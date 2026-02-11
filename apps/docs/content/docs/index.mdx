@@ -1,13 +1,103 @@
 ---
-title: Hello World
-description: Your first document
+title: Welcome
+description: Planisfy documentation — Mapbox-compatible API platform
 ---
 
-Welcome to the docs! You can start writing documents in `/content/docs`.
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Cards, Card } from 'fumadocs-ui/components/card';
 
-## What is Next?
+# Welcome to Planisfy
+
+Planisfy is a self-hosted, Mapbox-compatible API platform built with open-source geospatial engines. Switch by changing one URL — keep the same code.
+
+## Quick Start
+
+### 1. Get Your API Key
+
+Sign up at [planisfy.com](https://planisfy.com) and create an API key from the dashboard.
+
+### 2. Replace Your Mapbox URL
+
+```javascript
+// Before (Mapbox)
+map.setStyle('https://api.mapbox.com/styles/v1/mapbox/streets-v12?access_token=YOUR_KEY')
+
+// After (Planisfy)
+map.setStyle('https://api.planisfy.com/styles/v1/planisfy/streets?access_token=YOUR_KEY')
+```
+
+### 3. That's It!
+
+Everything else works the same — MapLibre GL JS, Mapbox GL JS, tile coordinates, all of it.
+
+---
+
+## Documentation
 
 <Cards>
-  <Card title="Learn more about Next.js" href="https://nextjs.org/docs" />
-  <Card title="Learn more about Fumadocs" href="https://fumadocs.dev" />
+  <Card title="API Reference" href="/docs/api/tiles">
+    Explore all Planisfy APIs: Tiles, Styles, Geocoding, Directions, and more.
+  </Card>
+  <Card title="Quick Start Guide" href="/docs/quickstart">
+    Get up and running in 5 minutes with interactive examples.
+  </Card>
+  <Card title="Migration Guide" href="/docs/migration">
+    Switch from Mapbox with our step-by-step migration guide.
+  </Card>
+  <Card title="Self-Hosting" href="/docs/self-hosting/overview">
+    Deploy Planisfy on your own infrastructure for full data sovereignty.
+  </Card>
 </Cards>
+
+---
+
+## What is Planisfy?
+
+Planisfy provides drop-in Mapbox API compatibility using:
+
+- **[Martin](https://github.com/maplibre/martin)** — Vector tile server (Rust)
+- **[Pelias](https://github.com/pelias/pelias)** — Geocoding engine (Node.js)
+- **[Valhalla](https://github.com/valhalla/valhalla)** — Routing engine (C++)
+- **[Overture Maps](https://overturemaps.org/)** — Open map data source
+
+All open-source, all self-hostable, all compatible with Mapbox's API specs.
+
+---
+
+## Why Planisfy?
+
+| Feature | Planisfy | Mapbox |
+|---------|----------|--------|
+| **Self-Hostable** | ✅ Full control | ❌ Cloud-only |
+| **Open Source** | ✅ GPL-3.0 | ❌ Proprietary |
+| **Data Source** | Overture Maps (free) | Proprietary |
+| **Pricing** | Open-source + SaaS | Subscription only |
+| **API Compatible** | ✅ Drop-in replacement | — |
+
+---
+
+## Core APIs
+
+| API | Description | Status |
+|-----|-------------|--------|
+| **Vector Tiles** | Protocol Buffer vector tiles | ✅ Available |
+| **Style JSON** | MapLibre style specifications | ✅ Available |
+| **Sprites & Glyphs** | Map icons and text rendering | ✅ Available |
+| **Geocoding** | Forward/reverse address search | 🟡 In Development |
+| **Directions** | Turn-by-turn routing | 🟡 In Development |
+| **Isochrones** | Time-distance polygons | 🔜 Planned |
+| **Static Images** | PNG map snapshots | 🔜 Planned |
+
+---
+
+## Need Help?
+
+- **GitHub**: [github.com/cruzor-blade/planisfy](https://github.com/cruzor-blade/planisfy)
+- **Discord**: Join our community
+- **Email**: support@planisfy.com
+
+---
+
+<Callout type="info" title="Project Status">
+Planisfy is in active development. Core tile and style APIs are available. Geocoding and routing APIs are in development. See <a href="https://github.com/cruzor-blade/planisfy/blob/main/STATUS.md">STATUS.md</a> for detailed progress.
+</Callout>

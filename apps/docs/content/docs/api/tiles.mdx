@@ -1,0 +1,267 @@
+---
+title: Vector Tiles API
+description: Request vector tiles for rendering with MapLibre GL JS, Mapbox GL JS, and other compatible libraries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Vector Tiles API
+
+The **Planisfy Vector Tiles API** serves MapLibre-compatible vector tiles from Overture Maps data. Our tiles are drop-in compatible with Mapbox — just change the base URL and keep the same z/x/y coordinate system.
+
+<Callout type="info" title="Data Source">
+Tiles are generated from <a href="https://overturemaps.org/" target="_blank">Overture Maps</a> — a free, open-source map data updated monthly from OpenStreetMap and other sources.
+</Callout>
+
+---
+
+## Endpoint Overview
+
+```
+GET https://api.planisfy.com/tiles/v1/{style}/{z}/{x}/{y}.mvt?access_token=YOUR_KEY
+```
+
+| Component | Description |
+|-----------|-------------|
+| `style` | The map style (`basic`, `streets`, `dark`, `satellite`) |
+| `z` | Zoom level (0-22) |
+| `x` | Tile column |
+| `y` | Tile row |
+| `access_token` | Your Planisfy API key |
+
+The tile coordinate system follows the [OSM slippy map tilename specification](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames).
+
+---
+
+## Request Parameters
+
+### Required Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `style` | `string` | Map style identifier. See [Available Styles](#available-styles) |
+| `z` | `integer` | Zoom level (0-22). Higher = closer, more detail |
+| `x` | `integer` | Tile column (0 to 2<sup>z</sup>-1) |
+| `y` | `integer` | Tile row (0 to 2<sup>z</sup>-1) |
+| `access_token` | `string` | Your API key for authentication |
+
+### Optional Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `secure` | `boolean` | Force HTTPS (default: `true`) |
+
+---
+
+## Authentication
+
+Include your API key in one of two ways:
+
+### Query Parameter (Recommended for SDKs)
+
+```bash
+GET https://api.planisfy.com/tiles/v1/basic/0/0/0.mvt?access_token=pk.your-key-here
+```
+
+### Bearer Token
+
+```bash
+GET https://api.planisfy.com/tiles/v1/basic/0/0/0.mvt
+Authorization: Bearer pk.your-key-here
+```
+
+<Callout type="warn" title="Self-Hosted Mode">
+When self-hosting, you can configure anonymous access or use your own authentication scheme.
+</Callout>
+
+---
+
+## Example Requests
+
+### cURL
+
+```bash
+# Fetch a tile at zoom 10, coordinates (517, 353)
+curl "https://api.planisfy.com/tiles/v1/basic/10/517/353.mvt?access_token=pk.your-key-here" \
+  --output tile.mvt
+```
+
+### JavaScript (MapLibre GL JS)
+
+```javascript
+// Replace Mapbox with Planisfy — just change the URL
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY',
+  center: [-74.006, 40.7128], // New York
+  zoom: 12
+});
+```
+
+### JavaScript (Mapbox GL JS)
+
+```javascript
+// Planisfy tiles work with Mapbox GL JS too
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY'
+});
+```
+
+### Python
+
+```python
+import requests
+
+url = "https://api.planisfy.com/tiles/v1/basic/12/1171/1566.mvt"
+headers = {"Authorization": "Bearer pk.your-key-here"}
+
+response = requests.get(url, headers=headers)
+
+if response.status_code == 200:
+    with open("tile.mvt", "wb") as f:
+        f.write(response.content)
+```
+
+---
+
+## Response
+
+The API returns a **Protocol Buffer Vector Tile** (`.mvt` format):
+
+```
+Content-Type: application/vnd.mapbox-vector-tile
+Content-Encoding: gzip
+Cache-Control: public, max-age=43200
+Access-Control-Allow-Origin: *
+```
+
+### Tile Layers
+
+Each tile contains vector layers based on Overture Maps data:
+
+| Layer | Description | Zoom Range |
+|-------|-------------|------------|
+| `roads` | Streets, highways, paths | 4+ |
+| `buildings` | Building footprints | 12+ |
+| `landuse` | Parks, water, urban areas | 0+ |
+| `places` | Cities, towns, neighborhoods | 4+ |
+| `pois` | Points of interest | 14+ |
+| `boundaries` | Administrative borders | 0+ |
+
+---
+
+## Available Styles
+
+| Style ID | Description | Best For |
+|----------|-------------|----------|
+| `basic` | Clean, minimalist design | Data visualization, dashboards |
+| `streets` | Detailed street map | Navigation, local search |
+| `dark` | Dark theme with muted colors | Night mode, embedded maps |
+| `satellite` | Satellite imagery overlay | Terrain visualization |
+
+---
+
+## Caching
+
+Tiles are heavily cached for performance:
+
+| Cache Type | Duration | Description |
+|------------|----------|-------------|
+| **Browser/Client** | 12 hours | Local cache in your app |
+| **CDN/Edge** | 5 minutes | Cloudflare edge locations |
+| **Origin** | 5 minutes | Planisfy servers |
+
+<Callout type="tip" title="Cache Headers">
+Responses include <code>Cache-Control</code> and <code>ETag</code> headers. Implement conditional requests with <code>If-None-Match</code> for bandwidth savings.
+</Callout>
+
+---
+
+## Rate Limits
+
+| Plan | Requests per Minute | Requests per Day |
+|------|---------------------|------------------|
+| Free | 1,000 | 50,000 |
+| Starter | 10,000 | 500,000 |
+| Pro | 100,000 | 5,000,000 |
+| Enterprise | Custom | Custom |
+
+Exceeding limits returns `HTTP 429` with a `Retry-After` header.
+
+---
+
+## Error Codes
+
+| HTTP Code | Error | Description |
+|-----------|-------|-------------|
+| `400` | Bad Request | Invalid coordinates or zoom level |
+| `401` | Unauthorized | Missing or invalid API key |
+| `403` | Forbidden | API key suspended or over quota |
+| `404` | Not Found | Tile coordinates out of range |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Server Error | Internal server error |
+
+### Error Response Format
+
+```json
+{
+  "message": "Invalid API key",
+  "code": "auth_invalid_token",
+  "request_id": "req_abc123xyz"
+}
+```
+
+---
+
+## Zoom Levels by Use Case
+
+| Zoom | Use Case | Tile Coverage |
+|------|----------|---------------|
+| 0-3 | Country/continent overview | ~1-8 tiles |
+| 4-7 | Regional view | ~16-1,024 tiles |
+| 8-10 | Metropolitan area | ~4,000-16,000 tiles |
+| 11-14 | City/district | ~64,000-4M tiles |
+| 15-17 | Street detail | ~16M-256M tiles |
+| 18+ | Building-level precision | Extremely localized |
+
+---
+
+## Switching from Mapbox
+
+Replace your Mapbox tile URL:
+
+```javascript
+// Before (Mapbox)
+url: 'https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/{z}/{x}/{y}.vector.pbf?access_token=YOUR_MAPBOX_KEY'
+
+// After (Planisfy)
+url: 'https://api.planisfy.com/tiles/v1/streets/{z}/{x}/{y}.mvt?access_token=YOUR_PLANISFY_KEY'
+```
+
+<Callout type="info" title="Compatible Tools">
+Planisfy tiles work with any Mapbox Vector Tile (MVT) compatible renderer: MapLibre GL JS, Mapbox GL JS, Leaflet with VectorGrid, QGIS, and more.
+</Callout>
+
+---
+
+## Self-Hosting Tiles
+
+When self-hosting Planisfy, tiles are served by **Martin** (Rust-based tile server) from PMTiles archives:
+
+```bash
+# Example: Serve tiles locally with Martin
+martin --config /path/to/martin-config.yaml
+# Access at: http://localhost:3005
+```
+
+See the [Self-Hosting Guide](/docs/self-hosting) for full setup instructions.
+
+---
+
+## See Also
+
+- [Styles API](/docs/api/styles) — Style JSON specifications
+- [Sprites API](/docs/api/sprites) — Map icons and markers
+- [Geocoding API](/docs/api/geocoding) — Search for places
+- [Migration Guide](/docs/guides/migrate-from-mapbox) — Switch from Mapbox in 5 minutes
