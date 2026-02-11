@@ -1,0 +1,40 @@
+{
+  "docs": [
+    {
+      "title": "Getting Started",
+      "pages": [
+        "index",
+        "quickstart",
+        "migration"
+      ]
+    },
+    {
+      "title": "API Reference",
+      "pages": [
+        "api/tiles",
+        "api/styles",
+        "api/geocoding",
+        "api/directions",
+        "api/sprites",
+        "api/glyphs"
+      ]
+    },
+    {
+      "title": "Guides",
+      "pages": [
+        "guides/authentication",
+        "guides/rate-limits",
+        "guides/caching",
+        "guides/error-handling"
+      ]
+    },
+    {
+      "title": "Self-Hosting",
+      "pages": [
+        "self-hosting/overview",
+        "self-hosting/docker",
+        "self-hosting/data-sources"
+      ]
+    }
+  ]
+}
