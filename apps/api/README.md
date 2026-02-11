@@ -2,6 +2,8 @@
 
 Mapbox-compatible API gateway built with Fastify.
 
+> **Implementation Status**: 🟡 Package.json created, implementation pending
+
 ---
 
 ## Overview
@@ -78,7 +80,7 @@ Request → API Gateway → [Auth Check] → [Rate Limit]
 
 ```bash
 pnpm install
-pnpm dev      # Port 3000
+pnpm dev      # Port 3003
 pnpm check-types
 pnpm lint
 pnpm build
@@ -92,9 +94,9 @@ pnpm build
 DATABASE_URL=postgresql://user:pass@host:5432/planisfy
 REDIS_URL=redis://localhost:6379
 BETTER_AUTH_SECRET=your-secret-key
-MARTIN_URL=http://localhost:3002
-PELIAS_URL=http://localhost:3003
-VALHALLA_URL=http://localhost:3004
+MARTIN_URL=http://localhost:3005
+PELIAS_URL=http://localhost:3006
+VALHALLA_URL=http://localhost:3007
 ```
 
 ---
@@ -104,7 +106,7 @@ VALHALLA_URL=http://localhost:3004
 ### Docker
 ```bash
 docker build -t planisfy-api .
-docker run -p 3000:3000 planisfy-api
+docker run -p 3003:3000 planisfy-api
 ```
 
 ---

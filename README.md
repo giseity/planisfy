@@ -44,27 +44,27 @@ Planisfy is a Mapbox alternative that:
 
 ## Features
 
-### Core APIs
+### Planned Core APIs
 
-| API | Description | Status |
+| API | Description | Engine |
 |-----|-------------|--------|
-| **Vector Tiles** | Protocol Buffer vector tiles | ✅ Stable |
-| **Style JSON** | MapLibre style specifications | ✅ Stable |
-| **Sprites & Glyphs** | Map icons and text rendering | ✅ Stable |
-| **Geocoding** | Forward/reverse address search | ✅ Stable |
-| **Directions** | Turn-by-turn routing | ✅ Stable |
+| **Vector Tiles** | Protocol Buffer vector tiles | Martin |
+| **Style JSON** | MapLibre style specifications | Static |
+| **Sprites & Glyphs** | Map icons and text rendering | R2 |
+| **Geocoding** | Forward/reverse address search | Pelias |
+| **Directions** | Turn-by-turn routing | Valhalla |
 
-### Platform Features
+### Planned Platform Features
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **API Key Authentication** | Bearer token or query param | ✅ Stable |
-| **Rate Limiting** | Per-key RPM limits | ✅ Stable |
-| **Usage Analytics** | Request tracking, charts | ✅ Stable |
-| **Role-Based Access** | User/Admin roles | ✅ Stable |
-| **User Dashboard** | API key management, usage views | ✅ Stable |
+| Feature | Description |
+|---------|-------------|
+| **API Key Authentication** | Bearer token or query param |
+| **Rate Limiting** | Per-key RPM limits |
+| **Usage Analytics** | Request tracking, charts |
+| **Role-Based Access** | User/Admin roles |
+| **User Dashboard** | API key management, usage views |
 
-### In Progress
+### Future Features
 
 - Isochrones API (time-distance polygons)
 - Static Images API (PNG map snapshots)
@@ -97,7 +97,13 @@ map.setStyle('https://api.planisfy.com/styles/v1/planisfy/basic?access_token=KEY
 git clone https://github.com/cruzor-blade/planisfy.git
 cd planisfy
 
-# Start all services
+# Start all services with Docker
+docker compose -f infrastructure/docker/docker-compose.yml up -d
+
+# Access dashboard at http://localhost:3002
+# Access docs at http://localhost:3001
+# API runs on http://localhost:3003
+```
 docker compose up -d
 
 # Access dashboard at http://localhost:3001
@@ -115,6 +121,16 @@ pnpm dev
 # Run tests
 pnpm test
 ```
+
+---
+
+## Current Status
+
+**Phase: Architecture & Foundation** 🏗️
+
+This project is in active development. We're building the core infrastructure.
+
+See [STATUS.md](./STATUS.md) for detailed implementation status.
 
 ---
 
@@ -140,20 +156,32 @@ pnpm test
 ```
 planisfy/
 ├── apps/
-│   ├── api/                    # API gateway
-│   ├── dashboard/              # User dashboard (with RBAC)
-│   ├── documentation/          # Public docs (Docusaurus)
-│   └── tile-worker/            # Edge tile delivery
+│   ├── api/                    # API gateway (Fastify)
+│   ├── dashboard/              # User dashboard (Next.js, RBAC)
+│   ├── docs/                   # Documentation (Fumadocs)
+│   ├── web/                    # Landing/marketing site
+│   └── tile-worker/            # Edge tile delivery (Cloudflare)
 │
 ├── packages/
-│   ├── auth/                   # Authentication
-│   ├── config/                 # Shared configs
-│   ├── database/               # Database schema
-│   ├── map-styles/             # Map style definitions
-│   ├── types/                  # Shared TypeScript types
-│   └── utils/                  # Utilities
+│   ├── auth/                   # Authentication (@planisfy/auth)
+│   ├── database/               # Database schema (@planisfy/database)
+│   ├── types/                  # Shared TypeScript types (@planisfy/types)
+│   ├── utils/                  # Utilities (@planisfy/utils)
+│   ├── map-styles/             # Map style definitions (@planisfy/map-styles)
+│   ├── ui/                     # Shared UI components (@planisfy/ui)
+│   ├── eslint-config/          # ESLint configuration (@planisfy/eslint-config)
+│   ├── typescript-config/      # TypeScript config (@planisfy/typescript-config)
+│   └── prettier-config/        # Prettier config (@planisfy/prettier-config)
 │
-└── infrastructure/             # Docker, K8s configs
+├── infrastructure/
+│   └── docker/
+│       ├── docker-compose.yml  # All services orchestration
+│       ├── martin-config.yaml  # Tile server config
+│       ├── pelias-config.json  # Geocoding config
+│       └── valhalla-config.json # Routing config
+│
+├── STATUS.md                   # Implementation status tracking
+└── ARCHITECTURE.md             # System architecture documentation
 ```
 
 ---
@@ -194,6 +222,8 @@ Updated monthly from Overture releases.
 
 ## Planned Features
 
+After core infrastructure is complete:
+
 - Optimization API (multi-stop routing)
 - Matrix API (distance/time matrices)
 - Navigation API (real-time turn notifications)
@@ -206,10 +236,10 @@ Updated monthly from Overture releases.
 
 ## Documentation
 
-- **API Reference**: https://docs.planisfy.com/api
-- **Architecture**: [ARCHITECTURE.md](./ARCHITECTURE.md)
-- **RBAC Design**: [docs/RBAC_ARCHITECTURE.md](./docs/RBAC_ARCHITECTURE.md)
-- **Self-Hosting**: https://docs.planisfy.com/deployment/self-hosted
+- **Implementation Status**: [STATUS.md](./STATUS.md) - Track our progress
+- **Architecture**: [ARCHITECTURE.md](./ARCHITECTURE.md) - System design
+- **RBAC Design**: [docs/RBAC_ARCHITECTURE.md](./docs/RBAC_ARCHITECTURE.md) - Access control
+- **App READMEs**: See individual `apps/*/README.md` for details
 
 ---
 
@@ -231,6 +261,20 @@ We welcome contributions! Areas we need help with:
 
 ---
 
+## Contributing
+
+We welcome contributions! Areas we need help with:
+
+- Map styles (dark, satellite, minimalist themes)
+- Documentation improvements
+- Bug fixes
+- Localization
+- Performance optimizations
+
+**See [STATUS.md](./STATUS.md) for current priorities.**
+
+---
+
 ## Acknowledgments
 
 Built on amazing open-source projects:
@@ -243,4 +287,4 @@ Built on amazing open-source projects:
 
 ---
 
-**Status**: ✅ Production Ready | **Version**: 1.0.0
+**Status**: 🏗️ In Development | **Version**: 0.1.0-alpha

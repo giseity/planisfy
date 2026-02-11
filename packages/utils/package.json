@@ -1,0 +1,21 @@
+{
+  "name": "@planisfy/utils",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@planisfy/eslint-config": "workspace:*",
+    "@planisfy/typescript-config": "workspace:*",
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@planisfy/map-styles",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./styles/*": "./styles/*.json",
+    "./sprites/*": "./sprites/*",
+    "./glyphs/*": "./glyphs/*"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings 0"
+  }
+}

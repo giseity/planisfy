@@ -2,6 +2,8 @@
 
 Shared database schema, migrations, and client using Drizzle ORM.
 
+> **Implementation Status**: 🟡 Package.json created, implementation pending
+
 ---
 
 ## Overview

@@ -2,6 +2,8 @@
 
 Shared TypeScript type definitions for the Planisfy platform.
 
+> **Implementation Status**: 🟡 Package.json created, implementation pending
+
 ---
 
 ## Overview
