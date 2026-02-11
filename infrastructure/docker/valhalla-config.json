@@ -1,0 +1,84 @@
+{
+  "mjolnir": {
+    "tile_dir": "/valhalla/custom_files/tiles",
+    "tile_extract": "/valhalla/custom_files/tiles.tar",
+    "time_zone": "America/New_York",
+    "admin": "/valhalla/custom_files/admins.sqlite",
+    "traffic": "/valhalla/custom_files/traffic.tar",
+    "use_connectivity": true,
+    "free_flow_threshold": 2000,
+    "congestion_timezone": "America/New_York"
+  },
+  "loki": {
+    "logging": {
+      "long_request": 3.0,
+      "type": "std_out"
+    },
+    "worker": "auto",
+    "auto_cleanup_interval": 600,
+    "logging": {
+      "type": "std_out"
+    }
+  },
+  "thor": {
+    "logging": {
+      "long_request": 3.0,
+      "type": "std_out"
+    },
+    "worker": "auto",
+    "timezone": "America/New_York",
+    "use_dir_sign_posts": true
+  },
+  "odin": {
+    "logging": {
+      "long_request": 5.0,
+      "type": "std_out"
+    },
+    "worker": "auto",
+    "directions_options": {
+      "units": "miles"
+    }
+  },
+  "skadi": {
+    "logging": {
+      "long_request": 1.0,
+      "type": "std_out"
+    },
+    "worker": "auto",
+    "elevation": "/valhalla/custom_files/dem"
+  },
+  "meili": {
+    "logging": {
+      "long_request": 5.0,
+      "type": "std_out"
+    },
+    "worker": "auto",
+    "tile_dir": "/valhalla/custom_files/tiles"
+  },
+  "service_limits": {
+    "max_distance": {
+      "auto": 5000000.0,
+      "bicycle": 500000.0,
+      "pedestrian": 500000.0,
+      "multimodal": 500000.0
+    },
+    "max_locations": 10,
+    "max_matrix_distance": 500000.0,
+    "max_matrix_locations": 50
+  },
+  "service": {
+    "proxy": "iproxy",
+    "request_logging_type": "std_out",
+    "has_parent": false,
+    "drtt_filename": "/dev/null",
+    "max_concurrent_threads": 8,
+    "threads": 4,
+    "listen_address": "0.0.0.0:8002",
+    "drtt_bucket_size": 500,
+    "drtt_decay": 3600000,
+    "drtt_max_cache_size": 10000,
+    "drtt_max_departure_time": 3600,
+    "drtt_max_edges": 500,
+    "allow_negative_damage": true
+  }
+}

@@ -1,0 +1,231 @@
+# Planisfy - Self-Hosted Docker Compose Configuration
+#
+# This configuration runs all Planisfy services locally for development or self-hosting.
+#
+# Quick start:
+#   docker compose up -d
+#
+# Services:
+#   - api:        API Gateway (port 3003)
+#   - dashboard:  User Dashboard (port 3002)
+#   - docs:       Documentation (port 3001)
+#   - web:        Landing page (port 3000)
+#   - postgres:   PostgreSQL database (port 5432)
+#   - redis:      Redis for rate limiting (port 6379)
+#   - martin:     Vector tile server (port 3002)
+#   - pelias:     Geocoding engine (port 3003)
+#   - valhalla:   Routing engine (port 3004)
+
+services:
+  # ============================================
+  # Core Applications
+  # ============================================
+
+  api:
+    build:
+      context: ../../
+      dockerfile: apps/api/Dockerfile
+    container_name: planisfy-api
+    ports:
+      - "3003:3000"
+    environment:
+      - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
+      - REDIS_URL=redis://redis:6379
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
+      - BETTER_AUTH_URL=http://localhost:3003/auth
+      - MARTIN_URL=http://martin:3002
+      - PELIAS_URL=http://pelias:3003
+      - VALHALLA_URL=http://valhalla:3004
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  dashboard:
+    build:
+      context: ../../
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: planisfy-dashboard
+    ports:
+      - "3002:3000"
+    environment:
+      - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
+      - BETTER_AUTH_URL=http://localhost:3002/auth
+      - NEXT_PUBLIC_APP_URL=http://localhost:3002
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  docs:
+    build:
+      context: ../../
+      dockerfile: apps/docs/Dockerfile
+    container_name: planisfy-docs
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  web:
+    build:
+      context: ../../
+      dockerfile: apps/web/Dockerfile
+    container_name: planisfy-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  # ============================================
+  # Data Storage
+  # ============================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: planisfy-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=planisfy
+      - POSTGRES_PASSWORD=planisfy
+      - POSTGRES_DB=planisfy
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U planisfy"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: planisfy-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  # ============================================
+  # Geospatial Engines
+  # ============================================
+
+  martin:
+    image: maplibre/martin:latest
+    container_name: planisfy-martin
+    ports:
+      - "3005:3000"
+    environment:
+      - MARTIN_CONFIG=/config/config.yaml
+    volumes:
+      - ./martin-config.yaml:/config/config.yaml:ro
+      - ./pmtiles:/data:ro
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  pelias:
+    image: pelias/pelias:latest
+    container_name: planisfy-pelias
+    ports:
+      - "3006:4000"
+    environment:
+      - PELIAS_CONFIG=/config/pelias.json
+    volumes:
+      - ./pelias-config.json:/config/pelias.json:ro
+      - pelias_data:/data
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  valhalla:
+    image: ghcr.io/gis-ops/docker-valhalla:latest
+    container_name: planisfy-valhalla
+    ports:
+      - "3007:8002"
+    environment:
+      - RUN_MODES=auto
+      - USE_TLS=false
+      - BUILD_EGRESS=false
+    volumes:
+      - valhalla_data:/valhalla/custom_files
+      - ./valhalla-config.json:/etc/valhalla/valhalla.json:ro
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  # ============================================
+  # Optional: Reverse Proxy (Traefik)
+  # ============================================
+
+  traefik:
+    image: traefik:v3.0
+    container_name: planisfy-traefik
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik-config.yml:/etc/traefik/traefik.yml:ro
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+    profiles:
+      - with-proxy
+
+# ============================================
+# Volumes
+# ============================================
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pelias_data:
+    driver: local
+  valhalla_data:
+    driver: local
+
+# ============================================
+# Networks
+# ============================================
+
+networks:
+  planisfy-network:
+    driver: bridge

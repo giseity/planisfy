@@ -2,6 +2,8 @@
 
 Shared authentication package using **better-auth** for the Planisfy platform.
 
+> **Implementation Status**: 🟡 Package.json created, implementation pending
+
 ---
 
 ## Overview

@@ -2,6 +2,8 @@
 
 The user-facing web application for managing API keys, viewing usage analytics, and system administration.
 
+> **Implementation Status**: 🟡 Package.json created, implementation pending
+
 ---
 
 ## Overview
@@ -80,7 +82,7 @@ The Dashboard is a **single Next.js application** with **Role-Based Access Contr
 # Install dependencies
 pnpm install
 
-# Run dev server (port 3001)
+# Run dev server (port 3002)
 pnpm dev
 
 # Type check
@@ -103,13 +105,13 @@ DATABASE_URL=postgresql://user:pass@host:5432/planisfy
 
 # Auth (better-auth)
 BETTER_AUTH_SECRET=your-secret-key-min-32-chars
-BETTER_AUTH_URL=http://localhost:3001/auth
+BETTER_AUTH_URL=http://localhost:3002/auth
 
 # Email (password reset)
 RESEND_API_KEY=re_your_api_key
 
 # App URL
-NEXT_PUBLIC_APP_URL=http://localhost:3001
+NEXT_PUBLIC_APP_URL=http://localhost:3002
 ```
 
 ---
@@ -126,7 +128,7 @@ vercel --prod
 
 ```bash
 docker build -t planisfy-dashboard .
-docker run -p 3001:3000 \
+docker run -p 3002:3000 \
   -e DATABASE_URL=... \
   -e BETTER_AUTH_SECRET=... \
   planisfy-dashboard

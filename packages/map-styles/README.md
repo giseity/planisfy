@@ -2,6 +2,8 @@
 
 Mapbox Style JSON specifications for Overture Maps data.
 
+> **Implementation Status**: 🟡 Package.json created, style definitions pending
+
 ---
 
 ## Overview

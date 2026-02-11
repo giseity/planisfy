@@ -2,6 +2,8 @@
 
 Cloudflare Worker for edge-optimized vector tile delivery from PMTiles stored on R2.
 
+> **Implementation Status**: 🔴 Not started
+
 ---
 
 ## Overview
