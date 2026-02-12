@@ -1,0 +1,535 @@
+---
+title: Self-Hosting Overview
+description: Learn about self-hosting Planisfy with open-source tools like Martin, Pelias, and Valhalla.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Self-Hosting Overview
+
+Planisfy can be fully self-hosted using open-source tools, giving you complete control over your mapping infrastructure. This guide explains the architecture, benefits, and requirements for self-hosting.
+
+---
+
+## Why Self-Host?
+
+### Data Sovereignty
+
+Keep complete control over your mapping data:
+
+- Store data on your own servers
+- Choose which data sources to use
+- Ensure compliance with data regulations
+- Avoid vendor lock-in
+
+### Cost Control
+
+Predictable costs at any scale:
+
+- **No per-request fees** after initial setup
+- **Unlimited usage** within your infrastructure
+- **Scale** without worrying about API quotas
+- **Budget** for infrastructure, not requests
+
+### Customization
+
+Full control over your mapping stack:
+
+- Modify routing algorithms
+- Customize map styles deeply
+- Integrate with internal systems
+- Add custom data sources
+
+### Reliability
+
+Depend only on your infrastructure:
+
+- **No external API dependencies**
+- **99.99%+ uptime** (your SLA)
+- **Offline capability** for air-gapped environments
+- **Geographic control** over data residency
+
+<Callout type="info" title="Trade-offs">
+Self-hosting requires technical expertise to set up and maintain. You're responsible for server management, updates, and scaling.
+</Callout>
+
+---
+
+## Architecture Overview
+
+Planisfy's self-hosted architecture uses three core open-source components:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Client Applications                   │
+│  (Web apps, Mobile apps, Desktop applications)              │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Load Balancer / CDN                     │
+│                    (Nginx, Traefik, Cloudflare)               │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
+┌─────────────────┐ ┌──────────────┐ ┌───────────────┐
+│     Martin     │ │    Pelias    │ │   Valhalla    │
+│  (Tile Server)  │ │  (Geocoder)   │ │   (Router)    │
+└────────┬────────┘ └──────┬───────┘ └───────┬───────┘
+         │                │                  │
+         └────────────────┼──────────────────┘
+                          ▼
+                 ┌─────────────────┐
+                 │  PostgreSQL /   │
+                 │  PMTiles Files  │
+                 │  (Data Storage) │
+                 └─────────────────┘
+```
+
+### Component Responsibilities
+
+| Component | Purpose | Technology |
+|------------|---------|------------|
+| **Martin** | Serves vector tiles from PMTiles or PostgreSQL | Rust |
+| **Pelias** | Geocoding and search (forward/reverse) | Node.js |
+| **Valhalla** | Routing, isochrones, optimization | C++ |
+
+---
+
+## System Requirements
+
+### Minimum Requirements
+
+**For development/testing:**
+
+| Resource | Minimum |
+|----------|----------|
+| **CPU** | 2 cores |
+| **RAM** | 4 GB |
+| **Storage** | 50 GB SSD |
+| **OS** | Linux (Ubuntu 20.04+, Debian 11+) |
+
+### Production Requirements
+
+**For small production deployment:**
+
+| Resource | Recommended |
+|----------|--------------|
+| **CPU** | 4-8 cores |
+| **RAM** | 16-32 GB |
+| **Storage** | 500 GB SSD (for Overture Maps data) |
+| **OS** | Linux (Ubuntu 22.04 LTS, Debian 12) |
+| **Network** | 1 Gbps |
+
+**For large-scale deployment:**
+
+| Resource | Recommended |
+|----------|--------------|
+| **CPU** | 16+ cores |
+| **RAM** | 64+ GB |
+| **Storage** | 2+ TB NVMe SSD |
+| **OS** | Linux |
+| **Network** | 10 Gbps |
+
+<Callout type="tip" title="Start Small">
+You can begin with modest hardware and scale as needed. Tile serving scales horizontally, routing scales with CPU.
+</Callout>
+
+---
+
+## Component Specifications
+
+### Martin (Tile Server)
+
+**Purpose:** Serve vector tiles from PMTiles files or PostgreSQL
+
+**Resources:**
+- **RAM:** 2-4 GB per instance
+- **CPU:** 2-4 cores per instance
+- **Storage:** Depends on data size (100 GB - 1 TB+)
+
+**Scaling:** Horizontal (add more instances behind load balancer)
+
+**Documentation:** [https://github.com/maplibre/martin](https://github.com/maplibre/martin)
+
+### Pelias (Geocoder)
+
+**Purpose:** Forward/reverse geocoding and place search
+
+**Resources:**
+- **RAM:** 8-16 GB
+- **CPU:** 4-8 cores
+- **Storage:** 50-200 GB (for Elasticsearch index)
+
+**Scaling:** Vertical (more RAM/CPU) and horizontal (Elasticsearch cluster)
+
+**Documentation:** [https://github.com/pelias/pelias](https://github.com/pelias/pelias)
+
+### Valhalla (Router)
+
+**Purpose:** Turn-by-turn routing, isochrones, optimization
+
+**Resources:**
+- **RAM:** 16-32 GB
+- **CPU:** 8-16 cores
+- **Storage:** 100-500 GB (for routing graph)
+
+**Scaling:** Horizontal with shared graph storage
+
+**Documentation:** [https://valhalla.readthedocs.io/](https://valhalla.readthedocs.io/)
+
+---
+
+## Hosting Options
+
+### Docker (Recommended)
+
+The easiest way to self-host Planisfy:
+
+- **Isolated environments** for each component
+- **Easy deployment** with Docker Compose
+- **Simple scaling** with Kubernetes or Swarm
+- **Version control** for configuration
+
+**Best for:** Most deployments, development, production
+
+### Bare Metal
+
+Run directly on physical or virtual machines:
+
+- **Maximum performance** (no container overhead)
+- **Fine-tuned control** over resources
+- **Simpler monitoring** and debugging
+
+**Best for:** Large-scale production, performance-critical deployments
+
+### Kubernetes
+
+Orchestrate containers at scale:
+
+- **Auto-scaling** based on load
+- **Self-healing** failed instances
+- **Rolling updates** with zero downtime
+- **Multi-region** deployment
+
+**Best for:** Enterprise deployments, high-availability requirements
+
+### Cloud Platforms
+
+**Managed services:**
+
+| Platform | Services |
+|----------|----------|
+| **AWS** | ECS/EKS, RDS, S3, CloudFront |
+| **Google Cloud** | GKE, Cloud SQL, Cloud CDN |
+| **Azure** | AKS, PostgreSQL, Front Door |
+| **DigitalOcean** | App Platform, Managed Databases |
+
+---
+
+## Data Sources
+
+### Overture Maps (Recommended)
+
+**What:** Free, open-source map data
+
+**Sources:**
+- OpenStreetMap (OSM)
+- Microsoft Building Footprints
+- Wikidata
+- Other open datasets
+
+**Updates:** Monthly releases
+
+**Coverage:** Global
+
+**Pros:**
+- Free and open
+- Regularly updated
+- High quality for many areas
+- No attribution fees
+
+**Cons:**
+- Data quality varies by region
+- Less detailed than commercial alternatives in some areas
+
+**Website:** [https://overturemaps.org/](https://overturemaps.org/)
+
+### OpenStreetMap
+
+**What:** Community-edited map data
+
+**Updates:** Continuous (minute-by-minute changes)
+
+**Coverage:** Global (varies by region)
+
+**Pros:**
+- Highly detailed in urban areas
+- Active community
+- Real-time updates
+
+**Cons:**
+- Data quality varies
+- Requires regular imports
+- Attribution required
+
+### Custom Data
+
+**Add your own data:**
+
+- POI databases
+- Private road networks
+- Indoor maps
+- Campus/corporate maps
+
+**Formats supported:**
+- GeoJSON
+- Shapefile
+* PostGIS tables
+- PMTiles
+
+---
+
+## Comparison: Self-Hosted vs Managed
+
+| Feature | Self-Hosted | Planisfy Cloud |
+|---------|-------------|----------------|
+| **Cost** | Infrastructure only | Per-request pricing |
+| **Maintenance** | Your responsibility | Managed for you |
+| **Updates** | Manual | Automatic |
+| **Scalability** | Your limit | Unlimited (with pay) |
+| **Customization** | Full control | Limited |
+| **Data control** | Complete | Planisfy choices |
+| **Setup time** | Hours to days | Minutes |
+| **Technical skill** | Required | Not required |
+
+<Callout type="info" title="Hybrid Approach">
+You can self-host some components (tiles) while using Planisfy Cloud for others (geocoding). This gives you cost savings on high-volume APIs while reducing complexity.
+</Callout>
+
+---
+
+## Getting Started Checklist
+
+Before self-hosting Planisfy, ensure you have:
+
+### Infrastructure ✅
+
+- [ ] Linux servers (Ubuntu 22.04+ recommended)
+- [ ] Docker and Docker Compose installed
+- [ ] Load balancer (Nginx, Traefik, or cloud LB)
+- [ ] Domain name configured
+- [ ] SSL/TLS certificates (Let's Encrypt or commercial)
+
+### Data ✅
+
+- [ ] Chosen data source (Overture Maps recommended)
+- [ ] Storage space allocated (500 GB minimum)
+- [ ] Data download strategy (direct download or torrent)
+- [ ] Import plan scheduled
+
+### Networking ✅
+
+- [ ] Firewall rules configured
+- [ ] Ports open: 80, 443, 5432 (PostgreSQL)
+- [ ] DNS records configured
+- [ ] CDN configured (optional but recommended)
+
+### Monitoring ✅
+
+- [ ] Logging configured (ELK, Loki, or cloud service)
+- [ ] Metrics collection (Prometheus, Datadog, etc.)
+- [ ] Health check endpoints
+- [ ] Alert notifications configured
+
+---
+
+## Installation Overview
+
+### Quick Start (Docker Compose)
+
+```bash
+# Clone the Planisfy self-hosting repository
+git clone https://github.com/planisfy/self-hosting.git
+cd self-hosting
+
+# Configure environment variables
+cp .env.example .env
+nano .env
+
+# Start all services
+docker-compose up -d
+
+# Import Overture Maps data
+./scripts/import-overture.sh
+
+# Verify services are running
+docker-compose ps
+```
+
+### Manual Installation
+
+See the [Docker Deployment](/docs/self-hosting/docker) guide for detailed instructions.
+
+---
+
+## Common Use Cases
+
+### 1. Enterprise Applications
+
+**Requirements:**
+- Data sovereignty
+- Compliance with regulations
+- SLA guarantees
+
+**Solution:**
+- Self-host all components
+- Deploy in your data center
+- Use private data sources
+
+### 2. High-Traffic Applications
+
+**Requirements:**
+- millions of daily users
+- Cost control at scale
+- High availability
+
+**Solution:**
+- Self-host tiles (highest volume)
+- Use Planisfy Cloud for geocoding (lower volume)
+- Deploy multiple Martin instances behind CDN
+
+### 3. Offline/Air-Gapped
+
+**Requirements:**
+- No internet access
+- Complete offline operation
+- Data security
+
+**Solution:**
+- Self-host all components
+- Use local data sources
+- Deploy on isolated network
+
+### 4. Custom Data Integration
+
+**Requirements:**
+- Private POI data
+- Custom road networks
+- Indoor mapping
+
+**Solution:**
+- Self-host Pelias with custom data
+- Add custom layers to Martin
+- Use Valhalla with custom graphs
+
+---
+
+## Security Considerations
+
+### Network Security
+
+- **Firewall:** Restrict access to necessary ports only
+- **VPN:** Use VPN for administrative access
+- **Private network:** Deploy services in private subnets
+- **DDoS protection:** Use Cloudflare or similar
+
+### Application Security
+
+- **Authentication:** Implement API key authentication
+- **HTTPS:** Force TLS for all connections
+- **CORS:** Configure appropriate CORS policies
+- **Rate limiting:** Implement per-IP rate limits
+- **Input validation:** Sanitize all user inputs
+
+### Data Security
+
+- **Encryption:** Encrypt data at rest (disk encryption)
+- **Backups:** Regular encrypted backups
+- **Access control:** Limit database access
+- **Audit logging:** Log all administrative actions
+
+---
+
+## Maintenance
+
+### Regular Tasks
+
+| Task | Frequency | Time Required |
+|------|-----------|---------------|
+| **Update Overture data** | Monthly | 1-2 hours |
+| **OS updates** | Monthly | 30 minutes |
+| **Container updates** | Quarterly | 1 hour |
+| **Backup verification** | Monthly | 15 minutes |
+| **Capacity planning** | Quarterly | 1-2 hours |
+| **Security audits** | Annually | 4-8 hours |
+
+### Monitoring
+
+Monitor these metrics:
+
+- **Tile serve time** (p50, p95, p99 latency)
+- **Geocode response time**
+- **Routing calculation time**
+- **CPU/memory usage**
+- **Disk I/O**
+- **Request rate** (RPS)
+- **Error rate**
+
+### Backups
+
+Back up these components:
+
+- **PostgreSQL databases** (Pelias)
+- **PMTiles files** (Martin)
+- **Configuration files**
+- **SSL certificates**
+
+---
+
+## Support Resources
+
+### Official Documentation
+
+- **Martin:** [https://maplibre.org/martin/](https://maplibre.org/martin/)
+- **Pelias:** [https://pelias.io/](https://pelias.io/)
+- **Valhalla:** [https://valhalla.readthedocs.io/](https://valhalla.readthedocs.io/)
+
+### Community
+
+- **GitHub Discussions:** Component-specific repositories
+- **Discord/Slack:** OpenStreetMap and MapLibre communities
+- **Stack Overflow:** Tag questions with `overture-maps`, `pelias`, `valhalla`
+
+### Professional Support
+
+For enterprise support:
+- **Planisfy Enterprise:** Contact sales@planisfy.com
+- **Third-party providers:** MapLibre, GIS consultants
+
+---
+
+## Related Resources
+
+- [Docker Deployment Guide](/docs/self-hosting/docker) — Step-by-step setup
+- [Data Sources Guide](/docs/self-hosting/data-sources) — Working with map data
+- [Configuration Guide](/docs/self-hosting/configuration) — Detailed configuration options
+- [Performance Tuning](/docs/self-hosting/performance) — Optimization strategies
+
+---
+
+## Next Steps
+
+1. Review the [Docker Deployment](/docs/self-hosting/docker) guide
+2. Choose your data sources (see [Data Sources](/docs/self-hosting/data-sources))
+3. Plan your infrastructure requirements
+4. Deploy your first test instance
+5. Import Overture Maps data
+6. Configure DNS and SSL
+7. Test all components
+8. Set up monitoring and alerts
+
+---
+
+Ready to get started? Follow the [Docker Deployment](/docs/self-hosting/docker) guide for step-by-step instructions.
