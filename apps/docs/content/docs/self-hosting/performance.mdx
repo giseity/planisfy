@@ -1,0 +1,760 @@
+---
+title: Performance Tuning
+description: Optimize self-hosted Planisfy deployment for maximum performance and scalability.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Performance Tuning Guide
+
+This guide covers performance optimization strategies for self-hosted Planisfy deployments.
+
+---
+
+## Performance Overview
+
+### Key Metrics
+
+| Metric | Target | Description |
+|--------|--------|-------------|
+| **Tile response time** | < 100ms (p95) | Time to return tile data |
+| **Geocode response** | < 500ms (p95) | Time for search results |
+| **Routing calculation** | < 2s (p95) | Time for route calculation |
+| **Throughput** | 1000+ RPS | Requests per second per instance |
+| **CPU usage** | < 70% | Average CPU utilization |
+| **Memory usage** | < 80% | Memory utilization |
+
+---
+
+## Caching Strategies
+
+### 1. CDN Caching
+
+Use Cloudflare or similar for edge caching:
+
+```yaml
+# Cloudflare configuration
+cache_rules:
+  - url: "*.tiles"
+    cache_ttl: 604800  # 7 days
+
+  - url: "*.fonts"
+    cache_ttl: 31536000  # 1 year
+
+  - url: "*.sprites"
+    cache_ttl: 604800  # 7 days
+```
+
+**Cache rules:**
+- Static assets: 1 year
+- Tiles: 12 hours (browser) / 7 days (CDN)
+- Geocoding: 1 hour
+- Routing: 5 minutes
+
+### 2. Redis Caching
+
+Add Redis cache for frequently accessed data:
+
+```yaml
+services:
+  redis:
+    image: redis:alpine
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+```
+
+**Martin with Redis:**
+
+```yaml
+# martin-config.yaml
+cache:
+  type: redis
+  redis_url: redis://redis:6379
+  ttl: 3600  # 1 hour
+```
+
+### 3. Application-Level Caching
+
+```javascript
+// Node.js example with Node-cache
+const NodeCache = require('node-cache');
+const styleCache = new NodeCache({ stdTTL: 3600 }); // 1 hour
+
+async function getCachedStyle(styleId) {
+  let style = styleCache.get(styleId);
+
+  if (!style) {
+    style = await fetchStyle(styleId);
+    styleCache.set(styleId, style);
+  }
+
+  return style;
+}
+```
+
+---
+
+## Database Optimization
+
+### PostgreSQL Tuning
+
+#### `postgresql.conf`
+
+```ini
+# Connection settings
+max_connections = 200
+shared_buffers = 4GB
+effective_cache_size = 12GB
+work_mem = 64MB
+maintenance_work_mem = 512MB
+
+# WAL settings
+wal_buffers = 64MB
+checkpoint_completion_target = 0.9
+max_wal_size = 4GB
+
+# Query optimization
+random_page_cost = 1.1
+effective_io_concurrency = 200
+
+# Logging
+log_min_duration_statement = 1000  # Log slow queries
+```
+
+#### Connection Pooling
+
+```yaml
+# martin-config.yaml
+sources:
+  postgis:
+    type: postgresql
+    connection_string: postgresql://planisfy:pass@postgres:5432/tiles
+    max_connections: 50
+    pool_idle_timeout: 30
+    pool_max_lifetime: 3600
+```
+
+### Indexing
+
+Add indexes for common queries:
+
+```sql
+-- Index on tile geometry
+CREATE INDEX idx_tiles_geometry ON tiles USING GIST(geometry);
+
+-- Index on zoom level
+CREATE INDEX idx_tiles_zoom ON tiles(zoom);
+
+-- Composite index
+CREATE INDEX idx_tiles_zoom_xy ON tiles(zoom, x, y);
+```
+
+---
+
+## Tile Server Optimization
+
+### Martin Performance
+
+#### Worker Threads
+
+```yaml
+# martin-config.yaml
+server:
+  worker_threads: 8  # Match CPU cores
+```
+
+#### Tile Size Optimization
+
+```yaml
+# Generate tiles with appropriate size
+# Smaller tiles = faster transfer but more requests
+# Larger tiles = fewer requests but more data
+
+# For high zoom (14+): Use 256x256
+# For low zoom (0-10): Use 512x512
+```
+
+#### Compression
+
+```yaml
+compression: true
+compression_level: 6  # Balance CPU vs compression
+```
+
+### Horizontal Scaling
+
+```yaml
+# docker-compose.yml
+services:
+  martin:
+    image: maplibre/martin
+    deploy:
+      replicas: 3
+    environment:
+      - CACHE_TYPE=redis
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+```
+
+**Load balancer configuration:**
+
+```nginx
+upstream martin {
+    least_conn;  # Route to least busy server
+
+    server martin_1:3000 max_fails=3 fail_timeout=30s;
+    server martin_2:3000 max_fails=3 fail_timeout=30s;
+    server martin_3:3000 max_fails=3 fail_timeout=30s;
+}
+```
+
+---
+
+## Geocoding Optimization
+
+### Elasticsearch Tuning
+
+#### Memory Allocation
+
+```yaml
+# docker-compose.yml
+elasticsearch:
+  environment:
+    - "ES_JAVA_OPTS=-Xms16g -Xmx16g"  # 16GB heap
+```
+
+#### Shard Strategy
+
+```json
+{
+  "elasticsearch": {
+    "index": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1
+    }
+  }
+}
+```
+
+#### Index Settings
+
+```json
+{
+  "settings": {
+    "index": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "refresh_interval": "30s",
+      "index.max_result_window": 10000
+    }
+  }
+}
+```
+
+### Pelias Optimization
+
+#### Reduce Search Scope
+
+```json
+{
+  "api": {
+    "autocomplete": {
+      "layers": {
+        "lookup": ["poi", "address"]
+      }
+    }
+  }
+}
+```
+
+#### Increase Importance
+
+```json
+{
+  "imports": {
+    "openstreetmap": {
+      "importance": 0.5
+    },
+    "whosonfirst": {
+      "importance": 0.3
+    }
+  }
+}
+```
+
+---
+
+## Routing Optimization
+
+### Valhalla Tuning
+
+#### Thread Pool
+
+```json
+{
+  "mjolnir": {
+    "concurrency": 8
+  }
+}
+```
+
+#### Tile Pre-Warming
+
+```bash
+# Pre-load frequently used tiles
+valhalla_tiles预热:
+  min_zoom: 10
+  max_zoom: 14
+  bbox: [-122.5, 37.7, -122.3, 37.8]
+```
+
+#### Reduce Search Area
+
+```json
+{
+  "service_limits": {
+    "max_exclude_location_distance": 10000,
+    "max_contour_location_distance": 5000
+  }
+}
+```
+
+### Costing Model Optimization
+
+```json
+{
+  "costing": {
+    "auto": {
+      "costing_options": {
+        "highway": {
+          "use_motorway": true,
+          "use_toll": false
+        },
+        "surface": {
+          "exclude": ["gravel", "dirt"]
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## Horizontal Scaling
+
+### Kubernetes Deployment
+
+```yaml
+# martin-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: martin
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: martin
+  template:
+    metadata:
+      labels:
+        app: martin
+    spec:
+      containers:
+      - name: martin
+        image: maplibre/martin:latest
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: martin
+spec:
+  selector:
+    matchLabels:
+      app: martin
+  ports:
+  - port: 3000
+  type: LoadBalancer
+```
+
+### Auto-Scaling
+
+```yaml
+# autoscaler.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: martin-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: martin
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+```
+
+---
+
+## Monitoring and Metrics
+
+### Prometheus Metrics
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'martin'
+    static_configs:
+      - targets: ['martin:3000']
+    metrics_path: /metrics
+
+  - job_name: 'valhalla'
+    static_configs:
+      - targets: ['valhalla:8002']
+```
+
+### Grafana Dashboards
+
+**Key metrics to monitor:**
+
+| Service | Metrics |
+|---------|---------|
+| **Martin** | Requests/sec, response time, cache hit rate |
+| **Pelias** | Queries/sec, index size, search latency |
+| **Valhalla** | Routes/sec, calculate time, tile cache hits |
+| **PostgreSQL** | Connections, query time, dead tuples |
+| **Redis** | Memory usage, hit rate, evictions |
+
+### Alerting Rules
+
+```yaml
+# alerting.yml
+groups:
+  - name: planisfy
+    rules:
+      - alert: HighResponseTime
+        expr: martin_response_time_p95 > 500
+        for: 5m
+
+      - alert: HighCPU
+        expr: cpu_usage_percent > 90
+        for: 10m
+
+      - alert: LowCacheHitRate
+        expr: cache_hit_rate < 0.5
+        for: 15m
+```
+
+---
+
+## Load Testing
+
+### Apache Bench
+
+```bash
+# Test tile server
+ab -n 10000 -c 10 http://localhost:3005/overtime/14/2626/6301
+```
+
+### Locust
+
+```python
+# locustfile.py
+from locust import HttpUser, task, between
+
+class TileUser(HttpUser):
+    wait_time = between(0.5, 2)
+
+    @task
+    def get_tile(self):
+        self.client.get("/overtime/14/2626/6301")
+```
+
+**Run load test:**
+
+```bash
+locust -f locustfile.py --host=http://localhost:3005 --users=100
+```
+
+### k6
+
+```javascript
+// k6 script
+import http from 'k6/http';
+
+export let options = {
+  vus: 100,
+  duration: '5m'
+};
+
+export default function () {
+  const response = http.get('http://localhost:3005/overtime/14/2626/6301');
+  check(response, {
+    'status is 200': (r) => r.status === 200,
+    'response time < 500ms': (r) => r.timings.duration < 500
+  });
+}
+```
+
+---
+
+## Troubleshooting Performance Issues
+
+### Slow Tile Loading
+
+**Diagnose:**
+
+```bash
+# Check Martin metrics
+curl http://localhost:3005/metrics
+
+# Check PostgreSQL connections
+docker exec postgres psql -U planisfy -d tiles \
+  -c "SELECT count(*) FROM pg_stat_activity;"
+```
+
+**Solutions:**
+- Increase worker threads
+- Add caching layer
+- Scale horizontally
+- Optimize database queries
+
+### High Memory Usage
+
+**Diagnose:**
+
+```bash
+# Check memory usage
+docker stats
+
+# Check Redis memory
+docker exec redis redis-cli INFO memory
+```
+
+**Solutions:**
+- Reduce tile cache size
+- Limit connections
+- Add swap space
+- Scale vertically
+
+### Slow Geocoding
+
+**Diagnose:**
+
+```bash
+# Check Elasticsearch cluster health
+curl http://localhost:9200/_cluster/health
+
+# Check index stats
+curl http://localhost:9200/pelias/_stats
+```
+
+**Solutions:**
+- Increase Elasticsearch heap
+- Optimize index settings
+- Reduce search scope
+- Use fewer data sources
+
+### Routing Delays
+
+**Diagnose:**
+
+```bash
+# Check Valhalla logs
+docker compose logs valhalla --tail=100
+
+# Test route calculation time
+time curl "http://localhost:8002/route?locations=-122.42,37.78;-122.45,37.75"
+```
+
+**Solutions:**
+- Increase Valhalla concurrency
+- Pre-load tiles
+- Reduce service limits
+- Use faster costing model
+
+---
+
+## Performance Tuning Checklist
+
+### Initial Setup ✅
+
+- [ ] Configure appropriate cache TTLs
+- [ ] Set up Redis caching layer
+- [ ] Configure CDN
+- [ ] Tune PostgreSQL settings
+- [ ] Set appropriate worker threads
+
+### Monitoring ✅
+
+- [ ] Install Prometheus
+- [ ] Configure Grafana dashboards
+- [ ] Set up alerting rules
+- [ ] Create runbooks for common issues
+- [ ] Test alerting system
+
+### Testing ✅
+
+- [ ] Run load tests
+- [ ] Benchmark tile serving
+- [ ] Test geocoding performance
+- [ ] Test routing performance
+- [ ] Validate scaling behavior
+
+### Optimization ✅
+
+- [ ] Profile application
+- [ ] Optimize database queries
+- [ ] Tune JVM settings
+- [ ] Configure appropriate shard counts
+- [ ] Optimize compression levels
+
+---
+
+## Best Practices
+
+### 1. Profile Before Optimizing
+
+```bash
+# Profile Martin
+go tool pprof -http=:3000 http://localhost:3000/debug/pprof/
+```
+
+### 2. Monitor All Components
+
+```bash
+# Collect metrics from all services
+prometheus.yml:
+  scrape_configs:
+    - job_name: 'martin'
+    - job_name: 'pelias'
+    - job_name: 'valhalla'
+    - job_name: 'postgres'
+```
+
+### 3. Use Appropriate Cache TTLs
+
+```yaml
+cache:
+  tiles: 43200      # 12 hours
+  styles: 3600      # 1 hour
+  glyphs: 31536000  # 1 year
+  sprites: 604800   # 7 days
+```
+
+### 4. Scale Horizontally First
+
+Scale horizontally before vertically:
+
+- Add more instances (cheaper)
+- Use load balancer
+- Only then scale vertically
+
+### 5. Test at Scale
+
+```bash
+# Simulate production load
+locust --users=1000 --spawn-rate=100
+```
+
+### 6. Set Up Alerts Early
+
+Configure alerts before issues occur:
+
+```yaml
+alerts:
+  - name: HighLatency
+    condition: latency > 500ms
+    action: Auto-scale cluster
+```
+
+---
+
+## Performance Targets
+
+### By Component
+
+| Component | Target | How to Achieve |
+|-----------|--------|----------------|
+| **Tile serving** | < 100ms p95 | Cache, CDN, multiple instances |
+| **Geocoding** | < 500ms p95 | Elasticsearch tuning, fewer data sources |
+| **Routing** | < 2s p95 | Tile caching, concurrency tuning |
+| **API gateway** | < 50ms p95 | Efficient routing, connection pooling |
+
+### By Plan Scale
+
+| Users | Instances | RAM | CPU |
+|-------|-----------|-----|-----|
+| **100** | 1 | 8 GB | 4 cores |
+| **1,000** | 2-3 | 16 GB | 8 cores |
+| **10,000** | 5-10 | 64 GB | 32 cores |
+| **100,000** | 20+ | 256 GB | 128+ cores |
+
+<Callout type="info" title="Scale Gradually">
+Start small and scale up as needed. Monitor at each step.
+</Callout>
+
+---
+
+## Related Resources
+
+- [Valhalla Documentation](https://valhalla.readthedocs.io/) — Routing performance
+- [Elasticsearch Performance](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html) — Search performance
+- [PostgreSQL Performance](https://www.postgresql.org/docs/current/performance-tips.html) — Database performance
+- [Redis Performance](https://redis.io/docs/manual/admin/optimization/) — Cache performance
+
+---
+
+## See Also
+
+- [Docker Deployment](/docs/self-hosting/docker) — Deployment setup
+- [Configuration](/docs/self-hosting/configuration) — Component configuration
+- [Data Sources](/docs/self-hosting/data-sources) — Data optimization
+
+---
+
+## Quick Reference
+
+| Task | Solution |
+|------|----------|
+| **Slow tiles** | Add Redis cache, increase worker threads |
+| **Slow geocoding** | Tune Elasticsearch, reduce data sources |
+| **Slow routing** | Increase Valhalla concurrency, pre-load tiles |
+| **High CPU** | Scale horizontally, optimize queries |
+| **High memory** | Reduce cache size, add swap, tune JVM |
+| **Monitoring** | Use Prometheus + Grafana |
+| **Load testing** | Use Locust, k6, or Apache Bench |
+
+---
+
+## Performance Optimization Summary
+
+| Layer | Optimization | Impact |
+|-------|-------------|--------|
+| **CDN** | Cloudflare caching | 50-80% improvement |
+| **Redis** | Distributed caching | 30-50% improvement |
+| **PostgreSQL** | Connection pooling, indexes | 20-40% improvement |
+| **Scaling** | Horizontal autoscaling | Linear scaling |
+| **Compression** | Tile compression | 50-70% bandwidth reduction |
+| **Profiling** | Identify bottlenecks | Targeted optimizations |
