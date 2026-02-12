@@ -1,0 +1,507 @@
+---
+title: Sprites API
+description: Retrieve map icons and sprite images for use with MapLibre GL JS, Mapbox GL JS, and other compatible libraries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Sprites API
+
+The **Planisfy Sprites API** serves map icons and pattern images used in styles. Sprites are collections of small images (markers, icons, patterns) that are efficiently packed into a single texture for GPU-accelerated rendering.
+
+<Callout type="info" title="What Are Sprites?">
+A sprite is a single PNG image containing all icons and patterns for a map style, plus a JSON index file describing each image's position. This format enables efficient GPU rendering in MapLibre GL JS and Mapbox GL JS.
+</Callout>
+
+---
+
+## Endpoint Overview
+
+```
+https://api.planisfy.com/styles/v1/{owner}/{style_id}/sprite
+```
+
+The sprite URL in a style is a **URL template** that MapLibre/Mapbox automatically expands:
+
+| File Type | URL Pattern | Description |
+|-----------|-------------|-------------|
+| **Standard DPI** | `{sprite}.json` and `{sprite}.png` | 1x pixel density displays |
+| **High DPI** | `{sprite}@2x.json` and `{sprite}@2x.png` | Retina/high-density displays |
+
+For example, with `"sprite": "https://api.planisfy.com/styles/v1/planisfy/basic/sprite"`:
+
+- `https://api.planisfy.com/styles/v1/planisfy/basic/sprite.json` — Index (1x)
+- `https://api.planisfy.com/styles/v1/planisfy/basic/sprite.png` — Image (1x)
+- `https://api.planisfy.com/styles/v1/planisfy/basic/sprite@2x.json` — Index (2x)
+- `https://api.planisfy.com/styles/v1/planisfy/basic/sprite@2x.png` — Image (2x)
+
+---
+
+## Request Parameters
+
+| Component | Description |
+|-----------|-------------|
+| `owner` | Account owner (`planisfy` for public styles, or your username for custom styles) |
+| `style_id` | The style identifier (`basic`, `streets`, `dark`, `satellite`) |
+| `@2x` | Optional suffix for high-density displays (2x, 3x, 4x supported) |
+
+---
+
+## Authentication
+
+Include your API key in one of two ways:
+
+### Query Parameter
+
+```bash
+GET https://api.planisfy.com/styles/v1/planisfy/basic/sprite.png?access_token=pk.your-key-here
+```
+
+### Bearer Token
+
+```bash
+GET https://api.planisfy.com/styles/v1/planisfy/basic/sprite.png
+Authorization: Bearer pk.your-key-here
+```
+
+<Callout type="warn" title="Self-Hosted Mode">
+When self-hosting, sprites are typically served publicly without authentication. Configure your tile server (Martin) to serve sprites from a public directory.
+</Callout>
+
+---
+
+## Example Requests
+
+### cURL
+
+```bash
+# Fetch sprite index (JSON)
+curl "https://api.planisfy.com/styles/v1/planisfy/streets/sprite.json?access_token=pk.your-key-here"
+
+# Fetch sprite image (PNG)
+curl "https://api.planisfy.com/styles/v1/planisfy/streets/sprite.png?access_token=pk.your-key-here" \
+  --output sprite.png
+
+# Fetch high-DPI (2x) sprite
+curl "https://api.planisfy.com/styles/v1/planisfy/streets/sprite@2x.png?access_token=pk.your-key-here" \
+  --output sprite@2x.png
+```
+
+### JavaScript (MapLibre GL JS)
+
+Sprites are automatically loaded when you use a Planisfy style:
+
+```javascript
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY'
+});
+
+// Sprites are automatically fetched from:
+// https://api.planisfy.com/styles/v1/planisfy/basic/sprite
+```
+
+### JavaScript (Manual Usage)
+
+```javascript
+// Fetch and use sprite manually
+async function loadSprite(styleUrl) {
+  const response = await fetch(`${styleUrl}/sprite.json?access_token=YOUR_KEY`);
+  return await response.json();
+}
+
+const spriteIndex = await loadSprite(
+  'https://api.planisfy.com/styles/v1/planisfy/basic'
+);
+
+console.log('Available icons:', Object.keys(spriteIndex));
+// Output: ['marker', 'poi', 'restaurant', 'gas-station', ...]
+```
+
+### Python
+
+```python
+import requests
+import json
+
+style_id = "planisfy/basic"
+base_url = f"https://api.planisfy.com/styles/v1/{style_id}/sprite"
+params = {"access_token": "pk.your-key-here"}
+
+# Fetch sprite index
+response = requests.get(f"{base_url}.json", params=params)
+sprite_index = response.json()
+
+print(f"Available icons: {list(sprite_index.keys())}")
+
+# Fetch sprite image
+response = requests.get(f"{base_url}.png", params=params)
+with open("sprite.png", "wb") as f:
+    f.write(response.content)
+```
+
+---
+
+## Response Format
+
+### Sprite Index (JSON)
+
+The sprite index is a JSON document describing each icon's position and dimensions:
+
+```json
+{
+  "marker": {
+    "width": 32,
+    "height": 42,
+    "x": 0,
+    "y": 0,
+    "pixelRatio": 1
+  },
+  "poi": {
+    "width": 24,
+    "height": 24,
+    "x": 32,
+    "y": 0,
+    "pixelRatio": 1
+  },
+  "restaurant": {
+    "width": 24,
+    "height": 24,
+    "x": 56,
+    "y": 0,
+    "pixelRatio": 1
+  }
+}
+```
+
+### Index Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `width` | `integer` | Icon width in pixels |
+| `height` | `integer` | Icon height in pixels |
+| `x` | `integer` | X position within sprite image |
+| `y` | `integer` | Y position within sprite image |
+| `pixelRatio` | `number` | Pixel ratio (1 for standard, 2 for @2x) |
+
+#### Optional Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `content` | `[number, number, number, number]` | Content box for text fit `[left, top, right, bottom]` |
+| `stretchX` | `[[number, number], ...]` | Stretchable horizontal zones |
+| `stretchY` | `[[number, number], ...]` | Stretchable vertical zones |
+
+### Sprite Image (PNG)
+
+The sprite image is a PNG file containing all icons packed together:
+
+```
+Content-Type: image/png
+Cache-Control: public, max-age=43200
+Access-Control-Allow-Origin: *
+```
+
+<Callout type="info" title="Maximum Sprite Size">
+Sprite images are limited by WebGL <code>MAX_TEXTURE_SIZE</code>, which is GPU-dependent but typically at least 4096×4096 pixels.
+</Callout>
+
+---
+
+## Using Sprites in Styles
+
+### Setting the Sprite Property
+
+```json
+{
+  "version": 8,
+  "name": "My Custom Style",
+  "sprite": "https://api.planisfy.com/styles/v1/planisfy/basic/sprite",
+  "sources": { ... },
+  "layers": [
+    {
+      "id": "markers",
+      "type": "symbol",
+      "source": "my-data",
+      "layout": {
+        "icon-image": "marker",
+        "icon-size": 1.0
+      }
+    }
+  ]
+}
+```
+
+### Using Icons in Layers
+
+```javascript
+// Use a sprite icon in a symbol layer
+map.addLayer({
+  id: 'poi-layer',
+  type: 'symbol',
+  source: 'places',
+  layout: {
+    'icon-image': 'restaurant', // References sprite key
+    'icon-size': 1.0,
+    'icon-allow-overlap': true
+  }
+});
+
+// Use a sprite pattern in a fill layer
+map.addLayer({
+  id: 'pattern-layer',
+  type: 'fill',
+  source: 'areas',
+  paint: {
+    'fill-pattern': 'diagonal-lines' // References sprite key
+  }
+});
+```
+
+### Tokenized Icon Names
+
+Use feature properties to dynamically select icons:
+
+```javascript
+map.addLayer({
+  id: 'dynamic-pois',
+  type: 'symbol',
+  source: 'places',
+  layout: {
+    'icon-image': ['get', 'icon'], // Uses feature.icon property
+    'icon-size': 1.0
+  }
+});
+
+// Feature with { "icon": "restaurant" } uses restaurant sprite
+// Feature with { "icon": "gas-station" } uses gas-station sprite
+```
+
+---
+
+## Available Icons
+
+Planisfy sprites include common map icons:
+
+| Icon Name | Description | Use Case |
+|-----------|-------------|----------|
+| `marker` | Default map pin | General points of interest |
+| `poi` | Generic POI icon | Places of interest |
+| `restaurant` | Fork/knife or dining | Food establishments |
+| `gas-station` | Fuel pump | Gas stations |
+| `parking` | Letter P | Parking areas |
+| `shop` | Shopping bag | Retail locations |
+| `lodging` | Bed/hotel | Hotels, accommodations |
+| `airport` | Airplane | Airports |
+| `transit` | Bus/train | Transit stations |
+| `bicycle` | Bicycle | Bike share, cycling |
+
+<Callout type="tip" title="Custom Sprites">
+When self-hosting, you can add custom icons to your sprites. See the <a href="#self-hosting">Self-Hosting</a> section below.
+</Callout>
+
+---
+
+## Pixel Density Support
+
+Sprites support multiple pixel densities for crisp rendering on high-DPI displays:
+
+| Density | Suffix | Use Case |
+|---------|--------|----------|
+| **Standard** | (none) | Regular displays (96 DPI) |
+| **High** | `@2x` | Retina displays (2x) |
+| **Extra High** | `@3x` | Ultra-high density (3x) |
+| **Ultra** | `@4x` | 4K displays (4x) |
+
+MapLibre GL JS automatically requests the appropriate density based on the device:
+
+```javascript
+// Desktop (standard): fetches sprite.json + sprite.png
+// Mobile (Retina): fetches sprite@2x.json + sprite@2x.png
+```
+
+---
+
+## Caching
+
+Sprites are heavily cached since they change infrequently:
+
+| Cache Type | Duration | Description |
+|------------|----------|-------------|
+| **Browser/Client** | 7 days | Long-term local cache |
+| **CDN/Edge** | 1 day | Cloudflare edge locations |
+| **Origin** | 1 day | Planisfy servers |
+
+<Callout type="tip" title="Sprite Versioning">
+When you update a sprite, the URL changes automatically. Add a version hash to force cache invalidation:<br/>
+<code>"sprite": ".../sprite?v=2"</code>
+</Callout>
+
+---
+
+## Rate Limits
+
+| Plan | Requests per Minute | Requests per Day |
+|------|---------------------|------------------|
+| Free | 1,000 | 50,000 |
+| Starter | 10,000 | 500,000 |
+| Pro | 100,000 | 5,000,000 |
+| Enterprise | Custom | Custom |
+
+---
+
+## Error Codes
+
+| HTTP Code | Error | Description |
+|-----------|-------|-------------|
+| `400` | Bad Request | Invalid style ID or sprite URL |
+| `401` | Unauthorized | Missing or invalid API key |
+| `403` | Forbidden | API key suspended or over quota |
+| `404` | Not Found | Sprite does not exist |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Server Error | Internal server error |
+
+### Error Response Format
+
+```json
+{
+  "message": "Sprite not found: planisfy/unknown",
+  "code": "sprite_not_found",
+  "request_id": "req_abc123xyz"
+}
+```
+
+---
+
+## Self-Hosting Sprites
+
+When self-hosting Planisfy, you can create custom sprites for your maps:
+
+### Creating Custom Sprites
+
+Use **spritezero-cli** to build MapLibre-compatible sprites from SVG files:
+
+```bash
+# Install spritezero
+npm install -g @mapbox/spritezero-cli
+
+# Build sprite from SVG directory
+spritezero [output-name] [input-directory]
+
+# Example: Build standard and 2x sprites
+spritezero basic sprites/icons/
+spritezero basic@2x sprites/icons/ --retina
+```
+
+### Directory Structure
+
+```
+sprites/
+├── icons/
+│   ├── marker.svg
+│   ├── restaurant.svg
+│   ├── gas-station.svg
+│   └── ...
+└── output/
+    ├── basic.json       # Generated sprite index
+    ├── basic.png        # Generated sprite image
+    ├── basic@2x.json    # High-DPI index
+    └── basic@2x.png     # High-DPI image
+```
+
+### Martin Configuration
+
+Configure Martin to serve sprite files:
+
+```yaml
+# martin-config.yaml
+sprites:
+  - id: "basic"
+    path: "/path/to/sprites/output"
+    url_prefix: "https://your-domain.com/sprites"
+```
+
+Access your sprites at:
+
+```
+https://your-domain.com/sprites/basic.json
+https://your-domain.com/sprites/basic.png
+https://your-domain.com/sprites/basic@2x.json
+https://your-domain.com/sprites/basic@2x.png
+```
+
+### Updating Your Style
+
+Reference your custom sprite in the style JSON:
+
+```json
+{
+  "version": 8,
+  "sprite": "https://your-domain.com/sprites/basic",
+  "sources": { ... },
+  "layers": [ ... ]
+}
+```
+
+<Callout type="info" title="Sprite Limits">
+Each sprite can contain up to 1,000 icons. Individual icons must be smaller than 400 KB and under 512×512 pixels.
+</Callout>
+
+---
+
+## Switching from Mapbox
+
+Replace your Mapbox sprite URL:
+
+### Before (Mapbox)
+
+```json
+{
+  "sprite": "mapbox://sprites/mapbox/streets-v12"
+}
+```
+
+### After (Planisfy)
+
+```json
+{
+  "sprite": "https://api.planisfy.com/styles/v1/planisfy/streets/sprite"
+}
+```
+
+Or in code:
+
+```javascript
+// Mapbox GL JS
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    sprite: 'https://api.planisfy.com/styles/v1/planisfy/basic/sprite',
+    sources: { ... },
+    layers: [ ... ]
+  }
+});
+```
+
+<Callout type="tip" title="Icon Compatibility">
+Planisfy sprites use the same icon names as Mapbox where possible (<code>marker</code>, <code>poi</code>, etc.), making migration seamless.
+</Callout>
+
+---
+
+## Related Resources
+
+- [MapLibre Style Spec: Sprite](https://maplibre.org/maplibre-style-spec/sprite/) — Full sprite specification
+- [spritezero-cli](https://github.com/mapbox/spritezero-cli) — Tool for building sprites
+- [Styles API](/docs/api/styles) — Style JSON configuration
+- [Glyphs API](/docs/api/glyphs) — Font rendering for text labels
+
+---
+
+## See Also
+
+- [Styles API](/docs/api/styles) — Style JSON specifications
+- [Glyphs API](/docs/api/glyphs) — Text font serving
+- [Self-Hosting Guide](/docs/self-hosting) — Complete self-hosting setup
+- [Migration Guide](/docs/migration) — Switch from Mapbox
