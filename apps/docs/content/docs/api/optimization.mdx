@@ -1,0 +1,684 @@
+---
+title: Optimization API
+description: Calculate optimal routes for visiting multiple waypoints in the most efficient order (Traveling Salesperson Problem).
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Optimization API
+
+The **Planisfy Optimization API** calculates the most efficient route for visiting multiple waypoints. Our API solves the Traveling Salesperson Problem (TSP), optimizing the order of stops to minimize total travel time or distance.
+
+<Callout type="info" title="Use Case">
+The Optimization API is ideal for delivery routes, sales calls, service appointments, or any scenario where you need to visit multiple locations efficiently.
+</Callout>
+
+---
+
+## Endpoint Overview
+
+```
+GET https://api.planisfy.com/optimization/v1/{profile}/{coordinates}?access_token=YOUR_KEY
+```
+
+| Component | Description |
+|-----------|-------------|
+| `profile` | Routing mode: `driving`, `walking`, `cycling` |
+| `coordinates` | Semicolon-separated waypoints: `lon1,lat1;lon2,lat2;lon3,lat3` |
+
+---
+
+## Routing Profiles
+
+| Profile | Description | Use Case |
+|---------|-------------|----------|
+| `driving` | Car/truck routing on roads | Delivery routes, sales calls |
+| `walking` | Pedestrian-friendly paths | Walking tours, nearby visits |
+| `cycling` | Bike-friendly routes | Bike delivery, cycling routes |
+
+---
+
+## Request Parameters
+
+### Required Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `profile` | `string` | Routing profile: `driving`, `walking`, `cycling` |
+| `coordinates` | `string` | Semicolon-separated `{longitude},{latitude}` pairs |
+
+### Optional Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `source` | `string` | `first` | Starting waypoint: `first`, `last`, or index |
+| `destination` | `string` | `last` | Ending waypoint: `first`, `last`, or index |
+| `roundtrip` | `boolean` | `true` | Return to starting point |
+| `distributions` | `string` | - | Semicolon-separated pickup/delivery pairs |
+| `steps` | `boolean` | `false` | Return turn-by-turn steps |
+| `geometries` | `string` | `polyline6` | Geometry format: `polyline`, `polyline6`, `geojson` |
+| `overview` | `string` | `simplified` | Route overview: `full`, `simplified`, `false` |
+
+---
+
+## Example Requests
+
+### cURL
+
+#### Basic Roundtrip
+
+```bash
+# Optimize route visiting 4 locations, returning to start
+curl "https://api.planisfy.com/optimization/v1/driving/-122.4194,37.7749;-122.4084,37.7548;-122.4782,37.7697;-122.4535,37.7686?access_token=pk.your-key-here"
+```
+
+#### One-Way Route
+
+```bash
+# Start at first location, end at last
+curl "https://api.planisfy.com/optimization/v1/driving/-122.4194,37.7749;-122.4084,37.7548;-122.4782,37.7697;-122.4535,37.7686?roundtrip=false&access_token=pk.your-key-here"
+```
+
+#### Custom Start/End
+
+```bash
+# Start at location 2, end at location 0
+curl "https://api.planisfy.com/optimization/v1/driving/0;-1;2;3?source=1&destination=0&access_token=pk.your-key-here"
+```
+
+#### Pickup and Delivery
+
+```bash
+# Location 1 picks up, location 4 delivers
+curl "https://api.planisfy.com/optimization/v1/driving/0;1;2;3;4?distributions=1,4&access_token=pk.your-key-here"
+```
+
+#### With Turn-by-Turn Directions
+
+```bash
+# Include step-by-step instructions
+curl "https://api.planisfy.com/optimization/v1/driving/-122.4194,37.7749;-122.4084,37.7548;-122.4782,37.7697?steps=true&access_token=pk.your-key-here"
+```
+
+### JavaScript (Fetch)
+
+```javascript
+// Optimize route for delivery
+async function optimizeRoute(waypoints) {
+  const coordinates = waypoints.map(p => `${p.lng},${p.lat}`).join(';');
+
+  const response = await fetch(
+    `https://api.planisfy.com/optimization/v1/driving/${coordinates}?roundtrip=false&steps=true&geometries=geojson&access_token=YOUR_KEY`
+  );
+
+  const data = await response.json();
+  return data;
+}
+
+const waypoints = [
+  { lng: -122.4194, lat: 37.7749, name: 'Warehouse' },
+  { lng: -122.4084, lat: 37.7548, name: 'Customer A' },
+  { lng: -122.4782, lat: 37.7697, name: 'Customer B' },
+  { lng: -122.4535, lat: 37.7686, name: 'Customer C' }
+];
+
+const result = await optimizeRoute(waypoints);
+
+console.log('Optimized order:', result.trips[0].waypoint_order);
+console.log('Total distance:', (result.trips[0].distance / 1609).toFixed(1), 'miles');
+console.log('Total time:', Math.round(result.trips[0].duration / 60), 'minutes');
+```
+
+### JavaScript (MapLibre GL JS)
+
+```javascript
+// Display optimized route on map
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY',
+  center: [-122.45, 37.76],
+  zoom: 11
+});
+
+async function showOptimizedRoute(waypoints) {
+  const coordinates = waypoints.map(p => `${p.lng},${p.lat}`).join(';');
+
+  const response = await fetch(
+    `https://api.planisfy.com/optimization/v1/driving/${coordinates}?geometries=geojson&access_token=YOUR_KEY`
+  );
+
+  const data = await response.json();
+  const route = data.trips[0];
+
+  // Add optimized route line
+  map.addLayer({
+    id: 'optimized-route',
+    type: 'line',
+    source: {
+      type: 'geojson',
+      data: route.geometry
+    },
+    paint: {
+      'line-color': '#3887be',
+      'line-width': 5,
+      'line-opacity': 0.75
+    }
+  });
+
+  // Add waypoint markers in optimized order
+  const optimizedOrder = route.waypoint_order;
+
+  optimizedOrder.forEach((originalIndex, position) => {
+    const waypoint = waypoints[originalIndex];
+
+    new maplibregl.Marker({
+      color: position === 0 ? '#22c55e' : position === optimizedOrder.length - 1 ? '#ef4444' : '#3887be'
+    })
+      .setLngLat([waypoint.lng, waypoint.lat])
+      .setPopup(new maplibregl.Popup().setText(`${position + 1}. ${waypoint.name}`))
+      .addTo(map);
+  });
+}
+
+map.on('load', () => {
+  const waypoints = [
+    { lng: -122.4194, lat: 37.7749, name: 'Warehouse' },
+    { lng: -122.4084, lat: 37.7548, name: 'Customer A' },
+    { lng: -122.4782, lat: 37.7697, name: 'Customer B' },
+    { lng: -122.4535, lat: 37.7686, name: 'Customer C' }
+  ];
+
+  showOptimizedRoute(waypoints);
+});
+```
+
+### Python
+
+```python
+import requests
+
+def optimize_route(waypoints, profile='driving', roundtrip=False):
+    coordinates = ";".join([f"{p['lng']},{p['lat']}" for p in waypoints])
+
+    url = f"https://api.planisfy.com/optimization/v1/{profile}/{coordinates}"
+    params = {
+        "access_token": "pk.your-key-here",
+        "roundtrip": str(roundtrip).lower(),
+        "steps": "true"
+    }
+
+    response = requests.get(url, params=params)
+    return response.json()
+
+# Example usage
+waypoints = [
+    {"lng": -122.4194, "lat": 37.7749, "name": "Warehouse"},
+    {"lng": -122.4084, "lat": 37.7548, "name": "Customer A"},
+    {"lng": -122.4782, "lat": 37.7697, "name": "Customer B"},
+    {"lng": -122.4535, "lat": 37.7686, "name": "Customer C"}
+]
+
+result = optimize_route(waypoints)
+
+trip = result['trips'][0]
+print(f"Optimized order: {trip['waypoint_order']}")
+print(f"Total distance: {trip['distance'] / 1609:.1f} miles")
+print(f"Total time: {trip['duration'] / 60:.0f} minutes")
+
+# Display stops in optimized order
+for i, idx in enumerate(trip['waypoint_order']):
+    waypoint = waypoints[idx]
+    print(f"{i + 1}. {waypoint['name']}")
+```
+
+### Node.js
+
+```javascript
+import axios from 'axios';
+
+const optimizeRoute = async (waypoints, profile = 'driving') => {
+  const coordinates = waypoints.map(p => `${p.lng},${p.lat}`).join(';');
+
+  const response = await axios.get(
+    `https://api.planisfy.com/optimization/v1/${profile}/${coordinates}`,
+    {
+      params: {
+        access_token: process.env.PLANISFY_API_KEY,
+        roundtrip: false,
+        steps: true,
+        geometries: 'geojson'
+      }
+    }
+  );
+
+  return response.data;
+};
+
+const waypoints = [
+  { lng: -122.4194, lat: 37.7749, name: 'Warehouse' },
+  { lng: -122.4084, lat: 37.7548, name: 'Delivery 1' },
+  { lng: -122.4782, lat: 37.7697, name: 'Delivery 2' },
+  { lng: -122.4535, lat: 37.7686, name: 'Delivery 3' }
+];
+
+const result = await optimizeRoute(waypoints);
+
+console.log('Optimization complete!');
+console.log('Waypoint order:', result.trips[0].waypoint_order.map(i => waypoints[i].name));
+```
+
+---
+
+## Response Format
+
+```json
+{
+  "trips": [
+    {
+      "distance": 12345.6,
+      "duration": 1234.5,
+      "geometry": "{...polyline or GeoJSON...}",
+      "waypoint_order": [0, 2, 3, 1],
+      "legs": [
+        {
+          "distance": 1234.5,
+          "duration": 123.4,
+          "summary": "I-80 W",
+          "steps": [...]
+        }
+      ],
+      "weight_name": "auto",
+      "weight": 1234.5
+    }
+  ],
+  "waypoints": [
+    {
+      "waypoint_index": 0,
+      "trips_index": 0,
+      "location": [-122.4194, 37.7749],
+      "name": "Market Street"
+    }
+  ],
+  "code": "Ok"
+}
+```
+
+---
+
+## Response Properties
+
+### Trip Object
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `distance` | `number` | Total route distance in meters |
+| `duration` | `number` | Total travel time in seconds |
+| `geometry` | `string/object` | Polyline or GeoJSON route geometry |
+| `waypoint_order` | `number[]` | Optimized order of original waypoint indices |
+| `legs` | `array` | Route segments between consecutive waypoints |
+| `weight` | `number` | Route weight based on profile |
+
+### Waypoint Order
+
+The `waypoint_order` array indicates the optimized visiting sequence:
+
+```javascript
+// Original waypoints: [Warehouse, Customer A, Customer B, Customer C]
+waypoint_order: [0, 2, 3, 1]
+
+// Optimized sequence:
+// 1. Warehouse (index 0)
+// 2. Customer B (index 2)
+// 3. Customer C (index 3)
+// 4. Customer A (index 1)
+```
+
+### Waypoint Object
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `waypoint_index` | `number` | Original index in request |
+| `trips_index` | `number` | Trip index (for multiple vehicles) |
+| `location` | `number[]` | `[longitude, latitude]` coordinates |
+| `name` | `string` | Nearest street name |
+
+---
+
+## Advanced Features
+
+### Roundtrip vs One-Way
+
+**Roundtrip** (default): Return to starting point
+
+```bash
+# Start at warehouse, visit all customers, return to warehouse
+curl "...?roundtrip=true&..."
+```
+
+**One-Way**: End at last waypoint
+
+```bash
+# Start at warehouse, end at last customer
+curl "...?roundtrip=false&..."
+```
+
+### Custom Source and Destination
+
+Specify which waypoint is the start and end:
+
+```bash
+# Start at waypoint 2, end at waypoint 0
+curl "...?source=2&destination=0&..."
+
+# Use first waypoint as start, but don't return
+curl "...?source=first&destination=last&..."
+```
+
+### Pickup and Delivery Constraints
+
+Specify that certain waypoints must be visited in order (e.g., pickup before delivery):
+
+```bash
+# Waypoint 1 must be visited before waypoint 4
+curl "...?distributions=1,4&..."
+
+# Multiple pairs
+curl "...?distributions=1,4;2,5;3,6&..."
+```
+
+This is useful for delivery scenarios where you must pick up at location X before delivering to location Y.
+
+### Turn-by-Turn Directions
+
+Include step-by-step navigation instructions:
+
+```bash
+curl "...?steps=true&..."
+```
+
+Returns detailed steps in the `legs[].steps` array.
+
+---
+
+## Use Cases
+
+### 1. Delivery Route Optimization
+
+```javascript
+// Optimize delivery route from warehouse
+async function planDeliveryRoute(customers) {
+  const warehouse = { lng: -122.4194, lat: 37.7749, name: 'Warehouse' };
+  const waypoints = [warehouse, ...customers];
+
+  const result = await optimizeRoute(waypoints);
+
+  console.log('Delivery route:');
+  result.trips[0].waypoint_order.forEach((idx, i) => {
+    const stop = waypoints[idx];
+    console.log(`${i + 1}. ${stop.name}`);
+  });
+
+  return result;
+}
+```
+
+### 2. Sales Call Planning
+
+```javascript
+// Plan efficient sales call route
+const prospects = [
+  { lng: -122.4084, lat: 37.7548, name: 'Acme Corp' },
+  { lng: -122.4782, lat: 37.7697, name: 'Tech Solutions' },
+  { lng: -122.4535, lat: 37.7686, name: 'Global Industries' }
+];
+
+const route = await optimizeRoute(prospects, 'driving', false);
+```
+
+### 3. Service Appointment Scheduling
+
+```javascript
+// Optimize technician service calls
+const appointments = [
+  { lng: -122.4194, lat: 37.7749, name: 'Morning - Job A' },
+  { lng: -122.4084, lat: 37.7548, name: 'Midday - Job B' },
+  { lng: -122.4782, lat: 37.7697, name: 'Afternoon - Job C' }
+];
+
+// Optimize route with time windows (custom logic needed)
+const route = await optimizeRoute(appointments);
+```
+
+### 4. Tour Planning
+
+```javascript
+// Create walking tour of attractions
+const attractions = [
+  { lng: -0.1278, lat: 51.5074, name: 'Big Ben' },
+  { lng: -0.0877, lat: 51.5081, name: 'Tower of London' },
+  { lng: -0.1196, lat: 51.5033, name: 'London Eye' }
+];
+
+const tour = await optimizeRoute(attractions, 'walking', true);
+```
+
+---
+
+## Limitations and Constraints
+
+### Maximum Waypoints
+
+| Plan | Maximum Waypoints |
+|------|-------------------|
+| Free | 10 |
+| Starter | 12 |
+| Pro | 15 |
+| Enterprise | 25 |
+
+<Callout type="warn" title="Computational Complexity">
+The Traveling Salesperson Problem is NP-hard. Request time increases exponentially with the number of waypoints.
+</Callout>
+
+### Best Practices
+
+1. **Keep waypoints under 15** for fast response times
+2. **Group nearby stops** by region before optimizing
+3. **Use one-way routes** when you don't need to return to start
+4. **Consider time windows** separately (API optimizes for distance/time only)
+
+---
+
+## Caching
+
+Optimization responses are minimally cached:
+
+| Cache Type | Duration | Description |
+|------------|----------|-------------|
+| **Browser/Client** | 1 minute | Very short cache |
+| **CDN/Edge** | 1 minute | Cloudflare edge locations |
+| **Origin** | No cache | Computed fresh each time |
+
+<Callout type="info" title="No Long-Term Caching">
+Each optimization is computed based on current road conditions. Results may vary based on traffic.
+</Callout>
+
+---
+
+## Rate Limits
+
+| Plan | Requests per Minute | Requests per Day |
+|------|---------------------|------------------|
+| Free | 10 | 200 |
+| Starter | 50 | 1,000 |
+| Pro | 200 | 5,000 |
+| Enterprise | Custom | Custom |
+
+<Callout type="warn" title="Low Limits Due to Cost">
+Optimization is computationally expensive (solving TSP). Rate limits are significantly lower than other APIs.
+</Callout>
+
+---
+
+## Error Codes
+
+| HTTP Code | Error | Description |
+|-----------|-------|-------------|
+| `400` | Bad Request | Invalid coordinates or parameters |
+| `401` | Unauthorized | Missing or invalid API key |
+| `403` | Forbidden | API key suspended or over quota |
+| `413` | Payload Too Large | Too many waypoints |
+| `422` | Unprocessable Entity | No route possible between waypoints |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Server Error | Internal optimization error |
+
+### Error Response Format
+
+```json
+{
+  "message": "No route found between waypoints",
+  "code": "NoRoute",
+  "request_id": "req_abc123xyz"
+}
+```
+
+---
+
+## Switching from Mapbox
+
+Replace your Mapbox optimization URL:
+
+### Before (Mapbox)
+
+```javascript
+const url = `https://api.mapbox.com/optimized-trips/v1/mapbox/driving/${coordinates}?access_token=${mapboxToken}`;
+```
+
+### After (Planisfy)
+
+```javascript
+const url = `https://api.planisfy.com/optimization/v1/driving/${coordinates}?access_token=${planisfyKey}`;
+```
+
+### Feature Compatibility
+
+| Feature | Mapbox | Planisfy |
+|---------|--------|----------|
+| Roundtrip optimization | ✅ | ✅ |
+| Custom source/destination | ✅ | ✅ |
+| Pickup/delivery pairs | ✅ | ✅ |
+| Multiple vehicles | ✅ | ❌ (v2 feature) |
+| Traffic awareness | ✅ | ❌ |
+
+<Callout type="info" title="API Version">
+Planisfy Optimization API v1 corresponds to Mapbox Optimization API v1. Multi-vehicle optimization (v2) is not yet supported.
+</Callout>
+
+---
+
+## Best Practices
+
+### 1. Pre-Process Waypoints
+
+```javascript
+// ❌ Too many waypoints (slow)
+const allCustomers = getAllCustomers(); // 50 locations
+const route = await optimizeRoute(allCustomers);
+
+// ✅ Cluster and optimize separately
+const clusters = clusterByRegion(allCustomers, 10);
+for (const cluster of clusters) {
+  const route = await optimizeRoute(cluster);
+}
+```
+
+### 2. Add Time Windows Client-Side
+
+```javascript
+// API optimizes for route, you handle time constraints
+const appointments = [
+  { lng: -122.4084, lat: 37.7548, name: 'Customer A', window: ['09:00', '11:00'] },
+  { lng: -122.4782, lat: 37.7697, name: 'Customer B', window: ['13:00', '15:00'] }
+];
+
+const route = await optimizeRoute(appointments);
+
+// Check if optimized route fits time windows
+if (fitsTimeWindows(route, appointments)) {
+  useRoute(route);
+}
+```
+
+### 3. Handle Large Fleets
+
+```javascript
+// For many vehicles, optimize each separately
+const vehicles = [
+  { id: 'truck1', waypoints: [...] },
+  { id: 'truck2', waypoints: [...] },
+  { id: 'truck3', waypoints: [...] }
+];
+
+for (const vehicle of vehicles) {
+  vehicle.optimizedRoute = await optimizeRoute(vehicle.waypoints);
+}
+```
+
+### 4. Display Results Clearly
+
+```javascript
+const trip = result.trips[0];
+const order = trip.waypoint_order;
+
+console.log('Optimized Route:');
+console.log(`Total Distance: ${(trip.distance / 1609).toFixed(1)} miles`);
+console.log(`Total Time: ${Math.round(trip.duration / 60)} minutes`);
+console.log('\nStops:');
+
+order.forEach((originalIndex, position) => {
+  const waypoint = waypoints[originalIndex];
+  console.log(`${position + 1}. ${waypoint.name}`);
+});
+```
+
+### 5. Combine with Geocoding
+
+```javascript
+// Geocode addresses, then optimize
+const addresses = [
+  '123 Main St, San Francisco, CA',
+  '456 Oak Ave, Oakland, CA',
+  '789 Pine Rd, Berkeley, CA'
+];
+
+// First geocode all addresses
+const coordinates = await Promise.all(
+  addresses.map(addr => geocode(addr))
+);
+
+// Then optimize the route
+const route = await optimizeRoute(coordinates);
+```
+
+---
+
+## Related Resources
+
+- [Mapbox Optimization API](https://docs.mapbox.com/api/navigation/optimization/) — Original Mapbox reference
+- [Mapbox Optimization API v1](https://docs.mapbox.com/api/navigation/optimization-v1/) — Stable v1 documentation
+- [Generate an optimized route with the Optimization API](https://docs.mapbox.com/help/tutorials/optimization-api/) — Tutorial
+- [Directions API](/docs/api/directions) — Point-to-point routing
+
+---
+
+## See Also
+
+- [Directions API](/docs/api/directions) — Turn-by-turn navigation
+- [Isochrone API](/docs/api/isochrone) — Reachable areas analysis
+- [Geocoding API](/docs/api/geocoding) — Address to coordinates
+
+---
+
+Sources:
+- [Optimization API v2 | API Docs](https://docs.mapbox.com/api/navigation/optimization/)
+- [Optimization API v1 | API Docs](https://docs.mapbox.com/api/navigation/optimization-v1/)
+- [Generate an optimized route with the Optimization API](https://docs.mapbox.com/help/tutorials/optimization-api/)
