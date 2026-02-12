@@ -1,0 +1,603 @@
+---
+title: Data Sources
+description: Learn about working with map data sources for self-hosted Planisfy, including Overture Maps and custom data.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Data Sources Guide
+
+This guide covers working with map data sources for self-hosted Planisfy, including Overture Maps, OpenStreetMap, and custom data integration.
+
+---
+
+## Overture Maps (Recommended)
+
+### What is Overture Maps?
+
+Overture Maps is a collaborative effort to create a comprehensive, open-source map dataset. It aggregates data from multiple sources:
+
+- **OpenStreetMap** (roads, buildings, places)
+- **Microsoft Building Footprints** (global building footprints)
+- **Wikidata** (rich place metadata)
+- **Other open datasets**
+
+**Website:** [https://overturemaps.org/](https://overturemaps.org/)
+
+### Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **Free** | No licensing fees, no attribution required |
+| **Global** | Worldwide coverage |
+| **Regular Updates** | Monthly releases |
+| **Open** | Open-source, community-driven |
+| **Rich Data** | POIs, buildings, roads, addresses |
+
+### Data Schema
+
+Overture Maps uses a unified feature schema:
+
+| Feature Type | Description |
+|--------------|-------------|
+| `admins` | Administrative boundaries |
+| `areas` | Named areas (neighborhoods, campuses) |
+| `buildings` | Building footprints |
+| `infrastructure` | Transportation networks |
+| `land` | Land use/land cover |
+| `land_use` | Land use boundaries |
+| `places` | Populated places |
+| `pois` | Points of interest |
+
+### Download Overture Maps
+
+### Official Releases
+
+```bash
+# Latest release
+wget https://overturemaps.org/release/overture-maps-latest.7z
+
+# Specific release
+wget https://overturemaps.org/release/overture-maps-2024-01-15.7z
+```
+
+### Via Script
+
+Use the Overture download script:
+
+```bash
+# Clone the Overture tools repo
+git clone https://github.com/OvertureMaps/contrib.git
+cd contrib
+
+# Download latest release
+./download-overdata.sh
+```
+
+### Torrent
+
+For large datasets, use torrents:
+
+```bash
+# Get torrent file from Overture website
+transmission-cli overture-maps-latest.torrent
+```
+
+---
+
+## Converting to PMTiles
+
+### What are PMTiles?
+
+PMTiles is a single-file archive format for map tiles, based on MBTiles but optimized for cloud storage.
+
+**Benefits:**
+- Single file per zoom level
+- Random access for tiles
+- Compression support
+- Works with Martin and MapLibre
+
+### Conversion Process
+
+#### 1. Download Overture Data
+
+```bash
+wget https://overturemaps.org/release/overture-maps-2024-01-15.7z
+unzip overture-maps-2024-01-15.7z
+```
+
+#### 2. Extract to GeoJSON
+
+Overture data is stored as GeoJSONFeature collections:
+
+```bash
+# Buildings
+unzip overture-maps-2024-01-15/theme=buildings/type=*.zip
+```
+
+#### 3. Convert to PMTiles
+
+Use `tippecanoe` to generate PMTiles:
+
+```bash
+pip install tippecanoe
+
+# Convert buildings layer
+tippecanoe \
+  -z 0-14 \
+  -o buildings.pmtiles \
+  overture-buildings-*.geojson \
+  --name "buildings" \
+  --attribution "Overture Maps"
+```
+
+#### 4. Optimize PMTiles
+
+```bash
+# Optimize for serving
+pmtiles-optimized buildings.pmtiles buildings-optimized.pmtiles
+```
+
+---
+
+## Importing Overture Maps
+
+### Using Martin
+
+Configure Martin to serve PMTiles:
+
+```yaml
+# config/martin/martin-config.yaml
+sources:
+  overture:
+    type: pmtiles
+    path: /data/overture.pmtiles
+```
+
+### Using PostgreSQL
+
+Import to PostGIS for custom queries:
+
+```bash
+# Load QGIS
+# Open QGIS and import Overture GeoJSON
+# Export to PostgreSQL/PostGIS
+```
+
+Or use ogr2ogr:
+
+```bash
+ogr2ogr \
+  -f "PostgreSQL" \
+  PG:"host=localhost dbname=gis user=postgres" \
+  /vsizip/vsizip/overture-buildings-*.zip
+```
+
+---
+
+## OpenStreetMap
+
+### Import OSM Data
+
+#### 1. Download OSM Data
+
+Use `osmctools` to download OSM data:
+
+```bash
+# Download for specific region
+osmosis --read-pbf fast \
+  --bbox -122.5,37.7,-122.3,37.8 \
+  --write-pbf san-francisco.osm.pbf
+```
+
+#### 2. Import to PostgreSQL
+
+```bash
+# Use osm2pgsql
+osm2pgsql \
+  -c \
+  -d gis \
+  -U postgres \
+  -H localhost \
+  san-francisco.osm.pbf
+```
+
+#### 3. Configure Martin
+
+```yaml
+# config/martin/martin-config.yaml
+sources:
+  osm:
+    type: postgresql
+    connection_string: postgresql://postgres@localhost/gis
+    extent = {-180,-85.0511,180,85.0511}
+    maxzoom = 14
+```
+
+### OSM Updates
+
+OSM data is continuously updated. Update regularly:
+
+```bash
+# Download daily diff
+osmosis --read-pbf fast \
+  --read-pbf-interval changes.osc.gz \
+  -s \
+  -c \
+  -d gis
+```
+
+---
+
+## Custom Data
+
+### Supported Formats
+
+| Format | Description | Use Case |
+|--------|-------------|----------|
+| **GeoJSON** | JSON-based format | Custom POIs, areas |
+| **Shapefile** | ESRI shapefile | Legacy GIS data |
+| **PostGIS** | PostgreSQL + PostGIS | Spatial database |
+| **MBTiles** | Mapbox tiles | Pre-rendered tiles |
+| **PMTiles** | Optimized tiles | Cloud tiles |
+
+### Adding Custom POIs
+
+Create custom POI dataset:
+
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "My Store",
+        "category": "retail"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-122.4194, 37.7749]
+      }
+    }
+  ]
+}
+```
+
+Convert to PMTiles:
+
+```bash
+tippecanoe \
+  -z 14-17 \
+  -o custom-pois.pmtiles \
+  custom-pois.geojson \
+  --name "custom-pois"
+```
+
+### Custom Layers
+
+Add to Martin configuration:
+
+```yaml
+sources:
+  custom:
+    type: pmtiles
+    path: /data/custom.pmtiles
+```
+
+Use in style:
+
+```json
+{
+  "sources": {
+    "custom": {
+      "type": "vector",
+      "url": "http://localhost:3005/custom/{z}/{x}/{y}"
+    }
+  },
+  "layers": [{
+    "id": "custom-pois",
+    "type": "circle",
+    "source": "custom",
+    "source-layer": "custom-pois",
+    "paint": {
+      "circle-radius": 6,
+      "circle-color": "#ff0000"
+    }
+  }]
+}
+```
+
+---
+
+## Data Update Strategies
+
+### Full Import vs. Updates
+
+| Strategy | When to Use | Frequency |
+|----------|-------------|-----------|
+| **Full Import** | Initial setup, major updates | Monthly/Quarterly |
+| **Incremental** | Regular updates | Daily/Weekly |
+| **Replication** | Real-time sync | Continuous |
+
+### Full Import
+
+```bash
+# Stop services
+docker compose stop martin
+
+# Remove old data
+rm /data/overture.pmtiles
+
+# Import new data
+./scripts/import-overture.sh
+
+# Restart services
+docker compose start martin
+```
+
+### Incremental Updates
+
+Use OSM replication:
+
+```bash
+# Set up replication
+osmosis --read-pbf-interval-replication-001 \
+  --write-pbf /data/updates.osc.pbf \
+  --s \
+  -c
+
+# Apply updates
+osm2pgsql --append /data/updates.osc.pbf
+```
+
+### Automated Updates
+
+Add cron job:
+
+```bash
+# Add to crontab
+0 2 * * * cd /path/to/self-hosting && ./scripts/update-data.sh
+```
+
+---
+
+## Data Validation
+
+### Check Tile Coverage
+
+```bash
+# Test tile at specific coordinates
+curl "http://localhost:3005/overture/14/2626/6301?access_token=test"
+
+# Check if tile has data
+# Should return tile data (PBF), not empty response
+```
+
+### Verify Data Quality
+
+```bash
+# Query Martin for tile info
+curl "http://localhost:3005/overture/metadata?access_token=test"
+```
+
+### Test with MapLibre
+
+```javascript
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    sources: {
+      overture: {
+        type: 'vector',
+        url: 'http://localhost:3005/overture/{z}/{x}/{y}'
+      }
+    },
+    layers: [{
+      id: 'buildings',
+      type: 'fill',
+      source: 'overture',
+      'source-layer': 'buildings',
+      paint: {
+        'fill-color': '#cccccc'
+      }
+    }]
+  }
+});
+
+map.on('load', () => {
+  const center = map.getCenter();
+  console.log('Map loaded at:', center);
+});
+```
+
+---
+
+## Data Size Considerations
+
+### Storage Requirements
+
+| Data Type | Coverage | Size |
+|-----------|----------|------|
+| **Overture (global)** | Worldwide | ~500 GB |
+| **Overture (region)** | City/state | 10-50 GB |
+| **OSM (global)** | Worldwide | ~1 TB |
+| **OSM (region)** | City/state | 5-20 GB |
+| **Custom POIs** | Varies | Depends |
+
+### Optimization
+
+#### 1. Clip to Region
+
+```bash
+# Clip to bounding box
+ogr2ogr \
+  -clipsrc [xmin, ymin, xmax, ymax] \
+  -f "GeoJSON" \
+  output.geojson \
+  input.geojson
+```
+
+#### 2. Filter Features
+
+```bash
+# Keep only certain types
+tippecanoe input.geojson \
+  --filter "['properties', 'type'] == 'restaurant'" \
+  -o restaurants.pmtiles
+```
+
+#### 3. Simplify Geometry
+
+```bash
+# Reduce precision
+tippecanoe input.geojson \
+  --simplification 2 \
+  -o simplified.pmtiles
+```
+
+---
+
+## Troubleshooting
+
+### Import Fails
+
+**Check available disk space:**
+```bash
+df -h
+```
+
+**Check memory:**
+```bash
+free -h
+```
+
+**Increase swap space:**
+```bash
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+```
+
+### Tiles Not Loading
+
+**Verify Martin configuration:**
+```bash
+docker exec martin cat /config/martin-config.yaml
+```
+
+**Check if tiles exist:**
+```bash
+docker exec martin ls -la /data/
+```
+
+**Test Martin endpoint:**
+```bash
+curl "http://localhost:3005/health"
+```
+
+### Data Missing
+
+**Check source connection:**
+```bash
+docker exec martin psql -U planisfy -d tiles -c "\dt"
+```
+
+**Verify data import:**
+```bash
+docker exec postgres psql -U planisfy -d tiles \
+  -c "SELECT COUNT(*) FROM buildings;"
+```
+
+---
+
+## Best Practices
+
+### 1. Start Small
+
+**Begin with a region:**
+```bash
+# Start with single city
+wget https://download.geofabrik.de/north-america/us/california-latest.osm.pbf
+```
+
+**Scale up as needed:**
+- Learn with smaller datasets
+- Test performance
+- Understand infrastructure needs
+
+### 2. Use PMTiles for Static Data
+
+**Best for:**
+- Rarely changing data
+- High-volume serving
+- Cloud storage (S3, GCS)
+
+### 3. Use PostGIS for Dynamic Data
+
+**Best for:**
+- Frequently updated data
+- Custom queries
+- Spatial analysis
+
+### 4. Validate Data
+
+**Check before importing:**
+```bash
+# Validate GeoJSON
+cat input.geojson | jq '.'
+
+# Check file size
+ls -lh input.geojson
+
+# Preview first features
+head input.geojson | jq '.features[0]'
+```
+
+### 5. Document Data Sources
+
+**Keep track of data:**
+```yaml
+data_sources:
+  overture:
+    url: https://overturemaps.org/release/overture-maps-2024-01-15.7z
+    date: 2024-01-15
+    version: 2024.01.15
+    license: Overture Maps Foundation License
+  custom:
+    source: Internal POI database
+    last_updated: 2024-01-20
+    owner: Data Team
+```
+
+---
+
+## Related Resources
+
+- [Overture Maps Website](https://overturemaps.org/) — Official site
+- [Overture Maps GitHub](https://github.com/OvertureMaps/) — GitHub organization
+- [PMTiles Specification](https://github.com/protomaps/PMTiles) — PMTiles format
+- [Tippecanoe Documentation](https://github.com/mapbox/tippecanoe) — Tile generation
+- [OSM2PGSQL Documentation](https://osm2pgsql.org/) — OSM import tool
+
+---
+
+## See Also
+
+- [Configuration Guide](/docs/self-hosting/configuration) — Configure data sources
+- [Performance Tuning](/docs/self-hosting/performance) — Optimize data serving
+- [Overview Guide](/docs/self-hosting/overview) — Self-hosting basics
+
+---
+
+## Quick Reference
+
+| Task | Command |
+|------|---------|
+| **Download Overture** | `wget https://overturemaps.org/release/overture-maps-latest.7z` |
+| **Convert to PMTiles** | `tippecanoe -z 0-14 -o output.pmtiles input.geojson` |
+| **Test tile server** | `curl "http://localhost:3005/health"` |
+| **Check disk space** | `df -h` |
+| **Import to PostGIS** | `ogr2ogr -f "PostgreSQL" PG:"host=localhost..." input.geojson` |
