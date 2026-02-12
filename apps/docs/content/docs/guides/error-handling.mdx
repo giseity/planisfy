@@ -1,0 +1,680 @@
+---
+title: Error Handling Guide
+description: Learn how to properly handle API errors, implement retry strategies, and build resilient applications.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Error Handling Guide
+
+This guide covers common API errors, how to parse error responses, implement retry strategies, and build resilient applications that handle failures gracefully.
+
+---
+
+## Error Response Format
+
+All Planisfy API errors follow a consistent JSON format:
+
+```json
+{
+  "message": "Human-readable error description",
+  "code": "error_code_identifier",
+  "request_id": "req_abc123xyz"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message` | `string` | Human-readable description of the error |
+| `code` | `string` | Machine-readable error code for programmatic handling |
+| `request_id` | `string` | Unique identifier for the request (useful for support) |
+
+<Callout type="tip" title="Log Request IDs">
+Always log the <code>request_id</code> when handling errors. This helps Planisfy support track down specific issues.
+</Callout>
+
+---
+
+## HTTP Status Codes
+
+### Client Errors (4xx)
+
+These errors indicate a problem with the request:
+
+| Status | Error Code | Description | Common Cause |
+|--------|------------|-------------|--------------|
+| `400` | `bad_request` | Invalid request format | Malformed JSON, invalid parameters |
+| `401` | `unauthorized` | Authentication required | Missing or invalid API key |
+| `403` | `forbidden` | Access denied | Insufficient permissions, suspended account |
+| `404` | `not_found` | Resource not found | Invalid ID, non-existent resource |
+| `406` | `not_acceptable` | Invalid Accept header | Unsupported response format |
+| `408` | `request_timeout` | Request took too long | Slow server, network issues |
+| `422` | `unprocessable_entity` | Semantic errors | Invalid coordinates, failed validation |
+| `429` | `rate_limit_exceeded` | Too many requests | Rate limit exceeded |
+
+### Server Errors (5xx)
+
+These errors indicate a problem with the server:
+
+| Status | Error Code | Description | Action |
+|--------|------------|-------------|--------|
+| `500` | `internal_server_error` | Server error | Retry with backoff |
+| `502` | `bad_gateway` | Upstream server error | Retry with backoff |
+| `503` | `service_unavailable` | Service temporarily down | Retry with backoff |
+| `504` | `gateway_timeout` | Upstream timeout | Retry with backoff |
+
+---
+
+## Common Error Scenarios
+
+### 1. Invalid API Key
+
+**Status:** `401 Unauthorized`
+
+**Response:**
+```json
+{
+  "message": "Invalid API key",
+  "code": "auth_invalid_token",
+  "request_id": "req_123"
+}
+```
+
+**Solution:**
+- Verify API key is correct
+- Check token hasn't been deleted or expired
+- Ensure token has required scopes
+
+```javascript
+if (response.status === 401) {
+  console.error('Authentication failed. Check your API key.');
+}
+```
+
+### 2. Rate Limit Exceeded
+
+**Status:** `429 Too Many Requests`
+
+**Response:**
+```json
+{
+  "message": "Rate limit exceeded",
+  "code": "rate_limit_exceeded",
+  "retry-after": 60,
+  "request_id": "req_456"
+}
+```
+
+**Solution:**
+- Implement retry with `Retry-After` header
+- Reduce request frequency
+- Consider upgrading your plan
+
+```javascript
+if (response.status === 429) {
+  const retryAfter = parseInt(response.headers.get('Retry-After'));
+  await sleep(retryAfter * 1000);
+  return retryRequest();
+}
+```
+
+### 3. Invalid Coordinates
+
+**Status:** `422 Unprocessable Entity`
+
+**Response:**
+```json
+{
+  "message": "Coordinates are invalid",
+  "code": "invalid_coordinates",
+  "request_id": "req_789"
+}
+```
+
+**Solution:**
+- Validate coordinates before sending: latitude (-90 to 90), longitude (-180 to 180)
+- Check for missing or malformed coordinate values
+
+```javascript
+function validateCoordinates(lng, lat) {
+  if (lng < -180 || lng > 180) {
+    throw new Error('Longitude must be between -180 and 180');
+  }
+  if (lat < -90 || lat > 90) {
+    throw new Error('Latitude must be between -90 and 90');
+  }
+  return true;
+}
+```
+
+### 4. Resource Not Found
+
+**Status:** `404 Not Found`
+
+**Response:**
+```json
+{
+  "message": "Style not found: planisfy/unknown",
+  "code": "style_not_found",
+  "request_id": "req_abc"
+}
+```
+
+**Solution:**
+- Verify resource ID is correct
+- Check resource hasn't been deleted
+- Ensure account has access to the resource
+
+### 5. Service Unavailable
+
+**Status:** `503 Service Unavailable**
+
+**Response:**
+```json
+{
+  "message": "Service temporarily unavailable",
+  "code": "service_unavailable",
+  "request_id": "req_def"
+}
+```
+
+**Solution:**
+- Retry with exponential backoff
+- Check status page for incidents
+- Implement fallback behavior
+
+---
+
+## Retry Strategies
+
+### Exponential Backoff
+
+Increase wait time between retries:
+
+```javascript
+async function fetchWithBackoff(url, options = {}, maxRetries = 5) {
+  let lastError;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+
+      // Don't retry client errors (except 429)
+      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+        return response;
+      }
+
+      // Success or server error - return
+      if (response.ok || response.status >= 500) {
+        return response;
+      }
+
+    } catch (error) {
+      lastError = error;
+
+      // Exponential backoff: 2^attempt seconds
+      const delay = Math.pow(2, attempt) * 1000;
+      console.log(`Attempt ${attempt + 1} failed. Retrying in ${delay}ms...`);
+
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError || new Error('Max retries exceeded');
+}
+```
+
+### Retry with Jitter
+
+Add randomness to prevent thundering herd:
+
+```javascript
+function getDelayWithJitter(attempt, baseDelay = 1000) {
+  const exponentialDelay = baseDelay * Math.pow(2, attempt);
+  const jitter = Math.random() * 1000; // 0-1000ms random
+  return exponentialDelay + jitter;
+}
+
+// Usage
+await new Promise(resolve =>
+  setTimeout(resolve, getDelayWithJitter(attempt))
+);
+```
+
+### Conditional Retry
+
+Only retry on specific status codes:
+
+```javascript
+const RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504];
+
+function shouldRetry(statusCode, attempt) {
+  return RETRYABLE_STATUS_CODES.includes(statusCode) && attempt < maxRetries;
+}
+```
+
+---
+
+## Error Monitoring
+
+### Log Errors
+
+Implement structured logging:
+
+```javascript
+function logError(response, error) {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    url: response.url,
+    status: response.status,
+    code: error?.code,
+    message: error?.message,
+    requestId: error?.request_id,
+    userAgent: navigator.userAgent
+  };
+
+  // Send to logging service
+  sendToLogging(logEntry);
+
+  // Also log to console in development
+  if (process.env.NODE_ENV === 'development') {
+    console.error('API Error:', logEntry);
+  }
+}
+```
+
+### Track Error Rates
+
+Monitor error rates by endpoint:
+
+```javascript
+const errorTracker = {
+  tiles: { total: 0, errors: 0 },
+  geocoding: { total: 0, errors: 0 },
+  directions: { total: 0, errors: 0 }
+};
+
+function trackRequest(endpoint, success) {
+  if (!errorTracker[endpoint]) {
+    errorTracker[endpoint] = { total: 0, errors: 0 };
+  }
+
+  errorTracker[endpoint].total++;
+  if (!success) {
+    errorTracker[endpoint].errors++;
+  }
+
+  // Alert if error rate exceeds threshold
+  const stats = errorTracker[endpoint];
+  const errorRate = stats.errors / stats.total;
+
+  if (stats.total > 100 && errorRate > 0.05) {
+    console.warn(`High error rate for ${endpoint}: ${(errorRate * 100).toFixed(1)}%`);
+  }
+}
+```
+
+### Alert on Critical Errors
+
+Set up alerts for critical failures:
+
+```javascript
+const alertThresholds = {
+  errorRate: 0.1, // 10% error rate
+  consecutiveErrors: 5,
+  downtimeSeconds: 60
+};
+
+let consecutiveErrors = 0;
+let lastSuccessTime = Date.now();
+
+function checkAlerts() {
+  // Check consecutive errors
+  if (consecutiveErrors >= alertThresholds.consecutiveErrors) {
+    sendAlert({
+      severity: 'critical',
+      message: `${consecutiveErrors} consecutive API errors`
+    });
+  }
+
+  // Check downtime
+  const downtime = (Date.now() - lastSuccessTime) / 1000;
+  if (downtime > alertThresholds.downtimeSeconds) {
+    sendAlert({
+      severity: 'critical',
+      message: `API down for ${Math.floor(downtime)} seconds`
+    });
+  }
+}
+```
+
+---
+
+## Graceful Degradation
+
+Implement fallback behavior when APIs fail:
+
+### Fallback for Styles
+
+```javascript
+async function getMapStyle(styleId) {
+  try {
+    const response = await fetch(
+      `https://api.planisfy.com/styles/v1/planisfy/${styleId}?access_token=${apiKey}`
+    );
+    return await response.json();
+  } catch (error) {
+    console.warn('Failed to load style, using fallback');
+
+    // Return cached or fallback style
+    return {
+      version: 8,
+      name: 'Fallback Style',
+      sources: { /* ... */ },
+      layers: [ /* ... */ ]
+    };
+  }
+}
+```
+
+### Fallback for Geocoding
+
+```javascript
+async function geocodeWithFallback(address) {
+  try {
+    return await planisfyGeocode(address);
+  } catch (error) {
+    console.warn('Planisfy geocoding failed, using browser Geolocation API');
+
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            coordinates: [position.coords.longitude, position.coords.latitude],
+            source: 'browser'
+          });
+        },
+        reject
+      );
+    });
+  }
+}
+```
+
+### Offline Mode
+
+Detect offline state and provide cached data:
+
+```javascript
+const cache = await caches.open('planisfy-v1');
+
+async function fetchWithCache(url) {
+  // Check if offline
+  if (!navigator.onLine) {
+    const cached = await cache.match(url);
+    if (cached) {
+      return cached;
+    }
+    throw new Error('Offline and no cached data available');
+  }
+
+  try {
+    const response = await fetch(url);
+
+    // Cache successful responses
+    if (response.ok) {
+      await cache.put(url, response.clone());
+    }
+
+    return response;
+  } catch (error) {
+    // Try cache on network error
+    const cached = await cache.match(url);
+    if (cached) {
+      return cached;
+    }
+    throw error;
+  }
+}
+
+// Listen for online/offline events
+window.addEventListener('offline', () => {
+  console.log('App is offline. Using cached data.');
+});
+
+window.addEventListener('online', () => {
+  console.log('App is back online.');
+});
+```
+
+---
+
+## Error Handling Patterns
+
+### Try-Catch-Finally
+
+```javascript
+async function loadMap() {
+  try {
+    const style = await getMapStyle('basic');
+    map.setStyle(style);
+  } catch (error) {
+    console.error('Failed to load map:', error);
+    showErrorMessage('Unable to load map. Please try again.');
+  } finally {
+    hideLoadingSpinner();
+  }
+}
+```
+
+### Async/Await Error Boundary
+
+```javascript
+class APIErrorBoundary {
+  constructor() {
+    this.errorHandlers = new Map();
+  }
+
+  register(errorCode, handler) {
+    this.errorHandlers.set(errorCode, handler);
+  }
+
+  async handle(response) {
+    if (!response.ok) {
+      const error = await response.json();
+
+      const handler = this.errorHandlers.get(error.code);
+      if (handler) {
+        return handler(error, response);
+      }
+
+      // Default error handler
+      throw new Error(error.message);
+    }
+
+    return response;
+  }
+}
+
+// Usage
+const errorHandler = new APIErrorBoundary();
+
+errorHandler.register('rate_limit_exceeded', async (error, response) => {
+  const retryAfter = response.headers.get('Retry-After');
+  await sleep(retryAfter * 1000);
+  return retryRequest();
+});
+
+errorHandler.register('auth_invalid_token', async (error) => {
+  logout();
+  redirectToLogin();
+});
+```
+
+### Global Error Handler
+
+Set up global error handling for uncaught errors:
+
+```javascript
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection:', event.reason);
+
+  // Log to error tracking service
+  logToErrorService({
+    type: 'unhandledRejection',
+    error: event.reason,
+    url: window.location.href
+  });
+
+  // Prevent default browser error
+  event.preventDefault();
+});
+
+window.addEventListener('error', (event) => {
+  console.error('Global error:', event.error);
+
+  logToErrorService({
+    type: 'globalError',
+    error: event.error,
+    url: window.location.href
+  });
+});
+```
+
+---
+
+## Testing Error Handling
+
+### Mock API Errors
+
+Test your error handling with mock responses:
+
+```javascript
+// Test with mock 429 response
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    ok: false,
+    status: 429,
+    headers: {
+      get: (name) => name === 'Retry-After' ? '60' : null
+    },
+    json: () => Promise.resolve({
+      message: 'Rate limit exceeded',
+      code: 'rate_limit_exceeded'
+    })
+  })
+);
+
+// Test retry logic
+await expect(fetchWithRetry('https://api.planisfy.com/...')).resolves.toBeDefined();
+```
+
+### Simulate Network Failures
+
+```javascript
+// Test offline behavior
+async function testOfflineMode() {
+  // Simulate offline
+  Object.defineProperty(navigator, 'onLine', {
+    writable: true,
+    value: false
+  });
+
+  const result = await fetchWithCache('https://api.planisfy.com/styles/...');
+
+  expect(result.source).toBe('cache');
+}
+```
+
+---
+
+## Best Practices
+
+### Do's ✅
+
+- **Always check** `response.ok` before using the response
+- **Parse error responses** to get structured error information
+- **Log request IDs** for debugging
+- **Implement retry** with exponential backoff for server errors
+- **Validate input** before sending requests
+- **Provide fallbacks** for critical features
+- **Monitor error rates** and set up alerts
+- **Test error handling** in development
+
+### Don'ts ❌
+
+- **Don't ignore** errors (catch and do nothing)
+- **Don't expose** sensitive error messages to users
+- **Don't retry** indefinitely (set max retries)
+- **Don't retry** client errors (except 429)
+- **Don't log** sensitive data (API keys, user PII)
+- **Don't alert** on every single error (use thresholds)
+- **Don't retry** without backoff (causes thundering herd)
+- **Don't assume** the API is always available
+
+---
+
+## Error Reference
+
+### Authentication Errors
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `auth_invalid_token` | 401 | API key is invalid or expired |
+| `auth_missing_token` | 401 | No API key provided |
+| `auth_forbidden` | 403 | Insufficient permissions for resource |
+
+### Request Errors
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `bad_request` | 400 | Invalid request format or parameters |
+| `invalid_coordinates` | 422 | Coordinates out of valid range |
+| `invalid_query` | 400 | Query string validation failed |
+| `missing_parameter` | 400 | Required parameter not provided |
+
+### Resource Errors
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `not_found` | 404 | Resource doesn't exist |
+| `style_not_found` | 404 | Style ID not found |
+| `tile_not_found` | 404 | Tile coordinates invalid |
+
+### Rate Limit Errors
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `rate_limit_exceeded` | 429 | Too many requests |
+| `quota_exceeded` | 429 | Daily quota exceeded |
+
+### Server Errors
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `internal_error` | 500 | Unexpected server error |
+| `service_unavailable` | 503 | Service temporarily down |
+| `upstream_timeout` | 504 | Upstream service timeout |
+
+---
+
+## Related Resources
+
+- [Web Services APIs - Mapbox API Docs](https://docs.mapbox.com/api/guides/) — API overview
+- [Troubleshooting - Mapbox Help](https://docs.mapbox.com/help/troubleshooting/) — Common issues
+- [Rate Limits Guide](/docs/guides/rate-limits) — Handling 429 responses
+
+---
+
+## See Also
+
+- [Authentication Guide](/docs/guides/authentication) — Managing API keys
+- [Rate Limits Guide](/docs/guides/rate-limits) — Understanding quotas
+- [Best Practices](/docs/guides/best-practices) — Production patterns
+
+---
+
+Sources:
+- [Web Services APIs - Mapbox API Docs](https://docs.mapbox.com/api/guides/)
+- [Troubleshooting - Mapbox Help](https://docs.mapbox.com/help/troubleshooting/)
+- [Troubleshooting Access Tokens - Mapbox Help](https://docs.mapbox.com/help/troubleshooting/token-errors/)
