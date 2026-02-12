@@ -1,0 +1,607 @@
+---
+title: Geocoding API
+description: Convert addresses to coordinates (forward geocoding) and coordinates to addresses (reverse geocoding).
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Geocoding API
+
+The **Planisfy Geocoding API** converts street addresses to coordinates (**forward geocoding**) and coordinates to addresses (**reverse geocoding**). Our API is drop-in compatible with Mapbox Geocoding v5, powered by open-source search engines.
+
+<Callout type="info" title="Data Source">
+Geocoding is powered by <a href="https://pelias.io/" target="_blank">Pelias</a>, an open-source geocoder using Overture Maps and OpenStreetMap data.
+</Callout>
+
+---
+
+## Forward Geocoding
+
+Convert a text address or place name into geographic coordinates.
+
+### Endpoint
+
+```
+GET https://api.planisfy.com/geocoding/v5/{country}/{query}.json?access_token=YOUR_KEY
+```
+
+| Component | Description |
+|-----------|-------------|
+| `country` | Country code for region biasing (e.g., `us`, `uk`, `ca`, `international`) |
+| `query` | URL-encoded search query (address, place name, POI) |
+
+### Request Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `access_token` | `string` | Yes | Your API key |
+| `query` | `string` | Yes | Search query in URL path |
+| `country` | `string` | Yes | Country code for region biasing |
+
+### Optional Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | `integer` | Number of results to return (1-10, default: 5) |
+| `bbox` | `string` | Bias results to bounding box: `min_lon,min_lat,max_lon,max_lat` |
+| `proximity` | `string` | Bias results to nearby location: `longitude,latitude` |
+| `types` | `string` | Filter by place type(s): `country,region,place,locality,neighborhood,address,poi` |
+| `autocomplete` | `boolean` | Return autocomplete results (default: `true`) |
+| `fuzzyMatch` | `boolean` | Fuzzy matching for misspellings (default: `true`) |
+| `language` | `string` | Language for results (e.g., `en`, `es`, `fr`) |
+
+---
+
+## Reverse Geocoding
+
+Convert geographic coordinates into a readable address or place name.
+
+### Endpoint
+
+```
+GET https://api.planisfy.com/geocoding/v5/{country}/{longitude},{latitude}.json?access_token=YOUR_KEY
+```
+
+| Component | Description |
+|-----------|-------------|
+| `country` | Country code for region (e.g., `us`, `uk`, `international`) |
+| `longitude` | X coordinate (decimal degrees) |
+| `latitude` | Y coordinate (decimal degrees) |
+
+### Request Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `access_token` | `string` | Yes | Your API key |
+| `longitude` | `number` | Yes | X coordinate (-180 to 180) |
+| `latitude` | `number` | Yes | Y coordinate (-85 to 85) |
+| `country` | `string` | Yes | Country code for region |
+
+### Optional Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `types` | `string` | Filter by place type(s) |
+| `language` | `string` | Language for results |
+
+---
+
+## Example Requests
+
+### cURL
+
+#### Forward Geocoding
+
+```bash
+# Search for an address
+curl "https://api.planisfy.com/geocoding/v5/us/1600%20pennsylvania%20ave%20nw%20washington%20dc.json?access_token=pk.your-key-here"
+
+# Search for a place name
+curl "https://api.planisfy.com/geocoding/v5/international/Eiffel%20Tower.json?access_token=pk.your-key-here"
+
+# Search with proximity bias
+curl "https://api.planisfy.com/geocoding/v5/us/main%20street.json?proximity=-122.4194,37.7749&access_token=pk.your-key-here"
+```
+
+#### Reverse Geocoding
+
+```bash
+# Get address from coordinates
+curl "https://api.planisfy.com/geocoding/v5/us/-77.0365,38.8977.json?access_token=pk.your-key-here"
+
+# Reverse geocode international location
+curl "https://api.planisfy.com/geocoding/v5/international/2.3522,48.8566.json?access_token=pk.your-key-here"
+```
+
+### JavaScript (MapLibre GL JS)
+
+```javascript
+// Forward geocoding
+async function geocode(address) {
+  const response = await fetch(
+    `https://api.planisfy.com/geocoding/v5/us/${encodeURIComponent(address)}.json?access_token=YOUR_KEY`
+  );
+  const data = await response.json();
+  return data.features;
+}
+
+const results = await geocode('1600 Pennsylvania Ave NW, Washington, DC');
+console.log('Coordinates:', results[0].center); // [longitude, latitude]
+```
+
+### JavaScript (Mapbox GL JS)
+
+```javascript
+// Mapbox GL JS compatibility
+const results = await mapboxGeocoding.geocode({
+  query: '1600 Pennsylvania Ave NW, Washington, DC',
+  countries: ['us'],
+  accessToken: 'YOUR_PLANISFY_KEY'
+}).send();
+```
+
+### JavaScript (Reverse Geocoding)
+
+```javascript
+// Reverse geocoding
+async function reverseGeocode(lng, lat) {
+  const response = await fetch(
+    `https://api.planisfy.com/geocoding/v5/us/${lng},${lat}.json?access_token=YOUR_KEY`
+  );
+  const data = await response.json();
+  return data.features;
+}
+
+const address = await reverseGeocode(-77.0365, 38.8977);
+console.log('Address:', address[0].place_name);
+```
+
+### Python
+
+```python
+import requests
+
+def geocode(address, country='us'):
+    url = f"https://api.planisfy.com/geocoding/v5/{country}/{address}.json"
+    params = {"access_token": "pk.your-key-here"}
+
+    response = requests.get(url, params=params)
+    return response.json()
+
+# Forward geocoding
+result = geocode("Eiffel Tower", country="international")
+print(f"Coordinates: {result['features'][0]['center']}")
+
+# Reverse geocoding
+def reverse_geocode(lng, lat, country='us'):
+    url = f"https://api.planisfy.com/geocoding/v5/{country}/{lng},{lat}.json"
+    params = {"access_token": "pk.your-key-here"}
+
+    response = requests.get(url, params=params)
+    return response.json()
+
+result = reverse_geocode(2.3522, 48.8566, country="international")
+print(f"Address: {result['features'][0]['place_name']}")
+```
+
+### Node.js
+
+```javascript
+import axios from 'axios';
+
+// Forward geocoding
+const geocode = async (query, country = 'us') => {
+  const response = await axios.get(
+    `https://api.planisfy.com/geocoding/v5/${country}/${encodeURIComponent(query)}.json`,
+    { params: { access_token: process.env.PLANISFY_API_KEY } }
+  );
+  return response.data;
+};
+
+const results = await geocode('Golden Gate Bridge');
+console.log('Location:', results.features[0].place_name);
+console.log('Coordinates:', results.features[0].center);
+```
+
+---
+
+## Response Format
+
+### Forward Geocoding Response
+
+```json
+{
+  "type": "FeatureCollection",
+  "query": ["1600", "pennsylvania", "ave", "washington", "dc"],
+  "features": [
+    {
+      "id": "place.12345",
+      "type": "Feature",
+      "place_type": ["address"],
+      "relevance": 0.99,
+      "properties": {
+        "accuracy": "rooftop",
+        "address": "1600",
+        "street": "Pennsylvania Avenue NW",
+        "city": "Washington",
+        "region": "District of Columbia",
+        "postcode": "20500",
+        "country": "United States"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-77.0365, 38.8977]
+      },
+      "text": "1600 Pennsylvania Avenue NW",
+      "place_name": "1600 Pennsylvania Avenue NW, Washington, DC 20500, United States",
+      "center": [-77.0365, 38.8977],
+      "bbox": [-77.0366, 38.8976, -77.0364, 38.8978]
+    }
+  ],
+  "attribution": "NOTICE: © OpenStreetMap contributors, ODbL 1.0"
+}
+```
+
+### Reverse Geocoding Response
+
+```json
+{
+  "type": "FeatureCollection",
+  "query": [-77.0365, 38.8977],
+  "features": [
+    {
+      "id": "place.67890",
+      "type": "Feature",
+      "place_type": ["address"],
+      "relevance": 1,
+      "properties": {
+        "accuracy": "rooftop"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-77.0365, 38.8977]
+      },
+      "text": "1600 Pennsylvania Avenue NW",
+      "place_name": "1600 Pennsylvania Avenue NW, Washington, DC 20500, United States",
+      "center": [-77.0365, 38.8977],
+      "bbox": [-77.0366, 38.8976, -77.0364, 38.8978]
+    }
+  ],
+  "attribution": "NOTICE: © OpenStreetMap contributors, ODbL 1.0"
+}
+```
+
+---
+
+## Response Properties
+
+### Feature Object
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Unique identifier for the place |
+| `type` | `string` | Always `"Feature"` |
+| `place_type` | `string[]` | Array of place type categories |
+| `relevance` | `number` | Relevance score (0-1, higher = better match) |
+| `properties` | `object` | Additional metadata about the place |
+| `geometry` | `object` | GeoJSON geometry (Point coordinates) |
+| `text` | `string` | Primary name of the place |
+| `place_name` | `string` | Full formatted address/name |
+| `center` | `number[]` | `[longitude, latitude]` coordinates |
+| `bbox` | `number[]` | Bounding box `[min_lon, min_lat, max_lon, max_lat]` |
+
+### Place Types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `country` | Sovereign nation | United States |
+| `region` | State, province, or region | California |
+| `place` | City or town | San Francisco |
+| `locality` | Smaller populated place | Neighborhood |
+| `neighborhood` | Residential or commercial area | Downtown |
+| `address` | Street address | 123 Main Street |
+| `poi` | Point of interest | Restaurant, park |
+
+---
+
+## Search Features
+
+### Proximity Search
+
+Bias results to a location for local searches:
+
+```bash
+# Find "Main Street" near San Francisco
+curl "https://api.planisfy.com/geocoding/v5/us/main%20street.json?proximity=-122.4194,37.7749&access_token=pk.your-key-here"
+```
+
+### Bounding Box Search
+
+Restrict results to a geographic area:
+
+```bash
+# Search within New York City bounds
+curl "https://api.planisfy.com/geocoding/v5/us/coffee.json?bbox=-74.05,40.68,-73.95,40.88&access_token=pk.your-key-here"
+```
+
+### Place Type Filtering
+
+Filter results by specific types:
+
+```bash
+# Only return cities
+curl "https://api.planisfy.com/geocoding/v5/us/Paris.json?types=place&access_token=pk.your-key-here"
+
+# Multiple types
+curl "https://api.planisfy.com/geocoding/v5/us/Paris.json?types=place,locality&access_token=pk.your-key-here"
+```
+
+### Language Selection
+
+Return results in a specific language:
+
+```bash
+# Get results in Spanish
+curl "https://api.planisfy.com/geocoding/v5/us/Los%20Angeles.json?language=es&access_token=pk.your-key-here"
+```
+
+---
+
+## Structured Input
+
+Format addresses with components for better accuracy:
+
+```javascript
+// Structured format: street, city, state, postal, country
+const structuredQuery = [
+  '1600 Pennsylvania Avenue NW',
+  'Washington',
+  'DC',
+  '20500'
+].join(', ');
+
+const response = await fetch(
+  `https://api.planisfy.com/geocoding/v5/us/${encodeURIComponent(structuredQuery)}.json?access_token=YOUR_KEY`
+);
+```
+
+<Callout type="tip" title="Best Practice">
+Use structured input format: <code>street, city, state, postcode, country</code> for the most accurate geocoding results.
+</Callout>
+
+---
+
+## Batch Geocoding
+
+Process multiple addresses in a single request (up to 50):
+
+```bash
+# Batch forward geocoding
+curl "https://api.planisfy.com/geocoding/v5/batch.json?access_token=pk.your-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "queries": [
+      "1600 Pennsylvania Ave NW, Washington, DC",
+      "10 Downing Street, London",
+      "Eiffel Tower, Paris"
+    ]
+  }'
+```
+
+```javascript
+// Batch geocoding with JavaScript
+const batchGeocode = async (addresses) => {
+  const response = await fetch(
+    'https://api.planisfy.com/geocoding/v5/batch.json?access_token=YOUR_KEY',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ queries: addresses })
+    }
+  );
+  return await response.json();
+};
+
+const results = await batchGeocode([
+  '1600 Pennsylvania Ave NW, Washington, DC',
+  '10 Downing Street, London'
+]);
+```
+
+<Callout type="warn" title="Batch Limits">
+Maximum 50 queries per batch request. Each query counts against your rate limit.
+</Callout>
+
+---
+
+## Country Codes
+
+| Code | Country |
+|------|---------|
+| `us` | United States |
+| `ca` | Canada |
+| `uk` | United Kingdom |
+| `au` | Australia |
+| `de` | Germany |
+| `fr` | France |
+| `es` | Spain |
+| `it` | Italy |
+| `jp` | Japan |
+| `international` | Global search (no country bias) |
+
+<Callout type="info" title="ISO 3166-1 alpha-2">
+Country codes follow the <a href="https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2" target="_blank">ISO 3166-1 alpha-2</a> standard.
+</Callout>
+
+---
+
+## Caching
+
+Geocoding results are cached to reduce latency:
+
+| Cache Type | Duration | Description |
+|------------|----------|-------------|
+| **Browser/Client** | 1 hour | Short-term cache for recent queries |
+| **CDN/Edge** | 1 hour | Cloudflare edge locations |
+| **Origin** | 1 hour | Planisfy servers |
+
+<Callout type="tip" title="Client-Side Caching">
+Implement your own geocode cache using localStorage or a Map to avoid repeated API calls for the same addresses.
+</Callout>
+
+---
+
+## Rate Limits
+
+| Plan | Requests per Minute | Requests per Day |
+|------|---------------------|------------------|
+| Free | 100 | 5,000 |
+| Starter | 1,000 | 50,000 |
+| Pro | 5,000 | 500,000 |
+| Enterprise | Custom | Custom |
+
+<Callout type="warn" title="Rate Limit by Plan">
+Geocoding has separate rate limits from tile requests. Check your plan for current limits.
+</Callout>
+
+---
+
+## Error Codes
+
+| HTTP Code | Error | Description |
+|-----------|-------|-------------|
+| `400` | Bad Request | Invalid query or parameters |
+| `401` | Unauthorized | Missing or invalid API key |
+| `403` | Forbidden | API key suspended or over quota |
+| `404` | Not Found | No results found for query |
+| `422` | Unprocessable Entity | Invalid coordinate format |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Server Error | Internal server error |
+
+### Error Response Format
+
+```json
+{
+  "message": "Query too long",
+  "code": "query_too_long",
+  "request_id": "req_abc123xyz"
+}
+```
+
+---
+
+## Switching from Mapbox
+
+Replace your Mapbox geocoding URL:
+
+### Before (Mapbox)
+
+```javascript
+// Mapbox Geocoding v5
+const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}`;
+```
+
+### After (Planisfy)
+
+```javascript
+// Planisfy Geocoding (drop-in compatible)
+const url = `https://api.planisfy.com/geocoding/v5/us/${encodeURIComponent(query)}.json?access_token=${planisfyKey}`;
+```
+
+### SDK Migration
+
+If using the Mapbox SDK, update the base URL:
+
+```javascript
+// Mapbox GL JS Geocoder plugin
+const geocoder = new MapboxGeocoder({
+  accessToken: 'YOUR_PLANISFY_KEY',
+  origin: 'https://api.planisfy.com',
+  placeholder: 'Search for an address'
+});
+
+map.addControl(geocoder);
+```
+
+<Callout type="tip" title="Country Parameter Required">
+Planisfy requires a country code parameter (<code>us</code>, <code>international</code>, etc.). Mapbox uses <code>mapbox.places</code> instead.
+</Callout>
+
+---
+
+## Best Practices
+
+### 1. Use Specific Queries
+
+```javascript
+// ❌ Too vague
+geocode('Main Street');
+
+// ✅ More specific
+geocode('Main Street, Springfield, IL');
+```
+
+### 2. Implement Client-Side Caching
+
+```javascript
+const geocodeCache = new Map();
+
+async function cachedGeocode(query) {
+  if (geocodeCache.has(query)) {
+    return geocodeCache.get(query);
+  }
+
+  const results = await geocode(query);
+  geocodeCache.set(query, results);
+  return results;
+}
+```
+
+### 3. Handle No Results Gracefully
+
+```javascript
+const results = await geocode('Invalid Address');
+
+if (results.features.length === 0) {
+  console.log('No results found');
+  // Show user feedback
+} else {
+  const [firstResult] = results.features;
+  map.flyTo({ center: firstResult.center });
+}
+```
+
+### 4. Use Proximity for Local Search
+
+```javascript
+// When user searches, bias to their current location
+map.on('click', (e) => {
+  const results = await geocode('coffee', {
+    proximity: `${e.lngLat.lng},${e.lngLat.lat}`
+  });
+});
+```
+
+---
+
+## Related Resources
+
+- [Mapbox Geocoding v5 API](https://docs.mapbox.com/api/search/geocoding-v5/) — Original Mapbox reference
+- [Pelias Documentation](https://pelias.io/) — Open-source geocoder powering Planisfy
+- [Directions API](/docs/api/directions) — Routing between geocoded locations
+- [Migration Guide](/docs/migration) — Complete Mapbox migration guide
+
+---
+
+## See Also
+
+- [Directions API](/docs/api/directions) — Turn-by-turn navigation
+- [Styles API](/docs/api/styles) — Map rendering
+- [Authentication Guide](/docs/guides/authentication) — API key management
+
+---
+
+Sources:
+- [Geocoding v5 API | API Docs | Mapbox](https://docs.mapbox.com/api/search/geocoding-v5/)
+- [Geocoding API | API Docs](https://docs.mapbox.com/api/search/geocoding/)
+- [Search | API Docs](https://docs.mapbox.com/api/search/)
