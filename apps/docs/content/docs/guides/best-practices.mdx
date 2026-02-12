@@ -1,0 +1,784 @@
+---
+title: Best Practices
+description: Recommended patterns and practices for building production applications with Planisfy APIs.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Best Practices Guide
+
+This guide covers recommended patterns, performance optimizations, security considerations, and design principles for building production applications with Planisfy APIs.
+
+---
+
+## Frontend Implementation Patterns
+
+### 1. Lazy Load Maps
+
+Load map libraries only when needed:
+
+```javascript
+// Lazy load MapLibre GL JS
+function loadMapLibre() {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js';
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+// Load only when map component mounts
+async function initializeMap() {
+  await loadMapLibre();
+
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY'
+  });
+}
+```
+
+### 2. Defer Map Initialization
+
+Initialize maps after other critical resources:
+
+```html
+<!-- Defer map loading -->
+<script defer>
+  window.addEventListener('load', () => {
+    initializeMap();
+  });
+</script>
+```
+
+### 3. Use Multiple Map Instances Wisely
+
+Multiple maps increase memory usage:
+
+```javascript
+// ❌ Bad - Multiple full map instances
+const map1 = new maplibregl.Map({ /* ... */ });
+const map2 = new maplibregl.Map({ /* ... */ });
+const map3 = new maplibregl.Map({ /* ... */ });
+
+// ✅ Good - Use one map, change viewport
+const map = new maplibregl.Map({ /* ... */ });
+
+// Change view as needed
+function showLocation(center, zoom) {
+  map.flyTo({ center, zoom });
+}
+```
+
+### 4. Responsive Map Sizing
+
+Handle window resize properly:
+
+```javascript
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY'
+});
+
+// Resize map on window resize
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    map.resize();
+  }, 250); // Debounce resize
+});
+```
+
+---
+
+## Performance Optimization
+
+### 1. Minimize Tile Requests
+
+Reduce unnecessary tile loading:
+
+```javascript
+// Limit visible zoom levels
+map.setMaxBounds([
+  [-122.5, 37.7], // Southwest
+  [-122.3, 37.8]  // Northeast
+]);
+
+// Set min/max zoom
+map.setMinZoom(10);
+map.setMaxZoom(16);
+```
+
+### 2. Use Vector Tiles Over Raster
+
+Vector tiles are more efficient:
+
+| Aspect | Vector Tiles | Raster Tiles |
+|--------|--------------|--------------|
+| **File size** | 10-50 KB | 100-500 KB |
+| **Styling** | Client-side (1 style) | Server-side (multiple styles) |
+| **Bandwidth** | Lower | Higher |
+| **Flexibility** | High (dynamic) | Low (static) |
+
+```javascript
+// ✅ Use vector tiles
+const style = 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY';
+```
+
+### 3. Optimize Layer Rendering
+
+Control which layers are rendered:
+
+```javascript
+// Remove unnecessary layers
+map.on('load', () => {
+  const style = map.getStyle();
+
+  style.layers.forEach(layer => {
+    // Remove POI layers at low zoom
+    if (layer.id.includes('poi') && map.getZoom() < 12) {
+      map.removeLayer(layer.id);
+    }
+  });
+});
+
+// Show/hide layers based on zoom
+map.on('zoomend', () => {
+  const zoom = map.getZoom();
+
+  if (zoom < 12) {
+    map.setLayoutProperty('places', 'visibility', 'none');
+  } else {
+    map.setLayoutProperty('places', 'visibility', 'visible');
+  }
+});
+```
+
+### 4. Use Clustering for Points
+
+Cluster many points for better performance:
+
+```javascript
+map.addLayer({
+  id: 'clusters',
+  type: 'circle',
+  source: 'places',
+  filter: ['has', 'point_count'],
+  paint: {
+    'circle-color': [
+      'step',
+      ['get', 'point_count'],
+      '#51bbd6',
+      100,
+      '#f1f075',
+      750,
+      '#f28cb1'
+    ],
+    'circle-radius': [
+      'step',
+      ['get', 'point_count'],
+      20,
+      100,
+      30,
+      750,
+      40
+    ]
+  }
+});
+```
+
+### 5. Debounce User Input
+
+Prevent excessive API calls:
+
+```javascript
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Debounce geocoding
+const debouncedGeocode = debounce(geocodeAddress, 300);
+
+searchInput.addEventListener('input', (e) => {
+  debouncedGeocode(e.target.value);
+});
+```
+
+---
+
+## Security Considerations
+
+### 1. Never Expose Secret Tokens
+
+Use public tokens only in frontend:
+
+```javascript
+// ❌ Never do this
+const SECRET_KEY = 'sk.your-secret-key-here';
+
+// ✅ Use environment variables
+const PUBLIC_KEY = process.env.PLANISFY_PUBLIC_KEY;
+```
+
+### 2. Use Domain Restrictions
+
+Restrict API keys to specific domains in your dashboard:
+
+```
+Allowed Domains:
+- https://yourapp.com
+- https://www.yourapp.com
+```
+
+### 3. Implement Content Security Policy
+
+Add CSP headers to prevent XSS:
+
+```html
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self' 'unsafe-inline' https://unpkg.com;
+               style-src 'self' 'unsafe-inline';
+               img-src 'self' data: https://api.planisfy.com;">
+```
+
+### 4. Validate User Input
+
+Sanitize all user-provided data:
+
+```javascript
+function sanitizeCoordinate(value) {
+  const num = parseFloat(value);
+
+  if (isNaN(num)) {
+    throw new Error('Invalid coordinate');
+  }
+
+  if (num < -180 || num > 180) {
+    throw new Error('Coordinate out of range');
+  }
+
+  return num;
+}
+
+// Use before API calls
+const lng = sanitizeCoordinate(userInputLng);
+const lat = sanitizeCoordinate(userInputLat);
+```
+
+### 5. Use HTTPS Only
+
+Never make API requests over HTTP:
+
+```javascript
+// ✅ Always use HTTPS
+const apiUrl = 'https://api.planisfy.com/styles/v1/planisfy/basic';
+```
+
+### 6. Implement Rate Limiting on Client
+
+Prevent abuse from your own app:
+
+```javascript
+class RateLimiter {
+  constructor(maxRequests, perMilliseconds) {
+    this.maxRequests = maxRequests;
+    this.perMilliseconds = perMilliseconds;
+    this.requests = [];
+  }
+
+  canMakeRequest() {
+    const now = Date.now();
+
+    // Remove old requests outside the time window
+    this.requests = this.requests.filter(
+      time => now - time < this.perMilliseconds
+    );
+
+    return this.requests.length < this.maxRequests;
+  }
+
+  recordRequest() {
+    this.requests.push(Date.now());
+  }
+}
+
+// Use for expensive operations
+const geocodeLimiter = new RateLimiter(10, 60000); // 10 per minute
+
+async function rateLimitedGeocode(address) {
+  if (!geocodeLimiter.canMakeRequest()) {
+    throw new Error('Rate limit exceeded. Please wait.');
+  }
+
+  geocodeLimiter.recordRequest();
+  return await geocode(address);
+}
+```
+
+---
+
+## Mobile App Integration
+
+### 1. Store API Keys Securely
+
+**iOS (Swift):**
+
+```swift
+// Use Environment Variables or xcconfig
+let apiKey = Bundle.main.object(forInfoDictionaryKey: "PLANISFY_API_KEY") as! String
+```
+
+**Android (Kotlin):**
+
+```kotlin
+// Use local.properties or BuildConfig
+val apiKey = BuildConfig.PLANISFY_API_KEY
+```
+
+**React Native:**
+
+```javascript
+// Use .env file (don't commit it)
+import { PLANISFY_API_KEY } from '@env';
+
+const mapStyle = `https://api.planisfy.com/styles/v1/planisfy/basic?access_token=${PLANISFY_API_KEY}`;
+```
+
+### 2. Optimize for Mobile Data
+
+Reduce bandwidth usage:
+
+```javascript
+// Use lower zoom levels on initial load
+const map = new maplibregl.Map({
+  container: 'map',
+  style: mapStyle,
+  zoom: 10, // Start with lower detail
+  pitch: 0   // Disable 3D initially (saves bandwidth)
+});
+
+// Enable detail only on demand
+map.on('load', () => {
+  if (isHighBandwidthConnection()) {
+    map.setPitch(60);
+  }
+});
+```
+
+### 3. Handle App Background
+
+Pause tile loading when app is backgrounded:
+
+```javascript
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    // App backgrounded - pause updates
+    map.setStyle(map.getStyle(), { diff: true });
+  } else {
+    // App foregrounded - resume
+  }
+});
+```
+
+### 4. Use Offline Packs
+
+Enable offline maps:
+
+```javascript
+// MapLibre GL JS offline support
+const offlinePack = {
+  name: 'san-francisco',
+  styleURL: mapStyle,
+  minZoom: 10,
+  maxZoom: 14,
+  bounds: [
+    [-122.5, 37.7],
+    [-122.3, 37.8]
+  ]
+};
+
+map.offlineManager.createPack(offlinePack, (progress, error) => {
+  if (error) {
+    console.error('Offline pack error:', error);
+  } else {
+    console.log(`Offline pack progress: ${progress.percentage}%`);
+  }
+});
+```
+
+---
+
+## Map Design Tips
+
+### 1. Choose the Right Base Style
+
+Select a style appropriate for your use case:
+
+| Style | Best For |
+|-------|----------|
+| `basic` | Data visualization, dashboards |
+| `streets` | Navigation, local search |
+| `dark` | Night mode, embedded maps |
+| `satellite` | Terrain visualization, outdoor |
+
+### 2. Use Color Purposefully
+
+Choose colors for meaning:
+
+```javascript
+// ✅ Good - Semantic colors
+map.setPaintProperty('places', 'circle-color', [
+  'match',
+  ['get', 'category'],
+  'restaurant',
+  '#FF5733',
+  'gas-station',
+  '#FFC300',
+  'parking',
+  '#C70039',
+  '#900C3F'  // Default
+]);
+```
+
+### 3. Typography Best Practices
+
+Ensure text is readable:
+
+```javascript
+// Set appropriate text size based on zoom
+map.setLayoutProperty('places', 'text-size', [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  10,
+  12,
+  15,
+  14
+]);
+
+// Use high contrast colors
+map.setPaintProperty('places', 'text-color', '#000000');
+map.setPaintProperty('places', 'text-halo-color', '#FFFFFF');
+map.setPaintProperty('places', 'text-halo-width', 2);
+```
+
+### 4. Progressive Disclosure
+
+Show more detail as user zooms:
+
+```javascript
+// Show place labels only at higher zoom
+map.setLayoutProperty('places', 'text-field', [
+  'step',
+  ['zoom'],
+  '',
+  12,
+  ['get', 'name']
+]);
+
+// Show POI icons only at high zoom
+map.setLayoutProperty('pois', 'icon-image', [
+  'step',
+  ['zoom'],
+  '',
+  14,
+  ['get', 'icon']
+]);
+```
+
+### 5. Use 3D Judiciously
+
+3D effects are expensive:
+
+```javascript
+// ✅ Enable 3D only on desktop
+if (window.innerWidth > 1024) {
+  map.setPitch(60);
+}
+
+// ❌ Don't use 3D on mobile by default
+// (it drains battery and reduces performance)
+```
+
+---
+
+## Error Handling
+
+### 1. Graceful Degradation
+
+Provide fallbacks when APIs fail:
+
+```javascript
+async function loadMapWithFallback(styleId) {
+  try {
+    const style = await fetchStyle(styleId);
+    map.setStyle(style);
+  } catch (error) {
+    console.error('Failed to load style:', error);
+
+    // Use cached or fallback style
+    map.setStyle(getFallbackStyle());
+    showNotification('Using offline map. Some features unavailable.');
+  }
+}
+```
+
+### 2. User Feedback
+
+Inform users about errors:
+
+```javascript
+map.on('error', (error) => {
+  console.error('Map error:', error);
+
+  // Show user-friendly message
+  showNotification({
+    type: 'error',
+    message: 'Unable to load map. Please check your connection.'
+  });
+});
+```
+
+### 3. Retry Logic
+
+Implement smart retries:
+
+```javascript
+async function loadStyleWithRetry(styleId, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fetchStyle(styleId);
+    } catch (error) {
+      if (attempt === maxRetries - 1) {
+        throw error;
+      }
+
+      // Exponential backoff
+      await new Promise(resolve =>
+        setTimeout(resolve, Math.pow(2, attempt) * 1000)
+      );
+    }
+  }
+}
+```
+
+---
+
+## Testing and Debugging
+
+### 1. Test on Real Devices
+
+Emulators don't always match real device performance:
+
+- Test on actual phones and tablets
+- Test on slow 3G connections
+- Test with different screen sizes
+
+### 2. Monitor Performance
+
+Use browser dev tools:
+
+```javascript
+// Log performance metrics
+map.on('render', () => {
+  const fps = map.getPainter().fps;
+  const frameTime = map.getPainter().frameTime;
+
+  if (fps < 30) {
+    console.warn('Low frame rate:', fps, 'fps');
+  }
+});
+```
+
+### 3. Debug Map Issues
+
+Use MapLibre Inspector:
+
+```javascript
+// Enable debug mode
+const map = new maplibregl.Map({
+  container: 'map',
+  style: mapStyle,
+  debug: true  // Shows tile boundaries, collision boxes
+});
+
+// Or use the browser extension
+// https://github.com/maplibre/maplibre-gl-inspector
+```
+
+### 4. Network Throttling
+
+Test slow connections:
+
+1. Open Chrome DevTools
+2. Go to Network tab
+3. Select "Slow 3G" throttling
+4. Test your map performance
+
+---
+
+## Production Checklist
+
+Before deploying to production:
+
+### Configuration ✅
+
+- [ ] Using environment variables for API keys
+- [ ] Domain restrictions configured
+- [ ] HTTPS only for all API requests
+- [ ] Appropriate rate limits per environment
+- [ ] Error tracking integrated (Sentry, etc.)
+- [ ] Analytics implemented
+
+### Performance ✅
+
+- [ ] Images optimized and compressed
+- [ ] Code minified and bundled
+- [ ] Lazy loading implemented
+- [ ] Caching configured properly
+- [ ] Tile requests minimized
+- [ ] 3D effects limited to desktop
+
+### Security ✅
+
+- [ ] No secret tokens in frontend code
+- [ ] Content Security Policy configured
+- [ ] Input validation implemented
+- [ ] Rate limiting in place
+- [ ] HTTPS enforced
+- [ ] Dependencies audited
+
+### Testing ✅
+
+- [ ] Tested on multiple browsers
+- [ ] Tested on mobile devices
+- [ ] Tested on slow connections
+- [ ] Error scenarios tested
+- [ ] Load testing completed
+- [ ] Accessibility tested
+
+### Monitoring ✅
+
+- [ ] Error tracking set up
+- [ ] Performance monitoring configured
+- [ ] Usage analytics implemented
+- [ ] Alerts configured
+- [ ] Logging in place
+
+---
+
+## Common Pitfalls
+
+### 1. Hardcoding API Keys
+
+```javascript
+// ❌ Never commit this
+const API_KEY = 'pk.your-hardcoded-key';
+
+// ✅ Use environment variables
+const API_KEY = process.env.PLANISFY_API_KEY;
+```
+
+### 2. Ignoring Error Handling
+
+```javascript
+// ❌ Silent failures
+fetch(url).then(response => response.json());
+
+// ✅ Proper error handling
+fetch(url)
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return response.json();
+  })
+  .catch(error => console.error('Fetch error:', error));
+```
+
+### 3. Over-Fetching Data
+
+```javascript
+// ❌ Fetching too much data
+const allPlaces = await fetchAllPlaces(); // 10,000 items
+
+// ✅ Fetch only visible data
+const visiblePlaces = await fetchPlacesInView(bounds);
+```
+
+### 4. Not Using Caching
+
+```javascript
+// ❌ No caching
+async function getStyle(styleId) {
+  return await fetch(`https://api.planisfy.com/styles/v1/planisfy/${styleId}?access_token=KEY`);
+}
+
+// ✅ With caching
+async function getCachedStyle(styleId) {
+  const cached = cache.get(styleId);
+  if (cached) return cached;
+
+  const style = await fetchStyle(styleId);
+  cache.set(styleId, style);
+  return style;
+}
+```
+
+### 5. Synchronous Operations on Main Thread
+
+```javascript
+// ❌ Blocking the main thread
+function processLargeDataset(data) {
+  data.forEach(item => {
+    // Heavy computation blocks UI
+    processItem(item);
+  });
+}
+
+// ✅ Use Web Workers or chunking
+async function processLargeDataset(data) {
+  const chunks = chunkArray(data, 100);
+
+  for (const chunk of chunks) {
+    await processChunk(chunk);
+    await yieldToMain(); // Let UI update
+  }
+}
+```
+
+---
+
+## Related Resources
+
+- [Map design and styles - Mapbox Help](https://docs.mapbox.com/help/dive-deeper/map-design/) — Design principles
+- [5 Best Practices for Building a Store Locator - Mapbox Blog](https://www.mapbox.com/blog/best-practices-store-locator/) — Store locator patterns
+- [Create a Custom Map in 5 Steps - Mapbox](https://docs.mapbox.com/help/troubleshooting/best-practices-for-map-design/) — Design tips
+
+---
+
+## See Also
+
+- [Authentication Guide](/docs/guides/authentication) — Security best practices
+- [Rate Limits Guide](/docs/guides/rate-limits) — Managing quotas
+- [Caching Strategies](/docs/guides/caching) — Performance optimization
+- [Error Handling Guide](/docs/guides/error-handling) — Error patterns
+
+---
+
+Sources:
+- [Map design and styles - Mapbox Help](https://docs.mapbox.com/help/dive-deeper/map-design/)
+- [The Guide to Map Design - Mapbox PDF](https://go.mapbox.com/rs/117-NXK-490/images/the-guide-to-map-design.pdf)
+- [Best Practices for Store Locator - Mapbox Blog](https://www.mapbox.com/blog/best-practices-store-locator/)
