@@ -1,0 +1,886 @@
+---
+title: Docker Deployment
+description: Step-by-step guide to deploying self-hosted Planisfy using Docker and Docker Compose.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Docker Deployment Guide
+
+This guide provides step-by-step instructions for deploying Planisfy using Docker and Docker Compose.
+
+---
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- **Docker** 20.10+ installed
+- **Docker Compose** 2.0+ installed
+- **Git** for cloning repositories
+- **At least 500 GB** of free disk space
+- **8 GB+ RAM** (16 GB recommended)
+
+### Verify Installation
+
+```bash
+docker --version
+# Docker version 24.0.0 or higher
+
+docker compose version
+# Docker Compose version v2.23.0 or higher
+```
+
+---
+
+## Quick Start
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/planisfy/self-hosting.git
+cd self-hosting
+```
+
+### 2. Configure Environment Variables
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+**Key environment variables:**
+
+```bash
+# Martin (Tile Server)
+MARTIN_PORT=3005
+MARTIN_CONFIG_PATH=/config/martin-config.yaml
+
+# Pelias (Geocoder)
+PELIAS_PORT=3100
+PELIAS_ELASTICSEARCH_URL=http://elasticsearch:9200
+
+# Valhalla (Router)
+VALHALLA_PORT=8002
+VALHALLA_CONFIG_PATH=/config/valhalla.json
+
+# API Gateway
+GATEWAY_PORT=8080
+GATEWAY_API_KEY=your-api-key-here
+```
+
+### 3. Start Services
+
+```bash
+docker compose up -d
+```
+
+This starts all services:
+- **Martin** (tile server) on port 3005
+- **Pelias** (geocoder) on port 3100
+- **Valhalla** (router) on port 8002
+- **PostgreSQL** (database) on port 5432
+- **Elasticsearch** (search engine) on port 9200
+- **API Gateway** on port 8080
+
+### 4. Verify Deployment
+
+```bash
+# Check all services are running
+docker compose ps
+
+# Check logs
+docker compose logs -f
+
+# Test tile server
+curl http://localhost:3005/health
+
+# Test geocoder
+curl http://localhost:3100/v1/autocomplete?text=Paris
+
+# Test router
+curl http://localhost:8002/route?locations=-122.42,37.78;-122.45,37.75
+```
+
+---
+
+## Docker Compose Configuration
+
+### Service Architecture
+
+```yaml
+version: '3.8'
+
+services:
+  # Tile Server
+  martin:
+    image: maplibre/martin:latest
+    ports:
+      - "3005:3000"
+    volumes:
+      - ./data/pmtiles:/data
+      - ./config/martin:/config
+    environment:
+      - MARTIN_CONFIG=/config/martin-config.yaml
+      - DATABASE_URL=postgresql://postgres:5432/tiles
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # Geocoder
+  pelias:
+    image: pelias/pelias:latest
+    ports:
+      - "3100:4000"
+    environment:
+      - PELIAS_CONFIG=/config/pelias.json
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  # Router
+  valhalla:
+    image: ghcr.io/gis-ops/valhalla:latest
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./data/valhalla:/data/valhalla
+      - ./config/valhalla:/config/valhalla
+    environment:
+      - valhalla_config=/config/valhalla/valhalla.json
+    restart: unless-stopped
+
+  # Database
+  postgres:
+    image: postgis/postgis:15-3.4
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=tiles
+      - POSTGRES_USER=planisfy
+      - POSTGRES_PASSWORD=your-password-here
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Search Engine
+  elasticsearch:
+    image: elasticsearch:8.12.0
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - xpack.security.enabled=false
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+
+  # API Gateway
+  gateway:
+    build: ./gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - API_KEY=${API_KEY}
+      - MARTIN_URL=http://martin:3000
+      - PELIAS_URL=http://pelias:3100
+      - VALHALLA_URL=http://valhalla:8002
+    depends_on:
+      - martin
+      - pelias
+      - valhalla
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+```
+
+---
+
+## Volume Mounts
+
+### Data Persistence
+
+Persist data using Docker volumes:
+
+```yaml
+volumes:
+  postgres_data:      # Database data
+  elasticsearch_data:  # Search index
+```
+
+### Host Mounts
+
+Mount host directories for easy access:
+
+```yaml
+volumes:
+  - ./data/pmtiles:/data           # PMTiles files
+  - ./config/martin:/config        # Martin config
+  - ./config/valhalla:/config     # Valhalla config
+```
+
+**Directory structure:**
+
+```
+self-hosting/
+├── data/
+│   ├── pmtiles/
+│   │   ├── overture.mbtiles
+│   │   └── custom.mbtiles
+│   └── valhalla/
+│       └── routing_graph/
+├── config/
+│   ├── martin/
+│   │   └── martin-config.yaml
+│   ├── pelias/
+│   │   └── pelias.json
+│   └── valhalla/
+│       └── valhalla.json
+└── docker-compose.yml
+```
+
+---
+
+## Network Configuration
+
+### Default Network
+
+Docker Compose creates a default network:
+
+```yaml
+networks:
+  default:
+    driver: bridge
+```
+
+Services can communicate using service names as hostnames:
+- `martin:3000`
+- `pelias:3100`
+- `valhalla:8002`
+
+### Custom Network
+
+For advanced configuration:
+
+```yaml
+networks:
+  planisfy:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+services:
+  martin:
+    networks:
+      planisfy:
+        ipv4_address: 172.28.0.10
+```
+
+### External Access
+
+Expose services to the host:
+
+```yaml
+ports:
+  # Expose to all interfaces
+  - "3005:3000"
+
+  # Expose to localhost only
+  - "127.0.0.1:3005:3000"
+```
+
+---
+
+## Environment Variables
+
+### Martin Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MARTIN_CONFIG` | Required | Path to configuration file |
+| `DATABASE_URL` | - | PostgreSQL connection string |
+| `SERVER_THREADS` | `4` | Number of worker threads |
+| `LISTEN_ADDRESSES` | `0.0.0.0:3000` | Bind address |
+
+### Pelias Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PELIAS_CONFIG` | Required | Path to configuration file |
+| `ELASTICSEARCH_URL` | Required | Elasticsearch connection URL |
+| `PORT` | `4000` | Pelias server port |
+| `NODE_ENV` | `production` | Environment mode |
+
+### Valhalla Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `valhalla_config` | Required | Path to configuration file |
+| `MIN_LON` | `-180` | Minimum longitude |
+| `MIN_LAT` | `-90` | Minimum latitude |
+| `MAX_LON` | `180` | Maximum longitude |
+| `MAX_LAT` | `90` | Maximum latitude |
+
+---
+
+## Configuration Files
+
+### Martin Configuration (`config/martin/martin-config.yaml`)
+
+```yaml
+# MBTiles sources
+sources:
+  overture:
+    type: file
+    path: /data/overture.mbtiles
+
+# PostgreSQL sources
+postgres:
+  type: postgresql
+  connection_string: postgresql://planisfy:password@postgres:5432/tiles
+
+# Sprites and glyphs
+sprites:
+  planisfy:
+    path: /data/sprites
+
+glyphs:
+  planisfy:
+    path: /data/glyphs
+```
+
+### Valhalla Configuration (`config/valhalla/valhalla.json`)
+
+```json
+{
+  "tile_dir": "/data/valhalla",
+  "tile_extract": "/data/valhalla/tiles",
+
+  "service_limits": {
+    "max_matrix_location_distance": 500000.0,
+    "max_exclude_location_distance": 500000.0,
+    "max_contour_location_distance": 50000.0
+  },
+
+  "mjolnir": {
+    "tile_dir": "/data/valhalla/tiles",
+    "concurrency": 4,
+    "tile_extract": "/data/valhalla/valhalla.tar"
+  },
+
+  "loki": {
+    "type": "osrm",
+    "use tiles": true,
+    "tile_dir": "/data/valhalla/tiles"
+  },
+
+  "thor": {
+    "type": "osrm",
+    "use_tiles": true,
+    "tile_dir": "/data/valhalla/tiles"
+  },
+
+  "odin": {
+    "type": "osrm",
+    "use_tiles": true,
+    "tile_dir": "/data/valhalla/tiles"
+  }
+}
+```
+
+---
+
+## Health Checks
+
+### Service Health Endpoints
+
+```bash
+# Martin health
+curl http://localhost:3005/health
+
+# Pelias health
+curl http://localhost:3100/health
+
+# Gateway health
+curl http://localhost:8080/health
+```
+
+### Docker Healthcheck
+
+Add healthchecks to `docker-compose.yml`:
+
+```yaml
+services:
+  martin:
+    image: maplibre/martin:latest
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+```
+
+---
+
+## Data Import
+
+### Import Overture Maps
+
+```bash
+# Download Overture Maps data
+wget https://overturemaps.org/release/overture-maps-2024-01-15.7z
+
+# Extract and convert to PMTiles
+./scripts/import-overture.sh
+
+# Verify import
+curl "http://localhost:3005/overture/0/0/0?access_token=your-key"
+```
+
+### Import Custom Data
+
+```bash
+# Copy PMTiles to data directory
+cp /path/to/custom.mbtiles ./data/pmtiles/
+
+# Update Martin configuration
+nano config/martin/martin-config.yaml
+
+# Restart Martin
+docker compose restart martin
+```
+
+---
+
+## Scaling Strategies
+
+### Horizontal Scaling (Martin)
+
+Run multiple Martin instances:
+
+```yaml
+services:
+  martin:
+    image: maplibre/martin:latest
+    deploy:
+      replicas: 3
+    environment:
+      - CACHE_TYPE=redis
+      - REDIS_URL=redis://redis:6379
+  redis:
+    image: redis:alpine
+```
+
+### Vertical Scaling (Valhalla)
+
+Increase resources for Valhalla:
+
+```yaml
+services:
+  valhalla:
+    image: ghcr.io/gis-ops/valhalla:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 32G
+        reservations:
+          cpus: '4'
+          memory: 16G
+```
+
+### Load Balancing
+
+Add Nginx load balancer:
+
+```yaml
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - martin
+```
+
+**nginx.conf:**
+
+```nginx
+upstream martin {
+    server martin:3000;
+    server martin_2:3000;
+    server martin_3:3000;
+}
+
+server {
+    listen 80;
+    server_name tiles.example.com;
+
+    location /tiles/ {
+        proxy_pass http://martin/;
+    }
+}
+```
+
+---
+
+## Production Deployment
+
+### 1. Use Environment-Specific Configs
+
+```bash
+# Development
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# Production
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### 2. Enable Auto-Restart
+
+```yaml
+services:
+  martin:
+    restart: unless-stopped
+```
+
+**Restart policies:**
+- `no`: Don't restart
+- `always`: Always restart
+- `on-failure`: Restart on failure
+- `unless-stopped`: Restart unless manually stopped (recommended)
+
+### 3. Configure Resource Limits
+
+```yaml
+services:
+  martin:
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+```
+
+### 4. Set Up Logging
+
+```yaml
+services:
+  martin:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+### 5. Use Secrets Management
+
+```bash
+# Docker Secrets (Swarm)
+echo "your-password" | docker secret create postgres_password -
+
+# Or use .env file
+echo "POSTGRES_PASSWORD=your-password" >> .env
+```
+
+---
+
+## Reverse Proxy
+
+### Nginx Configuration
+
+```nginx
+server {
+    listen 80;
+    server_name maps.example.com;
+
+    # Tiles
+    location /tiles/ {
+        proxy_pass http://martin:3000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Geocoding
+    location /geocoding/ {
+        proxy_pass http://pelias:3100/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Routing
+    location /routing/ {
+        proxy_pass http://valhalla:8002/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### Caddy (Automatic HTTPS)
+
+```json
+{
+  "apps": {
+    "http": {
+      "servers": {
+        "srv0": {
+          "listen": [
+            ":443"
+          ],
+          "routes": [
+            {
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {"dial": "martin:3000"}
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "tls": {
+        "certificates": [
+          {
+            "certificate": "/etc/caddy/certs/cert.pem",
+            "key": "/etc/caddy/certs/key.pem"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+---
+
+## Operations
+
+### View Logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f martin
+
+# Last 100 lines
+docker compose logs --tail=100 martin
+```
+
+### Restart Services
+
+```bash
+# Restart single service
+docker compose restart martin
+
+# Restart all services
+docker compose restart
+```
+
+### Update Services
+
+```bash
+# Pull latest images
+docker compose pull
+
+# Recreate containers with new images
+docker compose up -d --force-recreate
+```
+
+### Stop Services
+
+```bash
+# Stop all services
+docker compose down
+
+# Stop and remove volumes
+docker compose down -v
+```
+
+---
+
+## Troubleshooting
+
+### Service Won't Start
+
+**Check logs:**
+```bash
+docker compose logs martin
+```
+
+**Common issues:**
+- Port already in use
+- Insufficient memory
+- Missing environment variables
+- Incorrect configuration file syntax
+
+### Out of Memory
+
+**Increase memory limit:**
+```bash
+docker compose up -d --scale martin=2
+```
+
+**Or add swap:**
+```bash
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+```
+
+### Slow Performance
+
+**Check resource usage:**
+```bash
+docker stats
+```
+
+**Optimize:**
+- Increase CPU allocation
+- Add more replicas
+- Use Redis caching
+- Tune database queries
+
+### Data Not Loading
+
+**Verify data files:**
+```bash
+docker exec martin ls -la /data
+```
+
+**Check configuration:**
+```bash
+docker exec martin cat /config/martin-config.yaml
+```
+
+**Test connection:**
+```bash
+docker exec martin psql -U planisfy -d tiles
+```
+
+---
+
+## Backup and Restore
+
+### Backup Volumes
+
+```bash
+# Backup PostgreSQL
+docker exec postgres pg_dump -U planisfy tiles > backup.sql
+
+# Backup data directory
+tar czf backup-$(date +%Y%m%d).tar.gz ./data/
+```
+
+### Restore from Backup
+
+```bash
+# Restore PostgreSQL
+cat backup.sql | docker exec -i postgres psql -U planisfy tiles
+
+# Restore data directory
+tar xzf backup-20250112.tar.gz
+```
+
+### Automated Backups
+
+Add backup cron job:
+
+```bash
+# Add to crontab
+0 2 * * * cd /path/to/self-hosting && ./scripts/backup.sh
+```
+
+---
+
+## Monitoring
+
+### Metrics Collection
+
+Use cAdvisor and Prometheus:
+
+```yaml
+services:
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+```
+
+### Health Monitoring
+
+Add healthcheck script:
+
+```bash
+#!/bin/bash
+# health-check.sh
+
+services=("martin" "pelias" "valhalla")
+
+for service in "${services[@]}"; do
+  if ! docker compose ps | grep -q "$service.*Up"; then
+    echo "ALERT: $service is down!"
+    # Send alert
+  fi
+done
+```
+
+---
+
+## Related Resources
+
+- [Martin Documentation](https://maplibre.org/martin/) — Tile server docs
+- [Pelias Documentation](https://pelias.io/) — Geocoder docs
+- [Valhalla Documentation](https://valhalla.readthedocs.io/) — Router docs
+- [Docker Compose Documentation](https://docs.docker.com/compose/) — Docker docs
+
+---
+
+## See Also
+
+- [Data Sources Guide](/docs/self-hosting/data-sources) — Working with map data
+- [Configuration Guide](/docs/self-hosting/configuration) — Detailed configuration
+- [Performance Tuning](/docs/self-hosting/performance) — Optimization strategies
+
+---
+
+## Quick Reference
+
+| Command | Description |
+|---------|-------------|
+| `docker compose up -d` | Start all services |
+| `docker compose down` | Stop all services |
+| `docker compose logs -f` | View logs |
+| `docker compose restart [service]` | Restart service |
+| `docker compose ps` | List services |
+| `docker exec -it [service] sh` | Open shell in container |
