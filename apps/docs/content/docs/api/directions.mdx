@@ -1,0 +1,620 @@
+---
+title: Directions API
+description: Calculate turn-by-turn routes, driving directions, and navigation instructions between waypoints.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Directions API
+
+The **Planisfy Directions API** calculates optimal routes between waypoints and returns turn-by-turn navigation instructions. Our API is drop-in compatible with Mapbox Directions v5, powered by open-source routing engines.
+
+<Callout type="info" title="Data Source">
+Routing is powered by <a href="https://valhalla.readthedocs.io/" target="_blank">Valhalla</a>, an open-source routing engine using Overture Maps and OpenStreetMap road networks.
+</Callout>
+
+---
+
+## Endpoint Overview
+
+```
+GET https://api.planisfy.com/directions/v5/{profile}/{coordinates}?access_token=YOUR_KEY
+```
+
+| Component | Description |
+|-----------|-------------|
+| `profile` | Routing mode: `driving`, `walking`, `cycling` |
+| `coordinates` | Semicolon-separated waypoints: `lon1,lat1;lon2,lat2;lon3,lat3` |
+
+---
+
+## Routing Profiles
+
+| Profile | Description | Use Case |
+|---------|-------------|----------|
+| `driving` | Car/truck routing on roads | General navigation, commute |
+| `driving-traffic` | Routing with live traffic data | Real-time ETA calculations |
+| `walking` | Pedestrian-friendly paths | Walking directions, sidewalks |
+| `cycling` | Bike-friendly routes | Cycling navigation, bike lanes |
+
+<Callout type="tip" title="Profile Selection">
+Choose the profile that matches your user's mode of transportation. Each profile optimizes for different road types, speeds, and restrictions.
+</Callout>
+
+---
+
+## Request Parameters
+
+### Required Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `profile` | `string` | Routing profile: `driving`, `walking`, `cycling` |
+| `coordinates` | `string` | Semicolon-separated `{longitude},{latitude}` pairs |
+
+### Optional Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `alternatives` | `boolean` | `false` | Return alternative routes |
+| `steps` | `boolean` | `true` | Return turn-by-turn steps |
+| `geometries` | `string` | `polyline6` | Geometry format: `polyline`, `polyline6`, `geojson` |
+| `overview` | `string` | `simplified` | Route overview: `full`, `simplified`, `false` |
+| `language` | `string` | `en` | Language for instructions (`en`, `es`, `fr`, `de`, etc.) |
+| `radiuses` | `string` | Unlimited | Semocolon-separated road snap radiuses in meters |
+| `bearings` | `string` | - | Semicolon-separated `{bearing},{deviation}` pairs |
+| `exclude` | `string` | - | Exclude road classes: `toll`, `ferry`, `motorway` |
+| `approaches` | `string` | - | Semicolon-separated approach sides: `curb`, `unrestricted` |
+| `waypoint_names` | `string` | - | Semicolon-separated waypoint names |
+| `waypoint_targets` | `string` | - | Semicolon-separated target coordinates |
+
+---
+
+## Example Requests
+
+### cURL
+
+#### Basic Route
+
+```bash
+# Route from San Francisco to Oakland
+curl "https://api.planisfy.com/directions/v5/driving/-122.4194,37.7749;-122.2711,37.8044?access_token=pk.your-key-here"
+
+# With turn-by-turn steps
+curl "https://api.planisfy.com/directions/v5/driving/-122.4194,37.7749;-122.2711,37.8044?steps=true&access_token=pk.your-key-here"
+
+# Alternative routes
+curl "https://api.planisfy.com/directions/v5/driving/-122.4194,37.7749;-122.2711,37.8044?alternatives=true&access_token=pk.your-key-here"
+```
+
+#### Multi-Waypoint Route
+
+```bash
+# Route with multiple stops
+curl "https://api.planisfy.com/directions/v5/driving/-122.4194,37.7749;-122.4084,37.7548;-122.2711,37.8044?access_token=pk.your-key-here"
+# SF → Fisherman's Wharf → Oakland
+```
+
+#### Walking Route
+
+```bash
+# Pedestrian route
+curl "https://api.planisfy.com/directions/v5/walking/-0.1278,51.5074;-0.0877,51.5081?steps=true&access_token=pk.your-key-here"
+# London Bridge → Tower of London
+```
+
+#### Cycling Route
+
+```bash
+# Bike-friendly route
+curl "https://api.planisfy.com/directions/v5/cycling/2.3522,48.8566;2.2945,48.8738?steps=true&access_token=pk.your-key-here"
+# Eiffel Tower → Arc de Triomphe
+```
+
+### JavaScript (Fetch)
+
+```javascript
+// Basic directions request
+async function getDirections(start, end) {
+  const coordinates = `${start.lng},${start.lat};${end.lng},${end.lat}`;
+  const response = await fetch(
+    `https://api.planisfy.com/directions/v5/driving/${coordinates}?steps=true&geometries=geojson&access_token=YOUR_KEY`
+  );
+  const data = await response.json();
+  return data.routes[0];
+}
+
+const route = await getDirections(
+  { lng: -122.4194, lat: 37.7749 }, // San Francisco
+  { lng: -122.2711, lat: 37.8044 }  // Oakland
+);
+
+console.log('Distance:', route.distance, 'meters');
+console.log('Duration:', route.duration, 'seconds');
+console.log('Steps:', route.legs[0].steps.length);
+```
+
+### JavaScript (MapLibre GL JS)
+
+```javascript
+// Display route on map
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY',
+  center: [-122.35, 37.78],
+  zoom: 10
+});
+
+async function showRoute(start, end) {
+  const coordinates = `${start.lng},${start.lat};${end.lng},${end.lat}`;
+  const url = `https://api.planisfy.com/directions/v5/driving/${coordinates}?geometries=geojson&access_token=YOUR_KEY`;
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  map.addLayer({
+    id: 'route',
+    type: 'line',
+    source: {
+      type: 'geojson',
+      data: data.routes[0].geometry
+    },
+    paint: {
+      'line-color': '#3887be',
+      'line-width': 5,
+      'line-opacity': 0.75
+    }
+  });
+}
+
+map.on('load', () => {
+  showRoute(
+    { lng: -122.4194, lat: 37.7749 },
+    { lng: -122.2711, lat: 37.8044 }
+  );
+});
+```
+
+### JavaScript (Mapbox GL JS)
+
+```javascript
+// Mapbox GL JS compatibility
+map.on('load', async () => {
+  const response = await fetch(
+    'https://api.planisfy.com/directions/v5/driving/-122.4194,37.7749;-122.2711,37.8044?geometries=geojson&access_token=YOUR_KEY'
+  );
+  const data = await response.json();
+
+  map.addLayer({
+    id: 'route',
+    type: 'line',
+    source: {
+      type: 'geojson',
+      data: data.routes[0].geometry
+    },
+    paint: {
+      'line-color': '#3887be',
+      'line-width': 5
+    }
+  });
+});
+```
+
+### Python
+
+```python
+import requests
+
+def get_directions(start_coords, end_coords, profile='driving'):
+    coordinates = f"{start_coords[0]},{start_coords[1]};{end_coords[0]},{end_coords[1]}"
+    url = f"https://api.planisfy.com/directions/v5/{profile}/{coordinates}"
+    params = {
+        "access_token": "pk.your-key-here",
+        "steps": "true",
+        "geometries": "geojson"
+    }
+
+    response = requests.get(url, params=params)
+    return response.json()
+
+# Example usage
+route = get_directions(
+    (-122.4194, 37.7749),  # San Francisco
+    (-122.2711, 37.8044),  # Oakland
+    profile='driving'
+)
+
+print(f"Distance: {route['routes'][0]['distance']:.0f} meters")
+print(f"Duration: {route['routes'][0]['duration']:.0f} seconds")
+```
+
+### Node.js
+
+```javascript
+import axios from 'axios';
+
+const getDirections = async (waypoints, profile = 'driving') => {
+  const coordinates = waypoints.map(p => `${p[0]},${p[1]}`).join(';');
+
+  const response = await axios.get(
+    `https://api.planisfy.com/directions/v5/${profile}/${coordinates}`,
+    {
+      params: {
+        access_token: process.env.PLANISFY_API_KEY,
+        steps: true,
+        alternatives: true,
+        geometries: 'geojson'
+      }
+    }
+  );
+
+  return response.data;
+};
+
+const route = await getDirections([
+  [-122.4194, 37.7749], // San Francisco
+  [-122.4084, 37.7548], // Fisherman's Wharf
+  [-122.2711, 37.8044]  // Oakland
+]);
+
+console.log(`Found ${route.routes.length} route(s)`);
+```
+
+---
+
+## Response Format
+
+```json
+{
+  "routes": [
+    {
+      "distance": 12345.6,
+      "duration": 1234.5,
+      "geometry": "{...polyline or GeoJSON...}",
+      "legs": [
+        {
+          "distance": 12345.6,
+          "duration": 1234.5,
+          "summary": "I-80 W",
+          "steps": [
+            {
+              "distance": 123.4,
+              "duration": 12.3,
+              "geometry": "{...}",
+              "maneuver": {
+                "type": "turn",
+                "modifier": "left",
+                "instruction": "Turn left onto Main St"
+              },
+              "name": "Main Street",
+              "ref": "US-101",
+              "exits": ["42A"],
+              "mode": "driving"
+            }
+          ]
+        }
+      ],
+      "weight_name": "auto",
+      "weight": 1234.5
+    }
+  ],
+  "waypoints": [
+    {
+      "distance": 5.6,
+      "name": "Market Street",
+      "location": [-122.4194, 37.7749]
+    }
+  ],
+  "code": "Ok"
+}
+```
+
+---
+
+## Response Properties
+
+### Route Object
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `distance` | `number` | Total route distance in meters |
+| `duration` | `number` | Total travel time in seconds |
+| `geometry` | `string/object` | Polyline or GeoJSON route geometry |
+| `legs` | `array` | Route segments between waypoints |
+| `weight` | `number` | Route weight (based on profile) |
+| `weight_name` | `string` | Weighting profile name |
+
+### Leg Object
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `distance` | `number` | Leg distance in meters |
+| `duration` | `number` | Leg duration in seconds |
+| `summary` | `string` | Summary of route segment |
+| `steps` | `array` | Turn-by-turn instructions |
+
+### Step Object
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `distance` | `number` | Step distance in meters |
+| `duration` | `number` | Step duration in seconds |
+| `geometry` | `string/object` | Step geometry |
+| `maneuver` | `object` | Turn instruction details |
+| `name` | `string` | Road name |
+| `ref` | `string` | Road reference number |
+| `exits` | `string[]` | Exit numbers |
+| `mode` | `string` | Travel mode |
+
+### Maneuver Types
+
+| Type | Modifier | Description |
+|------|----------|-------------|
+| `turn` | `left`, `right`, `slight left`, `slight right` | Basic turn |
+| `new name` | - | Road name change |
+| `merge` | - | Merge onto road |
+| `on ramp` | `left`, `right` | Enter highway |
+| `off ramp` | `left`, `right` | Exit highway |
+| `fork` | `left`, `right` | Road fork |
+| `arrive` | - | Arrive at destination |
+| `depart` | - | Depart from origin |
+
+---
+
+## Advanced Features
+
+### Alternative Routes
+
+Request multiple route options:
+
+```bash
+curl "https://api.planisfy.com/directions/v5/driving/-122.4194,37.7749;-122.2711,37.8044?alternatives=true&access_token=pk.your-key-here"
+```
+
+Returns up to 3 alternative routes when available.
+
+### Excluding Road Types
+
+Avoid certain road classes:
+
+```bash
+# Exclude toll roads
+curl "https://api.planisfy.com/directions/v5/driving/...?exclude=toll&access_token=pk.your-key-here"
+
+# Exclude multiple types
+curl "https://api.planisfy.com/directions/v5/driving/...?exclude=toll,ferry,motorway&access_token=pk.your-key-here"
+```
+
+### Bearing Constraints
+
+Specify initial heading for waypoint snapping:
+
+```bash
+# Start heading northeast (45° ± 20°)
+curl "https://api.planisfy.com/directions/v5/driving/...?bearings=45,20;&access_token=pk.your-key-here"
+
+# Multiple waypoints with bearings
+curl "https://api.planisfy.com/directions/v5/driving/...?bearings=45,20;180,15;&access_token=pk.your-key-here"
+```
+
+### Radius Limits
+
+Limit road snapping distance (useful for tunnels/bridges):
+
+```bash
+# Snap within 100 meters of waypoint
+curl "https://api.planisfy.com/directions/v5/driving/...?radiuses=100;&access_token=pk.your-key-here"
+
+# Different radiuses for each waypoint
+curl "https://api.planisfy.com/directions/v5/driving/...?radiuses=100,50,200;&access_token=pk.your-key-here"
+```
+
+### Language Selection
+
+Get instructions in different languages:
+
+```bash
+# Spanish instructions
+curl "https://api.planisfy.com/directions/v5/driving/...?language=es&access_token=pk.your-key-here"
+
+# French instructions
+curl "https://api.planisfy.com/directions/v5/driving/...?language=fr&access_token=pk.your-key-here"
+```
+
+Supported languages: `en`, `es`, `fr`, `de`, `it`, `pt`, `ru`, `zh`, `ja`, `ko`, `ar`
+
+---
+
+## Caching
+
+Route responses are cached based on coordinates:
+
+| Cache Type | Duration | Description |
+|------------|----------|-------------|
+| **Browser/Client** | 5 minutes | Short-term cache |
+| **CDN/Edge** | 5 minutes | Cloudflare edge locations |
+| **Origin** | 5 minutes | Planisfy servers |
+
+<Callout type="warn" title="Traffic-Aware Routes">
+Routes using <code>driving-traffic</code> profile have shorter cache times (1 minute) to reflect real-time conditions.
+</Callout>
+
+---
+
+## Rate Limits
+
+| Plan | Requests per Minute | Requests per Day |
+|------|---------------------|------------------|
+| Free | 100 | 5,000 |
+| Starter | 500 | 50,000 |
+| Pro | 2,000 | 500,000 |
+| Enterprise | Custom | Custom |
+
+<Callout type="info" title="Cost Per Route">
+Directions requests are more computationally expensive than tile or geocoding requests, so rate limits are lower.
+</Callout>
+
+---
+
+## Error Codes
+
+| HTTP Code | Error | Description |
+|-----------|-------|-------------|
+| `400` | Bad Request | Invalid coordinates or parameters |
+| `401` | Unauthorized | Missing or invalid API key |
+| `403` | Forbidden | API key suspended or over quota |
+| `404` | Not Found | No route found between waypoints |
+| `422` | Unprocessable Entity | Invalid waypoint format |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Server Error | Internal routing error |
+
+### Error Response Format
+
+```json
+{
+  "message": "No route found between waypoints",
+  "code": "NoRoute",
+  "request_id": "req_abc123xyz"
+}
+```
+
+---
+
+## Switching from Mapbox
+
+Replace your Mapbox directions URL:
+
+### Before (Mapbox)
+
+```javascript
+const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates}?access_token=${mapboxToken}`;
+```
+
+### After (Planisfy)
+
+```javascript
+const url = `https://api.planisfy.com/directions/v5/driving/${coordinates}?access_token=${planisfyKey}`;
+```
+
+### Profile Migration
+
+| Mapbox Profile | Planisfy Profile | Notes |
+|----------------|------------------|-------|
+| `mapbox/driving` | `driving` | Direct replacement |
+| `mapbox/driving-traffic` | `driving-traffic` | Real-time traffic |
+| `mapbox/walking` | `walking` | Direct replacement |
+| `mapbox/cycling` | `cycling` | Direct replacement |
+| `mapbox/driving-traffic` | `driving` | Fallback if traffic unavailable |
+
+<Callout type="tip" title="Drop-In Compatible">
+Planisfy Directions API uses the same request/response format as Mapbox Directions v5. Simply change the base URL and profile name.
+</Callout>
+
+---
+
+## Best Practices
+
+### 1. Use Appropriate Profiles
+
+```javascript
+// ❌ Wrong profile for walking
+const route = await getDirections(start, end, 'driving');
+
+// ✅ Correct profile
+const route = await getDirections(start, end, 'walking');
+```
+
+### 2. Handle No Route Scenarios
+
+```javascript
+const response = await fetch(url);
+const data = await response.json();
+
+if (data.code !== 'Ok') {
+  console.error('No route found:', data.message);
+  // Show user feedback
+  return;
+}
+
+// Process route
+const [route] = data.routes;
+```
+
+### 3. Display Turn-by-Turn Instructions
+
+```javascript
+const steps = route.legs[0].steps;
+
+steps.forEach((step, index) => {
+  console.log(`${index + 1}. ${step.maneuver.instruction}`);
+  console.log(`   Distance: ${(step.distance / 1000).toFixed(1)} km`);
+  console.log(`   Duration: ${Math.round(step.duration / 60)} min`);
+});
+```
+
+### 4. Visualize Routes on Map
+
+```javascript
+map.addLayer({
+  id: 'route',
+  type: 'line',
+  source: {
+    type: 'geojson',
+    data: route.geometry
+  },
+  paint: {
+    'line-color': '#3887be',
+    'line-width': 5,
+    'line-opacity': 0.75
+  }
+});
+
+// Add waypoints as markers
+route.waypoints.forEach(waypoint => {
+  new maplibregl.Marker()
+    .setLngLat(waypoint.location)
+    .addTo(map);
+});
+```
+
+### 5. Cache Routes Client-Side
+
+```javascript
+const routeCache = new Map();
+
+async function getCachedRoute(start, end, profile) {
+  const key = `${profile}:${start.lng},${start.lat}:${end.lng},${end.lat}`;
+
+  if (routeCache.has(key)) {
+    return routeCache.get(key);
+  }
+
+  const route = await getDirections(start, end, profile);
+  routeCache.set(key, route);
+  return route;
+}
+```
+
+---
+
+## Related Resources
+
+- [Mapbox Directions API](https://docs.mapbox.com/api/navigation/directions/) — Original Mapbox reference
+- [Valhalla Documentation](https://valhalla.readthedocs.io/) — Open-source routing engine
+- [Geocoding API](/docs/api/geocoding) — Find coordinates for addresses
+- [Isochrone API](/docs/api/isochrone) — Reachability analysis
+
+---
+
+## See Also
+
+- [Geocoding API](/docs/api/geocoding) — Address to coordinates
+- [Isochrone API](/docs/api/isochrone) — Reachable areas
+- [Optimization API](/docs/api/optimization) — Multi-stop route optimization
+
+---
+
+Sources:
+- [Directions API | API Docs - Mapbox Documentation](https://docs.mapbox.com/api/navigation/directions/)
+- [Navigation | API Docs - Mapbox Documentation](https://docs.mapbox.com/api/navigation/)
+- [Getting started with the Mapbox Directions API](https://docs.mapbox.com/help/tutorials/getting-started-directions-api/)
