@@ -3,8 +3,18 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "@planisfy/ui/*": ["../../packages/ui/src/*"]
+      "@/*": [
+        "./*"
+      ],
+      "@planisfy/ui/*": [
+        "../../packages/ui/src/*"
+      ],
+      "@planisfy/auth": [
+        "../../packages/auth/src/index.ts"
+      ],
+      "@planisfy/auth/*": [
+        "../../packages/auth/src/*"
+      ]
     },
     "plugins": [
       {
@@ -19,5 +29,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }
