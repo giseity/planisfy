@@ -1,0 +1,8 @@
+# Ignore all runtime data
+data/
+
+# Ignore downloaded archives
+*.zip
+
+# Ignore custom user configs if desired, keeping templates
+*.local

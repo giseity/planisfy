@@ -34,7 +34,9 @@ services:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
       - BETTER_AUTH_URL=http://localhost:3003/auth
       - MARTIN_URL=http://martin:3002
-      - PELIAS_URL=http://pelias:3003
+      # Geocode Earth API used in place of heavy local Pelias during dev
+      # Replace 'your-api-key' with a valid key from geocode.earth
+      - PELIAS_URL=https://api.geocode.earth/v1?api_key=your-api-key
       - VALHALLA_URL=http://valhalla:3004
       - NODE_ENV=production
     depends_on:
@@ -109,7 +111,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U planisfy"]
+      test: [ "CMD-SHELL", "pg_isready -U planisfy" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -126,7 +128,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -146,8 +148,8 @@ services:
     environment:
       - MARTIN_CONFIG=/config/config.yaml
     volumes:
-      - ./martin-config.yaml:/config/config.yaml:ro
-      - ./pmtiles:/data:ro
+      - ./configs/martin.yaml:/config/config.yaml:ro
+      - ./data/pmtiles:/data:ro
     restart: unless-stopped
     networks:
       - planisfy-network
@@ -160,14 +162,14 @@ services:
     environment:
       - PELIAS_CONFIG=/config/pelias.json
     volumes:
-      - ./pelias-config.json:/config/pelias.json:ro
+      - ./configs/pelias.json:/config/pelias.json:ro
       - pelias_data:/data
     restart: unless-stopped
     networks:
       - planisfy-network
 
   valhalla:
-    image: ghcr.io/gis-ops/docker-valhalla:latest
+    image: ghcr.io/valhalla/valhalla:latest
     container_name: planisfy-valhalla
     ports:
       - "3007:8002"
@@ -176,8 +178,9 @@ services:
       - USE_TLS=false
       - BUILD_EGRESS=false
     volumes:
-      - valhalla_data:/valhalla/custom_files
-      - ./valhalla-config.json:/etc/valhalla/valhalla.json:ro
+      - ./data/valhalla_data:/custom_files
+      - ./configs/valhalla.json:/etc/valhalla/valhalla.json:ro
+    command: [ "valhalla_service", "/custom_files/valhalla.json", "1" ]
     restart: unless-stopped
     networks:
       - planisfy-network
@@ -192,7 +195,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"  # Dashboard
+      - "8080:8080" # Dashboard
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik-config.yml:/etc/traefik/traefik.yml:ro
@@ -218,8 +221,6 @@ volumes:
   redis_data:
     driver: local
   pelias_data:
-    driver: local
-  valhalla_data:
     driver: local
 
 # ============================================
