@@ -1,0 +1,24 @@
+# Martin Tile Server Configuration
+
+# Storage backends for PMTiles
+pmtiles:
+  sources:
+    stuttgart-base: "/data/stuttgart.pmtiles"
+
+# Server settings
+server:
+  # Listen address
+  listen_address: "0.0.0.0:3000"
+
+  # CORS settings
+  cors:
+    allowed_origins: ["*"]
+
+  # Cache control headers
+  cache_control_max_age: 604800  # 7 days
+
+# Tile source combination
+# Combine multiple sources into a single tileset
+composer:
+  - id: "planisfy.basic"
+    sources: ["stuttgart-base"]
