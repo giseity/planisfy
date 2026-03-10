@@ -4,31 +4,42 @@ import {
   users,
   organizations,
   members,
+  invitations,
   sessions,
   accounts,
+  creemSubscriptions,
   styles,
   apiKeys,
   tilesetSources,
   usageLogs,
+  auditEvents,
 } from "./schema";
 
 // ============================================================================
-// Profile relations
+// Profile relations (supertype — identity shared with user or org)
 // ============================================================================
 
 export const profilesRelations = relations(profiles, ({ one, many }) => ({
+  // A profile is either a user or an org (never both).
+  // profile.id = user.id OR profile.id = organization.id.
   user: one(users, {
     fields: [profiles.id],
-    references: [users.profileId],
+    references: [users.id],
   }),
   organization: one(organizations, {
     fields: [profiles.id],
-    references: [organizations.profileId],
+    references: [organizations.id],
   }),
+
+  // Resources owned by this profile
   ownedStyles: many(styles),
   ownedTilesets: many(tilesetSources),
   apiKeys: many(apiKeys),
   usageLogs: many(usageLogs),
+  auditEvents: many(auditEvents),
+
+  // Subscriptions (via Creem)
+  subscriptions: many(creemSubscriptions),
 }));
 
 // ============================================================================
@@ -37,13 +48,13 @@ export const profilesRelations = relations(profiles, ({ one, many }) => ({
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   profile: one(profiles, {
-    fields: [users.profileId],
+    fields: [users.id],
     references: [profiles.id],
   }),
-  ownedOrganizations: many(organizations),
   memberships: many(members),
   sessions: many(sessions),
   authAccounts: many(accounts),
+  sentInvitations: many(invitations),
 }));
 
 // ============================================================================
@@ -54,14 +65,11 @@ export const organizationsRelations = relations(
   organizations,
   ({ one, many }) => ({
     profile: one(profiles, {
-      fields: [organizations.profileId],
+      fields: [organizations.id],
       references: [profiles.id],
     }),
-    owner: one(users, {
-      fields: [organizations.ownerId],
-      references: [users.id],
-    }),
     members: many(members),
+    invitations: many(invitations),
   })
 );
 
@@ -75,13 +83,28 @@ export const membersRelations = relations(members, ({ one }) => ({
     references: [users.id],
   }),
   organization: one(organizations, {
-    fields: [members.orgId],
+    fields: [members.organizationId],
     references: [organizations.id],
   }),
 }));
 
 // ============================================================================
-// better-auth relations
+// Invitation relations
+// ============================================================================
+
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [invitations.organizationId],
+    references: [organizations.id],
+  }),
+  inviter: one(users, {
+    fields: [invitations.inviterId],
+    references: [users.id],
+  }),
+}));
+
+// ============================================================================
+// better-auth core relations
 // ============================================================================
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -97,6 +120,20 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// ============================================================================
+// Creem subscription relations
+// ============================================================================
+
+export const creemSubscriptionsRelations = relations(
+  creemSubscriptions,
+  ({ one }) => ({
+    profile: one(profiles, {
+      fields: [creemSubscriptions.referenceId],
+      references: [profiles.id],
+    }),
+  })
+);
 
 // ============================================================================
 // Resource relations
@@ -134,6 +171,13 @@ export const usageLogsRelations = relations(usageLogs, ({ one }) => ({
   }),
   profile: one(profiles, {
     fields: [usageLogs.profileId],
+    references: [profiles.id],
+  }),
+}));
+
+export const auditEventsRelations = relations(auditEvents, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [auditEvents.profileId],
     references: [profiles.id],
   }),
 }));
