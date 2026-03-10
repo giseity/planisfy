@@ -31,7 +31,7 @@ Provides type safety across the monorepo:
 |----------|---------|
 | **API Types** | Request/response shapes for all endpoints |
 | **Database Types** | Generated from Drizzle |
-| **Engine Types** | Pelias, Valhalla, Martin types |
+| **Engine Types** | Geocoding, Valhalla, Martin types |
 | **Utility Types** | Common type helpers |
 
 ---
@@ -63,6 +63,6 @@ const request: GeocodingRequest = {
 - `usage-log.ts` - Usage tracking types
 
 ### Engine Types
-- `pelias.ts` - Pelias geocoding response
+- `geocoding.ts` - Geocoding service response
 - `valhalla.ts` - Valhalla routing response
 - `martin.ts` - Martin tile server types

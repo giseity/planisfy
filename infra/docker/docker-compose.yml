@@ -13,8 +13,9 @@
 #   - postgres:   PostgreSQL database (port 5432)
 #   - redis:      Redis for rate limiting (port 6379)
 #   - martin:     Vector tile server (port 3002)
-#   - pelias:     Geocoding engine (port 3003)
 #   - valhalla:   Routing engine (port 3004)
+#
+# Note: Geocoding (Pelias) runs as a separate project.
 
 services:
   # ============================================
@@ -34,9 +35,10 @@ services:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
       - BETTER_AUTH_URL=http://localhost:3003/auth
       - MARTIN_URL=http://martin:3002
-      # Geocode Earth API used in place of heavy local Pelias during dev
-      # Replace 'your-api-key' with a valid key from geocode.earth
-      - PELIAS_URL=https://api.geocode.earth/v1?api_key=your-api-key
+      # Geocoding service URL (see the geocoding project for self-hosting)
+      # For dev, you can use Geocode Earth: https://api.geocode.earth/v1?api_key=your-key
+      # For self-hosted, point to your geocoding instance: http://localhost:3006
+      - GEOCODING_URL=${GEOCODING_URL:-https://api.geocode.earth/v1?api_key=your-api-key}
       - VALHALLA_URL=http://valhalla:3004
       - NODE_ENV=production
     depends_on:
@@ -154,20 +156,6 @@ services:
     networks:
       - planisfy-network
 
-  pelias:
-    image: pelias/pelias:latest
-    container_name: planisfy-pelias
-    ports:
-      - "3006:4000"
-    environment:
-      - PELIAS_CONFIG=/config/pelias.json
-    volumes:
-      - ./configs/pelias.json:/config/pelias.json:ro
-      - pelias_data:/data
-    restart: unless-stopped
-    networks:
-      - planisfy-network
-
   valhalla:
     image: ghcr.io/valhalla/valhalla:latest
     container_name: planisfy-valhalla
@@ -219,8 +207,6 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
-    driver: local
-  pelias_data:
     driver: local
 
 # ============================================

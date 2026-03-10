@@ -25,7 +25,7 @@ The API is the central gateway that:
 | **Style JSON** | `GET /styles/v1/{username}/{style_id}` | Map style specification | Static/API |
 | **Sprites** | `GET /styles/v1/{username}/{style_id}/sprite{@2x}` | Map icons | R2/API |
 | **Glyphs** | `GET /fonts/v1/{fontstack}/{range}.pbf` | Font glyphs | R2 |
-| **Geocoding** | `GET /geocoding/v1/planisfy/places` | Address search | Pelias |
+| **Geocoding** | `GET /geocoding/v1/planisfy/places` | Address search | Geocoding service |
 | **Directions** | `GET /directions/v1/planisfy/{profile}/{coords}` | Routing | Valhalla |
 
 ---
@@ -95,7 +95,7 @@ DATABASE_URL=postgresql://user:pass@host:5432/planisfy
 REDIS_URL=redis://localhost:6379
 BETTER_AUTH_SECRET=your-secret-key
 MARTIN_URL=http://localhost:3005
-PELIAS_URL=http://localhost:3006
+GEOCODING_URL=http://localhost:3006
 VALHALLA_URL=http://localhost:3007
 ```
 

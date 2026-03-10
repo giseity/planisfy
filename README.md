@@ -12,7 +12,7 @@ Planisfy is a Mapbox alternative that:
 
 - **Mapbox API Compatible** - Switch by changing one URL
 - **Self-Hostable** - Run on your own infrastructure
-- **Open Source Core** - Built on Martin, Pelias, Valhalla, Overture Maps
+- **Open Source Core** - Built on Martin, Valhalla, Overture Maps
 - **Full Featured** - Tiles, geocoding, routing, styles, dashboard
 
 ---
@@ -21,8 +21,8 @@ Planisfy is a Mapbox alternative that:
 
 ```
 ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-│   Martin    │      │   Pelias    │      │  Valhalla   │
-│  (Tiles)    │      │ (Geocoding) │      │  (Routing)   │
+│   Martin    │      │  Geocoding  │      │  Valhalla   │
+│  (Tiles)    │      │ (external)  │      │  (Routing)   │
 └──────┬──────┘      └──────┬──────┘      └──────┬──────┘
        │                    │                    │
        └────────────────────┼────────────────────┘
@@ -51,7 +51,7 @@ Planisfy is a Mapbox alternative that:
 | **Vector Tiles** | Protocol Buffer vector tiles | Martin |
 | **Style JSON** | MapLibre style specifications | Static |
 | **Sprites & Glyphs** | Map icons and text rendering | R2 |
-| **Geocoding** | Forward/reverse address search | Pelias |
+| **Geocoding** | Forward/reverse address search | Separate project (Pelias) |
 | **Directions** | Turn-by-turn routing | Valhalla |
 
 ### Planned Platform Features
@@ -141,7 +141,7 @@ See [STATUS.md](./STATUS.md) for detailed implementation status.
 | **Monorepo** | Turborepo + pnpm | Fast builds, shared packages |
 | **API Gateway** | Fastify (Node.js) | Performance, TypeScript-first |
 | **Tiles** | Martin (Rust) | Speed, PMTiles support |
-| **Geocoding** | Pelias (Node.js) | OpenStreetMap focus |
+| **Geocoding** | Separate project (Pelias) | OpenStreetMap focus |
 | **Routing** | Valhalla (C++) | Multi-modal profiles |
 | **Data Source** | Overture Maps | Free, open, regularly updated |
 | **Database** | PostgreSQL + Drizzle ORM | Type-safe, migrations |
@@ -177,7 +177,6 @@ planisfy/
 │   └── docker/
 │       ├── docker-compose.yml  # All services orchestration
 │       ├── martin-config.yaml  # Tile server config
-│       ├── pelias-config.json  # Geocoding config
 │       └── valhalla-config.json # Routing config
 │
 ├── STATUS.md                   # Implementation status tracking
@@ -201,7 +200,7 @@ Planisfy supports three deployment modes:
 - Use Planisfy for data updates only
 
 ### Hybrid (Remote Auth)
-- You host engines (tiles, geocoding, routing)
+- You host engines (tiles, routing) and the geocoding project
 - Use Planisfy SaaS for authentication
 - Best for regulated industries
 
@@ -280,7 +279,6 @@ We welcome contributions! Areas we need help with:
 Built on amazing open-source projects:
 
 - [Martin](https://github.com/maplibre/martin) - Vector tile server
-- [Pelias](https://github.com/pelias/pelias) - Geocoding engine
 - [Valhalla](https://github.com/valhalla/valhalla) - Routing engine
 - [Overture Maps](https://overturemaps.org/) - Open map data
 - [MapLibre GL JS](https://maplibre.org/) - Map rendering
