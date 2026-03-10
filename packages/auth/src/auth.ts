@@ -1,15 +1,15 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db, accounts, sessions, authAccounts, verifications } from "@planisfy/database";
+import { db, users, sessions, accounts, verifications } from "@planisfy/database";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {
-      user: accounts,
+      user: users,
       session: sessions,
-      account: authAccounts,
-      verification: verifications
+      account: accounts,
+      verification: verifications,
     },
   }),
   emailAndPassword: {
@@ -23,9 +23,10 @@ export const auth = betterAuth({
   },
   advanced: {
     defaultCookieAttributes: {
-      sameSite: "lax", // Required for cross-subdomain
+      sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
-      domain: process.env.NODE_ENV === "production" ? ".planisfy.com" : undefined, // Shared cookie
-    }
-  }
+      domain:
+        process.env.NODE_ENV === "production" ? ".planisfy.com" : undefined,
+    },
+  },
 });
