@@ -6,14 +6,15 @@
 #   docker compose up -d
 #
 # Services:
-#   - api:        API Gateway (port 3003)
-#   - dashboard:  User Dashboard (port 3002)
-#   - docs:       Documentation (port 3001)
-#   - web:        Landing page (port 3000)
+#   - api:        API Gateway (port 4000)
+#   - console:    Customer Console (port 3001)
+#   - admin:      Super Admin (port 3003)
+#   - docs:       Documentation (port 3002)
+#   - marketing:  Landing page (port 3000)
 #   - postgres:   PostgreSQL database (port 5432)
 #   - redis:      Redis for rate limiting (port 6379)
-#   - martin:     Vector tile server (port 3002)
-#   - valhalla:   Routing engine (port 3004)
+#   - martin:     Vector tile server (port 3005)
+#   - valhalla:   Routing engine (port 3007)
 #
 # Note: Geocoding (Pelias) runs as a separate project.
 
@@ -28,18 +29,15 @@ services:
       dockerfile: apps/api/Dockerfile
     container_name: planisfy-api
     ports:
-      - "3003:3000"
+      - "4000:4000"
     environment:
+      - PORT=4000
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - REDIS_URL=redis://redis:6379
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
-      - BETTER_AUTH_URL=http://localhost:3003/auth
-      - MARTIN_URL=http://martin:3002
-      # Geocoding service URL (see the geocoding project for self-hosting)
-      # For dev, you can use Geocode Earth: https://api.geocode.earth/v1?api_key=your-key
-      # For self-hosted, point to your geocoding instance: http://localhost:3006
-      - GEOCODING_URL=${GEOCODING_URL:-https://api.geocode.earth/v1?api_key=your-api-key}
-      - VALHALLA_URL=http://valhalla:3004
+      - MARTIN_URL=http://martin:3000
+      - GEOCODING_URL=${GEOCODING_URL:-}
+      - VALHALLA_URL=http://valhalla:8002
       - NODE_ENV=production
     depends_on:
       postgres:
@@ -50,19 +48,39 @@ services:
     networks:
       - planisfy-network
 
-  dashboard:
+  console:
     build:
       context: ../../
-      dockerfile: apps/dashboard/Dockerfile
-    container_name: planisfy-dashboard
+      dockerfile: apps/console/Dockerfile
+    container_name: planisfy-console
     ports:
-      - "3002:3000"
+      - "3001:3000"
     environment:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
-      - BETTER_AUTH_URL=http://localhost:3002/auth
-      - NEXT_PUBLIC_APP_URL=http://localhost:3002
+      - BETTER_AUTH_URL=http://localhost:3001/api/auth
+      - NEXT_PUBLIC_APP_URL=http://localhost:3001
       - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  admin:
+    build:
+      context: ../../
+      dockerfile: apps/admin/Dockerfile
+    container_name: planisfy-admin
+    ports:
+      - "3003:3000"
+    environment:
+      - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
+      - BETTER_AUTH_URL=http://localhost:3003/api/auth
+      - NEXT_PUBLIC_APP_URL=http://localhost:3003
       - NODE_ENV=production
     depends_on:
       postgres:
@@ -77,18 +95,18 @@ services:
       dockerfile: apps/docs/Dockerfile
     container_name: planisfy-docs
     ports:
-      - "3001:3000"
+      - "3002:3000"
     environment:
       - NODE_ENV=production
     restart: unless-stopped
     networks:
       - planisfy-network
 
-  web:
+  marketing:
     build:
       context: ../../
-      dockerfile: apps/web/Dockerfile
-    container_name: planisfy-web
+      dockerfile: apps/marketing/Dockerfile
+    container_name: planisfy-marketing
     ports:
       - "3000:3000"
     environment:
@@ -183,7 +201,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080" # Dashboard
+      - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik-config.yml:/etc/traefik/traefik.yml:ro

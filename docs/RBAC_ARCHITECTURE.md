@@ -2,61 +2,87 @@
 
 ## Overview
 
-Planisfy uses a **single dashboard** with role-based access control. All users access the same application, but the interface and available features change based on their role.
+Planisfy uses **two separate applications** with distinct access models:
+
+- **Console** (`apps/console`) — Customer-facing app for managing styles, API keys, usage, and organizations.
+- **Admin** (`apps/admin`) — Internal super-admin app for instance-wide management.
+
+Both apps share authentication via `@planisfy/auth` (shared session cookies on `.planisfy.com`) and UI components via `@planisfy/ui`.
 
 ---
 
-## Why Single Dashboard with RBAC?
+## Role Model
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| **Single Dashboard + RBAC** | Simpler deployment, shared components, seamless UX, easier maintenance | Larger bundle size |
-| **Separate Admin Panel** | Clear separation, different deployment strategies | More infrastructure, duplicate UI, more complex CI/CD |
+### System Roles (on `users` table)
 
-**Decision**: Single dashboard is better for self-hosting, where users are typically also admins of their instance.
-
----
-
-## User Roles
-
-| Role | Level | Description | Permissions |
-|------|-------|-------------|------------|
-| **user** | 1 | Regular user | Manage own API keys, view own usage |
-| **admin** | 2 | Instance administrator | Manage all users, system settings, view all usage |
-| **owner** | 3 | Billing contact (future) | Manage billing, plans |
-
-**Role Hierarchy**: Higher roles inherit lower role permissions.
-
----
-
-## Role-Based UI
-
-### Sidebar Navigation
-
-The sidebar dynamically renders based on user role:
-
-```
-All Users See:
-├── Overview
-├── API Keys
-└── Usage
-
-Admins Also See:
-├── ────────────────
-├── Users
-├── System
-└── Settings
-```
-
-### Page Content
-
-| Page | Regular Users | Admins |
+| Role | Description | Access |
 |------|-------------|--------|
-| **Overview** | Personal stats | System-wide stats |
-| **Usage** | Own data only | Aggregate + per-user breakdown |
-| **API Keys** | Own keys only | All users' keys (manage) |
-| **Users** | Hidden | ✅ Visible (user management) |
-| **System** | Hidden | ✅ Visible (health, metrics) |
+| **USER** | Regular user | Console only |
+| **ADMIN** | Instance administrator | Console + Admin |
+| **SUPER** | Platform owner | Console + Admin (full) |
+
+### Organization Roles (on `members` table)
+
+| Role | Description | Permissions |
+|------|-------------|-------------|
+| **OWNER** | Organization creator | Full org management, billing, delete org |
+| **ADMIN** | Org administrator | Manage members, settings, resources |
+| **MEMBER** | Regular member | Create/edit own resources |
+| **VIEWER** | Read-only | View org resources |
+
+Role hierarchy: higher roles inherit all lower role permissions.
+
+---
+
+## Console App (`apps/console`)
+
+### Route Structure
+
+```
+app/
+├── (auth)/                 # Public (login, register)
+├── (app)/                  # Authenticated routes
+│   ├── dashboard/          # Overview, stats
+│   ├── api-keys/           # API key management
+│   ├── usage/              # Usage analytics
+│   ├── styles/             # Style management
+│   ├── studio/             # Style editor
+│   └── settings/           # Account settings
+└── org/[orgId]/            # Organization context
+    ├── dashboard/
+    ├── members/
+    ├── api-keys/
+    └── settings/
+```
+
+### Access Rules
+
+| Page | USER | ORG MEMBER | ORG ADMIN | ORG OWNER |
+|------|------|-----------|-----------|-----------|
+| Dashboard | Own stats | Org stats | Org stats | Org stats |
+| API Keys | Own keys | Org keys (read) | Org keys (manage) | Org keys (manage) |
+| Usage | Own usage | Org usage | Org usage | Org usage + billing |
+| Members | — | View | Manage | Manage + invite |
+| Settings | Own account | — | Org settings | Org settings + delete |
+
+---
+
+## Admin App (`apps/admin`)
+
+Restricted to users with `ADMIN` or `SUPER` system role.
+
+### Route Structure
+
+```
+app/
+├── (auth)/                 # Admin login
+├── (admin)/                # Protected admin routes
+│   ├── dashboard/          # System-wide stats
+│   ├── users/              # User management
+│   ├── organizations/      # Org management
+│   ├── system/             # Health, metrics
+│   └── settings/           # Instance settings
+```
 
 ---
 
@@ -64,99 +90,37 @@ Admins Also See:
 
 ### Server-Side Authority
 
-- **All authorization happens server-side**
+- All authorization happens server-side
 - Client-side role checks are UX only, not security
 - Server Actions and API routes validate roles
 - Sessions include role in JWT payload
 
 ### Protection Layers
 
-1. **Middleware** - Route-level protection
-2. **Server Components** - Data fetching with role validation
-3. **Server Actions** - Mutation authorization
-4. **API Routes** - Endpoint-level guards
-
-### Audit Logging
-
-Admin actions are logged:
-- User role changes
-- User deletion
-- Settings modifications
-- Login attempts
+1. **Middleware** — Route-level protection (redirect unauthenticated)
+2. **Server Components** — Data fetching with role validation
+3. **Server Actions** — Mutation authorization
+4. **API Routes** — Endpoint-level guards
 
 ---
 
-## Implementation Approach
+## Database Schema
 
-### Route Structure
-
-```
-app/
-├── (auth)/           # Public (login, register)
-├── (dashboard)/      # Protected (all authenticated users)
-│   ├── overview/
-│   ├── api-keys/
-│   └── usage/
-│   └── admin/        # Admin-only routes
-│       ├── users/
-│       ├── system/
-│       └── settings/
-```
-
-### Protection Strategy
-
-| Location | Method | Purpose |
-|----------|--------|---------|
-| **Middleware** | `auth.middleware()` | Redirect unauthenticated |
-| **Layout** | Server component check | Block access to protected route groups |
-| **Server Action** | `requireRole()` | Validate before mutation |
-| **API Route** | Middleware guard | Validate API requests |
-
----
-
-## Database Schema (Conceptual)
-
-Users table includes:
+### Relevant Tables
 
 ```
-users
-├── id
-├── email
-├── name
-├── role (enum: user, admin, owner)  ← RBAC field
-├── organization
-└── created_at
+profiles   — Shared identity (handle, displayName, billing)
+users      — Auth identity (email, role: USER | ADMIN | SUPER)
+organizations — Org entities (ownerId → users)
+members    — User ↔ Org join (role: OWNER | ADMIN | MEMBER | VIEWER)
 ```
 
-No separate admin tables - role is a property of the user.
-
----
-
-## Migration Path
-
-1. **Add role column** to users table (default: 'user')
-2. **Update auth config** to include role in session
-3. **Create RBAC utilities** (`requireRole`, `hasRole`)
-4. **Add admin routes** with layout protection
-5. **Update UI components** to render based on role
-6. **Set first user** as admin (manual database update)
-
----
-
-## Future Enhancements
-
-- **Fine-grained permissions**: `users:read`, `users:write`, `system:configure`
-- **Teams/Organizations**: Admin per organization, not global
-- **Audit log viewer**: View all admin actions in dashboard
-- **Impersonation**: Admins can view as another user (for support)
-- **2FA requirement**: Require 2FA for admin access
-- **Role expiry**: Temporary admin access for specific tasks
+System role lives on `users.role`. Org role lives on `members.role`.
 
 ---
 
 ## See Also
 
 - [Architecture Overview](../ARCHITECTURE.md)
-- [Dashboard Implementation](../apps/dashboard/README.md)
 - [Auth Package](../packages/auth/README.md)
 - [Database Package](../packages/database/README.md)
