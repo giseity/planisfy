@@ -34,7 +34,7 @@ This document tracks the implementation status of all apps and packages in the P
 - [ ] Fastify server setup
 - [ ] Auth middleware
 - [ ] Route handlers
-- [ ] Engine integration (Martin, Pelias, Valhalla)
+- [ ] Engine integration (Martin, Valhalla, Geocoding)
 
 #### `apps/dashboard` (Port 3002)
 - [x] package.json created
@@ -128,7 +128,6 @@ This document tracks the implementation status of all apps and packages in the P
 |-----------|--------|-------|
 | `docker-compose.yml` | ✅ | Complete with all services |
 | Martin config | ✅ | tile server configuration |
-| Pelias config | ✅ | geocoding configuration |
 | Valhalla config | ✅ | routing configuration |
 | Dockerfiles | 🔴 | Need to create for each app |
 | Terraform | 🔴 | Not started |
@@ -142,9 +141,8 @@ This document tracks the implementation status of all apps and packages in the P
 | PostgreSQL | 🟡 | Configured in docker-compose |
 | Redis | 🟡 | Configured in docker-compose |
 | Martin (tiles) | 🟡 | Configured, needs PMTiles data |
-| Pelias (geocoding) | 🟡 | Configured, needs Elasticsearch |
+| Geocoding | ➡️ | Moved to separate project |
 | Valhalla (routing) | 🟡 | Configured, needs routing data |
-| Elasticsearch | 🔴 | Required for Pelias, not configured |
 | Cloudflare R2 | 🔴 | For tile storage, not configured |
 
 ---
@@ -187,7 +185,7 @@ This document tracks the implementation status of all apps and packages in the P
 5. Set up PostgreSQL migrations
 
 ### Long Term (Ongoing)
-1. Add Pelias geocoding integration
+1. Integrate with geocoding project
 2. Add Valhalla routing integration
 3. Deploy Cloudflare Worker for tiles
 4. Set up CI/CD pipeline

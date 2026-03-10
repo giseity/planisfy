@@ -34,9 +34,9 @@ Planisfy is a distributed geospatial API platform that provides Mapbox-compatibl
             ┌─────────────▼────┐ ┌───▼──────┐ ┌▼────────────┐
             │                  │ │          │ │             │
       ┌─────▼─────┐     ┌─────▼───▼──┐   ┌──▼──────┐  ┌──▼─────────┐
-      │  Martin   │     │  Pelias    │   │Valhalla │  │PostgreSQL  │
-      │ (Rust)    │     │ (Node.js)  │   │ (C++)   │  │  + Redis   │
-      │  Tiles    │     │Geocoding   │   │Routing  │  │            │
+      │  Martin   │     │ Geocoding  │   │Valhalla │  │PostgreSQL  │
+      │ (Rust)    │     │ (external) │   │ (C++)   │  │  + Redis   │
+      │  Tiles    │     │            │   │Routing  │  │            │
       └───────────┘     └────────────┘   └─────────┘  └────────────┘
             │                  │                │
             └──────────────────┴────────────────┘
@@ -80,7 +80,7 @@ Planisfy is a distributed geospatial API platform that provides Mapbox-compatibl
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
 | **Martin** | Rust | Serves vector tiles from PMTiles |
-| **Pelias** | Node.js | Geocoding and reverse search |
+| **Geocoding** | External service | Geocoding and reverse search (separate project) |
 | **Valhalla** | C++ | Turn-by-turn routing |
 
 ### Data Layer
@@ -112,7 +112,7 @@ Planisfy is a distributed geospatial API platform that provides Mapbox-compatibl
 ```
 1. Client: GET /geocoding/v1/planisfy/places.json?q=Paris
 2. API Gateway: Validate API key, check rate limit
-3. Pelias: Search Overture index
+3. Geocoding service: Search Overture index
 4. API Gateway: Format response, log usage
 5. Client: Display results
 ```
@@ -237,10 +237,10 @@ Planisfy is a distributed geospatial API platform that provides Mapbox-compatibl
 ┌──────────────────────────────────────┐
 │         Docker Host / Server         │
 │                                      │
-│  ┌────────┐  ┌────────┐  ┌────────┐ │
-│  │ API    │  │Pelias  │  │Valhalla│ │
-│  │Gateway │  │        │  │        │ │
-│  └────┬───┘  └────────┘  └────────┘ │
+│  ┌────────┐             ┌────────┐ │
+│  │ API    │             │Valhalla│ │
+│  │Gateway │             │        │ │
+│  └────┬───┘             └────────┘ │
 │       │                            │
 │  ┌────▼─────┐  ┌─────────────────┐ │
 │  │PostgreSQL│  │    Redis        │ │
@@ -255,8 +255,8 @@ Planisfy is a distributed geospatial API platform that provides Mapbox-compatibl
 │ Cloudflare Edge  │      │  VPS / Origin   │
 │                   │      │                 │
 │  Tile Worker     │<────>│  API Gateway    │
-│  (Tiles only)    │      │  Pelias,        │
-│                  │      │  Valhalla, DB   │
+│  (Tiles only)    │      │  Valhalla, DB   │
+│                  │      │                 │
 └──────────────────┘      └─────────────────┘
 ```
 
@@ -298,7 +298,7 @@ Planisfy is a distributed geospatial API platform that provides Mapbox-compatibl
 |-----------|-----------------|
 | **API Gateway** | Stateless, add instances behind load balancer |
 | **Tile Worker** | Auto-scales with Cloudflare |
-| **Pelias** | Run multiple instances behind Nginx |
+| **Geocoding** | Scaled independently (separate project) |
 | **Valhalla** | Per-region deployments |
 | **Database** | Read replicas, partitioning |
 
@@ -340,11 +340,6 @@ Planisfy is a distributed geospatial API platform that provides Mapbox-compatibl
 - Performance: 10x faster than Node.js tile servers
 - Memory safety: No memory leaks
 - Concurrency: Handle thousands of concurrent requests
-
-### Why Node.js for Pelias?
-- Ecosystem: Rich geospatial libraries
-- Maintenance: Easier to modify and extend
-- Integration: Same runtime as API gateway
 
 ### Why C++ for Valhalla?
 - Performance: Routing algorithms are CPU-intensive
