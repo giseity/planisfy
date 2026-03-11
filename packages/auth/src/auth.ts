@@ -12,6 +12,7 @@ import {
   accounts,
   verifications,
 } from "@planisfy/database";
+import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // ============================================================================
@@ -56,6 +57,17 @@ export const auth = betterAuth({
       },
       organizationHooks: {
         beforeCreateOrganization: async ({ organization }) => {
+          // Check for duplicate slug before creating the profile,
+          // since better-auth's org insert happens *after* this hook.
+          const [existing] = await db
+            .select({ id: organizations.id })
+            .from(organizations)
+            .where(eq(organizations.slug, organization.slug))
+            .limit(1);
+          if (existing) {
+            throw new Error("Organization with this slug already exists");
+          }
+
           // Generate a shared ID for both profile and organization
           const id = randomUUID();
           const handle = generateHandle(organization.name);
@@ -96,6 +108,18 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (userData) => {
+          // Check for duplicate email before creating the profile,
+          // since better-auth's user insert happens *after* this hook
+          // and we can't catch its constraint violations from here.
+          const [existing] = await db
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.email, userData.email))
+            .limit(1);
+          if (existing) {
+            throw new Error("User with this email already exists");
+          }
+
           const rawHandle = (userData as Record<string, unknown>).handle as
             | string
             | undefined;
