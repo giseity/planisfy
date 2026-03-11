@@ -14,6 +14,12 @@
       ],
       "@planisfy/auth/*": [
         "../../packages/auth/src/*"
+      ],
+      "@planisfy/database": [
+        "../../packages/database/src/index.ts"
+      ],
+      "@planisfy/database/*": [
+        "../../packages/database/src/*"
       ]
     },
     "plugins": [

@@ -57,6 +57,10 @@ export const auth = betterAuth({
       },
       organizationHooks: {
         beforeCreateOrganization: async ({ organization }) => {
+          if (!organization.slug || !organization.name) {
+            throw new Error("Organization slug and name are required");
+          }
+
           // Check for duplicate slug before creating the profile,
           // since better-auth's org insert happens *after* this hook.
           const [existing] = await db

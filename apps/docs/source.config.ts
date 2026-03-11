@@ -17,8 +17,5 @@ export const docs = defineDocs({
 });
 
 export default defineConfig({
-  mdxOptions: {
-    lastModifiedTime: 'git',
-    portableTranspiler: true,
-  },
+  mdxOptions: {},
 });
