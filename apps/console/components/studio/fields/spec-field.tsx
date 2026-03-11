@@ -9,23 +9,79 @@ import { StringField } from "./string-field"
 import { BooleanField } from "./boolean-field"
 import { ArrayField } from "./array-field"
 import { ExpressionField } from "./expression-field"
+import { ZoomFunctionField, valueToZoomFunction } from "./zoom-function-field"
+import { DataFunctionField, valueToDataFunction } from "./data-function-field"
+import { IconField } from "./icon-field"
+import { FontField } from "./font-field"
 
 interface SpecFieldProps {
   property: string
   spec: PropertySpec
   value: unknown
   onChange: (value: unknown) => void
+  spriteUrl?: string
+  glyphsUrl?: string
 }
 
 /**
  * Spec-driven field adapter — routes to the correct input component
  * based on the MapLibre style spec type definition.
  */
-export function SpecField({ property, spec, value, onChange }: SpecFieldProps) {
+export function SpecField({ property, spec, value, onChange, spriteUrl, glyphsUrl }: SpecFieldProps) {
   const valueType = getValueType(value)
 
-  // If the value is an expression or function, show JSON editor
-  if (valueType === "expression" || valueType === "zoom_function" || valueType === "data_function") {
+  // Zoom function → visual stop editor
+  if (valueType === "zoom_function") {
+    return (
+      <ZoomFunctionField
+        label={property}
+        value={value as any}
+        spec={spec}
+        onChange={onChange}
+        onSimplify={() => onChange(spec.default ?? undefined)}
+      />
+    )
+  }
+
+  // Data function → visual data-driven editor
+  if (valueType === "data_function") {
+    return (
+      <DataFunctionField
+        label={property}
+        value={value as any}
+        spec={spec}
+        onChange={onChange}
+        onSimplify={() => onChange(spec.default ?? undefined)}
+      />
+    )
+  }
+
+  // Font field → font stack picker (check before expression since font arrays look like expressions)
+  if (property === "text-font" && (valueType === "value" || (Array.isArray(value) && value.every((v) => typeof v === "string")))) {
+    return (
+      <FontField
+        label={property}
+        value={Array.isArray(value) ? value : (spec.default as string[]) ?? []}
+        onChange={onChange}
+        glyphsUrl={glyphsUrl}
+      />
+    )
+  }
+
+  // Icon/pattern fields → sprite picker (check before expression)
+  if ((property === "icon-image" || property.endsWith("-pattern")) && valueType === "value") {
+    return (
+      <IconField
+        label={property}
+        value={typeof value === "string" ? value : ""}
+        onChange={onChange}
+        spriteUrl={spriteUrl}
+      />
+    )
+  }
+
+  // Expression → JSON editor
+  if (valueType === "expression") {
     return <ExpressionField label={property} value={value} onChange={onChange} />
   }
 
@@ -77,38 +133,15 @@ export function SpecField({ property, spec, value, onChange }: SpecFieldProps) {
         />
       )
 
-    case "array": {
-      // Fixed-size number arrays (e.g., translate, dasharray, padding)
-      if (Array.isArray(value)) {
-        return (
-          <ArrayField
-            label={property}
-            value={value}
-            onChange={onChange}
-            itemType={spec.value === "string" ? "string" : "number"}
-          />
-        )
-      }
-      // Font arrays
-      if (property === "text-font") {
-        return (
-          <ArrayField
-            label={property}
-            value={Array.isArray(value) ? value : (spec.default as unknown[]) ?? []}
-            onChange={onChange}
-            itemType="string"
-          />
-        )
-      }
+    case "array":
       return (
         <ArrayField
           label={property}
-          value={Array.isArray(value) ? value : []}
+          value={Array.isArray(value) ? value : (spec.default as unknown[]) ?? []}
           onChange={onChange}
           itemType={spec.value === "string" ? "string" : "number"}
         />
       )
-    }
 
     case "string":
     case "resolvedImage":

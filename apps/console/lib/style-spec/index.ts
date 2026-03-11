@@ -130,7 +130,9 @@ export interface StyleError {
 
 export function validateStyleJSON(style: StyleSpecification): StyleError[] {
   try {
-    const errors = validateStyle(style as any)
+    // Deep-clone to strip any Proxy objects (e.g. from immer)
+    const clean = JSON.parse(JSON.stringify(style))
+    const errors = validateStyle(clean as any)
     return errors.map((e: any) => ({
       message: e.message,
       line: e.line,

@@ -49,6 +49,18 @@ const layerTypeIcons: Record<string, React.ElementType> = {
   heatmap: Layers,
 }
 
+const layerTypeColors: Record<string, string> = {
+  background: "text-slate-400",
+  fill: "text-blue-400",
+  line: "text-orange-400",
+  symbol: "text-purple-400",
+  circle: "text-green-400",
+  "fill-extrusion": "text-cyan-400",
+  raster: "text-amber-400",
+  hillshade: "text-emerald-400",
+  heatmap: "text-red-400",
+}
+
 export function LayerList() {
   const style = useStyleStore((s) => s.style)
   const selectedLayerId = useStyleStore((s) => s.selectedLayerId)
@@ -183,6 +195,7 @@ function SortableLayerItem({
   }
 
   const Icon = layerTypeIcons[layer.type] || Layers
+  const iconColor = layerTypeColors[layer.type] || "text-muted-foreground"
   const isVisible =
     !("layout" in layer) ||
     !layer.layout ||
@@ -206,7 +219,7 @@ function SortableLayerItem({
       >
         <GripVertical className="h-3 w-3" />
       </button>
-      <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
+      <Icon className={cn("h-3 w-3 shrink-0", iconColor)} />
       <span className="flex-1 truncate">{layer.id}</span>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
         <Button
