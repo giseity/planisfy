@@ -17,6 +17,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@maplibre/maplibre-gl-style-spec": "^24.3.1",
+    "@monaco-editor/react": "4.8.0-rc.3",
     "@planisfy/auth": "workspace:*",
     "@planisfy/ui": "workspace:*",
     "@types/geojson": "^7946.0.16",

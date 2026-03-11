@@ -1,25 +1,59 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useCallback, useState } from "react"
 import { useStyleStore } from "@/lib/store/style-store"
 import { sampleStyle } from "@/lib/sample-style"
 import { MapPreview } from "@/components/studio/map-preview"
 import { LayerList } from "@/components/studio/layer-list"
 import { PropertyPanel } from "@/components/studio/property-panel"
+import { SourcePanel } from "@/components/studio/source-panel"
+import { JsonEditor } from "@/components/studio/json-editor"
 import { Separator } from "@planisfy/ui/components/separator"
 import { Button } from "@planisfy/ui/components/button"
-import { Download, Upload } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@planisfy/ui/components/tabs"
+import { Download, Upload, Undo2, Redo2, Code2 } from "lucide-react"
 
 export default function StyleEditorPage() {
   const loadStyle = useStyleStore((s) => s.loadStyle)
   const style = useStyleStore((s) => s.style)
   const styleName = useStyleStore((s) => s.style?.name)
   const updateStyleName = useStyleStore((s) => s.updateStyleName)
+  const undo = useStyleStore((s) => s.undo)
+  const redo = useStyleStore((s) => s.redo)
+  const canUndo = useStyleStore((s) => s.canUndo)
+  const canRedo = useStyleStore((s) => s.canRedo)
+  const [showJson, setShowJson] = useState(false)
 
   // Load sample style on mount (Phase 2 — no backend yet)
   useEffect(() => {
     loadStyle(sampleStyle)
   }, [loadStyle])
+
+  // Keyboard shortcuts
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey
+
+      // Cmd+Z — undo
+      if (mod && e.key === "z" && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+        return
+      }
+      // Cmd+Shift+Z or Cmd+Y — redo
+      if ((mod && e.key === "z" && e.shiftKey) || (mod && e.key === "y")) {
+        e.preventDefault()
+        redo()
+        return
+      }
+    },
+    [undo, redo]
+  )
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [handleKeyDown])
 
   const handleExport = () => {
     if (!style) return
@@ -73,6 +107,38 @@ export default function StyleEditorPage() {
           placeholder="Style name"
         />
         <div className="flex-1" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={undo}
+          disabled={!canUndo()}
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo2 className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={redo}
+          disabled={!canRedo()}
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          <Redo2 className="h-3.5 w-3.5" />
+        </Button>
+        <Separator orientation="vertical" className="h-5" />
+        <Button
+          variant={showJson ? "secondary" : "ghost"}
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          onClick={() => setShowJson(!showJson)}
+          title="Toggle JSON editor"
+        >
+          <Code2 className="h-3 w-3" />
+          JSON
+        </Button>
+        <Separator orientation="vertical" className="h-5" />
         <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={handleImport}>
           <Upload className="h-3 w-3" />
           Import
@@ -85,20 +151,36 @@ export default function StyleEditorPage() {
 
       {/* Main editor area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left panel — Layer list */}
+        {/* Left panel — Layers + Sources */}
         <aside className="flex w-60 flex-col border-r bg-background">
-          <div className="flex h-8 items-center px-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Layers ({style.layers.length})
-          </div>
-          <Separator />
-          <div className="flex-1 overflow-hidden">
-            <LayerList />
-          </div>
+          <Tabs defaultValue="layers" className="flex flex-1 flex-col">
+            <TabsList className="mx-2 mt-1 h-7">
+              <TabsTrigger value="layers" className="text-xs h-6">
+                Layers ({style.layers.length})
+              </TabsTrigger>
+              <TabsTrigger value="sources" className="text-xs h-6">
+                Sources ({Object.keys(style.sources).length})
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="layers" className="flex-1 overflow-hidden mt-0">
+              <LayerList />
+            </TabsContent>
+            <TabsContent value="sources" className="flex-1 overflow-hidden mt-0">
+              <SourcePanel />
+            </TabsContent>
+          </Tabs>
         </aside>
 
-        {/* Map */}
-        <main className="flex-1">
-          <MapPreview />
+        {/* Map + optional JSON editor */}
+        <main className="flex flex-1 flex-col">
+          <div className={showJson ? "flex-1 basis-1/2" : "flex-1"}>
+            <MapPreview />
+          </div>
+          {showJson && (
+            <div className="basis-1/2 border-t">
+              <JsonEditor />
+            </div>
+          )}
         </main>
 
         {/* Right panel — Properties */}
