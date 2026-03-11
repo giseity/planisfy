@@ -3,7 +3,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@planisfy/database": ["../database/src/index.ts"]
     }
   },
   "include": ["src"],
