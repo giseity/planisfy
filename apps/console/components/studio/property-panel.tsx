@@ -44,6 +44,9 @@ export function PropertyPanel() {
   const paintKeys = Object.keys(paintSpec)
   const layoutKeys = Object.keys(layoutSpec).filter((k) => k !== "visibility")
 
+  const spriteUrl = style.sprite as string | undefined
+  const glyphsUrl = style.glyphs as string | undefined
+
   return (
     <ScrollArea className="h-full">
       <div className="flex flex-col gap-3 p-3">
@@ -63,6 +66,8 @@ export function PropertyPanel() {
                 spec={layoutSpec[key] as PropertySpec}
                 value={layout?.[key]}
                 onChange={(v) => updateLayerLayout(selectedLayerId, key, v)}
+                spriteUrl={spriteUrl}
+                glyphsUrl={glyphsUrl}
               />
             ))}
             <Separator />
@@ -78,6 +83,8 @@ export function PropertyPanel() {
             spec={paintSpec[key] as PropertySpec}
             value={paint?.[key]}
             onChange={(v) => updateLayerPaint(selectedLayerId, key, v)}
+            spriteUrl={spriteUrl}
+            glyphsUrl={glyphsUrl}
           />
         ))}
 

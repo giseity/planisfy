@@ -11,7 +11,8 @@ import { JsonEditor } from "@/components/studio/json-editor"
 import { Separator } from "@planisfy/ui/components/separator"
 import { Button } from "@planisfy/ui/components/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@planisfy/ui/components/tabs"
-import { Download, Upload, Undo2, Redo2, Code2 } from "lucide-react"
+import { ValidationPanel } from "@/components/studio/validation-panel"
+import { Download, Upload, Undo2, Redo2, Code2, MousePointerClick, AlertTriangle } from "lucide-react"
 
 export default function StyleEditorPage() {
   const loadStyle = useStyleStore((s) => s.loadStyle)
@@ -23,6 +24,8 @@ export default function StyleEditorPage() {
   const canUndo = useStyleStore((s) => s.canUndo)
   const canRedo = useStyleStore((s) => s.canRedo)
   const [showJson, setShowJson] = useState(false)
+  const [inspectMode, setInspectMode] = useState(false)
+  const [showValidation, setShowValidation] = useState(false)
 
   // Load sample style on mount (Phase 2 — no backend yet)
   useEffect(() => {
@@ -129,6 +132,26 @@ export default function StyleEditorPage() {
         </Button>
         <Separator orientation="vertical" className="h-5" />
         <Button
+          variant={inspectMode ? "secondary" : "ghost"}
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          onClick={() => setInspectMode(!inspectMode)}
+          title="Toggle inspect mode"
+        >
+          <MousePointerClick className="h-3 w-3" />
+          Inspect
+        </Button>
+        <Button
+          variant={showValidation ? "secondary" : "ghost"}
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          onClick={() => setShowValidation(!showValidation)}
+          title="Toggle validation panel"
+        >
+          <AlertTriangle className="h-3 w-3" />
+          Validate
+        </Button>
+        <Button
           variant={showJson ? "secondary" : "ghost"}
           size="sm"
           className="h-7 gap-1 text-xs"
@@ -171,14 +194,23 @@ export default function StyleEditorPage() {
           </Tabs>
         </aside>
 
-        {/* Map + optional JSON editor */}
+        {/* Map + optional JSON/Validation panel */}
         <main className="flex flex-1 flex-col">
-          <div className={showJson ? "flex-1 basis-1/2" : "flex-1"}>
-            <MapPreview />
+          <div className={showJson || showValidation ? "flex-1 basis-1/2" : "flex-1"}>
+            <MapPreview inspectMode={inspectMode} />
           </div>
-          {showJson && (
-            <div className="basis-1/2 border-t">
-              <JsonEditor />
+          {(showJson || showValidation) && (
+            <div className="basis-1/2 border-t flex">
+              {showJson && (
+                <div className={showValidation ? "flex-1 border-r" : "flex-1"}>
+                  <JsonEditor />
+                </div>
+              )}
+              {showValidation && (
+                <div className={showJson ? "w-72" : "flex-1"}>
+                  <ValidationPanel />
+                </div>
+              )}
             </div>
           )}
         </main>
