@@ -139,18 +139,39 @@ importers:
       '@better-fetch/fetch':
         specifier: ^1.1.21
         version: 1.1.21
+      '@dnd-kit/core':
+        specifier: ^6.3.1
+        version: 6.3.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@dnd-kit/sortable':
+        specifier: ^10.0.0
+        version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)
+      '@dnd-kit/utilities':
+        specifier: ^3.2.2
+        version: 3.2.2(react@19.2.4)
+      '@maplibre/maplibre-gl-style-spec':
+        specifier: ^24.3.1
+        version: 24.4.1
       '@planisfy/auth':
         specifier: workspace:*
         version: link:../../packages/auth
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@types/geojson':
+        specifier: ^7946.0.16
+        version: 7946.0.16
       better-auth:
         specifier: ^1.4.18
         version: 1.4.18(drizzle-kit@0.31.9)(drizzle-orm@0.45.1(kysely@0.28.11)(postgres@3.4.8))(next@16.1.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0))
+      immer:
+        specifier: ^11.1.4
+        version: 11.1.4
       lucide-react:
         specifier: ^0.563.0
         version: 0.563.0(react@19.2.4)
+      maplibre-gl:
+        specifier: ^5.14.0
+        version: 5.18.0
       next:
         specifier: 16.1.6
         version: 16.1.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3)
@@ -160,9 +181,15 @@ importers:
       react:
         specifier: ^19.2.4
         version: 19.2.4
+      react-colorful:
+        specifier: ^5.6.1
+        version: 5.6.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react-dom:
         specifier: ^19.2.4
         version: 19.2.4(react@19.2.4)
+      zustand:
+        specifier: ^5.0.11
+        version: 5.0.11(@types/react@19.2.14)(immer@11.1.4)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))
     devDependencies:
       '@planisfy/eslint-config':
         specifier: workspace:*
@@ -5748,6 +5775,9 @@ packages:
     engines: {node: '>=16.x'}
     hasBin: true
 
+  immer@11.1.4:
+    resolution: {integrity: sha512-XREFCPo6ksxVzP4E0ekD5aMdf8WMwmdNaz6vuvxgI40UaEiu6q3p8X52aU6GdyvLY3XXX/8R7JOTXStz/nBbRw==}
+
   immutable@5.1.4:
     resolution: {integrity: sha512-p6u1bG3YSnINT5RQmx/yRZBpenIl30kVxkTLDyHLIMk0gict704Q9n+thfDI7lTRm9vXdDYutVzXhzcThxTnXA==}
 
@@ -7236,6 +7266,12 @@ packages:
     peerDependencies:
       react: '*'
 
+  react-colorful@5.6.1:
+    resolution: {integrity: sha512-1exovf0uGTGyq5mXQT0zgQ80uvj2PCwvF8zY1RN9/vbJVSjSo3fsB/4L3ObbF7u70NduSiK4xu4Y6q1MHoUGEw==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
   react-dom@19.2.4:
     resolution: {integrity: sha512-AXJdLo8kgMbimY95O2aKQqsz2iWi9jMgKJhRBAxECE4IFxfcazB2LmzloIoibJI3C12IlY20+KFaLv+71bUJeQ==}
     peerDependencies:
@@ -8662,6 +8698,24 @@ packages:
 
   zstddec@0.2.0:
     resolution: {integrity: sha512-oyPnDa1X5c13+Y7mA/FDMNJrn4S8UNBe0KCqtDmor40Re7ALrPN6npFwyYVRRh+PqozZQdeg23QtbcamZnG5rA==}
+
+  zustand@5.0.11:
+    resolution: {integrity: sha512-fdZY+dk7zn/vbWNCYmzZULHRrss0jx5pPFiOuMZ/5HJN6Yv3u+1Wswy/4MpZEkEGhtNH+pwxZB8OKgUBPzYAGg==}
+    engines: {node: '>=12.20.0'}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+      immer: '>=9.0.6'
+      react: '>=18.0.0'
+      use-sync-external-store: '>=1.2.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      immer:
+        optional: true
+      react:
+        optional: true
+      use-sync-external-store:
+        optional: true
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -14077,6 +14131,8 @@ snapshots:
 
   image-size@2.0.2: {}
 
+  immer@11.1.4: {}
+
   immutable@5.1.4: {}
 
   import-fresh@3.3.1:
@@ -15901,6 +15957,11 @@ snapshots:
       reactcss: 1.2.3(react@19.2.4)
       tinycolor2: 1.6.0
 
+  react-colorful@5.6.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+    dependencies:
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+
   react-dom@19.2.4(react@19.2.4):
     dependencies:
       react: 19.2.4
@@ -17650,5 +17711,12 @@ snapshots:
   zod@4.3.6: {}
 
   zstddec@0.2.0: {}
+
+  zustand@5.0.11(@types/react@19.2.14)(immer@11.1.4)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4)):
+    optionalDependencies:
+      '@types/react': 19.2.14
+      immer: 11.1.4
+      react: 19.2.4
+      use-sync-external-store: 1.6.0(react@19.2.4)
 
   zwitch@2.0.4: {}
