@@ -7,7 +7,6 @@ import {
   invitations,
   sessions,
   accounts,
-  creemSubscriptions,
   styles,
   apiKeys,
   tilesetSources,
@@ -37,9 +36,6 @@ export const profilesRelations = relations(profiles, ({ one, many }) => ({
   apiKeys: many(apiKeys),
   usageLogs: many(usageLogs),
   auditEvents: many(auditEvents),
-
-  // Subscriptions (via Creem)
-  subscriptions: many(creemSubscriptions),
 }));
 
 // ============================================================================
@@ -120,20 +116,6 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
     references: [users.id],
   }),
 }));
-
-// ============================================================================
-// Creem subscription relations
-// ============================================================================
-
-export const creemSubscriptionsRelations = relations(
-  creemSubscriptions,
-  ({ one }) => ({
-    profile: one(profiles, {
-      fields: [creemSubscriptions.referenceId],
-      references: [profiles.id],
-    }),
-  })
-);
 
 // ============================================================================
 // Resource relations

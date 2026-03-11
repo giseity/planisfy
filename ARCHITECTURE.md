@@ -190,6 +190,16 @@ Planisfy is a distributed geospatial API platform that provides Mapbox-compatibl
 - Parallel task execution
 - Better caching than Nx/Lerna
 
+### 7. Console Uses Server Actions, API Gateway for External Access
+
+**Decision**: The console app (Next.js) accesses the database directly via server actions and server components. The Fastify API gateway is exclusively for external SDK/API-key access.
+
+**Why**:
+- Avoids unnecessary network hop for dashboard operations
+- Server actions provide type-safe, colocated data fetching
+- Single source of truth for external API validation and rate limiting
+- Simpler architecture for a small team
+
 ---
 
 ## Data Flow Diagrams

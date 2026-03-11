@@ -146,7 +146,7 @@ See [STATUS.md](./STATUS.md) for detailed implementation status.
 | **Data Source** | Overture Maps | Free, open, regularly updated |
 | **Database** | PostgreSQL + Drizzle ORM | Type-safe, migrations |
 | **Auth** | better-auth | Framework-agnostic, API keys built-in |
-| **Dashboard** | Next.js 14 | App Router, Server Components |
+| **Dashboard** | Next.js 16 | App Router, Server Components |
 | **Tile Delivery** | Cloudflare Workers + R2 | Edge caching, zero egress fees |
 
 ---

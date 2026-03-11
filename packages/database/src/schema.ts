@@ -87,7 +87,7 @@ export const users = pgTable(
     role: systemRoleEnum("role").default("USER").notNull(),
     image: text("image"),
     name: varchar("name", { length: 128 }).notNull(),
-    creemCustomerId: varchar("creem_customer_id", { length: 255 }),
+    polarCustomerId: varchar("polar_customer_id", { length: 255 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -115,7 +115,7 @@ export const organizations = pgTable(
     name: varchar("name", { length: 128 }).notNull(),
     slug: varchar("slug", { length: 128 }).notNull(),
     logo: text("logo"),
-    metadata: text("metadata"),
+    metadata: jsonb("metadata"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -245,41 +245,6 @@ export const verifications = pgTable("verifications", {
     .notNull()
     .defaultNow(),
 });
-
-// ============================================================================
-// Creem Subscriptions (better-auth Creem plugin)
-//
-// referenceId is a profile ID (user.id or org.id, which equals profile.id).
-// The Creem plugin manages this table; we define it here so Drizzle is aware.
-// ============================================================================
-
-export const creemSubscriptions = pgTable(
-  "creem_subscriptions",
-  {
-    id: text("id").primaryKey(),
-    productId: text("product_id").notNull(),
-    referenceId: uuid("reference_id")
-      .notNull()
-      .references(() => profiles.id, { onDelete: "cascade" }),
-    creemCustomerId: text("creem_customer_id").notNull(),
-    creemSubscriptionId: text("creem_subscription_id").notNull(),
-    creemOrderId: text("creem_order_id"),
-    status: varchar("status", { length: 32 }).notNull(),
-    periodStart: timestamp("period_start", { withTimezone: true }),
-    periodEnd: timestamp("period_end", { withTimezone: true }),
-    cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .$onUpdate(() => new Date()),
-  },
-  (table) => [
-    index("creem_subscriptions_reference_idx").on(table.referenceId),
-    index("creem_subscriptions_status_idx").on(table.status),
-  ]
-);
 
 // ============================================================================
 // Resources (Owned by Profiles — both users and orgs can own resources)
