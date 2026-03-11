@@ -24,6 +24,7 @@ export function MapPreview({ inspectMode, onFeatureInspect }: MapPreviewProps) {
   const style = useStyleStore((s) => s.style)
   const setMapLoaded = useStyleStore((s) => s.setMapLoaded)
   const setSelectedLayer = useStyleStore((s) => s.setSelectedLayer)
+  const setMapPosition = useStyleStore((s) => s.setMapPosition)
 
   const handleMapClick = useCallback(
     (e: maplibregl.MapMouseEvent) => {
@@ -96,6 +97,16 @@ export function MapPreview({ inspectMode, onFeatureInspect }: MapPreviewProps) {
 
     map.on("load", () => {
       setMapLoaded(true)
+    })
+
+    map.on("moveend", () => {
+      const center = map.getCenter()
+      setMapPosition({
+        center: [center.lng, center.lat],
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+      })
     })
 
     mapRef.current = map

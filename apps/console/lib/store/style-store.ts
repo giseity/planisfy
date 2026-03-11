@@ -5,11 +5,19 @@ import { changeLayerType } from "@/lib/style-spec/layer"
 
 const MAX_UNDO = 50
 
+export interface MapPosition {
+  center: [number, number]
+  zoom: number
+  bearing: number
+  pitch: number
+}
+
 export interface StyleStore {
   // State
   style: StyleSpecification | null
   selectedLayerId: string | null
   mapLoaded: boolean
+  mapPosition: MapPosition | null
 
   // Undo/redo
   undoStack: StyleSpecification[]
@@ -19,6 +27,7 @@ export interface StyleStore {
   loadStyle: (style: StyleSpecification) => void
   setSelectedLayer: (layerId: string | null) => void
   setMapLoaded: (loaded: boolean) => void
+  setMapPosition: (pos: MapPosition) => void
 
   // Layer mutations
   updateLayerPaint: (layerId: string, property: string, value: unknown) => void
@@ -38,6 +47,7 @@ export interface StyleStore {
   // Style-level mutations
   updateStyleMetadata: (key: string, value: unknown) => void
   updateStyleName: (name: string) => void
+  updateStyleTopLevel: (key: string, value: unknown) => void
 
   // Undo/redo
   undo: () => void
@@ -81,6 +91,7 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
     style: null,
     selectedLayerId: null,
     mapLoaded: false,
+    mapPosition: null,
     undoStack: [],
     redoStack: [],
 
@@ -96,6 +107,8 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
     setSelectedLayer: (layerId) => set({ selectedLayerId: layerId }),
 
     setMapLoaded: (loaded) => set({ mapLoaded: loaded }),
+
+    setMapPosition: (pos) => set({ mapPosition: pos }),
 
     // Layer mutations
     updateLayerPaint: (layerId, property, value) =>
@@ -213,6 +226,12 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
       tracked((state) => {
         if (!state.style) return
         state.style.name = name
+      }),
+
+    updateStyleTopLevel: (key, value) =>
+      tracked((state) => {
+        if (!state.style) return
+        ;(state.style as any)[key] = value
       }),
 
     // Undo/redo

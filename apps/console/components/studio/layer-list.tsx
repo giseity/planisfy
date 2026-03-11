@@ -14,6 +14,9 @@ import {
   Trash2,
   GripVertical,
   Plus,
+  ChevronRight,
+  ChevronDown,
+  Group,
 } from "lucide-react"
 import { cn } from "@planisfy/ui/lib/utils"
 import { Button } from "@planisfy/ui/components/button"
@@ -71,6 +74,8 @@ export function LayerList() {
   const reorderLayers = useStyleStore((s) => s.reorderLayers)
   const addLayer = useStyleStore((s) => s.addLayer)
   const [filter, setFilter] = useState("")
+  const [groupBySource, setGroupBySource] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -84,6 +89,26 @@ export function LayerList() {
       l.id.toLowerCase().includes(filter.toLowerCase())
     )
   }, [style, filter])
+
+  const groups = useMemo(() => {
+    if (!groupBySource) return null
+    const map = new Map<string, LayerSpecification[]>()
+    for (const layer of layers) {
+      const key = ("source-layer" in layer ? (layer as any)["source-layer"] : null) ?? "(no source-layer)"
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(layer)
+    }
+    return map
+  }, [layers, groupBySource])
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   if (!style) return null
 
@@ -111,12 +136,23 @@ export function LayerList() {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b p-2 space-y-1">
-        <Input
-          placeholder="Filter layers..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="h-7 text-xs"
-        />
+        <div className="flex gap-1">
+          <Input
+            placeholder="Filter layers..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="h-7 text-xs flex-1"
+          />
+          <Button
+            variant={groupBySource ? "secondary" : "ghost"}
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            onClick={() => setGroupBySource(!groupBySource)}
+            title="Group by source-layer"
+          >
+            <Group className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
       <ScrollArea className="flex-1">
         <DndContext
@@ -129,23 +165,60 @@ export function LayerList() {
             strategy={verticalListSortingStrategy}
           >
             <div className="p-1">
-              {layers.map((layer) => (
-                <SortableLayerItem
-                  key={layer.id}
-                  layer={layer}
-                  isSelected={layer.id === selectedLayerId}
-                  onSelect={() => setSelectedLayer(layer.id)}
-                  onToggleVisibility={() => {
-                    const isVisible =
-                      !("layout" in layer) ||
-                      !layer.layout ||
-                      (layer.layout as any).visibility !== "none"
-                    setLayerVisibility(layer.id, !isVisible)
-                  }}
-                  onDuplicate={() => duplicateLayer(layer.id)}
-                  onDelete={() => deleteLayer(layer.id)}
-                />
-              ))}
+              {groups
+                ? Array.from(groups.entries()).map(([groupName, groupLayers]) => (
+                    <div key={groupName}>
+                      <button
+                        className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent/50"
+                        onClick={() => toggleGroup(groupName)}
+                      >
+                        {collapsedGroups.has(groupName) ? (
+                          <ChevronRight className="h-3 w-3" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3" />
+                        )}
+                        <span className="truncate">{groupName}</span>
+                        <span className="text-[9px] text-muted-foreground/60 ml-auto">
+                          {groupLayers.length}
+                        </span>
+                      </button>
+                      {!collapsedGroups.has(groupName) &&
+                        groupLayers.map((layer) => (
+                          <SortableLayerItem
+                            key={layer.id}
+                            layer={layer}
+                            isSelected={layer.id === selectedLayerId}
+                            onSelect={() => setSelectedLayer(layer.id)}
+                            onToggleVisibility={() => {
+                              const isVisible =
+                                !("layout" in layer) ||
+                                !layer.layout ||
+                                (layer.layout as any).visibility !== "none"
+                              setLayerVisibility(layer.id, !isVisible)
+                            }}
+                            onDuplicate={() => duplicateLayer(layer.id)}
+                            onDelete={() => deleteLayer(layer.id)}
+                          />
+                        ))}
+                    </div>
+                  ))
+                : layers.map((layer) => (
+                    <SortableLayerItem
+                      key={layer.id}
+                      layer={layer}
+                      isSelected={layer.id === selectedLayerId}
+                      onSelect={() => setSelectedLayer(layer.id)}
+                      onToggleVisibility={() => {
+                        const isVisible =
+                          !("layout" in layer) ||
+                          !layer.layout ||
+                          (layer.layout as any).visibility !== "none"
+                        setLayerVisibility(layer.id, !isVisible)
+                      }}
+                      onDuplicate={() => duplicateLayer(layer.id)}
+                      onDelete={() => deleteLayer(layer.id)}
+                    />
+                  ))}
             </div>
           </SortableContext>
         </DndContext>
