@@ -29,9 +29,18 @@ importers:
 
   apps/admin:
     dependencies:
+      '@planisfy/auth':
+        specifier: workspace:^
+        version: link:../../packages/auth
+      '@planisfy/database':
+        specifier: workspace:^
+        version: link:../../packages/database
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      drizzle-orm:
+        specifier: ^0.45.1
+        version: 0.45.1(kysely@0.28.11)(postgres@3.4.8)
       lucide-react:
         specifier: ^0.563.0
         version: 0.563.0(react@19.2.4)
@@ -47,6 +56,9 @@ importers:
       react-dom:
         specifier: ^19.2.4
         version: 19.2.4(react@19.2.4)
+      recharts:
+        specifier: ^3.8.0
+        version: 3.8.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-is@16.13.1)(react@19.2.4)(redux@5.0.1)
     devDependencies:
       '@planisfy/eslint-config':
         specifier: workspace:*
