@@ -105,6 +105,9 @@ importers:
       ioredis:
         specifier: ^5.5.0
         version: 5.9.2
+      rate-limiter-flexible:
+        specifier: ^9.1.1
+        version: 9.1.1
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -4439,6 +4442,9 @@ packages:
         optional: true
       '@types/react-dom':
         optional: true
+
+  rate-limiter-flexible@9.1.1:
+    resolution: {integrity: sha512-imxFjzPCmvDLMe7d2tsgiSQvs5EI2fI9SNymmslAfOqznZhsZ+PqbIjIYKpuSbd3pKovR1aMG47qfCLIO/adVg==}
 
   react-colorful@5.6.1:
     resolution: {integrity: sha512-1exovf0uGTGyq5mXQT0zgQ80uvj2PCwvF8zY1RN9/vbJVSjSo3fsB/4L3ObbF7u70NduSiK4xu4Y6q1MHoUGEw==}
@@ -9546,6 +9552,8 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
       '@types/react-dom': 19.2.3(@types/react@19.2.14)
+
+  rate-limiter-flexible@9.1.1: {}
 
   react-colorful@5.6.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
