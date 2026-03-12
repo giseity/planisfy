@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useCallback, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { useStyleStore } from "@/lib/store/style-store"
 import { sampleStyle } from "@/lib/sample-style"
 import { MapPreview } from "@/components/studio/map-preview"
@@ -32,10 +32,18 @@ import {
   Link,
   Check,
   Settings,
+  Save,
+  Loader2,
+  AlertCircle,
 } from "lucide-react"
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export default function StyleEditorPage() {
+  const params = useParams<{ styleId: string }>()
   const loadStyle = useStyleStore((s) => s.loadStyle)
+  const loadStyleFromApi = useStyleStore((s) => s.loadStyleFromApi)
+  const saveStyle = useStyleStore((s) => s.saveStyle)
   const style = useStyleStore((s) => s.style)
   const styleName = useStyleStore((s) => s.style?.name)
   const updateStyleName = useStyleStore((s) => s.updateStyleName)
@@ -46,17 +54,28 @@ export default function StyleEditorPage() {
   const redo = useStyleStore((s) => s.redo)
   const canUndo = useStyleStore((s) => s.canUndo)
   const canRedo = useStyleStore((s) => s.canRedo)
+  const saveStatus = useStyleStore((s) => s.saveStatus)
+  const styleId = useStyleStore((s) => s.styleId)
   const [showJson, setShowJson] = useState(false)
   const [inspectMode, setInspectMode] = useState(false)
   const [showValidation, setShowValidation] = useState(false)
   const [copied, setCopied] = useState(false)
   const [urlInput, setUrlInput] = useState("")
   const [urlLoading, setUrlLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const searchParams = useSearchParams()
 
-  // Load style from URL param or use sample
+  // Load style: from API if UUID, from URL param, or sample fallback
   useEffect(() => {
+    const id = params.styleId
+    if (UUID_RE.test(id)) {
+      loadStyleFromApi(id).catch((err) => {
+        setLoadError(err instanceof Error ? err.message : "Failed to load style")
+      })
+      return
+    }
+
     const styleUrl = searchParams.get("url")
     if (styleUrl) {
       fetch(styleUrl)
@@ -72,7 +91,7 @@ export default function StyleEditorPage() {
     } else {
       loadStyle(sampleStyle)
     }
-  }, [searchParams, loadStyle])
+  }, [params.styleId, searchParams, loadStyle, loadStyleFromApi])
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
@@ -81,6 +100,12 @@ export default function StyleEditorPage() {
       const target = e.target as HTMLElement
       const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable
 
+      // Cmd+S — save
+      if (mod && e.key === "s") {
+        e.preventDefault()
+        if (styleId) saveStyle().catch(() => {})
+        return
+      }
       // Cmd+Z — undo
       if (mod && e.key === "z" && !e.shiftKey) {
         e.preventDefault()
@@ -106,7 +131,7 @@ export default function StyleEditorPage() {
         return
       }
     },
-    [undo, redo, selectedLayerId, deleteLayer, duplicateLayer]
+    [undo, redo, selectedLayerId, deleteLayer, duplicateLayer, styleId, saveStyle]
   )
 
   useEffect(() => {
@@ -170,6 +195,17 @@ export default function StyleEditorPage() {
     }
   }
 
+  if (loadError) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-destructive flex items-center gap-2">
+          <AlertCircle className="h-4 w-4" />
+          {loadError}
+        </div>
+      </div>
+    )
+  }
+
   if (!style) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -188,7 +224,30 @@ export default function StyleEditorPage() {
           className="h-7 border-none bg-transparent text-sm font-medium outline-none focus:ring-0"
           placeholder="Style name"
         />
+        {/* Save status */}
+        {styleId && (
+          <span className="text-xs text-muted-foreground ml-2">
+            {saveStatus === "saving" && <Loader2 className="h-3 w-3 animate-spin inline mr-1" />}
+            {saveStatus === "saving" && "Saving..."}
+            {saveStatus === "saved" && "Saved"}
+            {saveStatus === "error" && <span className="text-destructive">Save failed</span>}
+            {saveStatus === "conflict" && <span className="text-destructive">Version conflict</span>}
+          </span>
+        )}
         <div className="flex-1" />
+        {styleId && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={() => saveStyle().catch(() => {})}
+            disabled={saveStatus === "saving"}
+            title="Save (Ctrl+S)"
+          >
+            <Save className="h-3 w-3" />
+            Save
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
