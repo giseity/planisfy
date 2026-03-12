@@ -2,8 +2,11 @@ import { create } from "zustand"
 import { produce } from "immer"
 import type { StyleSpecification, LayerSpecification, SourceSpecification } from "maplibre-gl"
 import { changeLayerType } from "@/lib/style-spec/layer"
+import { api, ApiRequestError } from "@/lib/api"
 
 const MAX_UNDO = 50
+
+export type SaveStatus = "idle" | "saving" | "saved" | "error" | "conflict"
 
 export interface MapPosition {
   center: [number, number]
@@ -19,6 +22,12 @@ export interface StyleStore {
   mapLoaded: boolean
   mapPosition: MapPosition | null
 
+  // Persistence state
+  styleId: string | null
+  styleVersion: number | null
+  saveStatus: SaveStatus
+  lastSavedAt: Date | null
+
   // Undo/redo
   undoStack: StyleSpecification[]
   redoStack: StyleSpecification[]
@@ -28,6 +37,11 @@ export interface StyleStore {
   setSelectedLayer: (layerId: string | null) => void
   setMapLoaded: (loaded: boolean) => void
   setMapPosition: (pos: MapPosition) => void
+
+  // Persistence actions
+  loadStyleFromApi: (id: string) => Promise<void>
+  saveStyle: () => Promise<void>
+  setSaveStatus: (status: SaveStatus) => void
 
   // Layer mutations
   updateLayerPaint: (layerId: string, property: string, value: unknown) => void
@@ -95,6 +109,12 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
     undoStack: [],
     redoStack: [],
 
+    // Persistence state
+    styleId: null,
+    styleVersion: null,
+    saveStatus: "idle",
+    lastSavedAt: null,
+
     // Actions
     loadStyle: (style) =>
       set({
@@ -103,6 +123,49 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
         undoStack: [],
         redoStack: [],
       }),
+
+    loadStyleFromApi: async (id) => {
+      const res = await api.get<{ data: { styleJson: StyleSpecification; version: number; id: string } }>(
+        `/styles/${id}`
+      )
+      const { styleJson, version, id: styleId } = res.data
+      set({
+        style: JSON.parse(JSON.stringify(styleJson)),
+        styleId,
+        styleVersion: version,
+        selectedLayerId: (styleJson as StyleSpecification).layers?.[0]?.id ?? null,
+        undoStack: [],
+        redoStack: [],
+        saveStatus: "idle",
+      })
+    },
+
+    saveStyle: async () => {
+      const { style, styleId, styleVersion } = get()
+      if (!style || !styleId || styleVersion === null) return
+
+      set({ saveStatus: "saving" })
+      try {
+        const res = await api.put<{ data: { version: number } }>(`/styles/${styleId}`, {
+          styleJson: style,
+          version: styleVersion,
+        })
+        set({
+          styleVersion: res.data.version,
+          saveStatus: "saved",
+          lastSavedAt: new Date(),
+        })
+      } catch (err) {
+        if (err instanceof ApiRequestError && err.status === 409) {
+          set({ saveStatus: "conflict" })
+        } else {
+          set({ saveStatus: "error" })
+        }
+        throw err
+      }
+    },
+
+    setSaveStatus: (status) => set({ saveStatus: status }),
 
     setSelectedLayer: (layerId) => set({ selectedLayerId: layerId }),
 
