@@ -13,6 +13,11 @@ import { usageRoute } from "./routes/usage";
 import { tilesRoute } from "./routes/tiles";
 import { publicStylesRoute } from "./routes/public-styles";
 import { fontsRoute } from "./routes/fonts";
+import { directionsRoute } from "./routes/directions";
+import { geocodingRoute } from "./routes/geocoding";
+import { elevationRoute } from "./routes/elevation";
+import { staticMapRoute } from "./routes/static-map";
+import { emailRoute } from "./routes/email";
 import { auth } from "@planisfy/auth/auth";
 
 const app = new Hono<AuthEnv>();
@@ -63,6 +68,13 @@ for (const path of publicApiPaths) {
 app.route("/", tilesRoute);
 app.route("/", publicStylesRoute);
 app.route("/", fontsRoute);
+app.route("/", directionsRoute);
+app.route("/", geocodingRoute);
+app.route("/", elevationRoute);
+app.route("/", staticMapRoute);
+
+// ── Internal routes (no auth — called by platform services only) ─────────────
+app.route("/", emailRoute);
 
 // ── Protected routes (require session cookie) ───────────────────────────────
 app.use("/console/*", authMiddleware);

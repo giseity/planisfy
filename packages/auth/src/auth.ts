@@ -49,11 +49,32 @@ export const auth = betterAuth({
 
   plugins: [
     organization({
-      sendInvitationEmail: async ({ invitation, organization }) => {
-        // TODO: Wire up Resend to send invitation emails
+      sendInvitationEmail: async ({ invitation, organization, inviter }) => {
+        // Email sending delegated to API email service
+        // The API hooks into this via the onInviteSent callback pattern
         console.log(
-          `[invite] ${invitation.email} invited to ${organization.name} (invitation: ${invitation.id})`
+          `[invite] ${invitation.email} invited to ${organization.name} by ${inviter.user.name} (role: ${invitation.role}, id: ${invitation.id})`
         );
+        // When RESEND_API_KEY is set, the API's email service sends the actual email
+        // via a fire-and-forget fetch to the internal email endpoint
+        if (process.env.RESEND_API_KEY) {
+          try {
+            const emailUrl = process.env.INTERNAL_API_URL || "http://localhost:4000";
+            await fetch(`${emailUrl}/internal/send-invitation-email`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: invitation.email,
+                organizationName: organization.name,
+                inviterName: inviter.user.name,
+                role: invitation.role,
+                invitationId: invitation.id,
+              }),
+            }).catch(() => {/* fire and forget */});
+          } catch {
+            // Ignore — email delivery is best-effort
+          }
+        }
       },
       organizationHooks: {
         beforeCreateOrganization: async ({ organization }) => {
