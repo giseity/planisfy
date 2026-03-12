@@ -10,6 +10,9 @@ import { stylesRoute } from "./routes/styles";
 import { auditRoute } from "./routes/audit";
 import { keysRoute } from "./routes/keys";
 import { usageRoute } from "./routes/usage";
+import { tilesRoute } from "./routes/tiles";
+import { publicStylesRoute } from "./routes/public-styles";
+import { fontsRoute } from "./routes/fonts";
 import { auth } from "@planisfy/auth/auth";
 
 const app = new Hono<AuthEnv>();
@@ -55,6 +58,11 @@ const publicApiPaths = [
 for (const path of publicApiPaths) {
   app.use(path, apiKeyMiddleware, dualAuthMiddleware, rateLimitMiddleware, usageLogMiddleware);
 }
+
+// ── Public API route handlers ────────────────────────────────────────────────
+app.route("/", tilesRoute);
+app.route("/", publicStylesRoute);
+app.route("/", fontsRoute);
 
 // ── Protected routes (require session cookie) ───────────────────────────────
 app.use("/console/*", authMiddleware);
