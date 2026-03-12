@@ -18,6 +18,7 @@ import { geocodingRoute } from "./routes/geocoding";
 import { elevationRoute } from "./routes/elevation";
 import { staticMapRoute } from "./routes/static-map";
 import { emailRoute } from "./routes/email";
+import { sourcesRoute } from "./routes/sources";
 import { auth } from "@planisfy/auth/auth";
 
 const app = new Hono<AuthEnv>();
@@ -82,5 +83,6 @@ app.route("/console", stylesRoute);
 app.route("/console", auditRoute);
 app.route("/console", keysRoute);
 app.route("/console", usageRoute);
+app.route("/console", sourcesRoute);
 
 export { app };

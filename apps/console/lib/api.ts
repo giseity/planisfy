@@ -58,6 +58,29 @@ class ApiClient {
   delete<T>(path: string) {
     return this.request<T>("DELETE", path);
   }
+
+  async upload<T>(path: string, formData: FormData): Promise<T> {
+    const url = `${BASE}${path}`;
+    const res = await fetch(url, {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      const err = json as ApiError;
+      throw new ApiRequestError(
+        err.error?.message || res.statusText,
+        res.status,
+        err.error?.code || "UNKNOWN",
+        err.error?.details
+      );
+    }
+
+    return json as T;
+  }
 }
 
 export class ApiRequestError extends Error {
