@@ -24,13 +24,17 @@ export type AuthEnv = {
  * ownerId = activeOrganizationId ?? userId
  */
 export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
-  const token =
+  const rawToken =
     getCookie(c, "better-auth.session_token") ||
     c.req.header("authorization")?.replace("Bearer ", "");
 
-  if (!token) {
+  if (!rawToken) {
     return c.json({ error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
+
+  // better-auth stores the cookie as "{token}.{signature}" but
+  // the sessions table only stores the token portion.
+  const token = rawToken.split(".")[0]!;
 
   const [session] = await db
     .select({
