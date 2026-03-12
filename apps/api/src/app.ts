@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
+import { requestLogger } from "./lib/logger";
 import { authMiddleware, dualAuthMiddleware, type AuthEnv } from "./middleware/auth";
 import { apiKeyMiddleware } from "./middleware/api-key";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
@@ -35,7 +35,7 @@ app.use(
     credentials: true,
   })
 );
-app.use("*", logger());
+app.use("*", requestLogger());
 
 // ── better-auth handler (signup, login, session, org endpoints) ─────────
 // better-auth's handler accepts a standard Request and returns a Response,
