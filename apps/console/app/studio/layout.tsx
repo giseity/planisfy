@@ -3,10 +3,11 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@planisfy/ui/lib/utils"
-import { Palette, Key, BarChart3, Settings } from "lucide-react"
+import { Palette, Key, BarChart3, Settings, Database } from "lucide-react"
 
 const navItems = [
   { href: "/studio/styles", label: "Styles", icon: Palette },
+  { href: "/studio/sources", label: "Sources", icon: Database },
   { href: "/studio/keys", label: "API Keys", icon: Key },
   { href: "/studio/usage", label: "Usage", icon: BarChart3 },
   { href: "/studio/settings", label: "Settings", icon: Settings },
