@@ -4,10 +4,12 @@ import { logger } from "hono/logger";
 import { authMiddleware, dualAuthMiddleware, type AuthEnv } from "./middleware/auth";
 import { apiKeyMiddleware } from "./middleware/api-key";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
+import { usageLogMiddleware } from "./middleware/usage-log";
 import { healthRoute } from "./routes/health";
 import { stylesRoute } from "./routes/styles";
 import { auditRoute } from "./routes/audit";
 import { keysRoute } from "./routes/keys";
+import { usageRoute } from "./routes/usage";
 import { auth } from "@planisfy/auth/auth";
 
 const app = new Hono<AuthEnv>();
@@ -36,7 +38,7 @@ app.on(["GET", "POST"], "/api/auth/**", (c) => {
 app.route("/", healthRoute);
 
 // ── Public API routes (require API key or session) ──────────────────────────
-// Pipeline: API key extraction → auth → rate limit
+// Pipeline: API key extraction → auth → rate limit → usage log
 const publicApiPaths = [
   "/tiles/*",
   "/styles/v1/*",
@@ -51,7 +53,7 @@ const publicApiPaths = [
   "/static/*",
 ];
 for (const path of publicApiPaths) {
-  app.use(path, apiKeyMiddleware, dualAuthMiddleware, rateLimitMiddleware);
+  app.use(path, apiKeyMiddleware, dualAuthMiddleware, rateLimitMiddleware, usageLogMiddleware);
 }
 
 // ── Protected routes (require session cookie) ───────────────────────────────
@@ -59,5 +61,6 @@ app.use("/console/*", authMiddleware);
 app.route("/console", stylesRoute);
 app.route("/console", auditRoute);
 app.route("/console", keysRoute);
+app.route("/console", usageRoute);
 
 export { app };
