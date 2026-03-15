@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@planisfy/ui/lib/utils"
 import { Palette, Key, BarChart3, Settings, Database, Building2 } from "lucide-react"
 import { ContextSwitcher } from "@/components/studio/context-switcher"
+import { EmailVerificationBanner } from "@/components/studio/email-verification-banner"
 
 const navItems = [
   { href: "/studio/styles", label: "Styles", icon: Palette },
@@ -56,6 +57,7 @@ export default function StudioLayout({
           </nav>
         </div>
       </header>
+      <EmailVerificationBanner />
       <main>{children}</main>
     </div>
   )

@@ -5,6 +5,7 @@ import { Button } from "@planisfy/ui/components/button";
 import { Input } from "@planisfy/ui/components/input";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -17,12 +18,12 @@ export default function SignUpPage() {
       email,
       password,
       name,
-      callbackURL: "/dashboard",
+      callbackURL: "/studio/styles",
       fetchOptions: {
         onSuccess: () => {
-          router.push("/dashboard");
+          router.push("/studio/styles");
         },
-        onError: (ctx: any) => {
+        onError: (ctx: { error: { message: string } }) => {
           alert(ctx.error.message);
         },
       },
@@ -30,7 +31,7 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+    <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-4">
       <h1 className="text-2xl font-bold">Sign Up for Planisfy</h1>
       <Input
         type="text"
@@ -53,7 +54,15 @@ export default function SignUpPage() {
         onChange={(e) => setPassword(e.target.value)}
         className="w-full max-w-sm"
       />
-      <Button onClick={handleSignUp}>Sign Up</Button>
+      <Button onClick={handleSignUp} className="w-full max-w-sm">
+        Sign Up
+      </Button>
+      <p className="text-sm text-muted-foreground">
+        Already have an account?{" "}
+        <Link href="/sign-in" className="underline hover:text-foreground">
+          Sign in
+        </Link>
+      </p>
     </div>
   );
 }

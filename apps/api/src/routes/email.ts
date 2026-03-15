@@ -3,6 +3,7 @@ import {
   sendInvitationEmail,
   sendPasswordResetEmail,
   sendQuotaWarningEmail,
+  sendVerificationEmail,
   sendWelcomeEmail,
 } from "../lib/email";
 
@@ -26,6 +27,12 @@ emailRoute.post("/internal/send-welcome-email", async (c) => {
 emailRoute.post("/internal/send-password-reset-email", async (c) => {
   const body = await c.req.json();
   await sendPasswordResetEmail(body);
+  return c.json({ ok: true });
+});
+
+emailRoute.post("/internal/send-verification-email", async (c) => {
+  const body = await c.req.json();
+  await sendVerificationEmail(body);
   return c.json({ ok: true });
 });
 
