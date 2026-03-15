@@ -131,6 +131,31 @@ export async function sendQuotaWarningEmail(params: {
   });
 }
 
+export async function sendVerificationEmail(params: {
+  email: string;
+  name: string;
+  verifyUrl: string;
+}) {
+  return sendEmail({
+    to: params.email,
+    subject: "Verify your Planisfy email address",
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1a1a1a;">Verify your email</h2>
+        <p>Hi ${params.name},</p>
+        <p>Please verify your email address to get full access to Planisfy.</p>
+        <a href="${params.verifyUrl}" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">
+          Verify Email
+        </a>
+        <p style="color: #666; font-size: 14px;">If you didn't create a Planisfy account, you can safely ignore this email.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+        <p style="color: #999; font-size: 12px;">Planisfy — Open-source mapping platform</p>
+      </div>
+    `,
+    text: `Hi ${params.name},\n\nVerify your email: ${params.verifyUrl}`,
+  });
+}
+
 export async function sendWelcomeEmail(params: {
   email: string;
   name: string;

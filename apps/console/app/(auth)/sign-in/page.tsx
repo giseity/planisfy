@@ -5,6 +5,7 @@ import { Button } from "@planisfy/ui/components/button";
 import { Input } from "@planisfy/ui/components/input";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -15,12 +16,12 @@ export default function SignInPage() {
     await signIn.email({
       email,
       password,
-      callbackURL: "/dashboard",
+      callbackURL: "/studio/styles",
       fetchOptions: {
         onSuccess: () => {
-          router.push("/dashboard");
+          router.push("/studio/styles");
         },
-        onError: (ctx: any) => {
+        onError: (ctx: { error: { message: string } }) => {
           alert(ctx.error.message);
         },
       },
@@ -28,7 +29,7 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+    <div className="flex flex-col items-center justify-center min-h-screen gap-4 px-4">
       <h1 className="text-2xl font-bold">Sign In to Planisfy</h1>
       <Input
         type="email"
@@ -44,7 +45,21 @@ export default function SignInPage() {
         onChange={(e) => setPassword(e.target.value)}
         className="w-full max-w-sm"
       />
-      <Button onClick={handleSignIn}>Sign In</Button>
+      <Button onClick={handleSignIn} className="w-full max-w-sm">
+        Sign In
+      </Button>
+      <Link
+        href="/reset-password"
+        className="text-sm text-muted-foreground hover:text-foreground"
+      >
+        Forgot password?
+      </Link>
+      <p className="text-sm text-muted-foreground">
+        Don&apos;t have an account?{" "}
+        <Link href="/sign-up" className="underline hover:text-foreground">
+          Sign up
+        </Link>
+      </p>
     </div>
   );
 }

@@ -117,6 +117,49 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
+    sendResetPassword: async ({ user, url }) => {
+      console.log(`[password-reset] Sending reset link to ${user.email}`);
+      if (process.env.RESEND_API_KEY) {
+        try {
+          const emailUrl = process.env.INTERNAL_API_URL || "http://localhost:4000";
+          await fetch(`${emailUrl}/internal/send-password-reset-email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: user.email,
+              name: user.name,
+              resetUrl: url,
+            }),
+          }).catch(() => {/* fire and forget */});
+        } catch {
+          // Ignore — email delivery is best-effort
+        }
+      }
+    },
+  },
+
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      console.log(`[email-verify] Sending verification to ${user.email}`);
+      if (process.env.RESEND_API_KEY) {
+        try {
+          const emailUrl = process.env.INTERNAL_API_URL || "http://localhost:4000";
+          await fetch(`${emailUrl}/internal/send-verification-email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: user.email,
+              name: user.name,
+              verifyUrl: url,
+            }),
+          }).catch(() => {/* fire and forget */});
+        } catch {
+          // Ignore — email delivery is best-effort
+        }
+      }
+    },
   },
 
   user: {
