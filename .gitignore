@@ -39,3 +39,6 @@ yarn-error.log*
 
 # Test credentials (local dev only)
 credentials/
+
+# Local planning docs & brainstorming
+docs/
