@@ -284,6 +284,32 @@ export const styles = pgTable(
   ]
 );
 
+export const styleVersions = pgTable(
+  "style_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    styleId: uuid("style_id")
+      .notNull()
+      .references(() => styles.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    styleJson: jsonb("style_json").notNull(),
+    name: varchar("name", { length: 128 }).notNull(),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("style_versions_style_idx").on(table.styleId),
+    uniqueIndex("style_versions_style_version_unique").on(
+      table.styleId,
+      table.version
+    ),
+  ]
+);
+
 export const apiKeys = pgTable(
   "api_keys",
   {

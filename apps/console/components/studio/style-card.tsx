@@ -19,24 +19,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@planisfy/ui/components/dialog"
-import { MoreHorizontal, Copy, Trash2, Globe, GlobeLock, Download } from "lucide-react"
+import { MoreHorizontal, Copy, Trash2, Globe, GlobeLock, Download, Link } from "lucide-react"
 import { deleteStyle, duplicateStyle, togglePublish } from "@/app/studio/styles/actions"
+import { api } from "@/lib/api"
 
-interface StyleCardProps {
-  style: {
-    id: string
-    name: string
-    handle: string
-    description: string | null
-    isPublic: boolean
-    thumbnailUrl: string | null
-    version: number
-    createdAt: Date
-    updatedAt: Date
-  }
+export interface StyleData {
+  id: string
+  name: string
+  handle: string
+  description: string | null
+  isPublic: boolean
+  thumbnailUrl: string | null
+  version: number
+  createdAt: string | Date
+  updatedAt: string | Date
 }
 
-function timeAgo(date: Date): string {
+interface StyleCardProps {
+  style: StyleData
+  onMutate?: () => void
+}
+
+function timeAgo(date: string | Date): string {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
   if (seconds < 60) return "just now"
   const minutes = Math.floor(seconds / 60)
@@ -48,7 +52,7 @@ function timeAgo(date: Date): string {
   return new Date(date).toLocaleDateString()
 }
 
-export function StyleCard({ style }: StyleCardProps) {
+export function StyleCard({ style, onMutate }: StyleCardProps) {
   const router = useRouter()
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -59,10 +63,12 @@ export function StyleCard({ style }: StyleCardProps) {
 
   const handleDuplicate = async () => {
     await duplicateStyle(style.id)
+    onMutate?.()
   }
 
   const handleTogglePublish = async () => {
     await togglePublish(style.id)
+    onMutate?.()
   }
 
   const handleDelete = async () => {
@@ -70,6 +76,29 @@ export function StyleCard({ style }: StyleCardProps) {
     await deleteStyle(style.id)
     setDeleteOpen(false)
     setDeleting(false)
+    onMutate?.()
+  }
+
+  const handleCopyUrl = async () => {
+    const url = `${window.location.origin}/studio/styles/${style.id}`
+    await navigator.clipboard.writeText(url)
+  }
+
+  const handleDownloadJson = async () => {
+    try {
+      const res = await api.get<{ data: { styleJson: unknown } }>(`/styles/${style.id}`)
+      const blob = new Blob([JSON.stringify(res.data.styleJson, null, 2)], {
+        type: "application/json",
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${style.name || "style"}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      // ignore
+    }
   }
 
   return (
@@ -138,6 +167,15 @@ export function StyleCard({ style }: StyleCardProps) {
                         Publish
                       </>
                     )}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleCopyUrl}>
+                    <Link className="h-3.5 w-3.5 mr-2" />
+                    Copy style URL
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDownloadJson}>
+                    <Download className="h-3.5 w-3.5 mr-2" />
+                    Download JSON
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
