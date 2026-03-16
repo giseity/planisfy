@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from "@planisfy/ui/components/select"
 import { Plus, Copy, MoreHorizontal, Key, AlertTriangle, RefreshCw, Trash2, Check } from "lucide-react"
+import { toast } from "sonner"
 
 const ALL_SCOPES = [
   { value: "tiles:read", label: "Tiles", description: "Access vector/raster tiles" },
@@ -130,8 +131,8 @@ export default function ApiKeysPage() {
       setRevealedKey(res.data.key)
       setCreateOpen(false)
       fetchKeys()
-    } catch (err) {
-      console.error("Failed to create key:", err)
+    } catch {
+      toast.error("Failed to create key")
     }
   }
 
@@ -140,9 +141,10 @@ export default function ApiKeysPage() {
     try {
       await api.delete(`/keys/${deleteId}`)
       setDeleteId(null)
+      toast.success("API key revoked")
       fetchKeys()
-    } catch (err) {
-      console.error("Failed to delete key:", err)
+    } catch {
+      toast.error("Failed to revoke key")
     }
   }
 
@@ -153,8 +155,8 @@ export default function ApiKeysPage() {
       setRotateId(null)
       setRevealedKey(res.data.key)
       fetchKeys()
-    } catch (err) {
-      console.error("Failed to rotate key:", err)
+    } catch {
+      toast.error("Failed to rotate key")
     }
   }
 

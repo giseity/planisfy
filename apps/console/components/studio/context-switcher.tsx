@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@planisfy/ui/components/dropdown-menu"
 import { Building2, ChevronDown, Plus, User } from "lucide-react"
+import { toast } from "sonner"
 
 interface OrgItem {
   id: string
@@ -85,7 +86,7 @@ export function ContextSwitcher() {
         router.push("/studio/org")
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to create organization")
+      toast.error(err instanceof Error ? err.message : "Failed to create organization")
     } finally {
       setCreating(false)
     }

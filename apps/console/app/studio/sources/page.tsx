@@ -21,7 +21,8 @@ import {
 import { Button } from "@planisfy/ui/components/button"
 import { Input } from "@planisfy/ui/components/input"
 import { Label } from "@planisfy/ui/components/label"
-import { Plus, Upload, Trash2, RefreshCw } from "lucide-react"
+import { Plus, Upload, Trash2, RefreshCw, Database } from "lucide-react"
+import { toast } from "sonner"
 
 interface Source {
   id: string
@@ -51,8 +52,7 @@ export default function SourcesPage() {
     try {
       const data = await api.get<Source[]>("/sources")
       setSources(data)
-    } catch (err) {
-      console.error("Failed to fetch sources:", err)
+    } catch {
     } finally {
       setLoading(false)
     }
@@ -72,9 +72,10 @@ export default function SourcesPage() {
       setNewName("")
       setNewHandle("")
       setCreateOpen(false)
+      toast.success("Source created")
       fetchSources()
-    } catch (err) {
-      console.error("Failed to create source:", err)
+    } catch {
+      toast.error("Failed to create source")
     }
   }
 
@@ -84,9 +85,10 @@ export default function SourcesPage() {
       const formData = new FormData()
       formData.append("file", file)
       await api.upload(`/sources/${sourceId}/upload`, formData)
+      toast.success("File uploaded — processing started")
       fetchSources()
-    } catch (err) {
-      console.error("Failed to upload file:", err)
+    } catch {
+      toast.error("Failed to upload file")
     } finally {
       setUploading(false)
       setUploadSourceId(null)
@@ -97,9 +99,10 @@ export default function SourcesPage() {
     if (!confirm("Delete this source? This cannot be undone.")) return
     try {
       await api.delete(`/sources/${sourceId}`)
+      toast.success("Source deleted")
       fetchSources()
-    } catch (err) {
-      console.error("Failed to delete source:", err)
+    } catch {
+      toast.error("Failed to delete source")
     }
   }
 
@@ -161,11 +164,22 @@ export default function SourcesPage() {
       </div>
 
       {loading ? (
-        <p className="text-muted-foreground">Loading sources...</p>
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-16 rounded-lg border bg-muted animate-pulse" />
+          ))}
+        </div>
       ) : sources.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <p className="text-lg mb-2">No sources yet</p>
-          <p className="text-sm">Create a source and upload GeoJSON, CSV, or PMTiles data.</p>
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <Database className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-medium">No sources yet</h3>
+          <p className="text-sm text-muted-foreground mt-1 mb-4">
+            Create a source and upload GeoJSON, CSV, or PMTiles data.
+          </p>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add source
+          </Button>
         </div>
       ) : (
         <Table>

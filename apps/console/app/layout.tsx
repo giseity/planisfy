@@ -2,6 +2,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 
 import "@planisfy/ui/globals.css"
 import { Providers } from "@/components/providers"
+import { Toaster } from "@planisfy/ui/components/sonner"
 
 const fontSans = Geist({
   subsets: ["latin"],
@@ -23,7 +24,10 @@ export default function RootLayout({
       <body
         className={`${fontSans.variable} ${fontMono.variable} font-sans antialiased `}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <Toaster />
+        </Providers>
       </body>
     </html>
   )
