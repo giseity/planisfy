@@ -7,6 +7,7 @@ import {
 import Redis from "ioredis";
 import { PLAN_LIMITS, type PlanId } from "@planisfy/types";
 import { getEndpointCost } from "../lib/api-key";
+import { getUserPlan } from "../lib/billing";
 import type { AuthEnv } from "./auth";
 
 // ── Redis client ────────────────────────────────────────────────────────────
@@ -119,10 +120,11 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
     );
   }
 
-  // 2. Determine the user's plan (default to free)
-  // TODO: Look up actual plan from billing system in Phase 8
-  const planId: PlanId = "prod_free";
-  const planLimits = PLAN_LIMITS[planId];
+  // 2. Determine the user's plan
+  const userId = c.get("userId");
+  const rawPlan = userId ? await getUserPlan(userId) : "free";
+  const planId: PlanId = `prod_${rawPlan}` as PlanId;
+  const planLimits = PLAN_LIMITS[planId] || PLAN_LIMITS.prod_free;
   const limiter = planLimiters[planId];
   const cost = getEndpointCost(c.req.path);
 

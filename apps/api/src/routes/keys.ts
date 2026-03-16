@@ -4,6 +4,7 @@ import { eq, and, isNull, desc } from "drizzle-orm";
 import { db, apiKeys } from "@planisfy/database";
 import { logAudit } from "../lib/audit";
 import { generateApiKey, hashKey, ALL_SCOPES, type ApiKeyScope } from "../lib/api-key";
+import { checkResourceLimit } from "../lib/plan-check";
 import type { AuthEnv } from "../middleware/auth";
 
 export const keysRoute = new Hono<AuthEnv>();
@@ -44,6 +45,16 @@ keysRoute.post("/keys", async (c) => {
       { error: { code: "VALIDATION_ERROR", message: "Invalid input", details: parsed.error.flatten() } },
       400
     );
+  }
+
+  const planCheck = await checkResourceLimit(userId, ownerId, "apiKeys");
+  if (!planCheck.allowed) {
+    return c.json({
+      error: {
+        code: "PLAN_LIMIT",
+        message: `You've reached the maximum of ${planCheck.limit} API keys on your current plan. Please upgrade to create more.`,
+      },
+    }, 403);
   }
 
   const { name, scopes, allowedDomains, expiresAt } = parsed.data;

@@ -17,6 +17,8 @@ export type AuthEnv = {
     apiKeyId: string | null;
     apiKeyOwnerId: string | null;
     apiKeyScopes: string[] | null;
+    // Request ID for correlation
+    requestId: string;
   };
 };
 

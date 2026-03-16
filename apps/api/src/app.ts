@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { cors } from "hono/cors";
 import { ZodError } from "zod";
+import { randomUUID } from "crypto";
 import { requestLogger } from "./lib/logger";
 import { authMiddleware, dualAuthMiddleware, type AuthEnv } from "./middleware/auth";
 import { apiKeyMiddleware } from "./middleware/api-key";
@@ -28,6 +29,12 @@ import { auth } from "@planisfy/auth/auth";
 const app = new Hono<AuthEnv>();
 
 // ── Global middleware ───────────────────────────────────────────────────────
+app.use("*", async (c, next) => {
+  const requestId = c.req.header("x-request-id") || randomUUID();
+  c.set("requestId", requestId);
+  c.header("X-Request-Id", requestId);
+  await next();
+});
 app.use(
   "*",
   cors({
@@ -128,13 +135,15 @@ app.onError((err, c) => {
   }
 
   // Everything else → 500
-  console.error("[unhandled]", err);
+  const requestId = c.get("requestId");
+  console.error("[unhandled]", { requestId, error: err.message, stack: err.stack });
   return c.json({
     error: {
       code: "INTERNAL_ERROR",
       message: process.env.NODE_ENV === "production"
         ? "An unexpected error occurred"
         : err.message || "Unknown error",
+      requestId,
     },
   }, 500);
 });

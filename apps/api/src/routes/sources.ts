@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthEnv } from "../middleware/auth";
+import { checkResourceLimit } from "../lib/plan-check";
 import { db, tilesetSources, auditEvents } from "@planisfy/database";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { getStorage } from "../lib/storage";
@@ -45,6 +46,16 @@ sourcesRoute.post("/sources", async (c) => {
   const parsed = createSourceSchema.safeParse(body);
   if (!parsed.success) {
     return c.json({ error: { code: "VALIDATION_ERROR", details: parsed.error.flatten() } }, 400);
+  }
+
+  const planCheck = await checkResourceLimit(userId, ownerId, "sources");
+  if (!planCheck.allowed) {
+    return c.json({
+      error: {
+        code: "PLAN_LIMIT",
+        message: `You've reached the maximum of ${planCheck.limit} sources on your current plan. Please upgrade to create more.`,
+      },
+    }, 403);
   }
 
   const { name, handle, type } = parsed.data;
