@@ -94,11 +94,11 @@ sourcesRoute.post("/sources", async (c) => {
     profileId: userId,
     action: "source.created",
     resourceType: "source",
-    resourceId: source.id,
+    resourceId: source!.id,
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || null,
   });
 
-  return c.json(source, 201);
+  return c.json(source!, 201);
 });
 
 // ── GET /sources/:id — Get source details ───────────────────────────────────

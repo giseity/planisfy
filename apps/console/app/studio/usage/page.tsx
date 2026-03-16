@@ -315,7 +315,7 @@ export default function UsagePage() {
                     outerRadius={90}
                     paddingAngle={2}
                     dataKey="value"
-                    label={({ name, percent }) => `${name.slice(0, 10)}${name.length > 10 ? "..." : ""} ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }: { name?: string; percent?: number }) => `${(name ?? "").slice(0, 10)}${(name ?? "").length > 10 ? "..." : ""} ${((percent ?? 0) * 100).toFixed(0)}%`}
                   >
                     {pieData.map((_, index) => (
                       <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />

@@ -43,7 +43,7 @@ export class S3Storage implements StorageProvider {
     // Use simple PUT request with v4 sig or unsigned (for R2 with API token)
     const res = await fetch(url, {
       method: "PUT",
-      body,
+      body: body as unknown as BodyInit,
       headers: {
         "Content-Type": contentType || "application/octet-stream",
         "Content-Length": String(body.length),

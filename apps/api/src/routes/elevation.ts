@@ -125,7 +125,7 @@ elevationRoute.get("/elevation/v1/along/:coords", async (c) => {
     let totalAscent = 0;
     let totalDescent = 0;
     for (let i = 1; i < elevations.length; i++) {
-      const diff = elevations[i] - elevations[i - 1];
+      const diff = elevations[i]! - elevations[i - 1]!;
       if (diff > 0) totalAscent += diff;
       else totalDescent += Math.abs(diff);
     }
@@ -158,7 +158,7 @@ function interpolateAlongRoute(
   const segmentDistances: number[] = [];
   let totalDist = 0;
   for (let i = 1; i < points.length; i++) {
-    const d = haversine(points[i - 1].latitude, points[i - 1].longitude, points[i].latitude, points[i].longitude);
+    const d = haversine(points[i - 1]!.latitude, points[i - 1]!.longitude, points[i]!.latitude, points[i]!.longitude);
     segmentDistances.push(d);
     totalDist += d;
   }
@@ -173,16 +173,18 @@ function interpolateAlongRoute(
     let accumulated = 0;
 
     for (let i = 0; i < segmentDistances.length; i++) {
-      if (accumulated + segmentDistances[i] >= targetDist || i === segmentDistances.length - 1) {
-        const ratio = segmentDistances[i] > 0 ? (targetDist - accumulated) / segmentDistances[i] : 0;
+      if (accumulated + segmentDistances[i]! >= targetDist || i === segmentDistances.length - 1) {
+        const ratio = segmentDistances[i]! > 0 ? (targetDist - accumulated) / segmentDistances[i]! : 0;
         const clampedRatio = Math.max(0, Math.min(1, ratio));
+        const p = points[i]!;
+        const pNext = points[i + 1] ?? p;
         result.push({
-          latitude: points[i].latitude + (points[i + 1].latitude - points[i].latitude) * clampedRatio,
-          longitude: points[i].longitude + (points[i + 1].longitude - points[i].longitude) * clampedRatio,
+          latitude: p.latitude + (pNext.latitude - p.latitude) * clampedRatio,
+          longitude: p.longitude + (pNext.longitude - p.longitude) * clampedRatio,
         });
         break;
       }
-      accumulated += segmentDistances[i];
+      accumulated += segmentDistances[i]!;
     }
   }
 

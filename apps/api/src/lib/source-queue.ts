@@ -229,10 +229,10 @@ function calculateBounds(geojson: any): [number, number, number, number] | null 
   function processCoord(coord: number[]) {
     if (coord.length >= 2) {
       hasCoords = true;
-      minLon = Math.min(minLon, coord[0]);
-      minLat = Math.min(minLat, coord[1]);
-      maxLon = Math.max(maxLon, coord[0]);
-      maxLat = Math.max(maxLat, coord[1]);
+      minLon = Math.min(minLon, coord[0]!);
+      minLat = Math.min(minLat, coord[1]!);
+      maxLon = Math.max(maxLon, coord[0]!);
+      maxLat = Math.max(maxLat, coord[1]!);
     }
   }
 

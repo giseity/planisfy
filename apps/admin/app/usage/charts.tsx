@@ -86,7 +86,7 @@ export function UsageCharts({ timeseries, byEndpoint, byStatus }: UsageChartsPro
                     outerRadius={100}
                     dataKey="count"
                     nameKey="status"
-                    label={({ status, count }) => `${status}: ${count}`}
+                    label={((props: { status?: string; count?: number }) => `${props.status}: ${props.count}`) as unknown as boolean}
                   >
                     {byStatus.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
