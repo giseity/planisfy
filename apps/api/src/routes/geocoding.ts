@@ -14,6 +14,9 @@ geocodingRoute.get("/geocoding/v1/forward", async (c) => {
   if (!q) {
     return c.json({ error: { code: "BAD_REQUEST", message: "Missing 'q' parameter" } }, 400);
   }
+  if (q.length > 500) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "'q' must be 500 characters or fewer" } }, 400);
+  }
 
   const limit = Math.min(Number(c.req.query("limit")) || 5, 25);
   const bbox = c.req.query("bbox");
@@ -76,6 +79,9 @@ geocodingRoute.get("/geocoding/v1/reverse", async (c) => {
   if (isNaN(lon) || isNaN(lat)) {
     return c.json({ error: { code: "BAD_REQUEST", message: "Missing or invalid 'lon' and 'lat' parameters" } }, 400);
   }
+  if (lon < -180 || lon > 180 || lat < -90 || lat > 90) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Coordinates out of range (lon: -180..180, lat: -90..90)" } }, 400);
+  }
 
   const lang = c.req.query("language") || "en";
   const limit = Math.min(Number(c.req.query("limit")) || 1, 10);
@@ -127,6 +133,9 @@ geocodingRoute.get("/geocoding/v1/autocomplete", async (c) => {
   const text = c.req.query("text");
   if (!text) {
     return c.json({ error: { code: "BAD_REQUEST", message: "Missing 'text' parameter" } }, 400);
+  }
+  if (text.length > 500) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "'text' must be 500 characters or fewer" } }, 400);
   }
 
   const limit = Math.min(Number(c.req.query("limit")) || 5, 10);

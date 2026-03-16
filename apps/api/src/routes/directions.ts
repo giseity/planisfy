@@ -1,7 +1,22 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import type { AuthEnv } from "../middleware/auth";
 
 const VALHALLA_URL = process.env.VALHALLA_URL || "http://localhost:3007";
+
+const directionsBodySchema = z.object({
+  locations: z.array(
+    z.object({
+      lon: z.number().min(-180).max(180),
+      lat: z.number().min(-90).max(90),
+    })
+  ).min(2).max(100),
+  costing: z.string().optional(),
+  units: z.enum(["kilometers", "miles"]).optional(),
+  language: z.string().max(8).optional(),
+  alternates: z.number().int().min(0).max(3).optional(),
+  directions_options: z.record(z.string(), z.unknown()).optional(),
+}).passthrough();
 
 export const directionsRoute = new Hono<AuthEnv>();
 
@@ -76,7 +91,7 @@ directionsRoute.get("/directions/v1/:profile/:coords", async (c) => {
 
 directionsRoute.post("/directions/v1/:profile", async (c) => {
   const { profile } = c.req.param();
-  const body = await c.req.json();
+  const body = directionsBodySchema.parse(await c.req.json());
 
   const costing = mapProfileToCosting(profile);
   if (!costing) {
