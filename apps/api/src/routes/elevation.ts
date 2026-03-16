@@ -19,6 +19,10 @@ elevationRoute.get("/elevation/v1/:coords", async (c) => {
     return c.json({ error: { code: "BAD_REQUEST", message: "Invalid coordinates. Format: lon,lat or lon1,lat1;lon2,lat2" } }, 400);
   }
 
+  if (points.some((p) => p.longitude! < -180 || p.longitude! > 180 || p.latitude! < -90 || p.latitude! > 90)) {
+    return c.json({ error: { code: "BAD_REQUEST", message: "Coordinates out of range (lon: -180..180, lat: -90..90)" } }, 400);
+  }
+
   if (points.length > 100) {
     return c.json({ error: { code: "BAD_REQUEST", message: "Maximum 100 points per request" } }, 400);
   }

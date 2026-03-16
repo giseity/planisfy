@@ -1,8 +1,13 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import type { AuthEnv } from "../middleware/auth";
 import { getUserPlan, getPlanLimits, PLANS, createCheckoutUrl, getCustomerPortalUrl } from "../lib/billing";
 import { db, styles, tilesetSources, apiKeys, usageLogs } from "@planisfy/database";
 import { eq, and, isNull, count, sql, gte } from "drizzle-orm";
+
+const checkoutSchema = z.object({
+  priceId: z.string().min(1, "priceId is required").max(256),
+});
 
 export const billingRoute = new Hono<AuthEnv>();
 
@@ -69,11 +74,7 @@ billingRoute.get("/billing/plans", async (c) => {
 billingRoute.post("/billing/checkout", async (c) => {
   const userId = c.get("userId");
   const body = await c.req.json();
-  const { priceId } = body;
-
-  if (!priceId) {
-    return c.json({ error: { code: "BAD_REQUEST", message: "priceId is required" } }, 400);
-  }
+  const { priceId } = checkoutSchema.parse(body);
 
   const url = await createCheckoutUrl(userId, priceId);
 

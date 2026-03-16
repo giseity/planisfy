@@ -1,5 +1,7 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { cors } from "hono/cors";
+import { ZodError } from "zod";
 import { requestLogger } from "./lib/logger";
 import { authMiddleware, dualAuthMiddleware, type AuthEnv } from "./middleware/auth";
 import { apiKeyMiddleware } from "./middleware/api-key";
@@ -88,5 +90,53 @@ app.route("/console", usageRoute);
 app.route("/console", sourcesRoute);
 app.route("/console", billingRoute);
 app.route("/console", profileRoute);
+
+// ── Centralized error handler ─────────────────────────────────────────────
+app.onError((err, c) => {
+  // Zod validation errors → 400
+  if (err instanceof ZodError) {
+    return c.json({
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Invalid request data",
+        issues: err.issues.map((i) => ({
+          path: i.path.join("."),
+          message: i.message,
+        })),
+      },
+    }, 400);
+  }
+
+  // Hono HTTP exceptions (thrown by middleware etc.)
+  if (err instanceof HTTPException) {
+    return c.json({
+      error: {
+        code: "HTTP_ERROR",
+        message: err.message,
+      },
+    }, err.status);
+  }
+
+  // JSON parse errors from malformed request bodies
+  if (err instanceof SyntaxError && err.message.includes("JSON")) {
+    return c.json({
+      error: {
+        code: "BAD_REQUEST",
+        message: "Invalid JSON in request body",
+      },
+    }, 400);
+  }
+
+  // Everything else → 500
+  console.error("[unhandled]", err);
+  return c.json({
+    error: {
+      code: "INTERNAL_ERROR",
+      message: process.env.NODE_ENV === "production"
+        ? "An unexpected error occurred"
+        : err.message || "Unknown error",
+    },
+  }, 500);
+});
 
 export { app };
