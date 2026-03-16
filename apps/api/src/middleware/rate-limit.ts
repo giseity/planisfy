@@ -29,7 +29,7 @@ const memoryFallback = new RateLimiterMemory({
   duration: 60,
 });
 
-const planLimiters: Record<PlanId, RateLimiterRedis> = {} as any;
+const planLimiters = {} as Record<PlanId, RateLimiterRedis>;
 
 for (const [planId, limits] of Object.entries(PLAN_LIMITS)) {
   planLimiters[planId as PlanId] = new RateLimiterRedis({

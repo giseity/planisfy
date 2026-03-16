@@ -6,13 +6,28 @@ export const elevationRoute = new Hono<AuthEnv>();
 // Open Elevation API (free, self-hostable) or OpenTopoData as fallback
 const ELEVATION_URL = process.env.ELEVATION_URL || "https://api.open-elevation.com/api/v1";
 
+interface ElevationResult {
+  elevation: number;
+}
+
+interface ElevationResponse {
+  results?: ElevationResult[];
+}
+
+interface ProfilePoint {
+  distance: number;
+  elevation: number;
+  longitude: number;
+  latitude: number;
+}
+
 // ── GET /elevation/v1/:coords — Point elevation ─────────────────────────────
 
 elevationRoute.get("/elevation/v1/:coords", async (c) => {
   const coords = c.req.param("coords");
   const points = coords.split(";").map((pair) => {
     const [lon, lat] = pair.split(",").map(Number);
-    return { longitude: lon, latitude: lat };
+    return { longitude: lon!, latitude: lat! };
   });
 
   if (points.length === 0 || points.some((p) => isNaN(p.latitude) || isNaN(p.longitude))) {
@@ -38,11 +53,11 @@ elevationRoute.get("/elevation/v1/:coords", async (c) => {
       return c.json({ error: { code: "UPSTREAM_ERROR", message: "Elevation service error" } }, 502);
     }
 
-    const data: any = await res.json();
+    const data = (await res.json()) as ElevationResponse;
 
-    const elevations = (data.results || []).map((r: any, i: number) => ({
-      longitude: points[i].longitude,
-      latitude: points[i].latitude,
+    const elevations = (data.results || []).map((r: ElevationResult, i: number) => ({
+      longitude: points[i]!.longitude,
+      latitude: points[i]!.latitude,
       elevation: r.elevation,
     }));
 
@@ -63,7 +78,7 @@ elevationRoute.get("/elevation/v1/along/:coords", async (c) => {
   const coords = c.req.param("coords");
   const points = coords.split(";").map((pair) => {
     const [lon, lat] = pair.split(",").map(Number);
-    return { longitude: lon, latitude: lat };
+    return { longitude: lon!, latitude: lat! };
   });
 
   if (points.length < 2) {
@@ -85,25 +100,25 @@ elevationRoute.get("/elevation/v1/along/:coords", async (c) => {
       return c.json({ error: { code: "UPSTREAM_ERROR", message: "Elevation service error" } }, 502);
     }
 
-    const data: any = await res.json();
+    const data = (await res.json()) as ElevationResponse;
 
     let cumulativeDistance = 0;
-    const profile = (data.results || []).map((r: any, i: number) => {
+    const profile: ProfilePoint[] = (data.results || []).map((r: ElevationResult, i: number) => {
       if (i > 0) {
         cumulativeDistance += haversine(
-          interpolated[i - 1].latitude, interpolated[i - 1].longitude,
-          interpolated[i].latitude, interpolated[i].longitude
+          interpolated[i - 1]!.latitude, interpolated[i - 1]!.longitude,
+          interpolated[i]!.latitude, interpolated[i]!.longitude
         );
       }
       return {
         distance: Math.round(cumulativeDistance),
         elevation: r.elevation,
-        longitude: interpolated[i].longitude,
-        latitude: interpolated[i].latitude,
+        longitude: interpolated[i]!.longitude,
+        latitude: interpolated[i]!.latitude,
       };
     });
 
-    const elevations = profile.map((p: any) => p.elevation).filter((e: number) => e != null);
+    const elevations = profile.map((p) => p.elevation).filter((e) => e != null);
     const totalDistance = cumulativeDistance;
     const minElevation = Math.min(...elevations);
     const maxElevation = Math.max(...elevations);

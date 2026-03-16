@@ -206,11 +206,39 @@ async function tryPelias(
   }
 }
 
-function normalizeGeocodingResult(geojson: any) {
-  // Wrap Nominatim GeoJSON in a consistent response envelope
+interface NominatimFeature {
+  geometry: unknown;
+  properties?: {
+    display_name?: string;
+    label?: string;
+    name?: string;
+    importance?: number;
+    address?: {
+      house_number?: string;
+      road?: string;
+      postcode?: string;
+      city?: string;
+      town?: string;
+      village?: string;
+      state?: string;
+      country?: string;
+      country_code?: string;
+    };
+  };
+}
+
+interface NominatimResponse {
+  features?: NominatimFeature[];
+}
+
+function normalizeGeocodingResult(geojson: NominatimResponse | NominatimFeature) {
+  const features = "features" in geojson && geojson.features
+    ? geojson.features
+    : [geojson as NominatimFeature];
+
   return {
     type: "FeatureCollection",
-    features: (geojson.features || [geojson]).filter(Boolean).map((f: any) => ({
+    features: features.filter(Boolean).map((f) => ({
       type: "Feature",
       geometry: f.geometry,
       properties: {

@@ -21,8 +21,8 @@ healthRoute.get("/health/detailed", async (c) => {
   try {
     await db.execute(sql`SELECT 1`);
     checks.postgres = { status: "ok", latency: Date.now() - pgStart };
-  } catch (err: any) {
-    checks.postgres = { status: "error", latency: Date.now() - pgStart, error: err.message };
+  } catch (err) {
+    checks.postgres = { status: "error", latency: Date.now() - pgStart, error: err instanceof Error ? err.message : String(err) };
     healthy = false;
   }
 
@@ -41,8 +41,8 @@ healthRoute.get("/health/detailed", async (c) => {
     await redis.ping();
     checks.redis = { status: "ok", latency: Date.now() - redisStart };
     await redis.quit();
-  } catch (err: any) {
-    checks.redis = { status: "error", latency: Date.now() - redisStart, error: err.message };
+  } catch (err) {
+    checks.redis = { status: "error", latency: Date.now() - redisStart, error: err instanceof Error ? err.message : String(err) };
     healthy = false;
   }
 
@@ -55,8 +55,8 @@ healthRoute.get("/health/detailed", async (c) => {
     const res = await fetch(`${martinUrl}/health`, { signal: controller.signal });
     clearTimeout(timeout);
     checks.martin = { status: res.ok ? "ok" : "degraded", latency: Date.now() - martinStart };
-  } catch (err: any) {
-    checks.martin = { status: "error", latency: Date.now() - martinStart, error: err.message };
+  } catch (err) {
+    checks.martin = { status: "error", latency: Date.now() - martinStart, error: err instanceof Error ? err.message : String(err) };
     // Martin being down is degraded, not critical
   }
 
@@ -69,8 +69,8 @@ healthRoute.get("/health/detailed", async (c) => {
     const res = await fetch(`${valhallaUrl}/status`, { signal: controller.signal });
     clearTimeout(timeout);
     checks.valhalla = { status: res.ok ? "ok" : "degraded", latency: Date.now() - valhallaStart };
-  } catch (err: any) {
-    checks.valhalla = { status: "unavailable", latency: Date.now() - valhallaStart, error: err.message };
+  } catch (err) {
+    checks.valhalla = { status: "unavailable", latency: Date.now() - valhallaStart, error: err instanceof Error ? err.message : String(err) };
     // Valhalla being down is not critical
   }
 

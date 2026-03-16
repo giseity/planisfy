@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import type { AuthEnv } from "../middleware/auth";
 
@@ -25,7 +26,7 @@ export const directionsRoute = new Hono<AuthEnv>();
 async function valhallaProxy(
   action: string,
   body: Record<string, unknown>
-): Promise<{ ok: boolean; status: number; data: unknown }> {
+): Promise<{ ok: boolean; status: ContentfulStatusCode; data: unknown }> {
   try {
     const res = await fetch(`${VALHALLA_URL}/${action}`, {
       method: "POST",
@@ -33,17 +34,17 @@ async function valhallaProxy(
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    return { ok: res.ok, status: res.status, data };
+    return { ok: res.ok, status: res.status as ContentfulStatusCode, data };
   } catch (err) {
     console.error(`[valhalla] ${action} proxy error:`, err);
-    return { ok: false, status: 503, data: { error: "Routing service unavailable" } };
+    return { ok: false, status: 503 as ContentfulStatusCode, data: { error: "Routing service unavailable" } };
   }
 }
 
 function parseCoords(coords: string): { lon: number; lat: number }[] {
   return coords.split(";").map((pair) => {
     const [lon, lat] = pair.split(",").map(Number);
-    return { lon, lat };
+    return { lon: lon!, lat: lat! };
   });
 }
 
@@ -80,7 +81,7 @@ directionsRoute.get("/directions/v1/:profile/:coords", async (c) => {
   });
 
   if (!result.ok) {
-    return c.json({ error: result.data }, result.status as any);
+    return c.json({ error: result.data }, result.status);
   }
 
   c.header("Cache-Control", "public, max-age=300");
@@ -104,7 +105,7 @@ directionsRoute.post("/directions/v1/:profile", async (c) => {
   });
 
   if (!result.ok) {
-    return c.json({ error: result.data }, result.status as any);
+    return c.json({ error: result.data }, result.status);
   }
 
   return c.json(result.data);
@@ -143,7 +144,7 @@ directionsRoute.get("/isochrone/v1/:profile/:coord", async (c) => {
   });
 
   if (!result.ok) {
-    return c.json({ error: result.data }, result.status as any);
+    return c.json({ error: result.data }, result.status);
   }
 
   c.header("Cache-Control", "public, max-age=300");
@@ -172,7 +173,7 @@ directionsRoute.get("/matching/v1/:profile/:coords", async (c) => {
   });
 
   if (!result.ok) {
-    return c.json({ error: result.data }, result.status as any);
+    return c.json({ error: result.data }, result.status);
   }
 
   return c.json(result.data);
@@ -197,10 +198,10 @@ directionsRoute.get("/matrix/v1/:profile/:coords", async (c) => {
   const destinationsParam = c.req.query("destinations");
 
   const sources = sourcesParam
-    ? sourcesParam.split(";").map((i) => points[Number(i)])
+    ? sourcesParam.split(";").map((i) => points[Number(i)]!)
     : points;
   const targets = destinationsParam
-    ? destinationsParam.split(";").map((i) => points[Number(i)])
+    ? destinationsParam.split(";").map((i) => points[Number(i)]!)
     : points;
 
   const result = await valhallaProxy("sources_to_targets", {
@@ -210,7 +211,7 @@ directionsRoute.get("/matrix/v1/:profile/:coords", async (c) => {
   });
 
   if (!result.ok) {
-    return c.json({ error: result.data }, result.status as any);
+    return c.json({ error: result.data }, result.status);
   }
 
   return c.json(result.data);
@@ -237,7 +238,7 @@ directionsRoute.get("/optimized-trips/v1/:profile/:coords", async (c) => {
   });
 
   if (!result.ok) {
-    return c.json({ error: result.data }, result.status as any);
+    return c.json({ error: result.data }, result.status);
   }
 
   return c.json(result.data);
