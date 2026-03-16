@@ -20,6 +20,7 @@ import { staticMapRoute } from "./routes/static-map";
 import { emailRoute } from "./routes/email";
 import { sourcesRoute } from "./routes/sources";
 import { billingRoute } from "./routes/billing";
+import { profileRoute } from "./routes/profile";
 import { auth } from "@planisfy/auth/auth";
 
 const app = new Hono<AuthEnv>();
@@ -86,5 +87,6 @@ app.route("/console", keysRoute);
 app.route("/console", usageRoute);
 app.route("/console", sourcesRoute);
 app.route("/console", billingRoute);
+app.route("/console", profileRoute);
 
 export { app };

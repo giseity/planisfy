@@ -14,6 +14,7 @@ import { Separator } from "@planisfy/ui/components/separator"
 import { Button } from "@planisfy/ui/components/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@planisfy/ui/components/tabs"
 import { ValidationPanel } from "@/components/studio/validation-panel"
+import { VersionHistoryButton } from "@/components/studio/version-history"
 import {
   Popover,
   PopoverContent,
@@ -236,17 +237,20 @@ export default function StyleEditorPage() {
         )}
         <div className="flex-1" />
         {styleId && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 text-xs"
-            onClick={() => saveStyle().catch(() => {})}
-            disabled={saveStatus === "saving"}
-            title="Save (Ctrl+S)"
-          >
-            <Save className="h-3 w-3" />
-            Save
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => saveStyle().catch(() => {})}
+              disabled={saveStatus === "saving"}
+              title="Save (Ctrl+S)"
+            >
+              <Save className="h-3 w-3" />
+              Save
+            </Button>
+            <VersionHistoryButton />
+          </>
         )}
         <Button
           variant="ghost"

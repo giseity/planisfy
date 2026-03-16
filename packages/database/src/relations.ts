@@ -8,6 +8,7 @@ import {
   sessions,
   accounts,
   styles,
+  styleVersions,
   apiKeys,
   tilesetSources,
   usageLogs,
@@ -121,10 +122,22 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
 // Resource relations
 // ============================================================================
 
-export const stylesRelations = relations(styles, ({ one }) => ({
+export const stylesRelations = relations(styles, ({ one, many }) => ({
   owner: one(profiles, {
     fields: [styles.ownerId],
     references: [profiles.id],
+  }),
+  versions: many(styleVersions),
+}));
+
+export const styleVersionsRelations = relations(styleVersions, ({ one }) => ({
+  style: one(styles, {
+    fields: [styleVersions.styleId],
+    references: [styles.id],
+  }),
+  creator: one(users, {
+    fields: [styleVersions.createdBy],
+    references: [users.id],
   }),
 }));
 

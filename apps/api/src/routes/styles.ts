@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
-import { db, styles } from "@planisfy/database";
+import { db, styles, styleVersions } from "@planisfy/database";
 import { logAudit } from "../lib/audit";
 import type { AuthEnv } from "../middleware/auth";
 
@@ -182,6 +182,37 @@ stylesRoute.put("/styles/:id", async (c) => {
     return c.json({ error: { code: "VALIDATION_ERROR", message: "No fields to update" } }, 400);
   }
 
+  // Save a version snapshot of the current state before updating
+  const [current] = await db
+    .select({
+      version: styles.version,
+      styleJson: styles.styleJson,
+      name: styles.name,
+    })
+    .from(styles)
+    .where(
+      and(
+        eq(styles.id, styleId),
+        eq(styles.ownerId, ownerId),
+        eq(styles.version, version),
+        isNull(styles.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (current) {
+    await db
+      .insert(styleVersions)
+      .values({
+        styleId,
+        version: current.version,
+        styleJson: current.styleJson,
+        name: current.name,
+        createdBy: userId,
+      })
+      .onConflictDoNothing();
+  }
+
   // Optimistic locking: only update if version matches
   const result = await db
     .update(styles)
@@ -345,4 +376,123 @@ stylesRoute.post("/styles/:id/duplicate", async (c) => {
   });
 
   return c.json({ data: created }, 201);
+});
+
+// ── GET /console/styles/:id/versions — Version history ────────────────────
+
+stylesRoute.get("/styles/:id/versions", async (c) => {
+  const styleId = c.req.param("id");
+  const ownerId = c.get("ownerId");
+
+  // Verify ownership
+  const [style] = await db
+    .select({ id: styles.id })
+    .from(styles)
+    .where(
+      and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt))
+    )
+    .limit(1);
+
+  if (!style) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
+  }
+
+  const versions = await db
+    .select({
+      id: styleVersions.id,
+      version: styleVersions.version,
+      name: styleVersions.name,
+      createdBy: styleVersions.createdBy,
+      createdAt: styleVersions.createdAt,
+    })
+    .from(styleVersions)
+    .where(eq(styleVersions.styleId, styleId))
+    .orderBy(desc(styleVersions.version));
+
+  return c.json({ data: versions });
+});
+
+// ── POST /console/styles/:id/versions/:versionNum/restore — Restore ──────
+
+stylesRoute.post("/styles/:id/versions/:versionNum/restore", async (c) => {
+  const styleId = c.req.param("id");
+  const versionNum = parseInt(c.req.param("versionNum"), 10);
+  const ownerId = c.get("ownerId");
+  const userId = c.get("userId");
+
+  if (isNaN(versionNum)) {
+    return c.json({ error: { code: "VALIDATION_ERROR", message: "Invalid version number" } }, 400);
+  }
+
+  // Get current style to check ownership and get current version
+  const [current] = await db
+    .select({
+      id: styles.id,
+      version: styles.version,
+      styleJson: styles.styleJson,
+      name: styles.name,
+    })
+    .from(styles)
+    .where(
+      and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt))
+    )
+    .limit(1);
+
+  if (!current) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
+  }
+
+  // Get the version to restore
+  const [snapshot] = await db
+    .select()
+    .from(styleVersions)
+    .where(
+      and(
+        eq(styleVersions.styleId, styleId),
+        eq(styleVersions.version, versionNum)
+      )
+    )
+    .limit(1);
+
+  if (!snapshot) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Version not found" } }, 404);
+  }
+
+  // Save the current state as a version before restoring
+  await db
+    .insert(styleVersions)
+    .values({
+      styleId,
+      version: current.version,
+      styleJson: current.styleJson,
+      name: current.name,
+      createdBy: userId,
+    })
+    .onConflictDoNothing();
+
+  // Restore: update the style with the snapshot's data
+  const [updated] = await db
+    .update(styles)
+    .set({
+      styleJson: snapshot.styleJson,
+      name: snapshot.name,
+      version: sql`${styles.version} + 1`,
+    })
+    .where(eq(styles.id, styleId))
+    .returning({
+      id: styles.id,
+      version: styles.version,
+      updatedAt: styles.updatedAt,
+    });
+
+  logAudit({
+    profileId: userId,
+    action: "style.restored",
+    resourceType: "style",
+    resourceId: styleId,
+    metadata: { restoredVersion: versionNum, newVersion: updated!.version },
+    ipAddress: getClientIp(c.req.raw),
+  });
+
+  return c.json({ data: updated });
 });

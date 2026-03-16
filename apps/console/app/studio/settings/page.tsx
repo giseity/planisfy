@@ -1,11 +1,16 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { api } from "@/lib/api"
 import { authClient, useSession } from "@planisfy/auth/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Button } from "@planisfy/ui/components/button"
+import { Input } from "@planisfy/ui/components/input"
+import { Label } from "@planisfy/ui/components/label"
+import { Textarea } from "@planisfy/ui/components/textarea"
+import { Separator } from "@planisfy/ui/components/separator"
 import {
   Tabs,
   TabsContent,
@@ -28,11 +33,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@planisfy/ui/components/dialog"
-import { Check, CreditCard, Monitor, Shield, X } from "lucide-react"
+import { Check, CreditCard, Monitor, Shield, User, X } from "lucide-react"
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+interface ProfileData {
+  id: string
+  handle: string
+  displayName: string
+  avatarUrl: string | null
+  bio: string | null
+  email: string
+  emailVerified: boolean
+  createdAt: string
+}
 
 interface BillingInfo {
   plan: string
@@ -84,19 +100,26 @@ export default function SettingsPage() {
   return (
     <div className="container max-w-6xl py-8 px-4">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
-      <Tabs defaultValue="sessions">
+      <Tabs defaultValue="profile">
         <TabsList>
-          <TabsTrigger value="sessions">
+          <TabsTrigger value="profile">
+            <User className="h-4 w-4 mr-1.5" />
+            Profile
+          </TabsTrigger>
+          <TabsTrigger value="account">
             <Shield className="h-4 w-4 mr-1.5" />
-            Sessions
+            Account
           </TabsTrigger>
           <TabsTrigger value="billing">
             <CreditCard className="h-4 w-4 mr-1.5" />
             Billing
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="sessions" className="mt-6">
-          <SessionsTab />
+        <TabsContent value="profile" className="mt-6">
+          <ProfileTab />
+        </TabsContent>
+        <TabsContent value="account" className="mt-6">
+          <AccountTab />
         </TabsContent>
         <TabsContent value="billing" className="mt-6">
           <BillingTab />
@@ -107,7 +130,257 @@ export default function SettingsPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Sessions Tab
+// Profile Tab
+// ---------------------------------------------------------------------------
+
+function ProfileTab() {
+  const [profile, setProfile] = useState<ProfileData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [error, setError] = useState("")
+
+  const [displayName, setDisplayName] = useState("")
+  const [handle, setHandle] = useState("")
+  const [bio, setBio] = useState("")
+
+  useEffect(() => {
+    api
+      .get<{ data: ProfileData }>("/profile")
+      .then((res) => {
+        setProfile(res.data)
+        setDisplayName(res.data.displayName)
+        setHandle(res.data.handle)
+        setBio(res.data.bio ?? "")
+      })
+      .catch(() => setError("Failed to load profile"))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setError("")
+    setSuccess(false)
+
+    try {
+      const res = await api.put<{ data: ProfileData }>("/profile", {
+        displayName,
+        handle,
+        bio,
+      })
+      setProfile({ ...profile!, ...res.data })
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to update profile"
+      setError(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-16 rounded-lg border bg-muted animate-pulse" />
+        ))}
+      </div>
+    )
+  }
+
+  if (!profile) {
+    return <p className="text-sm text-destructive">{error || "Failed to load profile"}</p>
+  }
+
+  return (
+    <div className="max-w-lg space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold">Profile</h2>
+        <p className="text-sm text-muted-foreground">
+          Manage your public profile information.
+        </p>
+      </div>
+
+      <form onSubmit={handleSave} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="displayName">Display name</Label>
+          <Input
+            id="displayName"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required
+            minLength={1}
+            maxLength={128}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="handle">Handle</Label>
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-muted-foreground">@</span>
+            <Input
+              id="handle"
+              value={handle}
+              onChange={(e) => setHandle(e.target.value.toLowerCase())}
+              required
+              minLength={2}
+              maxLength={64}
+              pattern="^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$"
+              title="Lowercase letters, numbers, hyphens, and underscores"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Lowercase letters, numbers, hyphens, and underscores only.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="bio">Bio</Label>
+          <Textarea
+            id="bio"
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            maxLength={500}
+            placeholder="A short bio about yourself"
+            rows={3}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Email</Label>
+          <Input value={profile.email} disabled />
+          <p className="text-xs text-muted-foreground">
+            Email cannot be changed here.
+          </p>
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {success && <p className="text-sm text-green-600">Profile updated.</p>}
+
+        <Button type="submit" disabled={saving}>
+          {saving ? "Saving..." : "Save changes"}
+        </Button>
+      </form>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Account Tab (Password + Sessions + Danger Zone)
+// ---------------------------------------------------------------------------
+
+function AccountTab() {
+  return (
+    <div className="space-y-10">
+      <ChangePasswordSection />
+      <Separator />
+      <SessionsSection />
+      <Separator />
+      <DangerZone />
+    </div>
+  )
+}
+
+function ChangePasswordSection() {
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setSuccess(false)
+
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match")
+      return
+    }
+
+    if (newPassword.length < 8) {
+      setError("Password must be at least 8 characters")
+      return
+    }
+
+    setLoading(true)
+    try {
+      await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: false,
+      })
+      setSuccess(true)
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+      setTimeout(() => setSuccess(false), 3000)
+    } catch {
+      setError("Failed to change password. Check your current password.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">Change password</h2>
+        <p className="text-sm text-muted-foreground">
+          Update your password. You&apos;ll stay signed in on this device.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="currentPassword">Current password</Label>
+          <Input
+            id="currentPassword"
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="newPassword">New password</Label>
+          <Input
+            id="newPassword"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+            minLength={8}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirmPassword">Confirm new password</Label>
+          <Input
+            id="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            minLength={8}
+          />
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {success && <p className="text-sm text-green-600">Password changed.</p>}
+
+        <Button type="submit" disabled={loading}>
+          {loading ? "Changing..." : "Change password"}
+        </Button>
+      </form>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Sessions Section
 // ---------------------------------------------------------------------------
 
 function parseUserAgent(ua: string | null): string {
@@ -132,7 +405,7 @@ function timeAgo(date: string): string {
   return new Date(date).toLocaleDateString()
 }
 
-function SessionsTab() {
+function SessionsSection() {
   const { data: session } = useSession()
   const [sessions, setSessions] = useState<SessionData[]>([])
   const [loading, setLoading] = useState(true)
@@ -148,7 +421,7 @@ function SessionsTab() {
         setSessions(res.data as unknown as SessionData[])
       }
     } catch {
-      console.error("Failed to fetch sessions")
+      // ignore
     } finally {
       setLoading(false)
     }
@@ -167,7 +440,7 @@ function SessionsTab() {
       setRevokeId(null)
       await fetchSessions()
     } catch {
-      alert("Failed to revoke session")
+      // ignore
     }
   }
 
@@ -177,7 +450,7 @@ function SessionsTab() {
       setRevokeAllOpen(false)
       await fetchSessions()
     } catch {
-      alert("Failed to revoke sessions")
+      // ignore
     }
   }
 
@@ -312,7 +585,105 @@ function SessionsTab() {
 }
 
 // ---------------------------------------------------------------------------
-// Billing Tab (moved from original page)
+// Danger Zone
+// ---------------------------------------------------------------------------
+
+function DangerZone() {
+  const router = useRouter()
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [confirmation, setConfirmation] = useState("")
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState("")
+  const [profile, setProfile] = useState<ProfileData | null>(null)
+
+  useEffect(() => {
+    api
+      .get<{ data: ProfileData }>("/profile")
+      .then((res) => setProfile(res.data))
+      .catch(() => {})
+  }, [])
+
+  const handleDelete = async () => {
+    setError("")
+    setDeleting(true)
+    try {
+      await api.delete("/profile", { confirmation })
+      router.push("/sign-in")
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to delete account"
+      setError(message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-destructive">Danger Zone</h2>
+        <p className="text-sm text-muted-foreground">
+          Irreversible actions. Proceed with caution.
+        </p>
+      </div>
+
+      <Card className="border-destructive/30">
+        <CardContent className="flex items-center justify-between py-4">
+          <div>
+            <p className="font-medium">Delete account</p>
+            <p className="text-sm text-muted-foreground">
+              Permanently delete your account and all associated data.
+            </p>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setDeleteOpen(true)}
+          >
+            Delete account
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete your account?</DialogTitle>
+            <DialogDescription>
+              This action is permanent. All your styles, API keys, sources, and data
+              will be deleted. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>
+              Type <span className="font-mono font-semibold">{profile?.email}</span> to confirm
+            </Label>
+            <Input
+              value={confirmation}
+              onChange={(e) => setConfirmation(e.target.value)}
+              placeholder="your@email.com"
+            />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleting || confirmation !== profile?.email}
+            >
+              {deleting ? "Deleting..." : "Delete my account"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Billing Tab
 // ---------------------------------------------------------------------------
 
 function BillingTab() {
