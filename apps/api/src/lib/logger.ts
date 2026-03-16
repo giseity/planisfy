@@ -65,6 +65,7 @@ export function requestLogger(): MiddlewareHandler {
     const duration = Date.now() - start;
 
     const entry: Record<string, unknown> = {
+      requestId: c.get("requestId"),
       method: c.req.method,
       path: c.req.path,
       status: c.res.status,

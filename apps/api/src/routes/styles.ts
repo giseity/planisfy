@@ -3,6 +3,7 @@ import { z } from "zod";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { db, styles, styleVersions } from "@planisfy/database";
 import { logAudit } from "../lib/audit";
+import { checkResourceLimit } from "../lib/plan-check";
 import type { AuthEnv } from "../middleware/auth";
 
 export const stylesRoute = new Hono<AuthEnv>();
@@ -76,6 +77,16 @@ stylesRoute.post("/styles", async (c) => {
       { error: { code: "VALIDATION_ERROR", message: "Invalid input", details: parsed.error.flatten() } },
       400
     );
+  }
+
+  const planCheck = await checkResourceLimit(userId, ownerId, "styles");
+  if (!planCheck.allowed) {
+    return c.json({
+      error: {
+        code: "PLAN_LIMIT",
+        message: `You've reached the maximum of ${planCheck.limit} styles on your current plan. Please upgrade to create more.`,
+      },
+    }, 403);
   }
 
   const { name, description, styleJson } = parsed.data;
