@@ -57,6 +57,7 @@ import {
   AlertTriangle,
   Trash2,
 } from "lucide-react"
+import { toast } from "sonner"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -343,7 +344,7 @@ function MembersTab({
       setInviteOpen(false)
       await onRefresh()
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to send invitation")
+      toast.error(err instanceof Error ? err.message : "Failed to send invitation")
     } finally {
       setInviting(false)
     }
@@ -358,7 +359,7 @@ function MembersTab({
       setRemoveId(null)
       await onRefresh()
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to remove member")
+      toast.error(err instanceof Error ? err.message : "Failed to remove member")
     }
   }
 
@@ -372,7 +373,7 @@ function MembersTab({
       setRoleChange(null)
       await onRefresh()
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to change role")
+      toast.error(err instanceof Error ? err.message : "Failed to change role")
     }
   }
 
@@ -381,7 +382,7 @@ function MembersTab({
       await organization.cancelInvitation({ invitationId })
       await onRefresh()
     } catch (err) {
-      alert(
+      toast.error(
         err instanceof Error ? err.message : "Failed to cancel invitation"
       )
     }
@@ -684,7 +685,7 @@ function SettingsTab({
       })
       await onRefresh()
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update organization")
+      toast.error(err instanceof Error ? err.message : "Failed to update organization")
     } finally {
       setSaving(false)
     }
@@ -698,7 +699,7 @@ function SettingsTab({
       router.push("/studio/styles")
       router.refresh()
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete organization")
+      toast.error(err instanceof Error ? err.message : "Failed to delete organization")
       setDeleting(false)
     }
   }

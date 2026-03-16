@@ -6,6 +6,7 @@ import { Input } from "@planisfy/ui/components/input";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -24,7 +25,7 @@ export default function SignUpPage() {
           router.push("/studio/styles");
         },
         onError: (ctx: { error: { message: string } }) => {
-          alert(ctx.error.message);
+          toast.error(ctx.error.message);
         },
       },
     });

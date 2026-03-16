@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useSession, authClient } from "@planisfy/auth/client"
 import { Button } from "@planisfy/ui/components/button"
 import { Mail, X } from "lucide-react"
+import { toast } from "sonner"
 
 export function EmailVerificationBanner() {
   const { data: session } = useSession()
@@ -23,7 +24,7 @@ export function EmailVerificationBanner() {
       })
       setSent(true)
     } catch {
-      alert("Failed to send verification email")
+      toast.error("Failed to send verification email")
     } finally {
       setSending(false)
     }

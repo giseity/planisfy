@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from "@planisfy/ui/components/dialog"
 import { Check, CreditCard, Monitor, Shield, User, X } from "lucide-react"
+import { toast } from "sonner"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -822,7 +823,7 @@ function BillingTab() {
                   )
                   window.open(url, "_blank")
                 } catch {
-                  alert("Billing portal is not available")
+                  toast.error("Billing portal is not available")
                 }
               }}
             >
@@ -896,12 +897,12 @@ function BillingTab() {
                     disabled={!billing.polarConfigured}
                     onClick={async () => {
                       if (!billing.polarConfigured) {
-                        alert(
+                        toast.info(
                           "Billing is not configured yet. Set POLAR_ACCESS_TOKEN to enable payments."
                         )
                         return
                       }
-                      alert(
+                      toast.info(
                         `Upgrade to ${plan.name} — payment integration coming soon`
                       )
                     }}

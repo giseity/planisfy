@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table"
 import { Button } from "@planisfy/ui/components/button"
-import { Activity, Zap, Key, TrendingUp, TrendingDown, ChevronLeft, ChevronRight } from "lucide-react"
+import { Activity, Zap, Key, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, BarChart3 } from "lucide-react"
 import {
   AreaChart,
   Area,
@@ -196,7 +196,7 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? "..." : formatNumber(summary?.totalRequests ?? 0)}
+              {loading ? <div className="h-8 w-20 bg-muted animate-pulse rounded" /> : formatNumber(summary?.totalRequests ?? 0)}
             </div>
             {summary && (
               <TrendIndicator
@@ -214,7 +214,7 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? "..." : `${formatNumber(quotaUsed)} / ${formatNumber(quotaLimit)}`}
+              {loading ? <div className="h-8 w-28 bg-muted animate-pulse rounded" /> : `${formatNumber(quotaUsed)} / ${formatNumber(quotaLimit)}`}
             </div>
             <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
               <div
@@ -232,7 +232,7 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? "..." : summary?.activeApiKeys ?? 0}
+              {loading ? <div className="h-8 w-10 bg-muted animate-pulse rounded" /> : summary?.activeApiKeys ?? 0}
             </div>
           </CardContent>
         </Card>
