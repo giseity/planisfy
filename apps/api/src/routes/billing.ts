@@ -34,12 +34,12 @@ billingRoute.get("/billing", async (c) => {
       .where(and(eq(usageLogs.profileId, ownerId), gte(usageLogs.timestamp, monthStart))),
   ]);
 
-  const planInfo = PLANS[plan] || PLANS.free;
+  const planInfo = PLANS[plan] ?? PLANS.free!;
 
   return c.json({
     plan,
-    planName: planInfo.name,
-    price: planInfo.price,
+    planName: planInfo!.name,
+    price: planInfo!.price,
     limits,
     usage: {
       monthlyUnits: Number(usageRow?.total ?? 0),

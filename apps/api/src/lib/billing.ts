@@ -63,7 +63,7 @@ export async function getUserPlan(userId: string): Promise<string> {
 
 export async function getPlanLimits(userId: string): Promise<PlanLimits> {
   const plan = await getUserPlan(userId);
-  return PLANS[plan] || PLANS.free;
+  return PLANS[plan] ?? PLANS.free!;
 }
 
 // ── Polar integration ───────────────────────────────────────────────────────
