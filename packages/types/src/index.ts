@@ -1,4 +1,5 @@
 import type {
+  accounts,
   profiles,
   users,
   organizations,
@@ -13,6 +14,9 @@ import type {
 // ============================================================================
 // Drizzle inferred row types
 // ============================================================================
+
+export type Account = typeof accounts.$inferSelect;
+export type NewAccount = typeof accounts.$inferInsert;
 
 export type Profile = typeof profiles.$inferSelect;
 export type NewProfile = typeof profiles.$inferInsert;
@@ -45,7 +49,9 @@ export type NewAuditEvent = typeof auditEvents.$inferInsert;
 // Enum value types
 // ============================================================================
 
-export type ProfileType = "USER" | "ORGANIZATION";
+export type AccountType = "USER" | "ORGANIZATION";
+export type ProfileType = AccountType;
+export type AccountLifecycleStatus = "ACTIVE" | "SUSPENDED" | "BANNED";
 export type SystemRole = "USER" | "ADMIN" | "SUPER";
 export type SourceStatus = "PENDING" | "PROCESSING" | "READY" | "ERROR";
 export type SourceType = "VECTOR" | "RASTER" | "GEOJSON" | "IMAGE" | "VIDEO";

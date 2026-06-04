@@ -10,30 +10,47 @@ Drizzle schema, relations, migrations, database client, and shared server-side d
 - Shared database helpers such as style creation and duplication.
 - The identity, resource, usage, audit, and alpha source models.
 
-## Current Alpha Tables
+## Current Tables
 
-- `profiles`
+- `accounts` as the canonical user/org owner anchor
 - `users`
 - `organizations`
 - `members`
 - `invitations`
 - `sessions`
-- `accounts` for Better Auth provider credentials
+- `oauth_accounts` for Better Auth provider credentials
 - `verifications`
 - `styles`
 - `style_versions`
+- `style_publications`
 - `api_keys`
 - `tileset_sources`
+- `uploads`
+- `datasets`
+- `dataset_versions`
+- `tilesets`
+- `tileset_versions`
+- `processing_jobs`
+- `processing_job_logs`
+- `event_outbox`
+- `storage_objects`
+- `basemap_releases`
 - `usage_logs`
+- `usage_rollups`
 - `audit_events`
+- `billing_customers`
+- `plans`
+- `subscriptions`
+- `billing_transactions`
 
 ## Target Direction
 
-The restructuring plan resets the schema around:
+The restructuring reset moved the schema around:
 
 - `accounts` as the canonical user/org owner anchor.
 - `oauth_accounts` for Better Auth provider credentials.
 - `uploads`, `datasets`, `tilesets`, `tileset_versions`, `processing_jobs`, `event_outbox`, `storage_objects`, and explicit publication tables.
+- A temporary `profiles` export still points at `accounts` so alpha API callers can be renamed incrementally.
 
 ## Important Commands
 
