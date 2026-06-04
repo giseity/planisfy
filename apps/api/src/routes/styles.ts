@@ -2,6 +2,12 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { db, styles, styleVersions } from "@planisfy/database";
+import {
+  createStyleRecord,
+  duplicateStyleRecord,
+  softDeleteStyleRecord,
+  toggleStylePublishRecord,
+} from "@planisfy/database/style-service";
 import { logAudit } from "../lib/audit";
 import { checkResourceLimit } from "../lib/plan-check";
 import type { AuthEnv } from "../middleware/auth";
@@ -9,36 +15,6 @@ import type { AuthEnv } from "../middleware/auth";
 export const stylesRoute = new Hono<AuthEnv>();
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60);
-}
-
-async function uniqueHandle(ownerId: string, base: string): Promise<string> {
-  let handle = base || "untitled";
-  let attempt = 0;
-  while (true) {
-    const candidate = attempt === 0 ? handle : `${handle}-${attempt}`;
-    const [existing] = await db
-      .select({ id: styles.id })
-      .from(styles)
-      .where(
-        and(
-          eq(styles.ownerId, ownerId),
-          eq(styles.handle, candidate),
-          isNull(styles.deletedAt)
-        )
-      )
-      .limit(1);
-    if (!existing) return candidate;
-    attempt++;
-    if (attempt > 100) return `${handle}-${Date.now()}`;
-  }
-}
 
 function getClientIp(req: Request): string | undefined {
   return (
@@ -89,28 +65,21 @@ stylesRoute.post("/styles", async (c) => {
     }, 403);
   }
 
-  const { name, description, styleJson } = parsed.data;
-  const handle = await uniqueHandle(ownerId, parsed.data.handle ?? slugify(name));
-
-  const [created] = await db
-    .insert(styles)
-    .values({
-      ownerId,
-      handle,
-      name,
-      description: description ?? null,
-      styleJson,
-      originalStyleJson: styleJson,
-      version: 1,
-    })
-    .returning();
+  const { name, description, styleJson, handle } = parsed.data;
+  const created = await createStyleRecord({
+    ownerId,
+    name,
+    handle,
+    description,
+    styleJson,
+  });
 
   logAudit({
     profileId: userId,
     action: "style.created",
     resourceType: "style",
-    resourceId: created!.id,
-    metadata: { name, handle },
+    resourceId: created.id,
+    metadata: { name, handle: created.handle },
     ipAddress: getClientIp(c.req.raw),
   });
 
@@ -291,15 +260,8 @@ stylesRoute.delete("/styles/:id", async (c) => {
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
 
-  const result = await db
-    .update(styles)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt))
-    )
-    .returning({ id: styles.id, name: styles.name });
-
-  if (result.length === 0) {
+  const deleted = await softDeleteStyleRecord(ownerId, styleId);
+  if (!deleted) {
     return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
   }
 
@@ -308,7 +270,7 @@ stylesRoute.delete("/styles/:id", async (c) => {
     action: "style.deleted",
     resourceType: "style",
     resourceId: styleId,
-    metadata: { name: result[0]!.name },
+    metadata: { name: deleted.name },
     ipAddress: getClientIp(c.req.raw),
   });
 
@@ -322,27 +284,20 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
 
-  const result = await db
-    .update(styles)
-    .set({ isPublic: sql`NOT ${styles.isPublic}` })
-    .where(
-      and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt))
-    )
-    .returning({ id: styles.id, isPublic: styles.isPublic });
-
-  if (result.length === 0) {
+  const updated = await toggleStylePublishRecord(ownerId, styleId);
+  if (!updated) {
     return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
   }
 
   logAudit({
     profileId: userId,
-    action: result[0]!.isPublic ? "style.published" : "style.unpublished",
+    action: updated.isPublic ? "style.published" : "style.unpublished",
     resourceType: "style",
     resourceId: styleId,
     ipAddress: getClientIp(c.req.raw),
   });
 
-  return c.json({ data: result[0] });
+  return c.json({ data: updated });
 });
 
 // ── POST /console/styles/:id/duplicate — Duplicate ─────────────────────────
@@ -352,37 +307,17 @@ stylesRoute.post("/styles/:id/duplicate", async (c) => {
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
 
-  const [original] = await db
-    .select()
-    .from(styles)
-    .where(and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt)))
-    .limit(1);
-
-  if (!original) {
+  const created = await duplicateStyleRecord(ownerId, styleId);
+  if (!created) {
     return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
   }
-
-  const handle = await uniqueHandle(ownerId, `${original.handle}-copy`);
-
-  const [created] = await db
-    .insert(styles)
-    .values({
-      ownerId,
-      handle,
-      name: `${original.name} (copy)`,
-      description: original.description,
-      styleJson: original.styleJson,
-      originalStyleJson: original.styleJson,
-      version: 1,
-    })
-    .returning();
 
   logAudit({
     profileId: userId,
     action: "style.created",
     resourceType: "style",
-    resourceId: created!.id,
-    metadata: { name: created!.name, duplicatedFrom: styleId },
+    resourceId: created.id,
+    metadata: { name: created.name, duplicatedFrom: styleId },
     ipAddress: getClientIp(c.req.raw),
   });
 
