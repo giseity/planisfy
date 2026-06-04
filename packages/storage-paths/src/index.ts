@@ -35,6 +35,9 @@ export const StoragePaths = {
   ) =>
     `accounts/${safeSegment(accountId)}/tilesets/${safeSegment(tilesetId)}/v${version}/tiles.${format}`,
 
+  tilesetSourceArtifact: (accountId: string, sourceId: string, fileName: string) =>
+    `accounts/${safeSegment(accountId)}/tileset-sources/${safeSegment(sourceId)}/${safeSegment(fileName)}`,
+
   styleVersion: (accountId: string, styleId: string, version: number) =>
     `accounts/${safeSegment(accountId)}/styles/${safeSegment(styleId)}/v${version}/style.json`,
 
@@ -57,6 +60,9 @@ export const StoragePaths = {
 
   tilesetPrefix: (accountId: string, tilesetId: string) =>
     `accounts/${safeSegment(accountId)}/tilesets/${safeSegment(tilesetId)}/`,
+
+  tilesetSourcePrefix: (accountId: string, sourceId: string) =>
+    `accounts/${safeSegment(accountId)}/tileset-sources/${safeSegment(sourceId)}/`,
 } as const;
 
 export type ParsedStoragePath =
@@ -72,6 +78,12 @@ export type ParsedStoragePath =
       tilesetId: string;
       version: number;
       format: TilesetArtifactFormat;
+    }
+  | {
+      kind: "tilesetSourceArtifact";
+      accountId: string;
+      sourceId: string;
+      fileName: string;
     }
   | {
       kind: "basemapRelease";
@@ -101,6 +113,16 @@ export function parseStoragePath(path: string): ParsedStoragePath | null {
       tilesetId: tileset[2]!,
       version: Number(tileset[3]),
       format: tileset[4]! as TilesetArtifactFormat,
+    };
+  }
+
+  const tilesetSource = path.match(/^accounts\/([^/]+)\/tileset-sources\/([^/]+)\/([^/]+)$/);
+  if (tilesetSource) {
+    return {
+      kind: "tilesetSourceArtifact",
+      accountId: tilesetSource[1]!,
+      sourceId: tilesetSource[2]!,
+      fileName: tilesetSource[3]!,
     };
   }
 

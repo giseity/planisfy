@@ -2,14 +2,14 @@
 
 ## Current
 
-Some alpha work is enqueued directly into BullMQ from API code. This is not the target durable contract.
+Source uploads now write typed `event_outbox` rows for `upload.created` and cleanup requests. BullMQ still exists as the current transport until `apps/worker-geodata` owns event claiming and processing.
 
 ## Target
 
-Planisfy uses a transactional outbox:
+Planisfy uses a durable outbox:
 
 1. API writes primary state in a database transaction.
-2. API writes an `event_outbox` row in the same transaction.
+2. API writes an `event_outbox` row alongside that state.
 3. A worker claims due events.
 4. The worker validates the payload through `@planisfy/events`.
 5. The worker processes or schedules transport work.

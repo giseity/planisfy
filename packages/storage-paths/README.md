@@ -8,6 +8,7 @@ Pure storage key contract package.
 - Known path parsers.
 - Path segment safety.
 - Prefix helpers for listing account or resource artifacts.
+- Upload originals, tileset versions, tileset source artifacts, style artifacts, basemap releases, sprites, and glyph ranges.
 
 ## Rules
 

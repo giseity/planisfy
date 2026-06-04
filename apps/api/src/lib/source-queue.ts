@@ -2,9 +2,17 @@ import { Queue, Worker } from "bullmq";
 import { db, tilesetSources } from "@planisfy/database";
 import { eq } from "drizzle-orm";
 import { getStorage } from "./storage";
+import { recordStorageObject } from "./storage-ledger";
+import {
+  logProcessingJob,
+  markProcessingJobFailed,
+  markProcessingJobStarted,
+  markProcessingJobSucceeded,
+} from "./processing-jobs";
+import { StoragePaths } from "@planisfy/storage-paths";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { writeFile, unlink, readFile, mkdtemp } from "fs/promises";
+import { writeFile, readFile, mkdtemp } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -21,6 +29,9 @@ export interface SourceProcessingJob {
   sourceId: string;
   ownerId: string;
   uploadKey: string; // Storage key for the raw upload
+  uploadId?: string;
+  storageObjectId?: string;
+  processingJobId?: string;
   format: "geojson" | "csv" | "shapefile" | "pmtiles";
   options?: {
     minZoom?: number;
@@ -53,10 +64,16 @@ export function enqueueSourceProcessing(job: SourceProcessingJob): void {
 export const sourceWorker = new Worker<SourceProcessingJob>(
   QUEUE_NAME,
   async (job) => {
-    const { sourceId, ownerId, uploadKey, format, options } = job.data;
+    const { sourceId, ownerId, uploadKey, format, options, processingJobId } = job.data;
     const storage = getStorage();
 
     console.log(`[source-worker] Processing source ${sourceId} (format: ${format})`);
+    if (processingJobId) {
+      await markProcessingJobStarted(processingJobId);
+      await logProcessingJob(processingJobId, "Source processing started", {
+        metadata: { sourceId, uploadKey, format },
+      });
+    }
 
     // Mark as PROCESSING
     await db
@@ -72,8 +89,24 @@ export const sourceWorker = new Worker<SourceProcessingJob>(
 
       // 2. If already PMTiles, just move to final location
       if (format === "pmtiles") {
-        const finalKey = `sources/${ownerId}/${sourceId}/data.pmtiles`;
-        await storage.upload(finalKey, rawData, "application/x-protobuf");
+        const fileName = sourceArtifactFileName("pmtiles", processingJobId);
+        const finalKey = StoragePaths.tilesetSourceArtifact(ownerId, sourceId, fileName);
+        const stored = await storage.upload(finalKey, rawData, "application/x-protobuf");
+        const storageInfo = storage.getInfo();
+
+        await recordStorageObject({
+          accountId: ownerId,
+          provider: storageInfo.provider,
+          bucket: storageInfo.bucket,
+          storageKey: finalKey,
+          fileName,
+          contentType: stored.contentType,
+          size: stored.size,
+          resourceType: "tileset_source",
+          resourceId: sourceId,
+          artifactKind: "processed",
+          version: "current",
+        });
 
         await db
           .update(tilesetSources)
@@ -82,6 +115,14 @@ export const sourceWorker = new Worker<SourceProcessingJob>(
             url: storage.getUrl(finalKey),
           })
           .where(eq(tilesetSources.id, sourceId));
+
+        if (processingJobId) {
+          await markProcessingJobSucceeded(processingJobId, {
+            sourceId,
+            storageKey: finalKey,
+            size: stored.size,
+          });
+        }
 
         console.log(`[source-worker] Source ${sourceId} ready (PMTiles passthrough)`);
         return;
@@ -145,8 +186,24 @@ export const sourceWorker = new Worker<SourceProcessingJob>(
         // If tippecanoe is not available, store the raw GeoJSON as-is
         if (err.code === "ENOENT") {
           console.warn("[source-worker] tippecanoe not found, storing raw file");
-          const finalKey = `sources/${ownerId}/${sourceId}/data.${format}`;
-          await storage.upload(finalKey, rawData, "application/geo+json");
+          const fileName = sourceArtifactFileName(format, processingJobId);
+          const finalKey = StoragePaths.tilesetSourceArtifact(ownerId, sourceId, fileName);
+          const stored = await storage.upload(finalKey, rawData, "application/geo+json");
+          const storageInfo = storage.getInfo();
+
+          await recordStorageObject({
+            accountId: ownerId,
+            provider: storageInfo.provider,
+            bucket: storageInfo.bucket,
+            storageKey: finalKey,
+            fileName,
+            contentType: stored.contentType,
+            size: stored.size,
+            resourceType: "tileset_source",
+            resourceId: sourceId,
+            artifactKind: "processed",
+            version: "current",
+          });
 
           await db
             .update(tilesetSources)
@@ -157,6 +214,15 @@ export const sourceWorker = new Worker<SourceProcessingJob>(
             })
             .where(eq(tilesetSources.id, sourceId));
 
+          if (processingJobId) {
+            await markProcessingJobSucceeded(processingJobId, {
+              sourceId,
+              storageKey: finalKey,
+              size: stored.size,
+              fallback: "raw",
+            });
+          }
+
           console.log(`[source-worker] Source ${sourceId} ready (raw GeoJSON, no tippecanoe)`);
           return;
         }
@@ -165,8 +231,24 @@ export const sourceWorker = new Worker<SourceProcessingJob>(
 
       // 6. Upload PMTiles to storage
       const pmtilesData = await readFile(outputPath);
-      const finalKey = `sources/${ownerId}/${sourceId}/data.pmtiles`;
-      await storage.upload(finalKey, pmtilesData, "application/x-protobuf");
+      const fileName = sourceArtifactFileName("pmtiles", processingJobId);
+      const finalKey = StoragePaths.tilesetSourceArtifact(ownerId, sourceId, fileName);
+      const stored = await storage.upload(finalKey, pmtilesData, "application/x-protobuf");
+      const storageInfo = storage.getInfo();
+
+      await recordStorageObject({
+        accountId: ownerId,
+        provider: storageInfo.provider,
+        bucket: storageInfo.bucket,
+        storageKey: finalKey,
+        fileName,
+        contentType: stored.contentType,
+        size: stored.size,
+        resourceType: "tileset_source",
+        resourceId: sourceId,
+        artifactKind: "processed",
+        version: "current",
+      });
 
       // 7. Update source record
       await db
@@ -180,6 +262,16 @@ export const sourceWorker = new Worker<SourceProcessingJob>(
         })
         .where(eq(tilesetSources.id, sourceId));
 
+      if (processingJobId) {
+        await markProcessingJobSucceeded(processingJobId, {
+          sourceId,
+          storageKey: finalKey,
+          size: stored.size,
+          minZoom,
+          maxZoom,
+        });
+      }
+
       console.log(`[source-worker] Source ${sourceId} ready (PMTiles, ${pmtilesData.length} bytes)`);
     } catch (err: any) {
       console.error(`[source-worker] Source ${sourceId} failed:`, err);
@@ -188,6 +280,14 @@ export const sourceWorker = new Worker<SourceProcessingJob>(
         .update(tilesetSources)
         .set({ status: "ERROR" })
         .where(eq(tilesetSources.id, sourceId));
+
+      if (processingJobId) {
+        await markProcessingJobFailed(processingJobId, err);
+        await logProcessingJob(processingJobId, "Source processing failed", {
+          level: "error",
+          metadata: { sourceId, message: err?.message },
+        });
+      }
 
       throw err;
     } finally {
@@ -260,4 +360,8 @@ function calculateBounds(geojson: any): [number, number, number, number] | null 
   }
 
   return hasCoords ? [minLon, minLat, maxLon, maxLat] : null;
+}
+
+function sourceArtifactFileName(format: string, processingJobId?: string): string {
+  return processingJobId ? `data-${processingJobId}.${format}` : `data.${format}`;
 }

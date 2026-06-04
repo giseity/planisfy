@@ -8,14 +8,14 @@ Hono API gateway for Planisfy's public map API, console API, auth handler, and i
 - Console API routes for styles, API keys, sources, usage, audit, billing status, and profile settings.
 - API key validation, session fallback, scope checks, rate limits, quota checks, and usage logging.
 - Internal platform routes protected by `X-Internal-Secret`.
-- Durable backend mutations once the restructuring moves work through jobs and outbox events.
+- Durable backend mutations through upload records, processing jobs, storage ledger rows, and outbox events.
 
 ## Does Not Own
 
 - Heavy geodata processing.
 - Studio client state.
-- Durable storage path construction once `@planisfy/storage-paths` exists.
-- Event payload schemas once `@planisfy/events` exists.
+- Storage key contract definitions.
+- Event payload schema definitions.
 
 ## Important Commands
 
@@ -48,5 +48,5 @@ Optional providers:
 ## Gotchas
 
 - Production-like environments must set `INTERNAL_API_SECRET`; internal routes must not be exposed with the fallback development secret.
-- The current source upload prototype still enqueues BullMQ work directly from the API. The restructuring plan moves this behind `processing_jobs`, `event_outbox`, and `apps/worker-geodata`.
+- Source uploads now create `uploads`, `storage_objects`, `processing_jobs`, and `event_outbox` records before using BullMQ as the current transport. The next restructuring step moves event claiming and geodata execution into `apps/worker-geodata`.
 - Billing code currently contains alpha Polar references. The target provider is Dodo Payments.

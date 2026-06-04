@@ -26,6 +26,18 @@ describe("@planisfy/storage-paths", () => {
     });
   });
 
+  it("builds and parses tileset source artifact paths", () => {
+    const path = StoragePaths.tilesetSourceArtifact("acct_1", "source_1", "data.pmtiles");
+
+    expect(path).toBe("accounts/acct_1/tileset-sources/source_1/data.pmtiles");
+    expect(parseStoragePath(path)).toEqual({
+      kind: "tilesetSourceArtifact",
+      accountId: "acct_1",
+      sourceId: "source_1",
+      fileName: "data.pmtiles",
+    });
+  });
+
   it("rejects unsafe path segments", () => {
     expect(() => safeSegment("../secret")).toThrow();
     expect(() => StoragePaths.uploadOriginal("acct", "upload", "nested/file.geojson")).toThrow();

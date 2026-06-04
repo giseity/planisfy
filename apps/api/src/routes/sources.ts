@@ -2,11 +2,14 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthEnv } from "../middleware/auth";
 import { checkResourceLimit } from "../lib/plan-check";
-import { db, tilesetSources, auditEvents } from "@planisfy/database";
+import { db, tilesetSources, auditEvents, uploads } from "@planisfy/database";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { getStorage } from "../lib/storage";
 import { enqueueSourceProcessing, type SourceProcessingJob } from "../lib/source-queue";
-import { randomUUID } from "crypto";
+import { StoragePaths } from "@planisfy/storage-paths";
+import { enqueueOutboxEvent } from "../lib/outbox";
+import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
+import { recordStorageObject } from "../lib/storage-ledger";
 
 export const sourcesRoute = new Hono<AuthEnv>();
 
@@ -188,10 +191,14 @@ sourcesRoute.delete("/sources/:id", async (c) => {
     .set({ deletedAt: new Date() })
     .where(eq(tilesetSources.id, id));
 
-  // Clean up storage (fire and forget)
-  const storage = getStorage();
-  storage.delete(`sources/${ownerId}/${id}`).catch(() => {});
-  storage.delete(`uploads/${ownerId}/${id}`).catch(() => {});
+  await enqueueOutboxEvent({
+    eventName: "artifact.cleanup.requested",
+    payload: {
+      resourceType: "tileset_source",
+      resourceId: id,
+      reason: "source.deleted",
+    },
+  });
 
   await db.insert(auditEvents).values({
     profileId: userId,
@@ -252,11 +259,89 @@ sourcesRoute.post("/sources/:id/upload", async (c) => {
     }, 400);
   }
 
-  // Store raw upload
+  const storageFileName = toStorageFileName(filename);
+
+  const [upload] = await db
+    .insert(uploads)
+    .values({
+      accountId: ownerId,
+      originalFileName: filename,
+      contentType: file.type || null,
+      size: file.size,
+      status: "PENDING",
+    })
+    .returning();
+
+  if (!upload) {
+    return c.json({ error: { code: "INTERNAL_ERROR", message: "Failed to create upload record" } }, 500);
+  }
+
+  // Store raw upload through the shared storage path contract.
   const storage = getStorage();
-  const uploadKey = `uploads/${ownerId}/${id}/${filename}`;
+  const uploadKey = StoragePaths.uploadOriginal(ownerId, upload.id, storageFileName);
   const buffer = Buffer.from(await file.arrayBuffer());
-  await storage.upload(uploadKey, buffer, file.type);
+  const stored = await storage.upload(uploadKey, buffer, file.type);
+  const storageInfo = storage.getInfo();
+
+  const storageObject = await recordStorageObject({
+    accountId: ownerId,
+    provider: storageInfo.provider,
+    bucket: storageInfo.bucket,
+    storageKey: uploadKey,
+    fileName: storageFileName,
+    contentType: stored.contentType,
+    size: stored.size,
+    resourceType: "upload",
+    resourceId: upload.id,
+    artifactKind: "original",
+    metadata: {
+      originalFileName: filename,
+      sourceId: id,
+    },
+  });
+
+  await db
+    .update(uploads)
+    .set({
+      status: "UPLOADED",
+      storageObjectId: storageObject.id,
+    })
+    .where(eq(uploads.id, upload.id));
+
+  const processingJob = await createProcessingJob({
+    accountId: ownerId,
+    type: "tileset_source.process_upload",
+    input: {
+      sourceId: id,
+      uploadId: upload.id,
+      storageObjectId: storageObject.id,
+      uploadKey,
+      format,
+      options: {
+        minZoom: source.minZoom ?? 0,
+        maxZoom: source.maxZoom ?? 14,
+      },
+    },
+  });
+
+  await enqueueOutboxEvent({
+    eventName: "upload.created",
+    payload: {
+      uploadId: upload.id,
+      accountId: ownerId,
+      storageObjectId: storageObject.id,
+    },
+  });
+
+  await logProcessingJob(processingJob.id, "Source upload received", {
+    metadata: {
+      sourceId: id,
+      uploadId: upload.id,
+      storageObjectId: storageObject.id,
+      uploadKey,
+      format,
+    },
+  });
 
   // Update status to PENDING and enqueue processing job
   await db
@@ -268,6 +353,9 @@ sourcesRoute.post("/sources/:id/upload", async (c) => {
     sourceId: id,
     ownerId,
     uploadKey,
+    uploadId: upload.id,
+    storageObjectId: storageObject.id,
+    processingJobId: processingJob.id,
     format,
     options: {
       minZoom: source.minZoom ?? 0,
@@ -280,7 +368,15 @@ sourcesRoute.post("/sources/:id/upload", async (c) => {
     action: "source.upload",
     resourceType: "source",
     resourceId: id,
-    metadata: { filename, size: file.size, format },
+    metadata: {
+      filename,
+      storageFileName,
+      size: file.size,
+      format,
+      uploadId: upload.id,
+      storageObjectId: storageObject.id,
+      processingJobId: processingJob.id,
+    },
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || null,
   });
 
@@ -313,4 +409,18 @@ function detectFormat(filename: string, mimeType: string): SourceProcessingJob["
   if (mimeType.includes("csv")) return "csv";
 
   return null;
+}
+
+function toStorageFileName(filename: string): string {
+  const fallback = "upload";
+  const normalized = filename
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (!normalized || normalized === "." || normalized === "..") {
+    return fallback;
+  }
+
+  return normalized;
 }
