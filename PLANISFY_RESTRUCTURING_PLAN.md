@@ -7,7 +7,7 @@ This file is now the running restructuring log. Each completed milestone should 
 | Milestone | Status | Notes |
 | --- | --- | --- |
 | Phase 0: Documentation and Truth Reset | Complete | Added durable docs scaffold, unignored root `docs/`, corrected stale implemented package/app docs, and documented alpha Polar references as billing work to replace. |
-| Phase 1: Package Boundary Setup | Not started | Pending `events`, `storage-paths`, `style-spec`, `logger`, and test workspace. |
+| Phase 1: Package Boundary Setup | Complete | Added pure contract packages for events, storage paths, style lifecycle helpers, logger, and a Vitest workspace. Lockfile importers were updated manually because registry DNS failures prevented `pnpm install` from completing. |
 | Phase 2: Database and Resource Model Reset | Not started | Pending `accounts` identity anchor reset and resource tables. |
 | Phase 3: Async and Storage Backbone | Not started | Pending outbox, jobs, storage ledger, and provider alignment. |
 | Phase 4: Worker Split | Not started | Pending `apps/worker-geodata`. |
