@@ -38,6 +38,9 @@ jobs:
       - name: Type check
         run: pnpm check-types
 
+      - name: Test
+        run: pnpm test
+
   build:
     name: Build
     runs-on: ubuntu-latest
