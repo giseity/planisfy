@@ -29,6 +29,15 @@ function generateHandle(name: string): string {
   return `${base || "user"}_${suffix}`;
 }
 
+function internalHeaders(): HeadersInit {
+  return {
+    "Content-Type": "application/json",
+    ...(process.env.INTERNAL_API_SECRET
+      ? { "X-Internal-Secret": process.env.INTERNAL_API_SECRET }
+      : {}),
+  };
+}
+
 // ============================================================================
 // Better-Auth instance
 // ============================================================================
@@ -62,7 +71,7 @@ export const auth = betterAuth({
             const emailUrl = process.env.INTERNAL_API_URL || "http://localhost:4000";
             await fetch(`${emailUrl}/internal/send-invitation-email`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: internalHeaders(),
               body: JSON.stringify({
                 email: invitation.email,
                 organizationName: organization.name,
@@ -124,7 +133,7 @@ export const auth = betterAuth({
           const emailUrl = process.env.INTERNAL_API_URL || "http://localhost:4000";
           await fetch(`${emailUrl}/internal/send-password-reset-email`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: internalHeaders(),
             body: JSON.stringify({
               email: user.email,
               name: user.name,
@@ -148,7 +157,7 @@ export const auth = betterAuth({
           const emailUrl = process.env.INTERNAL_API_URL || "http://localhost:4000";
           await fetch(`${emailUrl}/internal/send-verification-email`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: internalHeaders(),
             body: JSON.stringify({
               email: user.email,
               name: user.name,

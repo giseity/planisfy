@@ -7,8 +7,9 @@ import {
   sendWelcomeEmail,
 } from "../lib/email";
 
-// Internal-only email endpoints (not exposed publicly, no auth required)
-// Called by auth hooks and background workers within the platform
+// Internal-only email endpoints.
+// Called by auth hooks and background workers within the platform.
+// Access is enforced by internalAuthMiddleware in app.ts.
 
 export const emailRoute = new Hono();
 
