@@ -9,6 +9,6 @@
     "./glyphs/*": "./glyphs/*"
   },
   "scripts": {
-    "lint": "eslint . --max-warnings 0"
+    "lint": "node ../eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0"
   }
 }
