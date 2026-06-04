@@ -3,7 +3,13 @@
 import { headers } from "next/headers"
 import { auth } from "@planisfy/auth/auth"
 import { db, styles } from "@planisfy/database"
-import { eq, and, isNull, desc, sql } from "drizzle-orm"
+import {
+  createStyleRecord,
+  duplicateStyleRecord,
+  softDeleteStyleRecord,
+  toggleStylePublishRecord,
+} from "@planisfy/database/style-service"
+import { eq, and, isNull, desc } from "drizzle-orm"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
@@ -37,75 +43,20 @@ export async function getStyles() {
     .orderBy(desc(styles.updatedAt))
 }
 
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60)
-}
-
-async function uniqueHandle(ownerId: string, base: string): Promise<string> {
-  let handle = base || "untitled"
-  let attempt = 0
-  while (true) {
-    const candidate = attempt === 0 ? handle : `${handle}-${attempt}`
-    const [existing] = await db
-      .select({ id: styles.id })
-      .from(styles)
-      .where(
-        and(
-          eq(styles.ownerId, ownerId),
-          eq(styles.handle, candidate),
-          isNull(styles.deletedAt)
-        )
-      )
-      .limit(1)
-    if (!existing) return candidate
-    attempt++
-    if (attempt > 100) return `${handle}-${Date.now()}`
-  }
-}
-
-const BLANK_STYLE = {
-  version: 8,
-  name: "",
-  sources: {},
-  layers: [],
-}
-
 export async function createStyle(formData: FormData) {
   const ownerId = await getOwnerId()
   const name = formData.get("name") as string
   if (!name?.trim()) throw new Error("Name is required")
 
-  const handle = await uniqueHandle(ownerId, slugify(name))
-  const styleJson = { ...BLANK_STYLE, name }
+  const created = await createStyleRecord({ ownerId, name })
 
-  const [created] = await db
-    .insert(styles)
-    .values({
-      ownerId,
-      handle,
-      name,
-      styleJson,
-      originalStyleJson: styleJson,
-      version: 1,
-    })
-    .returning({ id: styles.id })
-
-  redirect(`/studio/styles/${created!.id}`)
+  redirect(`/studio/styles/${created.id}`)
 }
 
 export async function deleteStyle(styleId: string) {
   const ownerId = await getOwnerId()
 
-  await db
-    .update(styles)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt))
-    )
+  await softDeleteStyleRecord(ownerId, styleId)
 
   revalidatePath("/studio/styles")
 }
@@ -113,42 +64,17 @@ export async function deleteStyle(styleId: string) {
 export async function duplicateStyle(styleId: string) {
   const ownerId = await getOwnerId()
 
-  const [original] = await db
-    .select()
-    .from(styles)
-    .where(and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt)))
-    .limit(1)
-
-  if (!original) throw new Error("Style not found")
-
-  const handle = await uniqueHandle(ownerId, `${original.handle}-copy`)
-
-  const [created] = await db
-    .insert(styles)
-    .values({
-      ownerId,
-      handle,
-      name: `${original.name} (copy)`,
-      description: original.description,
-      styleJson: original.styleJson,
-      originalStyleJson: original.styleJson,
-      version: 1,
-    })
-    .returning({ id: styles.id })
+  const created = await duplicateStyleRecord(ownerId, styleId)
+  if (!created) throw new Error("Style not found")
 
   revalidatePath("/studio/styles")
-  return created!.id
+  return created.id
 }
 
 export async function togglePublish(styleId: string) {
   const ownerId = await getOwnerId()
 
-  await db
-    .update(styles)
-    .set({ isPublic: sql`NOT ${styles.isPublic}` })
-    .where(
-      and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt))
-    )
+  await toggleStylePublishRecord(ownerId, styleId)
 
   revalidatePath("/studio/styles")
 }
