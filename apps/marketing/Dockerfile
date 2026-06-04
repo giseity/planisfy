@@ -1,0 +1,36 @@
+FROM node:22-slim AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+FROM base AS deps
+WORKDIR /app
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/marketing/package.json apps/marketing/
+COPY packages/ui/package.json packages/ui/
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --filter marketing...
+
+FROM base AS build
+WORKDIR /app
+COPY --from=deps /app ./
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm --filter marketing build
+
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+USER nextjs
+
+COPY --from=build --chown=nextjs:nodejs /app/apps/marketing/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /app/apps/marketing/.next/static ./apps/marketing/.next/static
+
+EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+CMD ["node", "apps/marketing/server.js"]

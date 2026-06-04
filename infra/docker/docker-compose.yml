@@ -170,6 +170,7 @@ services:
     volumes:
       - ./configs/martin.yaml:/config/config.yaml:ro
       - ./data/pmtiles:/data:ro
+    command: [ "--config", "/config/config.yaml" ]
     restart: unless-stopped
     networks:
       - planisfy-network
@@ -186,7 +187,7 @@ services:
     volumes:
       - ./data/valhalla_data:/custom_files
       - ./configs/valhalla.json:/etc/valhalla/valhalla.json:ro
-    command: [ "valhalla_service", "/custom_files/valhalla.json", "1" ]
+    command: [ "valhalla_service", "/etc/valhalla/valhalla.json", "1" ]
     restart: unless-stopped
     networks:
       - planisfy-network
