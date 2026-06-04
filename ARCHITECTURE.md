@@ -1,397 +1,137 @@
 # Planisfy Architecture
 
-## Overview
+Planisfy is a TypeScript monorepo for a Mapbox-compatible geospatial API platform. The platform layer provides authentication, API keys, rate limits, usage tracking, style management, and administrative UI around open geospatial engines.
 
-Planisfy is a distributed geospatial API platform that provides Mapbox-compatible endpoints. This document outlines the system architecture, component responsibilities, and key design decisions.
+## System Shape
 
----
+```text
+Client apps and SDKs
+        |
+        v
+Planisfy API (Hono)
+        |
+        +-- PostgreSQL + Drizzle: users, orgs, keys, styles, usage, audit
+        +-- Redis: rate limits, quotas, async queues
+        +-- Martin: vector/raster tile serving
+        +-- Valhalla: routing, isochrones, matching, matrices
+        +-- Pelias-compatible geocoder: forward/reverse/autocomplete geocoding
+        +-- Static map renderer: optional external render service
 
-## System Architecture
-
-```
-                    ┌─────────────────────────────────────┐
-                    │          Client Applications        │
-                    │    (MapLibre GL JS, Mobile Apps)    │
-                    └─────────────────┬───────────────────┘
-                                      │
-                                      ▼
-                    ┌─────────────────────────────────────┐
-                    │       Cloudflare Edge Network       │
-                    │  ┌──────────────────────────────┐  │
-                    │  │      Tile Worker (R2→CDN)    │  │
-                    │  └──────────────────────────────┘  │
-                    └─────────────────┬───────────────────┘
-                                      │
-                    ┌─────────────────▼───────────────────┐
-                    │         API Gateway (Fastify)        │
-                    │  ┌──────────────────────────────┐  │
-                    │  │  Auth & Rate Limiting       │  │
-                    │  │  Request Routing             │  │
-                    │  │  Usage Tracking              │  │
-                    │  └──────────────────────────────┘  │
-                    └─────┬──────────┬──────────┬─────────┘
-                          │          │          │
-            ┌─────────────▼────┐ ┌───▼──────┐ ┌▼────────────┐
-            │                  │ │          │ │             │
-      ┌─────▼─────┐     ┌─────▼───▼──┐   ┌──▼──────┐  ┌──▼─────────┐
-      │  Martin   │     │ Geocoding  │   │Valhalla │  │PostgreSQL  │
-      │ (Rust)    │     │ (external) │   │ (C++)   │  │  + Redis   │
-      │  Tiles    │     │            │   │Routing  │  │            │
-      └───────────┘     └────────────┘   └─────────┘  └────────────┘
-            │                  │                │
-            └──────────────────┴────────────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │   Overture Maps     │
-                    │   (PMTiles)         │
-                    └─────────────────────┘
+Planisfy Console/Admin/Docs/Marketing (Next.js)
+        |
+        +-- better-auth session cookies
+        +-- direct server-side database reads where appropriate
+        +-- `/api/v1/*` rewrites to the Hono API for console API calls
 ```
 
----
+## Monorepo Layout
 
-## Component Responsibilities
+| Path | Responsibility |
+| --- | --- |
+| `apps/api` | Hono API gateway for public map APIs, auth handler, internal platform routes, and console API routes |
+| `apps/console` | Customer console and MapLibre style studio |
+| `apps/admin` | Internal admin dashboard |
+| `apps/marketing` | Public website |
+| `apps/docs` | Fumadocs/Next documentation app |
+| `apps/tile-worker` | Planned Cloudflare tile delivery worker |
+| `packages/auth` | better-auth instance, organization hooks, email hook delegation |
+| `packages/database` | Drizzle client, schema, migrations, relations, and shared server data helpers |
+| `packages/types` | Shared platform types and plan limits |
+| `packages/ui` | Shared React UI components |
+| `infra/docker` | Local/self-host Docker Compose stack and engine configs |
 
-### Client Layer
+## API Gateway
 
-| Component | Purpose |
-|-----------|---------|
-| **MapLibre GL JS** | Renders vector tiles in browser |
-| **Mobile SDKs** | Native iOS/Android map rendering (planned) |
+The API gateway is implemented with Hono on Node.js.
 
-### Edge Layer
+Public map routes pass through this middleware chain:
 
-| Component | Purpose |
-|-----------|---------|
-| **Tile Worker (Cloudflare)** | Serves tiles from R2 with edge caching |
-| **R2 Storage** | Stores PMTiles, zero egress fees |
-| **CDN** | 300+ edge locations worldwide |
+1. API key extraction and validation
+2. API key or session authentication
+3. Plan-aware rate limiting and quota checks
+4. Non-blocking usage log enqueueing
 
-### API Gateway
+Public route categories:
 
-| Component | Purpose |
-|-----------|---------|
-| **Fastify** | High-performance HTTP server |
-| **Auth Middleware** | API key validation, JWT sessions |
-| **Rate Limiter** | Per-key request throttling |
-| **Usage Tracker** | Request logging, metrics collection |
+- Tiles and TileJSON via Martin
+- Styles, sprites, glyphs, and fonts
+- Geocoding via Pelias with development fallback to Nominatim
+- Directions, isochrones, matching, matrices, and optimized trips via Valhalla
+- Elevation via external elevation provider
+- Static maps via optional render service
 
-### Backend Engines
+Console routes under `/console/*` require a session cookie.
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Martin** | Rust | Serves vector tiles from PMTiles |
-| **Geocoding** | External service | Geocoding and reverse search (separate project) |
-| **Valhalla** | C++ | Turn-by-turn routing |
+Internal routes under `/internal/*` are for platform-to-platform calls such as email delivery. They require `X-Internal-Secret` when `INTERNAL_API_SECRET` is configured, and production deployments must configure it.
 
-### Data Layer
+## Data Model
 
-| Component | Purpose |
-|-----------|---------|
-| **PostgreSQL** | User accounts, API keys, usage logs |
-| **Redis** | Rate limiting, caching |
-| **PMTiles** | Overture Maps data storage |
+The central data model uses `profiles` as a shared owner supertype:
 
----
+- `profiles.id = users.id` for user-owned resources
+- `profiles.id = organizations.id` for organization-owned resources
 
-## Request Flow
+Resources reference `profiles.id` through `ownerId` or `profileId`, which lets the same style/API-key/source/usage/audit flows work for individual users and organizations.
 
-### Tile Request
+Important tables:
 
-```
-1. Client: GET /tiles/v1/planisfy.basic/14/4823/6140
-2. Cloudflare Edge: Check cache
-   ├─ HIT: Return tile immediately (~10ms)
-   └─ MISS: Forward to Tile Worker
-3. Tile Worker: Fetch from R2 PMTiles
-4. Cloudflare: Cache for 7 days
-5. Client: Render tile
-```
+- `profiles`
+- `users`
+- `organizations`
+- `members`
+- `invitations`
+- `sessions`
+- `accounts`
+- `verifications`
+- `styles`
+- `style_versions`
+- `api_keys`
+- `tileset_sources`
+- `usage_logs`
+- `audit_events`
 
-### Geocoding Request
+## Auth
 
-```
-1. Client: GET /geocoding/v1/planisfy/places.json?q=Paris
-2. API Gateway: Validate API key, check rate limit
-3. Geocoding service: Search Overture index
-4. API Gateway: Format response, log usage
-5. Client: Display results
-```
+Planisfy uses better-auth for email/password sessions and organization membership. The auth package owns the better-auth instance and hooks.
 
-### Dashboard Request
+The API gateway validates better-auth session cookies directly against the sessions table for cross-origin console/API development ergonomics. API keys use SHA-256 hashes of the full key and can be scoped by API category.
 
-```
-1. Browser: GET /dashboard/api-keys
-2. Next.js Middleware: Check session
-3. Dashboard: Fetch from PostgreSQL
-4. Render: Server Component → HTML
-```
+## Console Data Access
 
----
+The console uses a hybrid model:
 
-## Key Architectural Decisions
+- Client-side console API calls go through `/api/v1/*` rewrites to the Hono API.
+- Server actions and server components may access the database directly for colocated dashboard operations.
+- Shared style mutation helpers live in `@planisfy/database` to keep server actions and API routes from drifting.
 
-### 1. PMTiles over MBTiles
+## Self-Hosted Runtime
 
-**Decision**: Use PMTiles for tile storage
+`infra/docker/docker-compose.yml` runs:
 
-**Why**:
-- Single file per tileset (vs thousands of files)
-- Cloud-native (S3, R2 compatible)
-- Random access via HTTP range requests
-- Better compression
+- API
+- Console
+- Admin
+- Docs
+- Marketing
+- PostgreSQL
+- Redis
+- Martin
+- Valhalla
+- Optional Traefik profile
 
-### 2. Cloudflare Workers + R2 for Tiles
+The compose stack assumes local geospatial data exists under `infra/docker/data/*`. Without that data, Martin and Valhalla may start but will not serve useful map/routing results.
 
-**Decision**: Serve tiles from edge with R2 backend
+## Current Limitations
 
-**Why**:
-- Zero egress fees (vs AWS S3)
-- 300+ edge locations (low latency)
-- Automatic caching
-- No server management
-
-### 3. Single Dashboard with RBAC
-
-**Decision**: One dashboard with role-based UI rendering
-
-**Why**:
-- Simpler deployment (self-hosters run one app)
-- Seamless user experience
-- Shared components
-- Easier maintenance
-
-### 4. better-auth over NextAuth.js
-
-**Decision**: Use better-auth for authentication
-
-**Why**:
-- Framework-agnostic (works with Fastify + Next.js)
-- Built-in API key generation
-- TypeScript-first
-- Simpler integration
-
-### 5. Drizzle ORM over Prisma
-
-**Decision**: Use Drizzle ORM
-
-**Why**:
-- Smaller bundle size (~50KB vs ~500KB)
-- SQL-like queries (familiar syntax)
-- Better performance
-- Full migration control
-
-### 6. Turborepo for Monorepo
-
-**Decision**: Use Turborepo + pnpm
-
-**Why**:
-- Fast incremental builds
-- Shared packages (types, utils, auth)
-- Parallel task execution
-- Better caching than Nx/Lerna
-
-### 7. Console Uses Server Actions, API Gateway for External Access
-
-**Decision**: The console app (Next.js) accesses the database directly via server actions and server components. The Fastify API gateway is exclusively for external SDK/API-key access.
-
-**Why**:
-- Avoids unnecessary network hop for dashboard operations
-- Server actions provide type-safe, colocated data fetching
-- Single source of truth for external API validation and rate limiting
-- Simpler architecture for a small team
-
----
-
-## Data Flow Diagrams
-
-### Authentication Flow
-
-```
-┌──────────┐                 ┌──────────────┐
-│  User    │                 │   Database   │
-└─────┬────┘                 └──────┬───────┘
-      │                              │
-      │ 1. POST /login               │
-      ├─────────────────────────────>│
-      │                              │ 2. Verify credentials
-      │                              │
-      │ 3. Return session token      │
-      │<─────────────────────────────│
-      │                              │
-      │ 4. Request with token        │
-      ├─────────────────────────────>│
-      │ 5. Validate token, return data│
-      │<─────────────────────────────│
-```
-
-### API Request Flow
-
-```
-┌──────────┐     ┌─────────────┐     ┌──────────┐
-│  Client  │────>│ API Gateway │────>│  Engine  │
-└──────────┘     └─────────────┘     └──────────┘
-                      │
-                      ▼
-                ┌──────────┐
-                │ Database │ (Log usage)
-                └──────────┘
-```
-
----
-
-## Deployment Architecture
-
-### Self-Hosted (Docker)
-
-```
-┌──────────────────────────────────────┐
-│         Docker Host / Server         │
-│                                      │
-│  ┌────────┐             ┌────────┐ │
-│  │ API    │             │Valhalla│ │
-│  │Gateway │             │        │ │
-│  └────┬───┘             └────────┘ │
-│       │                            │
-│  ┌────▼─────┐  ┌─────────────────┐ │
-│  │PostgreSQL│  │    Redis        │ │
-│  └──────────┘  └─────────────────┘ │
-└──────────────────────────────────────┘
-```
-
-### Cloudflare Hybrid
-
-```
-┌──────────────────┐      ┌─────────────────┐
-│ Cloudflare Edge  │      │  VPS / Origin   │
-│                   │      │                 │
-│  Tile Worker     │<────>│  API Gateway    │
-│  (Tiles only)    │      │  Valhalla, DB   │
-│                  │      │                 │
-└──────────────────┘      └─────────────────┘
-```
-
----
-
-## Security Architecture
-
-### Authentication Layers
-
-1. **API Keys** (for external API access)
-   - Bearer token or query parameter
-   - Stored as bcrypt hash in database
-   - Scopes limit access to specific endpoints
-
-2. **Sessions** (for dashboard)
-   - JWT-based session tokens
-   - HTTP-only cookies
-   - Role-based access control
-
-### Rate Limiting
-
-- **Per-key limits**: Redis-backed sliding window
-- **Global limits**: Protect infrastructure
-- **Tier-based**: Different limits per user role
-
-### Data Isolation
-
-- **User data**: Each user sees only their own data
-- **Admin override**: Admins can view all users
-- **API key scoping**: Keys limited to specific APIs
-
----
-
-## Scalability
-
-### Horizontal Scaling
-
-| Component | Scaling Strategy |
-|-----------|-----------------|
-| **API Gateway** | Stateless, add instances behind load balancer |
-| **Tile Worker** | Auto-scales with Cloudflare |
-| **Geocoding** | Scaled independently (separate project) |
-| **Valhalla** | Per-region deployments |
-| **Database** | Read replicas, partitioning |
-
-### Performance Targets
-
-| Metric | Target |
-|--------|--------|
-| Tile latency (cache hit) | <50ms |
-| Tile latency (cache miss) | <200ms |
-| Geocoding latency | <500ms |
-| Routing latency | <1000ms |
-| API Gateway P95 | <100ms |
-
----
-
-## Monitoring & Observability
-
-### Metrics Collected
-
-- Request count per endpoint
-- Response times (P50, P95, P99)
-- Error rates (4xx, 5xx)
-- Cache hit rates
-- Rate limit violations
-- Engine health status
-
-### Logging Strategy
-
-- **API Gateway**: Structured JSON logs
-- **Usage tracking**: Async写入 database
-- **Errors**: Centralized logging (Loki/ELK)
-- **Audit logs**: Admin actions
-
----
-
-## Technology Rationale
-
-### Why Rust for Martin?
-- Performance: 10x faster than Node.js tile servers
-- Memory safety: No memory leaks
-- Concurrency: Handle thousands of concurrent requests
-
-### Why C++ for Valhalla?
-- Performance: Routing algorithms are CPU-intensive
-- Maturity: Battle-tested by large mapping companies
-- Features: Multi-modal routing (car, bike, walk, transit)
-
-### Why PostgreSQL?
-- Relational data: Users, API keys, sessions
-- Transactions: ACID guarantees
-- JSONB: Flexible schema for logs
-- Partitioning: Efficient usage log storage
-
----
-
-## Future Architecture Considerations
-
-### Regional Deployment
-
-- Deploy engines closer to users
-- Data residency compliance (EU, APAC)
-- Reduce latency for routing/geocoding
-
-### Microservices Evolution
-
-- Extract tile serving completely
-- Separate billing service
-- Independent service scaling
-
-### Caching Strategy
-
-- Edge cache (Cloudflare) - 7 days
-- Application cache (Redis) - 1 hour
-- Database cache (PostgreSQL) - 5 minutes
-
----
-
-## Documentation
-
-- **RBAC Design**: [docs/RBAC_ARCHITECTURE.md](./docs/RBAC_ARCHITECTURE.md)
-- **Package READMEs**: See individual packages/ directories
-- **App READMEs**: See individual apps/ directories
-
----
-
-**Last Updated**: Architecture is evolving. Implementation details may vary.
+- Static map generation is a placeholder unless `STATIC_MAP_URL` is configured.
+- Geocoding requires a Pelias-compatible service for production quality.
+- Tile delivery through Cloudflare/R2 is planned but not fully wired in this repository.
+- Test coverage is early and focused on core platform contracts.
+- Billing, email, and storage paths require external provider credentials for production use.
+
+## Operational Notes
+
+- Use `pnpm check-types`, `pnpm lint`, and `pnpm test` before merging.
+- Use strong production values for `BETTER_AUTH_SECRET` and `INTERNAL_API_SECRET`.
+- Avoid exposing `/internal/*` routes without network controls and the shared secret.
+- Treat this architecture as alpha and evolving.
