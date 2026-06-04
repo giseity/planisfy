@@ -35,6 +35,7 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - REDIS_URL=redis://redis:6379
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
       - MARTIN_URL=http://martin:3000
       - GEOCODING_URL=${GEOCODING_URL:-}
       - VALHALLA_URL=http://valhalla:8002
@@ -58,6 +59,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
       - BETTER_AUTH_URL=http://localhost:3001/api/auth
       - NEXT_PUBLIC_APP_URL=http://localhost:3001
       - RESEND_API_KEY=${RESEND_API_KEY:-}
@@ -79,6 +81,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
       - BETTER_AUTH_URL=http://localhost:3003/api/auth
       - NEXT_PUBLIC_APP_URL=http://localhost:3003
       - NODE_ENV=production

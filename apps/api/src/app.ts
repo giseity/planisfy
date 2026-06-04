@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import { requestLogger } from "./lib/logger";
 import { authMiddleware, dualAuthMiddleware, type AuthEnv } from "./middleware/auth";
 import { apiKeyMiddleware } from "./middleware/api-key";
+import { internalAuthMiddleware } from "./middleware/internal-auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { usageLogMiddleware } from "./middleware/usage-log";
 import { healthRoute } from "./routes/health";
@@ -85,7 +86,8 @@ app.route("/", geocodingRoute);
 app.route("/", elevationRoute);
 app.route("/", staticMapRoute);
 
-// ── Internal routes (no auth — called by platform services only) ─────────────
+// ── Internal routes (called by platform services only) ───────────────────────
+app.use("/internal/*", internalAuthMiddleware);
 app.route("/", emailRoute);
 
 // ── Protected routes (require session cookie) ───────────────────────────────
