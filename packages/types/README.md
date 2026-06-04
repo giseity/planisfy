@@ -1,68 +1,26 @@
 # Planisfy Types
 
-Shared TypeScript type definitions for the Planisfy platform.
+Shared TypeScript types for broad platform concepts.
 
-> **Implementation Status**: 🟡 Package.json created, implementation pending
+## Owns
 
----
+- Lightweight cross-package type exports.
+- Plan and quota types.
+- Inferred database model types exported from `@planisfy/database`.
 
-## Overview
+## Does Not Own
 
-Provides type safety across the monorepo:
-- API request/response shapes
-- Database model types
-- Engine-specific types
-- Utility type helpers
+- Event payload contracts; those belong in `@planisfy/events`.
+- Storage key contracts; those belong in `@planisfy/storage-paths`.
+- MapLibre style lifecycle helpers; those belong in `@planisfy/style-spec`.
 
----
+## Direction
 
-## Benefits
+This package should stay narrow. Prefer domain-specific contract packages over turning `@planisfy/types` into a broad bucket for every shared type.
 
-- ✅ Type safety between API and Dashboard
-- ✅ Single source of truth for data structures
-- ✅ Better IDE autocomplete
-- ✅ Fewer runtime errors
+## Important Commands
 
----
-
-## Categories
-
-| Category | Purpose |
-|----------|---------|
-| **API Types** | Request/response shapes for all endpoints |
-| **Database Types** | Generated from Drizzle |
-| **Engine Types** | Geocoding, Valhalla, Martin types |
-| **Utility Types** | Common type helpers |
-
----
-
-## Usage
-
-```typescript
-import type { GeocodingRequest } from '@planisfy/types';
-
-const request: GeocodingRequest = {
-  query: search,
-  proximity: [lon, lat],
-};
+```bash
+pnpm -F @planisfy/types check-types
+pnpm -F @planisfy/types lint
 ```
-
----
-
-## Type Categories
-
-### API Types
-- `tiles.ts` - Tile coordinates, requests
-- `geocoding.ts` - Forward/reverse geocoding
-- `directions.ts` - Routing profiles, routes
-- `common.ts` - Shared API types
-
-### Database Types
-- `user.ts` - User, role types
-- `api-key.ts` - API key types
-- `usage-log.ts` - Usage tracking types
-
-### Engine Types
-- `geocoding.ts` - Geocoding service response
-- `valhalla.ts` - Valhalla routing response
-- `martin.ts` - Martin tile server types

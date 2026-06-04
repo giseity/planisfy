@@ -1,66 +1,31 @@
 # Planisfy Utils
 
-Shared utility functions for the Planisfy platform.
+Pure shared utilities for the Planisfy monorepo.
 
-> **Implementation Status**: 🟡 Package.json created, implementation pending
+## Owns
 
----
+- Small framework-free helper functions.
+- Utilities that have no database, Redis, HTTP, storage, or frontend dependencies.
 
-## Overview
+## Does Not Own
 
-Provides:
-- Coordinate math (conversions, bounds)
-- Tile math (XYZ coordinates, mercator projection)
-- Validation (input validators with Zod)
-- Formatting (response formatters)
+- Service clients.
+- Storage providers.
+- Billing integrations.
+- Event schemas.
+- Style lifecycle logic.
 
----
+## Current Exports
 
-## Categories
+- `usage-writer` helpers used by the API usage pipeline.
 
-| Category | Purpose |
-|----------|---------|
-| **Coordinates** | Lat/lng conversions, bounds calculations |
-| **Tiles** | Tile coordinate functions, mercator projection |
-| **Validation** | Input validators with Zod schemas |
-| **Formatting** | Response formatters for API outputs |
+## Important Commands
 
----
-
-## Usage
-
-```typescript
-import { lngLatToTile, TileCoordsSchema } from '@planisfy/utils';
-
-// Convert coordinates
-const tile = lngLatToTile([lon, lat], zoom);
-
-// Validate input
-const coords = TileCoordsSchema.parse({ z, x, y });
+```bash
+pnpm -F @planisfy/utils check-types
+pnpm -F @planisfy/utils lint
 ```
 
----
+## Gotchas
 
-## Key Functions
-
-### Coordinates
-- `lngLatToTile()` - Convert coordinates to tile
-- `tileToLngLat()` - Convert tile to coordinates
-- `boundsFromCenter()` - Calculate bounding box
-- `pointInBounds()` - Check if point in bounds
-
-### Tiles
-- `validTile()` - Validate tile coordinates
-- `parentTile()` - Get parent tile
-- `childTiles()` - Get child tiles
-
-### Validation
-- `TileCoordsSchema` - Zod schema for tiles
-- `GeocodingRequestSchema` - Zod schema for geocoding
-- `DirectionsRequestSchema` - Zod schema for routing
-
----
-
-## See Also
-
-- [Packages/types](../types/README.md) - TypeScript types
+- If a helper needs IO, provider credentials, or app configuration, it probably belongs in a domain package or app-specific `lib/` directory instead.

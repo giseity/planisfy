@@ -1,82 +1,52 @@
 # Planisfy Database
 
-Shared database schema, migrations, and client using Drizzle ORM.
+Drizzle schema, relations, migrations, database client, and shared server-side data helpers.
 
-> **Implementation Status**: 🟡 Package.json created, implementation pending
+## Owns
 
----
+- PostgreSQL schema definitions.
+- Drizzle relations.
+- Migrations under `drizzle/`.
+- Shared database helpers such as style creation and duplication.
+- The identity, resource, usage, audit, and alpha source models.
 
-## Overview
+## Current Alpha Tables
 
-Provides:
-- Database schema definitions
-- Type-safe queries
-- Migration management
-- Seed scripts
+- `profiles`
+- `users`
+- `organizations`
+- `members`
+- `invitations`
+- `sessions`
+- `accounts` for Better Auth provider credentials
+- `verifications`
+- `styles`
+- `style_versions`
+- `api_keys`
+- `tileset_sources`
+- `usage_logs`
+- `audit_events`
 
----
+## Target Direction
 
-## Why Drizzle ORM?
+The restructuring plan resets the schema around:
 
-| Feature | Drizzle | Prisma |
-|---------|---------|--------|
-| Bundle size | ~50KB | ~500KB |
-| Type safety | ✅ | ✅ |
-| Performance | Faster | Slower |
-| SQL-like queries | ✅ | ❌ |
-| Migration control | Full | Partial |
+- `accounts` as the canonical user/org owner anchor.
+- `oauth_accounts` for Better Auth provider credentials.
+- `uploads`, `datasets`, `tilesets`, `tileset_versions`, `processing_jobs`, `event_outbox`, `storage_objects`, and explicit publication tables.
 
----
-
-## Tables
-
-| Table | Purpose |
-|-------|---------|
-| `users` | User accounts with RBAC roles |
-| `accounts` | OAuth provider accounts |
-| `sessions` | User sessions |
-| `api_keys` | API keys with scopes |
-| `usage_logs` | Request tracking |
-| `audit_logs` | Admin action logging |
-
----
-
-## Role-Based Access Control
-
-Users table includes `role` field for RBAC:
-- `user` - Regular user
-- `admin` - Instance administrator
-- `owner` - Billing contact (future)
-
----
-
-## Usage
-
-```typescript
-import { db } from '@planisfy/database';
-import { users } from '@planisfy/database/drizzle/schema';
-import { eq } from 'drizzle-orm';
-
-// Query with join
-const user = await db.query.users.findFirst({
-  where: eq(users.email, 'user@example.com'),
-  with: {
-    apiKeys: true,
-  },
-});
-```
-
----
-
-## Environment Variables
+## Important Commands
 
 ```bash
-DATABASE_URL=postgresql://user:pass@host:5432/planisfy
+pnpm -F @planisfy/database check-types
+pnpm -F @planisfy/database lint
+pnpm -F @planisfy/database db:generate
+pnpm -F @planisfy/database db:migrate
+pnpm -F @planisfy/database db:push
 ```
 
----
+## Gotchas
 
-## See Also
-
-- [Drizzle Docs](https://orm.drizzle.team/)
-- [RBAC Architecture](../../docs/RBAC_ARCHITECTURE.md)
+- Soft-delete-aware uniqueness should use partial unique indexes with `WHERE deleted_at IS NULL`.
+- Generic ownership should go through the shared owner anchor, not through separate user/org joins.
+- The database package should not import frontend code, storage clients, Redis, or HTTP clients.
