@@ -1,78 +1,95 @@
 import { relations } from "drizzle-orm";
 import {
-  profiles,
+  accounts,
   users,
   organizations,
   members,
   invitations,
   sessions,
-  accounts,
+  oauthAccounts,
   styles,
   styleVersions,
+  stylePublications,
   apiKeys,
   tilesetSources,
+  uploads,
+  datasets,
+  datasetVersions,
+  tilesets,
+  tilesetVersions,
+  processingJobs,
+  processingJobLogs,
+  eventOutbox,
+  storageObjects,
+  basemapReleases,
   usageLogs,
+  usageRollups,
   auditEvents,
+  billingCustomers,
+  plans,
+  subscriptions,
+  billingTransactions,
 } from "./schema";
 
 // ============================================================================
-// Profile relations (supertype — identity shared with user or org)
+// Account relations (canonical identity anchor)
 // ============================================================================
 
-export const profilesRelations = relations(profiles, ({ one, many }) => ({
-  // A profile is either a user or an org (never both).
-  // profile.id = user.id OR profile.id = organization.id.
+export const accountsRelations = relations(accounts, ({ one, many }) => ({
   user: one(users, {
-    fields: [profiles.id],
+    fields: [accounts.id],
     references: [users.id],
   }),
   organization: one(organizations, {
-    fields: [profiles.id],
+    fields: [accounts.id],
     references: [organizations.id],
   }),
 
-  // Resources owned by this profile
   ownedStyles: many(styles),
-  ownedTilesets: many(tilesetSources),
+  ownedTilesetSources: many(tilesetSources),
   apiKeys: many(apiKeys),
+  uploads: many(uploads),
+  datasets: many(datasets),
+  tilesets: many(tilesets),
+  processingJobs: many(processingJobs),
+  storageObjects: many(storageObjects),
   usageLogs: many(usageLogs),
+  usageRollups: many(usageRollups),
   auditEvents: many(auditEvents),
+  billingCustomers: many(billingCustomers),
+  subscriptions: many(subscriptions),
+  billingTransactions: many(billingTransactions),
 }));
 
+// Transitional export for alpha callers. New code should use accountsRelations.
+export const profilesRelations = accountsRelations;
+
 // ============================================================================
-// User relations
+// User and organization relations
 // ============================================================================
 
 export const usersRelations = relations(users, ({ one, many }) => ({
-  profile: one(profiles, {
+  account: one(accounts, {
     fields: [users.id],
-    references: [profiles.id],
+    references: [accounts.id],
   }),
   memberships: many(members),
   sessions: many(sessions),
-  authAccounts: many(accounts),
+  oauthAccounts: many(oauthAccounts),
   sentInvitations: many(invitations),
 }));
-
-// ============================================================================
-// Organization relations
-// ============================================================================
 
 export const organizationsRelations = relations(
   organizations,
   ({ one, many }) => ({
-    profile: one(profiles, {
+    account: one(accounts, {
       fields: [organizations.id],
-      references: [profiles.id],
+      references: [accounts.id],
     }),
     members: many(members),
     invitations: many(invitations),
   })
 );
-
-// ============================================================================
-// Member relations
-// ============================================================================
 
 export const membersRelations = relations(members, ({ one }) => ({
   user: one(users, {
@@ -84,10 +101,6 @@ export const membersRelations = relations(members, ({ one }) => ({
     references: [organizations.id],
   }),
 }));
-
-// ============================================================================
-// Invitation relations
-// ============================================================================
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({
   organization: one(organizations, {
@@ -111,9 +124,9 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
   }),
 }));
 
-export const accountsRelations = relations(accounts, ({ one }) => ({
+export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
   user: one(users, {
-    fields: [accounts.userId],
+    fields: [oauthAccounts.userId],
     references: [users.id],
   }),
 }));
@@ -123,14 +136,15 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
 // ============================================================================
 
 export const stylesRelations = relations(styles, ({ one, many }) => ({
-  owner: one(profiles, {
+  owner: one(accounts, {
     fields: [styles.ownerId],
-    references: [profiles.id],
+    references: [accounts.id],
   }),
   versions: many(styleVersions),
+  publications: many(stylePublications),
 }));
 
-export const styleVersionsRelations = relations(styleVersions, ({ one }) => ({
+export const styleVersionsRelations = relations(styleVersions, ({ one, many }) => ({
   style: one(styles, {
     fields: [styleVersions.styleId],
     references: [styles.id],
@@ -139,12 +153,28 @@ export const styleVersionsRelations = relations(styleVersions, ({ one }) => ({
     fields: [styleVersions.createdBy],
     references: [users.id],
   }),
+  publications: many(stylePublications),
+}));
+
+export const stylePublicationsRelations = relations(stylePublications, ({ one }) => ({
+  style: one(styles, {
+    fields: [stylePublications.styleId],
+    references: [styles.id],
+  }),
+  styleVersion: one(styleVersions, {
+    fields: [stylePublications.styleVersionId],
+    references: [styleVersions.id],
+  }),
+  account: one(accounts, {
+    fields: [stylePublications.accountId],
+    references: [accounts.id],
+  }),
 }));
 
 export const apiKeysRelations = relations(apiKeys, ({ one, many }) => ({
-  owner: one(profiles, {
+  owner: one(accounts, {
     fields: [apiKeys.ownerId],
-    references: [profiles.id],
+    references: [accounts.id],
   }),
   usageLogs: many(usageLogs),
 }));
@@ -152,27 +182,150 @@ export const apiKeysRelations = relations(apiKeys, ({ one, many }) => ({
 export const tilesetSourcesRelations = relations(
   tilesetSources,
   ({ one }) => ({
-    owner: one(profiles, {
+    owner: one(accounts, {
       fields: [tilesetSources.ownerId],
-      references: [profiles.id],
+      references: [accounts.id],
     }),
   })
 );
+
+export const uploadsRelations = relations(uploads, ({ one }) => ({
+  account: one(accounts, {
+    fields: [uploads.accountId],
+    references: [accounts.id],
+  }),
+  storageObject: one(storageObjects, {
+    fields: [uploads.storageObjectId],
+    references: [storageObjects.id],
+  }),
+}));
+
+export const datasetsRelations = relations(datasets, ({ one, many }) => ({
+  account: one(accounts, {
+    fields: [datasets.accountId],
+    references: [accounts.id],
+  }),
+  versions: many(datasetVersions),
+}));
+
+export const datasetVersionsRelations = relations(datasetVersions, ({ one }) => ({
+  dataset: one(datasets, {
+    fields: [datasetVersions.datasetId],
+    references: [datasets.id],
+  }),
+  storageObject: one(storageObjects, {
+    fields: [datasetVersions.storageObjectId],
+    references: [storageObjects.id],
+  }),
+}));
+
+export const tilesetsRelations = relations(tilesets, ({ one, many }) => ({
+  account: one(accounts, {
+    fields: [tilesets.accountId],
+    references: [accounts.id],
+  }),
+  versions: many(tilesetVersions),
+}));
+
+export const tilesetVersionsRelations = relations(tilesetVersions, ({ one }) => ({
+  tileset: one(tilesets, {
+    fields: [tilesetVersions.tilesetId],
+    references: [tilesets.id],
+  }),
+  artifactStorageObject: one(storageObjects, {
+    fields: [tilesetVersions.artifactStorageObjectId],
+    references: [storageObjects.id],
+  }),
+}));
+
+// ============================================================================
+// Async, storage, usage, audit, billing
+// ============================================================================
+
+export const processingJobsRelations = relations(processingJobs, ({ one, many }) => ({
+  account: one(accounts, {
+    fields: [processingJobs.accountId],
+    references: [accounts.id],
+  }),
+  logs: many(processingJobLogs),
+}));
+
+export const processingJobLogsRelations = relations(processingJobLogs, ({ one }) => ({
+  job: one(processingJobs, {
+    fields: [processingJobLogs.jobId],
+    references: [processingJobs.id],
+  }),
+}));
+
+export const eventOutboxRelations = relations(eventOutbox, () => ({}));
+
+export const storageObjectsRelations = relations(storageObjects, ({ one }) => ({
+  account: one(accounts, {
+    fields: [storageObjects.accountId],
+    references: [accounts.id],
+  }),
+}));
+
+export const basemapReleasesRelations = relations(basemapReleases, ({ one }) => ({
+  buildJob: one(processingJobs, {
+    fields: [basemapReleases.buildJobId],
+    references: [processingJobs.id],
+  }),
+}));
 
 export const usageLogsRelations = relations(usageLogs, ({ one }) => ({
   apiKey: one(apiKeys, {
     fields: [usageLogs.apiKeyId],
     references: [apiKeys.id],
   }),
-  profile: one(profiles, {
+  account: one(accounts, {
     fields: [usageLogs.profileId],
-    references: [profiles.id],
+    references: [accounts.id],
+  }),
+}));
+
+export const usageRollupsRelations = relations(usageRollups, ({ one }) => ({
+  account: one(accounts, {
+    fields: [usageRollups.accountId],
+    references: [accounts.id],
   }),
 }));
 
 export const auditEventsRelations = relations(auditEvents, ({ one }) => ({
-  profile: one(profiles, {
+  account: one(accounts, {
     fields: [auditEvents.profileId],
-    references: [profiles.id],
+    references: [accounts.id],
   }),
 }));
+
+export const billingCustomersRelations = relations(billingCustomers, ({ one }) => ({
+  account: one(accounts, {
+    fields: [billingCustomers.accountId],
+    references: [accounts.id],
+  }),
+}));
+
+export const plansRelations = relations(plans, ({ many }) => ({
+  subscriptions: many(subscriptions),
+}));
+
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+  account: one(accounts, {
+    fields: [subscriptions.accountId],
+    references: [accounts.id],
+  }),
+  plan: one(plans, {
+    fields: [subscriptions.planId],
+    references: [plans.id],
+  }),
+}));
+
+export const billingTransactionsRelations = relations(
+  billingTransactions,
+  ({ one }) => ({
+    account: one(accounts, {
+      fields: [billingTransactions.accountId],
+      references: [accounts.id],
+    }),
+  })
+);

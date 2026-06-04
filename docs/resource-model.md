@@ -2,7 +2,7 @@
 
 ## Current
 
-Planisfy currently has users, organizations, profiles, styles, style versions, API keys, tileset sources, usage logs, and audit events.
+Planisfy now uses `accounts` as the canonical owner anchor for both users and organizations. A temporary `profiles` export remains in the database package for alpha API compatibility, but new code should use account naming.
 
 ## Target Identity
 

@@ -4,12 +4,12 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import {
   db,
   users,
-  profiles,
+  accounts,
   organizations,
   members,
   invitations,
   sessions,
-  accounts,
+  oauthAccounts,
   verifications,
 } from "@planisfy/database";
 import { eq } from "drizzle-orm";
@@ -48,7 +48,7 @@ export const auth = betterAuth({
     schema: {
       user: users,
       session: sessions,
-      account: accounts,
+      account: oauthAccounts,
       verification: verifications,
       organization: organizations,
       member: members,
@@ -91,7 +91,7 @@ export const auth = betterAuth({
             throw new Error("Organization slug and name are required");
           }
 
-          // Check for duplicate slug before creating the profile,
+          // Check for duplicate slug before creating the account,
           // since better-auth's org insert happens *after* this hook.
           const [existing] = await db
             .select({ id: organizations.id })
@@ -102,12 +102,12 @@ export const auth = betterAuth({
             throw new Error("Organization with this slug already exists");
           }
 
-          // Generate a shared ID for both profile and organization
+          // Generate a shared ID for both account and organization
           const id = randomUUID();
           const handle = generateHandle(organization.name);
 
-          // Create the profile supertype row first
-          await db.insert(profiles).values({
+          // Create the account anchor row first
+          await db.insert(accounts).values({
             id,
             type: "ORGANIZATION",
             handle,
@@ -115,7 +115,7 @@ export const auth = betterAuth({
             avatarUrl: organization.logo ?? null,
           });
 
-          // Set the org's ID to match the profile
+          // Set the org's ID to match the account
           return {
             data: { ...organization, id },
           };
@@ -185,7 +185,7 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (userData) => {
-          // Check for duplicate email before creating the profile,
+          // Check for duplicate email before creating the account,
           // since better-auth's user insert happens *after* this hook
           // and we can't catch its constraint violations from here.
           const [existing] = await db
@@ -202,11 +202,11 @@ export const auth = betterAuth({
             | undefined;
           const handle = rawHandle ?? generateHandle(userData.name);
 
-          // Generate a shared ID for both profile and user
+          // Generate a shared ID for both account and user
           const id = randomUUID();
 
-          // Create the profile first (supertype row)
-          await db.insert(profiles).values({
+          // Create the account anchor row first
+          await db.insert(accounts).values({
             id,
             type: "USER",
             handle,
@@ -214,7 +214,7 @@ export const auth = betterAuth({
             avatarUrl: userData.image ?? null,
           });
 
-          // Set the user's ID to match the profile, strip handle
+          // Set the user's ID to match the account, strip handle
           const { handle: _h, ...userFields } = userData as Record<
             string,
             unknown
