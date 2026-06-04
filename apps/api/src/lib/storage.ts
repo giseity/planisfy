@@ -6,12 +6,25 @@ import { join, dirname } from "path";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 
+export interface StoredObject {
+  key: string;
+  url: string;
+  size: number;
+  contentType: string;
+}
+
+export interface StorageProviderInfo {
+  provider: string;
+  bucket: string;
+}
+
 export interface StorageProvider {
-  upload(key: string, data: Buffer | Readable, contentType?: string): Promise<{ url: string; size: number }>;
+  upload(key: string, data: Buffer | Readable, contentType?: string): Promise<StoredObject>;
   download(key: string): Promise<Buffer>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
   getUrl(key: string): string;
+  getInfo(): StorageProviderInfo;
 }
 
 // ── S3-compatible storage (production) ──────────────────────────────────────
@@ -33,8 +46,9 @@ export class S3Storage implements StorageProvider {
     this.publicUrl = process.env.S3_PUBLIC_URL;
   }
 
-  async upload(key: string, data: Buffer | Readable, contentType?: string): Promise<{ url: string; size: number }> {
+  async upload(key: string, data: Buffer | Readable, contentType?: string): Promise<StoredObject> {
     const body = Buffer.isBuffer(data) ? data : await streamToBuffer(data);
+    const resolvedContentType = contentType || "application/octet-stream";
 
     const url = `${this.endpoint || `https://s3.${this.region}.amazonaws.com`}/${this.bucket}/${key}`;
     const now = new Date();
@@ -45,7 +59,7 @@ export class S3Storage implements StorageProvider {
       method: "PUT",
       body: body as unknown as BodyInit,
       headers: {
-        "Content-Type": contentType || "application/octet-stream",
+        "Content-Type": resolvedContentType,
         "Content-Length": String(body.length),
         ...(this.accessKeyId ? { "x-amz-date": dateStr } : {}),
       },
@@ -56,7 +70,12 @@ export class S3Storage implements StorageProvider {
       throw new Error(`S3 upload failed: ${res.status} ${err}`);
     }
 
-    return { url: this.getUrl(key), size: body.length };
+    return {
+      key,
+      url: this.getUrl(key),
+      size: body.length,
+      contentType: resolvedContentType,
+    };
   }
 
   async download(key: string): Promise<Buffer> {
@@ -81,6 +100,13 @@ export class S3Storage implements StorageProvider {
     if (this.publicUrl) return `${this.publicUrl}/${key}`;
     return `${this.endpoint || `https://s3.${this.region}.amazonaws.com`}/${this.bucket}/${key}`;
   }
+
+  getInfo(): StorageProviderInfo {
+    return {
+      provider: process.env.STORAGE_PROVIDER || "s3",
+      bucket: this.bucket,
+    };
+  }
 }
 
 // ── Local filesystem storage (development) ──────────────────────────────────
@@ -88,31 +114,44 @@ export class S3Storage implements StorageProvider {
 export class LocalStorage implements StorageProvider {
   private basePath: string;
   private baseUrl: string;
+  private bucket: string;
 
   constructor() {
     this.basePath = process.env.LOCAL_STORAGE_PATH || join(process.cwd(), ".storage");
     this.baseUrl = process.env.LOCAL_STORAGE_URL || "http://localhost:4000/storage";
+    this.bucket = process.env.LOCAL_STORAGE_BUCKET || "local";
 
     if (!existsSync(this.basePath)) {
       mkdirSync(this.basePath, { recursive: true });
     }
   }
 
-  async upload(key: string, data: Buffer | Readable, _contentType?: string): Promise<{ url: string; size: number }> {
+  async upload(key: string, data: Buffer | Readable, contentType?: string): Promise<StoredObject> {
     const filePath = join(this.basePath, key);
     const dir = dirname(filePath);
+    const resolvedContentType = contentType || "application/octet-stream";
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
     if (Buffer.isBuffer(data)) {
       const { writeFile } = await import("fs/promises");
       await writeFile(filePath, data);
-      return { url: this.getUrl(key), size: data.length };
+      return {
+        key,
+        url: this.getUrl(key),
+        size: data.length,
+        contentType: resolvedContentType,
+      };
     }
 
     const writable = createWriteStream(filePath);
     await pipeline(data, writable);
     const stats = statSync(filePath);
-    return { url: this.getUrl(key), size: stats.size };
+    return {
+      key,
+      url: this.getUrl(key),
+      size: stats.size,
+      contentType: resolvedContentType,
+    };
   }
 
   async download(key: string): Promise<Buffer> {
@@ -131,6 +170,13 @@ export class LocalStorage implements StorageProvider {
 
   getUrl(key: string): string {
     return `${this.baseUrl}/${key}`;
+  }
+
+  getInfo(): StorageProviderInfo {
+    return {
+      provider: "local",
+      bucket: this.bucket,
+    };
   }
 }
 

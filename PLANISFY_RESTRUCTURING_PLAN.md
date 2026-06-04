@@ -9,7 +9,7 @@ This file is now the running restructuring log. Each completed milestone should 
 | Phase 0: Documentation and Truth Reset | Complete | Added durable docs scaffold, unignored root `docs/`, corrected stale implemented package/app docs, and documented alpha Polar references as billing work to replace. |
 | Phase 1: Package Boundary Setup | Complete | Added pure contract packages for events, storage paths, style lifecycle helpers, logger, and a Vitest workspace. Lockfile importers were updated manually because registry DNS failures prevented `pnpm install` from completing. |
 | Phase 2: Database and Resource Model Reset | Complete | Reset schema around the Geobble-style `accounts` identity anchor, renamed Better Auth provider credentials to `oauth_accounts`, added target resource/job/storage/billing tables, and kept temporary `profiles`/`profileId` compatibility exports for existing API callers. Drizzle snapshot regeneration remains pending until dependencies can be installed. |
-| Phase 3: Async and Storage Backbone | Not started | Pending outbox, jobs, storage ledger, and provider alignment. |
+| Phase 3: Async and Storage Backbone | Complete | Added API helpers for typed outbox events, processing job state/logs, and storage ledger writes. Source uploads now use `@planisfy/storage-paths`, create upload/storage/job/outbox records, and keep BullMQ as transport while the worker split lands. |
 | Phase 4: Worker Split | Not started | Pending `apps/worker-geodata`. |
 | Phase 5: Frontend and API DX | Not started | Pending typed client/style package adoption in console/admin. |
 | Phase 6: Self-Host Product Proof | Not started | Pending compose updates, seeds, health, and smoke test. |
