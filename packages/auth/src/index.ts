@@ -1,5 +1,5 @@
 // Don't use this barrel — import specific entrypoints instead:
-//   @planisfy/auth/auth      — server-side auth instance (Fastify, server actions)
+//   @planisfy/auth/auth      - server-side auth instance (Hono, server actions)
 //   @planisfy/auth/client    — React auth client (browser only)
 //   @planisfy/auth/helpers   — server-side helpers (getActiveOwnerId, requireOrgRole)
 //

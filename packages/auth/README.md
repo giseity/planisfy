@@ -1,93 +1,39 @@
 # Planisfy Auth
 
-Shared authentication package using **better-auth** for the Planisfy platform.
+Shared Better Auth configuration and helpers for Planisfy.
 
-> **Implementation Status**: 🟡 Package.json created, implementation pending
+## Owns
 
----
+- Better Auth server configuration.
+- Email/password auth.
+- Session and organization plugin setup.
+- User and organization creation hooks.
+- Shared auth client exports for frontend apps.
+- Helper functions for active profile/account context.
 
-## Overview
+## Does Not Own
 
-Provides unified authentication across the monorepo:
-- Email/password authentication
-- API key generation and validation
-- Session management (JWT)
-- Role-based access control (RBAC)
-- Password reset via email
-- Works across Fastify (API) + Next.js (Dashboard)
+- API key validation; that lives in `apps/api`.
+- Billing enforcement.
+- Admin authorization policy beyond auth/session primitives.
 
----
+## Identity Anchor
 
-## Why better-auth?
+The current alpha schema uses `profiles` as the shared owner anchor:
 
-| Feature | better-auth | NextAuth.js |
-|---------|-------------|-------------|
-| Monorepo-friendly | ✅ | ⚠️ Next.js only |
-| Framework-agnostic | ✅ | ❌ |
-| Built-in API keys | ✅ | ❌ |
-| TypeScript-first | ✅ | Partial |
+- `profiles.id = users.id`
+- `profiles.id = organizations.id`
 
----
+The restructuring plan renames this anchor to `accounts` and renames Better Auth's OAuth provider table to `oauth_accounts`, following the Geobble pattern.
 
-## Key Features
-
-### Authentication
-- Email/password with bcrypt (12 rounds)
-- Session management (JWT cookies)
-- API key generation (format: `plan_XXXXXXXX_...`)
-- API key validation
-
-### Role Management
-- User roles: `user`, `admin`, `owner`
-- Role hierarchy for permissions
-- Role stored in session for quick access
-
----
-
-## Usage
-
-### In Fastify (API)
-
-```typescript
-import { auth } from "@planisfy/auth";
-
-// API key validation
-const result = await auth.api.validateApiKey(apiKey);
-```
-
-### In Next.js (Dashboard)
-
-```typescript
-import { auth } from "@planisfy/auth";
-
-// Get session
-const session = await auth();
-
-// Check user role
-if (session?.user.role === "admin") {
-  // Admin logic
-}
-```
-
----
-
-## Environment Variables
+## Important Commands
 
 ```bash
-BETTER_AUTH_SECRET=your-secret-key-min-32-chars
-BETTER_AUTH_URL=http://localhost:3001/auth
-
-# OAuth (optional)
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-
-# Email
-RESEND_API_KEY=re_...
+pnpm -F @planisfy/auth check-types
+pnpm -F @planisfy/auth lint
 ```
 
----
+## Gotchas
 
-## See Also
-
-- [RBAC Architecture](../../docs/RBAC_ARCHITECTURE.md)
-- [Database Package](../database/README.md)
+- Better Auth inserts the final `users` or `organizations` row after `databaseHooks.*.create.before`; the hook must create the shared anchor row first and return the generated ID.
+- Email delivery is best effort in local development and depends on `RESEND_API_KEY`.

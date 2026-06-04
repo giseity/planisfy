@@ -1,119 +1,52 @@
 # Planisfy API
 
-Mapbox-compatible API gateway built with Fastify.
+Hono API gateway for Planisfy's public map API, console API, auth handler, and internal platform routes.
 
-> **Implementation Status**: 🟡 Package.json created, implementation pending
+## Owns
 
----
+- Public map route groups for styles, tiles, fonts, geocoding, routing, elevation, and static maps.
+- Console API routes for styles, API keys, sources, usage, audit, billing status, and profile settings.
+- API key validation, session fallback, scope checks, rate limits, quota checks, and usage logging.
+- Internal platform routes protected by `X-Internal-Secret`.
+- Durable backend mutations once the restructuring moves work through jobs and outbox events.
 
-## Overview
+## Does Not Own
 
-The API is the central gateway that:
-- Accepts Mapbox-compatible requests
-- Validates API keys and enforces rate limits
-- Routes requests to appropriate backend engines
-- Formats responses to match Mapbox specifications
-- Tracks usage for analytics
+- Heavy geodata processing.
+- Studio client state.
+- Durable storage path construction once `@planisfy/storage-paths` exists.
+- Event payload schemas once `@planisfy/events` exists.
 
----
-
-## Endpoints
-
-| API | Endpoint | Purpose | Engine |
-|-----|----------|---------|--------|
-| **Vector Tiles** | `GET /tiles/v1/{style}/{z}/{x}/{y}` | Serve vector tiles | Martin (Rust) |
-| **Style JSON** | `GET /styles/v1/{username}/{style_id}` | Map style specification | Static/API |
-| **Sprites** | `GET /styles/v1/{username}/{style_id}/sprite{@2x}` | Map icons | R2/API |
-| **Glyphs** | `GET /fonts/v1/{fontstack}/{range}.pbf` | Font glyphs | R2 |
-| **Geocoding** | `GET /geocoding/v1/planisfy/places` | Address search | Geocoding service |
-| **Directions** | `GET /directions/v1/planisfy/{profile}/{coords}` | Routing | Valhalla |
-
----
-
-## Key Features
-
-### Authentication
-- API key validation (Bearer token or query param)
-- Session validation for dashboard
-- Rate limiting per key (Redis-backed)
-- Scope enforcement (e.g., key limited to tiles only)
-
-### Request Processing
-- Input validation (coordinate bounds, zoom levels)
-- Request transformation (Mapbox format → engine format)
-- Response transformation (engine format → Mapbox format)
-- Error handling and standardization
-
-### Usage Tracking
-- Async logging to PostgreSQL
-- Request counts per endpoint
-- Response time metrics
-- Error rate tracking
-
----
-
-## Tech Stack
-
-| Component | Technology | Why? |
-|-----------|-----------|------|
-| **Framework** | Fastify | High performance, TypeScript-first |
-| **Auth** | better-auth | API key generation/validation built-in |
-| **Rate Limiting** | Redis + fastify-rate-limit | Sliding window, distributed |
-| **Database** | Drizzle ORM + PostgreSQL | Type-safe, async queries |
-| **Validation** | Zod | Schema validation, TypeScript inference |
-
----
-
-## Architecture
-
-```
-Request → API Gateway → [Auth Check] → [Rate Limit]
-                ↓
-        [Route to Engine] → [Format Response]
-                ↓
-        [Log Usage] → Response
-```
-
----
-
-## Development
+## Important Commands
 
 ```bash
-pnpm install
-pnpm dev      # Port 3003
-pnpm check-types
-pnpm lint
-pnpm build
+pnpm -F api dev
+pnpm -F api check-types
+pnpm -F api lint
+pnpm -F api test
+pnpm -F api build
 ```
 
----
+## Local Runtime
 
-## Environment Variables
+Default port: `4000`.
 
-```bash
-DATABASE_URL=postgresql://user:pass@host:5432/planisfy
-REDIS_URL=redis://localhost:6379
-BETTER_AUTH_SECRET=your-secret-key
-MARTIN_URL=http://localhost:3005
-GEOCODING_URL=http://localhost:3006
-VALHALLA_URL=http://localhost:3007
-```
+Required local services:
 
----
+- PostgreSQL via `DATABASE_URL`
+- Redis via `REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`
+- Martin via `MARTIN_URL`
+- Valhalla via `VALHALLA_URL`
 
-## Deployment
+Optional providers:
 
-### Docker
-```bash
-docker build -t planisfy-api .
-docker run -p 3003:3000 planisfy-api
-```
+- Pelias-compatible geocoder via `GEOCODING_URL`
+- Static map renderer via `STATIC_MAP_URL`
+- Email provider via `RESEND_API_KEY`
+- Storage provider via local disk or S3/R2-compatible settings
 
----
+## Gotchas
 
-## Planned Features
-
-- Isochrones API
-- Static Images API
-- TileJSON metadata
-- Optimization API
+- Production-like environments must set `INTERNAL_API_SECRET`; internal routes must not be exposed with the fallback development secret.
+- The current source upload prototype still enqueues BullMQ work directly from the API. The restructuring plan moves this behind `processing_jobs`, `event_outbox`, and `apps/worker-geodata`.
+- Billing code currently contains alpha Polar references. The target provider is Dodo Payments.

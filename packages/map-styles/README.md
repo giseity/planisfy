@@ -1,57 +1,26 @@
 # Planisfy Map Styles
 
-Mapbox Style JSON specifications for Overture Maps data.
+Shared package for default Planisfy style assets.
 
-> **Implementation Status**: 🟡 Package.json created, style definitions pending
+## Owns
 
----
+- Default MapLibre-compatible style JSON.
+- Future sprite and glyph metadata used by Planisfy basemap styles.
+- Basemap style assets that should be versioned with the product.
 
-## Overview
+## Does Not Own
 
-Contains map style definitions for MapLibre GL JS.
+- User draft style mutation logic.
+- Publish and rollback behavior.
+- Tileset processing.
+- Basemap build pipeline orchestration.
 
-**Key Challenge**: Overture Maps uses different schema than OpenStreetMap/Mapbox, so styles must map Overture layers to visual representations.
+## Direction
 
----
+This package should eventually contain `planisfy-streets-light-v1`, `planisfy-streets-dark-v1`, sprite metadata, and documented source-layer assumptions. Validation and style lifecycle helpers belong in `@planisfy/style-spec`.
 
-## Styles
+## Important Commands
 
-| Style | Description |
-|-------|-------------|
-| **Basic** | Simple street map |
-| **Streets** | Detailed streets with POIs |
-| **Light** | Minimalist light theme |
-| **Dark** | Dark mode theme |
-| **Satellite** | Satellite imagery (future) |
-
----
-
-## Overture Layer Mapping
-
-| Overture Layer | Mapbox Layer |
-|---------------|--------------|
-| `admins` | `admin` |
-| `buildings` | `building` |
-| `places` | `place` |
-| `transportation` | `road` |
-| `water` | `water` |
-| `land` | `landuse` |
-| `pois` | `poi` |
-
----
-
-## Components
-
+```bash
+pnpm -F @planisfy/map-styles lint
 ```
-packages/map-styles/
-├── styles/     # Style JSON files
-├── sprites/    # Map icons (PNG + JSON)
-└── glyphs/     # Font glyph files (PBF)
-```
-
----
-
-## See Also
-
-- [MapLibre Style Spec](https://maplibre.org/maplibre-style-spec/)
-- [Overture Maps Schema](https://overturemaps.org/docs/schema/)

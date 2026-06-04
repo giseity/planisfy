@@ -1,76 +1,32 @@
-# Planisfy Documentation
+# Planisfy Docs
 
-Public API documentation and guides built with Fumadocs.
+Fumadocs/Next.js documentation app for Planisfy's public API docs, migration guides, and self-hosting guides.
 
-> **Implementation Status**: 🟡 Skeleton ready, Fumadocs CLI setup pending
+## Owns
 
----
+- Public docs content under `content/docs`.
+- API reference pages.
+- Self-hosting and migration guides.
+- LLM text routes and Open Graph docs images.
 
-## Overview
+## Does Not Own
 
-Official documentation site for Planisfy, deployed at **https://docs.planisfy.com**.
+- Durable internal architecture references; those live under root `docs/`.
+- Marketing pages.
+- Runtime API behavior.
 
-Built with [Fumadocs](https://fumadocs.vercel.app/) - a modern documentation solution for Next.js.
-
----
-
-## Documentation Structure
-
-```
-docs/
-├── api/                    # API reference
-│   ├── tiles.md
-│   ├── geocoding.md
-│   └── directions.md
-│
-├── guides/                 # How-to guides
-│   ├── getting-started.md
-│   ├── authentication.md
-│   └── map-styles.md
-│
-├── migration/              # Migration guides
-│   └── mapbox.md
-│
-└── legal/                  # Legal pages
-    ├── terms.md
-    └── privacy.md
-```
-
----
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|-----------|
-| **Framework** | Next.js 14 (App Router) |
-| **Docs Library** | Fumadocs |
-| **Styling** | Tailwind CSS |
-| **MDX** | fumadocs-mdx |
-| **Hosting** | Vercel |
-| **Search** | Fumadocs Search (planned) |
-
----
-
-## Development
+## Important Commands
 
 ```bash
-pnpm install
-pnpm dev      # Port 3001
-pnpm build
-pnpm start
+pnpm -F docs dev
+pnpm -F docs check-types
+pnpm -F docs build
+pnpm -F docs start
 ```
 
----
+Default port: `3002`.
 
-## Deployment
+## Gotchas
 
-### Vercel
-```bash
-vercel --prod
-```
-
----
-
-## Internationalization
-
-Planned: French, German, Spanish, Japanese, Chinese
+- The docs app uses generated `.source/` and `.next/` output; those should stay untracked.
+- Root `docs/` is now reserved for durable engineering docs and must not be ignored globally.
