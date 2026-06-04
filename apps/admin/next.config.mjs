@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   transpilePackages: ["@planisfy/ui", "@planisfy/auth"],
   async rewrites() {
     const api = process.env.API_URL || "http://localhost:4000"
