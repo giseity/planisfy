@@ -9,7 +9,12 @@
     },
     "lint": {
       "dependsOn": ["^lint"],
-      "env": ["NODE_ENV", "INTERNAL_API_SECRET"]
+      "env": [
+        "NODE_ENV",
+        "INTERNAL_API_SECRET",
+        "LOCAL_STORAGE_PATH",
+        "MARTIN_SOURCES_PATH"
+      ]
     },
     "check-types": {
       "dependsOn": ["^check-types"]

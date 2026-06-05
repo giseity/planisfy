@@ -2,8 +2,17 @@
 
 # Storage backends for PMTiles
 pmtiles:
+  paths:
+    - "/storage/martin-sources"
   sources:
     stuttgart-base: "/data/stuttgart.pmtiles"
+
+# Martin hot-reloads MBTiles files from watched paths. PMTiles reload behavior
+# depends on the Martin version; restart Martin if a newly published local
+# PMTiles artifact does not appear immediately.
+mbtiles:
+  paths:
+    - "/storage/martin-sources"
 
 # Server settings
 server:
@@ -15,7 +24,7 @@ server:
     allowed_origins: ["*"]
 
   # Cache control headers
-  cache_control_max_age: 604800  # 7 days
+  cache_control_max_age: 604800 # 7 days
 
 # Tile source combination
 # The API proxies public tileset URLs to Martin source names:
