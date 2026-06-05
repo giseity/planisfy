@@ -36,3 +36,27 @@ Storage is built from:
 - Cleanup should be auditable and recoverable.
 - Published tileset URLs should reference a promoted `tileset_versions` row, not a raw upload.
 - Martin must expose the promoted artifact under the source name expected by the API proxy, such as `owner.tileset` for stable URLs and `owner.tileset.v3` for immutable version URLs.
+
+## Cloudflare R2
+
+Hosted deployments should use `STORAGE_PROVIDER=r2` with a Cloudflare R2
+bucket. Configure:
+
+- `R2_ACCOUNT_ID` or `R2_ENDPOINT`
+- `R2_BUCKET`
+- `R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`
+- `R2_PUBLIC_URL` for the bucket custom domain used in admin/API artifact URLs
+- `MARTIN_SOURCES_PREFIX`, defaulting to `martin-sources`
+
+R2 writes are signed through the S3-compatible API. When a PMTiles/MBTiles
+tileset version is published, Planisfy copies the immutable artifact to stable
+and versioned alias objects:
+
+- `martin-sources/{owner}.{tileset}.pmtiles`
+- `martin-sources/{owner}.{tileset}.v{version}.pmtiles`
+
+Martin should be configured to scan that prefix from the R2 bucket so the API
+tile proxy can continue using the stable `owner.tileset` and immutable
+`owner.tileset.v{version}` source names. Use an R2 custom domain for production
+artifact URLs; avoid `r2.dev` for production traffic.

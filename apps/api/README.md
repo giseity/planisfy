@@ -43,7 +43,7 @@ Optional providers:
 - Pelias-compatible geocoder via `GEOCODING_URL`
 - Static map renderer via `STATIC_MAP_URL`
 - Email provider via `RESEND_API_KEY`
-- Storage provider via local disk or S3/R2-compatible settings
+- Storage provider via local disk, S3, or Cloudflare R2-compatible settings
 
 Local self-host compose serves local artifacts from `/storage/*` and records artifact metadata in `storage_objects`.
 
@@ -52,4 +52,5 @@ Local self-host compose serves local artifacts from `/storage/*` and records art
 - Production-like environments must set `INTERNAL_API_SECRET`; internal routes must not be exposed with the fallback development secret.
 - Tileset uploads create `uploads`, `storage_objects`, `tilesets`, `processing_jobs`, and `tileset.build.requested` outbox events. `apps/worker-geodata` claims those events and dispatches BullMQ transport work.
 - Published tilesets are promoted explicitly through `/console/tilesets/:id/versions/:version/publish`; processing alone does not make a new version public.
+- `STORAGE_PROVIDER=r2` uses signed S3-compatible R2 access and publishes stable/versioned Martin alias objects under `MARTIN_SOURCES_PREFIX`.
 - Billing code currently contains alpha Polar references. The target provider is Dodo Payments.

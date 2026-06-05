@@ -1,4 +1,12 @@
 import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import {
   createWriteStream,
   existsSync,
   mkdirSync,
@@ -18,7 +26,7 @@ export interface StoredObject {
 }
 
 export interface StorageProviderInfo {
-  provider: string;
+  provider: "local" | "s3" | "r2";
   bucket: string;
 }
 
@@ -29,6 +37,7 @@ export interface StorageProvider {
     contentType?: string
   ): Promise<StoredObject>;
   download(key: string): Promise<Buffer>;
+  copy(sourceKey: string, targetKey: string): Promise<void>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
   getUrl(key: string): string;
@@ -36,18 +45,22 @@ export interface StorageProvider {
 }
 
 export class S3Storage implements StorageProvider {
+  private client: S3Client;
   private bucket: string;
-  private region: string;
-  private endpoint: string | undefined;
-  private accessKeyId: string;
+  private provider: "s3" | "r2";
   private publicUrl: string | undefined;
 
   constructor() {
-    this.bucket = env.S3_BUCKET;
-    this.region = env.S3_REGION;
-    this.endpoint = env.S3_ENDPOINT;
-    this.accessKeyId = env.AWS_ACCESS_KEY_ID || "";
-    this.publicUrl = env.S3_PUBLIC_URL;
+    this.provider = env.STORAGE_PROVIDER === "r2" ? "r2" : "s3";
+    const config = this.resolveConfig();
+    this.bucket = config.bucket;
+    this.publicUrl = config.publicUrl;
+    this.client = new S3Client({
+      region: config.region,
+      endpoint: config.endpoint,
+      forcePathStyle: Boolean(config.endpoint),
+      credentials: config.credentials,
+    });
   }
 
   async upload(
@@ -58,24 +71,15 @@ export class S3Storage implements StorageProvider {
     const body = Buffer.isBuffer(data) ? data : await streamToBuffer(data);
     const resolvedContentType = contentType || "application/octet-stream";
 
-    const url = `${this.originUrl()}/${this.bucket}/${key}`;
-    const now = new Date();
-    const dateStr = now.toISOString().replace(/[:-]/g, "").slice(0, 15) + "Z";
-
-    const res = await fetch(url, {
-      method: "PUT",
-      body: body as unknown as BodyInit,
-      headers: {
-        "Content-Type": resolvedContentType,
-        "Content-Length": String(body.length),
-        ...(this.accessKeyId ? { "x-amz-date": dateStr } : {}),
-      },
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`S3 upload failed: ${res.status} ${err}`);
-    }
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: resolvedContentType,
+        ContentLength: body.length,
+      }),
+    );
 
     return {
       key,
@@ -86,42 +90,110 @@ export class S3Storage implements StorageProvider {
   }
 
   async download(key: string): Promise<Buffer> {
-    const res = await fetch(`${this.originUrl()}/${this.bucket}/${key}`);
-    if (!res.ok) {
-      throw new Error(`S3 download failed: ${res.status}`);
-    }
+    const object = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    if (!object.Body) return Buffer.alloc(0);
+    return Buffer.from(await object.Body.transformToByteArray());
+  }
 
-    return Buffer.from(await res.arrayBuffer());
+  async copy(sourceKey: string, targetKey: string): Promise<void> {
+    await this.client.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        Key: targetKey,
+        CopySource: `${this.bucket}/${encodeCopySourceKey(sourceKey)}`,
+      }),
+    );
   }
 
   async delete(key: string): Promise<void> {
-    await fetch(`${this.originUrl()}/${this.bucket}/${key}`, { method: "DELETE" });
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
   }
 
   async exists(key: string): Promise<boolean> {
-    const res = await fetch(`${this.originUrl()}/${this.bucket}/${key}`, {
-      method: "HEAD",
-    });
-    return res.ok;
+    try {
+      await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      return true;
+    } catch (err) {
+      if (isNotFoundError(err)) return false;
+      throw err;
+    }
   }
 
   getUrl(key: string): string {
     if (this.publicUrl) {
-      return `${this.publicUrl}/${key}`;
+      return `${trimTrailingSlash(this.publicUrl)}/${key}`;
     }
-
-    return `${this.originUrl()}/${this.bucket}/${key}`;
+    const endpoint = this.resolveConfig().endpoint;
+    if (endpoint) return `${trimTrailingSlash(endpoint)}/${this.bucket}/${key}`;
+    return `https://${this.bucket}.s3.${env.S3_REGION}.amazonaws.com/${key}`;
   }
 
   getInfo(): StorageProviderInfo {
     return {
-      provider: env.STORAGE_PROVIDER,
+      provider: this.provider,
       bucket: this.bucket,
     };
   }
 
-  private originUrl(): string {
-    return this.endpoint || `https://s3.${this.region}.amazonaws.com`;
+  private resolveConfig(): {
+    bucket: string;
+    region: string;
+    endpoint?: string;
+    publicUrl?: string;
+    credentials?: {
+      accessKeyId: string;
+      secretAccessKey: string;
+    };
+  } {
+    if (this.provider === "r2") {
+      const endpoint =
+        env.R2_ENDPOINT ??
+        (env.R2_ACCOUNT_ID
+          ? `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+          : undefined);
+      if (!endpoint) {
+        throw new Error("R2 storage requires R2_ENDPOINT or R2_ACCOUNT_ID");
+      }
+
+      const accessKeyId = env.R2_ACCESS_KEY_ID ?? env.AWS_ACCESS_KEY_ID;
+      const secretAccessKey =
+        env.R2_SECRET_ACCESS_KEY ?? env.AWS_SECRET_ACCESS_KEY;
+      if (!accessKeyId || !secretAccessKey) {
+        throw new Error(
+          "R2 storage requires R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY",
+        );
+      }
+
+      return {
+        bucket: env.R2_BUCKET ?? env.S3_BUCKET,
+        region: "auto",
+        endpoint,
+        publicUrl: env.R2_PUBLIC_URL ?? env.S3_PUBLIC_URL,
+        credentials: { accessKeyId, secretAccessKey },
+      };
+    }
+
+    const credentials =
+      env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
+        ? {
+            accessKeyId: env.AWS_ACCESS_KEY_ID,
+            secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+          }
+        : undefined;
+
+    return {
+      bucket: env.S3_BUCKET,
+      region: env.S3_REGION,
+      endpoint: env.S3_ENDPOINT,
+      publicUrl: env.S3_PUBLIC_URL,
+      credentials,
+    };
   }
 }
 
@@ -179,6 +251,14 @@ export class LocalStorage implements StorageProvider {
     return readFile(join(this.basePath, key));
   }
 
+  async copy(sourceKey: string, targetKey: string): Promise<void> {
+    const { copyFile, mkdir } = await import("fs/promises");
+    const sourcePath = join(this.basePath, sourceKey);
+    const targetPath = join(this.basePath, targetKey);
+    await mkdir(dirname(targetPath), { recursive: true });
+    await copyFile(sourcePath, targetPath);
+  }
+
   async delete(key: string): Promise<void> {
     const filePath = join(this.basePath, key);
     if (existsSync(filePath)) {
@@ -229,4 +309,26 @@ async function streamToBuffer(stream: Readable): Promise<Buffer> {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   return Buffer.concat(chunks);
+}
+
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function encodeCopySourceKey(key: string) {
+  return key
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+function isNotFoundError(err: unknown) {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    ("$metadata" in err || "name" in err) &&
+    ((err as { $metadata?: { httpStatusCode?: number } }).$metadata
+      ?.httpStatusCode === 404 ||
+      (err as { name?: string }).name === "NotFound")
+  );
 }
