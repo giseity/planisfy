@@ -3,12 +3,13 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@planisfy/ui/lib/utils"
-import { Palette, Key, BarChart3, Settings, Database, Building2 } from "lucide-react"
+import { Palette, Key, BarChart3, Settings, Database, Building2, LayoutDashboard } from "lucide-react"
 import { ContextSwitcher } from "@/components/studio/context-switcher"
 import { ThemeToggle } from "@/components/studio/theme-toggle"
 import { EmailVerificationBanner } from "@/components/studio/email-verification-banner"
 
 const navItems = [
+  { href: "/studio", label: "Dashboard", icon: LayoutDashboard },
   { href: "/studio/styles", label: "Styles", icon: Palette },
   { href: "/studio/sources", label: "Tilesets", icon: Database },
   { href: "/studio/keys", label: "API Keys", icon: Key },
@@ -32,13 +33,16 @@ export default function StudioLayout({
     <div className="min-h-screen">
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <div className="container max-w-6xl flex h-12 items-center gap-4 px-4">
-          <Link href="/studio/styles" className="font-semibold text-lg tracking-tight">
+          <Link href="/studio" className="font-semibold text-lg tracking-tight">
             Planisfy
           </Link>
           <ContextSwitcher />
           <nav className="flex items-center gap-1 ml-auto">
             {navItems.map((item) => {
-              const isActive = pathname.startsWith(item.href)
+              const isActive =
+                item.href === "/studio"
+                  ? pathname === "/studio"
+                  : pathname.startsWith(item.href)
               return (
                 <Link
                   key={item.href}
