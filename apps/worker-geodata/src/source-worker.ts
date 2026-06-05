@@ -60,24 +60,33 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
 
   console.log(`[worker-geodata] processing tileset ${tilesetId} (${format})`);
 
-  if (processingJobId) {
-    await markProcessingJobStarted(processingJobId);
-    await logProcessingJob(processingJobId, "Geodata processing started", {
-      tilesetId,
-      uploadId,
-      uploadKey,
-      format,
-    });
-  }
-
-  await setProcessingStatus({
-    tilesetId,
-    uploadId,
-  });
   const tmpDir = await mkdtemp(join(tmpdir(), "planisfy-source-"));
 
   try {
+    if (processingJobId) {
+      await throwIfCancellationRequested(processingJobId);
+      await markProcessingJobStarted(processingJobId);
+      await logProcessingJob(processingJobId, "Geodata processing started", {
+        tilesetId,
+        uploadId,
+        uploadKey,
+        format,
+      });
+    }
+
+    await setProcessingStatus({
+      tilesetId,
+      uploadId,
+    });
+    if (processingJobId) {
+      await throwIfCancellationRequested(processingJobId);
+    }
+
     const rawData = await storage.download(uploadKey);
+    if (processingJobId) {
+      await throwIfCancellationRequested(processingJobId);
+    }
+
     const validation = validateUpload(rawData, format, job.data.csv);
     if (uploadId) {
       await db
@@ -95,9 +104,13 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         bytes: rawData.byteLength,
         validation,
       });
+      await throwIfCancellationRequested(processingJobId);
     }
 
     if (format === "pmtiles" || format === "mbtiles") {
+      if (processingJobId) {
+        await throwIfCancellationRequested(processingJobId);
+      }
       const result = await storeProcessedArtifact({
         ownerId,
         tilesetId,
@@ -115,6 +128,9 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         });
       }
 
+      if (processingJobId) {
+        await throwIfCancellationRequested(processingJobId);
+      }
       await finalizeProcessedArtifact({
         ownerId,
         tilesetId,
@@ -141,6 +157,9 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
           ["-f", "GeoJSONSeq", convertedPath, inputPath],
           { timeout: 300_000 },
         );
+        if (processingJobId) {
+          await throwIfCancellationRequested(processingJobId);
+        }
       } catch (err) {
         if (isMissingExecutableError(err)) {
           throw new Error(
@@ -181,11 +200,18 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
           minZoom,
           maxZoom,
         });
+        await throwIfCancellationRequested(processingJobId);
       }
       await execFileAsync("tippecanoe", tippecanoeArgs, { timeout: 300_000 });
+      if (processingJobId) {
+        await throwIfCancellationRequested(processingJobId);
+      }
     } catch (err) {
       if (isMissingExecutableError(err)) {
         console.warn("[worker-geodata] tippecanoe not found, storing raw file");
+        if (processingJobId) {
+          await throwIfCancellationRequested(processingJobId);
+        }
         const result = await storeProcessedArtifact({
           ownerId,
           tilesetId,
@@ -208,6 +234,9 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
           });
         }
 
+        if (processingJobId) {
+          await throwIfCancellationRequested(processingJobId);
+        }
         await finalizeProcessedArtifact({
           ownerId,
           tilesetId,
@@ -227,6 +256,9 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     }
 
     const pmtilesData = await readFile(outputPath);
+    if (processingJobId) {
+      await throwIfCancellationRequested(processingJobId);
+    }
     const result = await storeProcessedArtifact({
       ownerId,
       tilesetId,
@@ -243,6 +275,9 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
       });
     }
 
+    if (processingJobId) {
+      await throwIfCancellationRequested(processingJobId);
+    }
     await finalizeProcessedArtifact({
       ownerId,
       tilesetId,
@@ -255,6 +290,12 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
       bounds,
     });
   } catch (err) {
+    if (err instanceof ProcessingJobCanceledError) {
+      await setCanceledStatus({ tilesetId, uploadId });
+      await markProcessingJobCanceled(processingJobId, err);
+      return;
+    }
+
     await setErrorStatus({
       tilesetId,
       uploadId,
@@ -325,6 +366,28 @@ async function setErrorStatus(params: {
               : String(params.error),
         },
       })
+      .where(eq(uploads.id, params.uploadId));
+  }
+}
+
+async function setCanceledStatus(params: {
+  tilesetId: string;
+  uploadId?: string;
+}) {
+  const [versionState] = await db
+    .select({ latest: max(tilesetVersions.version) })
+    .from(tilesetVersions)
+    .where(eq(tilesetVersions.tilesetId, params.tilesetId));
+
+  await db
+    .update(tilesets)
+    .set({ status: versionState?.latest ? "READY" : "DRAFT" })
+    .where(eq(tilesets.id, params.tilesetId));
+
+  if (params.uploadId) {
+    await db
+      .update(uploads)
+      .set({ status: "UPLOADED", linkedTilesetId: params.tilesetId })
       .where(eq(uploads.id, params.uploadId));
   }
 }
@@ -485,7 +548,7 @@ async function logProcessingJob(
   jobId: string,
   message: string,
   metadata?: Record<string, unknown>,
-  level: "info" | "error" = "info",
+  level: "info" | "warn" | "error" = "info",
 ) {
   await db.insert(processingJobLogs).values({
     jobId,
@@ -537,6 +600,53 @@ async function markProcessingJobFailed(jobId: string, error: unknown) {
       updatedAt: new Date(),
     })
     .where(eq(processingJobs.id, jobId));
+}
+
+async function markProcessingJobCanceled(
+  jobId: string | undefined,
+  error: ProcessingJobCanceledError,
+) {
+  if (!jobId) return;
+
+  await db
+    .update(processingJobs)
+    .set({
+      status: "CANCELED",
+      errorCode: null,
+      errorMessage: null,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(processingJobs.id, jobId));
+
+  await logProcessingJob(
+    jobId,
+    "Geodata processing canceled",
+    { cancelRequestedAt: error.cancelRequestedAt?.toISOString() },
+    "warn",
+  );
+}
+
+async function throwIfCancellationRequested(jobId: string) {
+  const [job] = await db
+    .select({
+      status: processingJobs.status,
+      cancelRequestedAt: processingJobs.cancelRequestedAt,
+    })
+    .from(processingJobs)
+    .where(eq(processingJobs.id, jobId))
+    .limit(1);
+
+  if (job?.status === "CANCELED" || job?.cancelRequestedAt) {
+    throw new ProcessingJobCanceledError(job.cancelRequestedAt);
+  }
+}
+
+class ProcessingJobCanceledError extends Error {
+  constructor(readonly cancelRequestedAt?: Date | null) {
+    super("Processing job cancellation requested");
+    this.name = "ProcessingJobCanceledError";
+  }
 }
 
 function inputExtension(format: SourceFormat) {
