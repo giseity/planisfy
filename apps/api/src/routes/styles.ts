@@ -399,6 +399,18 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
     })
     .returning();
 
+  await db
+    .insert(stylePublications)
+    .values({
+      styleId,
+      styleVersionId: snapshot.id,
+      accountId: ownerId,
+      alias: `v${snapshot.version}`,
+      publishedBy: userId,
+      metadata: { version: snapshot.version },
+    })
+    .onConflictDoNothing();
+
   const [updated] = await db
     .update(styles)
     .set({ isPublic: true })
