@@ -2,7 +2,12 @@ import { Hono } from "hono";
 import { eq, and, gte, lte, sql, desc, count, isNull } from "drizzle-orm";
 import { db, usageLogs, apiKeys } from "@planisfy/database";
 import type { AuthEnv } from "../middleware/auth";
-import { getUserPlan, getPlanLimits, PLANS } from "../lib/billing";
+import {
+  getAccountPlan,
+  getAccountPlanLimits,
+  PLANS,
+  serializePlanLimits,
+} from "../lib/billing";
 import { getMonthlyUsagePeriod } from "../lib/usage-quota";
 
 export const usageRoute = new Hono<AuthEnv>();
@@ -10,11 +15,10 @@ export const usageRoute = new Hono<AuthEnv>();
 // ── GET /console/usage/summary — Aggregated usage stats ─────────────────────
 
 usageRoute.get("/usage/summary", async (c) => {
-  const userId = c.get("userId");
   const ownerId = c.get("ownerId");
   const [plan, limits] = await Promise.all([
-    getUserPlan(userId),
-    getPlanLimits(userId),
+    getAccountPlan(ownerId),
+    getAccountPlanLimits(ownerId),
   ]);
   const period = getMonthlyUsagePeriod();
   const startOfMonth = period.start;
@@ -68,6 +72,7 @@ usageRoute.get("/usage/summary", async (c) => {
     );
 
   const totalUnits = Number(currentMonth?.totalUnits ?? 0);
+  const serializedLimits = serializePlanLimits(limits);
   const quotaPercent =
     limits.monthlyUnits === Infinity
       ? 0
@@ -81,14 +86,14 @@ usageRoute.get("/usage/summary", async (c) => {
       plan: {
         id: plan,
         name: PLANS[plan]?.name ?? PLANS.free.name,
-        limits,
+        limits: serializedLimits,
       },
       quota: {
         used: totalUnits,
-        limit: limits.monthlyUnits,
+        limit: serializedLimits.monthlyUnits,
         remaining:
           limits.monthlyUnits === Infinity
-            ? Infinity
+            ? null
             : Math.max(0, limits.monthlyUnits - totalUnits),
         percent: quotaPercent,
         periodStart: period.start.toISOString(),

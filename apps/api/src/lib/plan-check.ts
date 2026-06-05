@@ -1,13 +1,14 @@
 import { db, styles, tilesets, apiKeys } from "@planisfy/database";
 import { eq, and, isNull, count } from "drizzle-orm";
-import { getPlanLimits } from "./billing";
+import { getAccountPlanLimits } from "./billing";
 
 export async function checkResourceLimit(
   userId: string,
   ownerId: string,
   resource: "styles" | "tilesets" | "apiKeys",
 ): Promise<{ allowed: boolean; current: number; limit: number }> {
-  const limits = await getPlanLimits(userId);
+  void userId;
+  const limits = await getAccountPlanLimits(ownerId);
 
   const limitMap = {
     styles: limits.maxStyles,

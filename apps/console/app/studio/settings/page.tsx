@@ -56,11 +56,11 @@ interface BillingInfo {
   planName: string
   price: number
   limits: {
-    monthlyUnits: number
+    monthlyUnits: number | null
     requestsPerMinute: number
-    maxStyles: number
-    maxSources: number
-    maxApiKeys: number
+    maxStyles: number | null
+    maxSources: number | null
+    maxApiKeys: number | null
   }
   usage: {
     monthlyUnits: number
@@ -69,13 +69,16 @@ interface BillingInfo {
     apiKeys: number
   }
   quotaPercent: number
-  polarConfigured: boolean
+  billingConfigured: boolean
+  portalAvailable: boolean
 }
 
 interface PlanInfo {
   id: string
+  productId: string
   name: string
   price: number
+  checkoutAvailable: boolean
   monthlyUnits: string | number
   requestsPerMinute: number
   maxStyles: string | number
@@ -91,6 +94,10 @@ interface SessionData {
   createdAt: string
   updatedAt: string
   expiresAt: string
+}
+
+function formatLimit(limit: number | null): string {
+  return limit === null ? "\u221e" : limit.toLocaleString()
 }
 
 // ---------------------------------------------------------------------------
@@ -751,9 +758,7 @@ function BillingTab() {
                 <span className="text-sm font-normal text-muted-foreground">
                   {" "}
                   /{" "}
-                  {billing.limits.monthlyUnits === Infinity
-                    ? "\u221e"
-                    : billing.limits.monthlyUnits.toLocaleString()}
+                  {formatLimit(billing.limits.monthlyUnits)}
                 </span>
               </p>
               <div className="h-2 bg-muted rounded-full mt-1">
@@ -772,9 +777,7 @@ function BillingTab() {
                 <span className="text-sm font-normal text-muted-foreground">
                   {" "}
                   /{" "}
-                  {billing.limits.maxStyles === Infinity
-                    ? "\u221e"
-                    : billing.limits.maxStyles}
+                  {formatLimit(billing.limits.maxStyles)}
                 </span>
               </p>
             </div>
@@ -785,9 +788,7 @@ function BillingTab() {
                 <span className="text-sm font-normal text-muted-foreground">
                   {" "}
                   /{" "}
-                  {billing.limits.maxSources === Infinity
-                    ? "\u221e"
-                    : billing.limits.maxSources}
+                  {formatLimit(billing.limits.maxSources)}
                 </span>
               </p>
             </div>
@@ -798,9 +799,7 @@ function BillingTab() {
                 <span className="text-sm font-normal text-muted-foreground">
                   {" "}
                   /{" "}
-                  {billing.limits.maxApiKeys === Infinity
-                    ? "\u221e"
-                    : billing.limits.maxApiKeys}
+                  {formatLimit(billing.limits.maxApiKeys)}
                 </span>
               </p>
             </div>
@@ -813,7 +812,7 @@ function BillingTab() {
             </div>
           )}
 
-          {billing.polarConfigured && billing.plan !== "free" && (
+          {billing.portalAvailable && billing.plan !== "free" && (
             <Button
               variant="outline"
               onClick={async () => {
@@ -894,20 +893,26 @@ function BillingTab() {
                   <Button
                     className="w-full mt-4"
                     variant={plan.id === "pro" ? "default" : "outline"}
-                    disabled={!billing.polarConfigured}
+                    disabled={!plan.checkoutAvailable}
                     onClick={async () => {
-                      if (!billing.polarConfigured) {
+                      if (!plan.checkoutAvailable) {
                         toast.info(
-                          "Billing is not configured yet. Set POLAR_ACCESS_TOKEN to enable payments."
+                          "Billing is not configured yet. Set Dodo Payments credentials to enable payments."
                         )
                         return
                       }
-                      toast.info(
-                        `Upgrade to ${plan.name} — payment integration coming soon`
-                      )
+                      try {
+                        const { url } = await api.post<{ url: string }>(
+                          "/billing/checkout",
+                          { planId: plan.id }
+                        )
+                        window.open(url, "_blank")
+                      } catch {
+                        toast.error("Unable to start checkout")
+                      }
                     }}
                   >
-                    {billing.polarConfigured
+                    {plan.checkoutAvailable
                       ? `Upgrade to ${plan.name}`
                       : "Coming soon"}
                   </Button>

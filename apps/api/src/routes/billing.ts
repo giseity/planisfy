@@ -1,27 +1,38 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { Webhook, WebhookVerificationError } from "standardwebhooks";
 import type { AuthEnv } from "../middleware/auth";
-import { getUserPlan, getPlanLimits, PLANS, createCheckoutUrl, getCustomerPortalUrl } from "../lib/billing";
+import {
+  applyDodoWebhookEvent,
+  createCheckoutSession,
+  getAccountPlan,
+  getAccountPlanLimits,
+  getCustomerPortalUrl,
+  isBillingConfigured,
+  isCheckoutConfiguredForPlan,
+  PLANS,
+  serializePlanLimits,
+} from "../lib/billing";
 import { getMonthlyUsagePeriod, getMonthlyUsageUnits } from "../lib/usage-quota";
 import { db, styles, tilesets, apiKeys } from "@planisfy/database";
 import { eq, and, isNull, count } from "drizzle-orm";
 import { env } from "../env";
 
 const checkoutSchema = z.object({
-  priceId: z.string().min(1, "priceId is required").max(256),
+  planId: z.enum(["pro", "enterprise"]),
 });
 
 export const billingRoute = new Hono<AuthEnv>();
+export const billingWebhookRoute = new Hono();
 
 // ── GET /billing — Current plan, usage, and limits ──────────────────────────
 
 billingRoute.get("/billing", async (c) => {
-  const userId = c.get("userId");
   const ownerId = c.get("ownerId");
 
   const [plan, limits] = await Promise.all([
-    getUserPlan(userId),
-    getPlanLimits(userId),
+    getAccountPlan(ownerId),
+    getAccountPlanLimits(ownerId),
   ]);
 
   const period = getMonthlyUsagePeriod();
@@ -46,12 +57,13 @@ billingRoute.get("/billing", async (c) => {
     ]);
 
   const planInfo = PLANS[plan] ?? PLANS.free;
+  const serializedLimits = serializePlanLimits(limits);
 
   return c.json({
     plan,
     planName: planInfo.name,
     price: planInfo.price,
-    limits,
+    limits: serializedLimits,
     usage: {
       monthlyUnits,
       styles: styleCount?.count ?? 0,
@@ -65,7 +77,8 @@ billingRoute.get("/billing", async (c) => {
       start: period.start.toISOString(),
       end: period.end.toISOString(),
     },
-    polarConfigured: !!env.POLAR_ACCESS_TOKEN,
+    billingConfigured: isBillingConfigured(),
+    portalAvailable: false,
   });
 });
 
@@ -77,6 +90,7 @@ billingRoute.get("/billing/plans", async (c) => {
     productId: plan.productId,
     name: plan.name,
     price: plan.price,
+    checkoutAvailable: isCheckoutConfiguredForPlan(plan.id),
     requestsPerMinute: plan.requestsPerMinute,
     monthlyUnits:
       plan.monthlyUnits === Infinity ? "Unlimited" : plan.monthlyUnits,
@@ -92,29 +106,32 @@ billingRoute.get("/billing/plans", async (c) => {
 
 billingRoute.post("/billing/checkout", async (c) => {
   const userId = c.get("userId");
+  const ownerId = c.get("ownerId");
   const body = await c.req.json();
-  const { priceId } = checkoutSchema.parse(body);
+  const { planId } = checkoutSchema.parse(body);
 
-  const url = await createCheckoutUrl(userId, priceId);
+  const session = await createCheckoutSession({
+    userId,
+    accountId: ownerId,
+    planId,
+  });
 
-  if (!url) {
+  if (!session) {
     return c.json({
       error: {
         code: "SERVICE_UNAVAILABLE",
-        message: "Billing is not configured. Set POLAR_ACCESS_TOKEN to enable payments.",
+        message: "Billing is not configured. Set Dodo Payments credentials and product IDs to enable payments.",
       },
     }, 503);
   }
 
-  return c.json({ url });
+  return c.json(session);
 });
 
 // ── GET /billing/portal — Get customer portal URL ───────────────────────────
 
 billingRoute.get("/billing/portal", async (c) => {
-  const userId = c.get("userId");
-
-  const url = await getCustomerPortalUrl(userId);
+  const url = await getCustomerPortalUrl();
 
   if (!url) {
     return c.json({
@@ -126,4 +143,33 @@ billingRoute.get("/billing/portal", async (c) => {
   }
 
   return c.json({ url });
+});
+
+billingWebhookRoute.post("/webhooks/dodo", async (c) => {
+  if (!env.DODO_PAYMENTS_WEBHOOK_SECRET) {
+    return c.json({
+      error: {
+        code: "SERVICE_UNAVAILABLE",
+        message: "Dodo webhook secret is not configured.",
+      },
+    }, 503);
+  }
+
+  const rawBody = await c.req.text();
+  let payload: unknown;
+
+  try {
+    const webhook = new Webhook(env.DODO_PAYMENTS_WEBHOOK_SECRET);
+    payload = webhook.verify(rawBody, Object.fromEntries(c.req.raw.headers));
+  } catch (err) {
+    if (err instanceof WebhookVerificationError) {
+      return c.json({
+        error: { code: "INVALID_SIGNATURE", message: "Invalid webhook signature." },
+      }, 401);
+    }
+    throw err;
+  }
+
+  const result = await applyDodoWebhookEvent(payload as Record<string, unknown>);
+  return c.json({ data: result });
 });

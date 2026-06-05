@@ -29,7 +29,14 @@ const schema = z.object({
 
   RESEND_API_KEY: z.string().min(1).optional(),
   FROM_EMAIL: z.string().min(1).default("Planisfy <noreply@planisfy.com>"),
-  POLAR_ACCESS_TOKEN: z.string().min(1).optional(),
+  DODO_PAYMENTS_API_KEY: z.string().min(1).optional(),
+  DODO_PAYMENTS_API_URL: z.string().url().optional(),
+  DODO_PAYMENTS_ENVIRONMENT: z
+    .enum(["test_mode", "live_mode"])
+    .default("test_mode"),
+  DODO_PAYMENTS_WEBHOOK_SECRET: z.string().min(1).optional(),
+  DODO_PRO_PRODUCT_ID: z.string().min(1).optional(),
+  DODO_ENTERPRISE_PRODUCT_ID: z.string().min(1).optional(),
 });
 
 export const env = createEnv(schema, process.env, { appName: "api" });
