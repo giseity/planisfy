@@ -5,9 +5,11 @@
  * so cookies are same-origin. In production, point directly at the API.
  */
 
+import { clientEnv } from "@/env.client";
+
 const BASE =
   typeof window !== "undefined"
-    ? "/api/v1/console"
+    ? clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH
     : (process.env.API_URL || "http://localhost:4000") + "/console";
 
 interface ApiError {

@@ -20,6 +20,7 @@
     "@monaco-editor/react": "4.8.0-rc.3",
     "@planisfy/auth": "workspace:*",
     "@planisfy/database": "workspace:*",
+    "@planisfy/env": "workspace:*",
     "@planisfy/style-spec": "workspace:*",
     "@planisfy/ui": "workspace:*",
     "@types/geojson": "^7946.0.16",

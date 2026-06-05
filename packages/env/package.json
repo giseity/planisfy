@@ -1,5 +1,5 @@
 {
-  "name": "@planisfy/storage",
+  "name": "@planisfy/env",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -11,12 +11,12 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@planisfy/env": "workspace:*"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@planisfy/eslint-config": "workspace:*",
     "@planisfy/typescript-config": "workspace:*",
     "@types/node": "^22.15.3",
-    "typescript": "^5.9.2"
+    "typescript": "5.9.2"
   }
 }

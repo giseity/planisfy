@@ -38,6 +38,9 @@ importers:
       '@planisfy/database':
         specifier: workspace:^
         version: link:../../packages/database
+      '@planisfy/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -99,6 +102,9 @@ importers:
       '@planisfy/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@planisfy/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@planisfy/events':
         specifier: workspace:*
         version: link:../../packages/events
@@ -187,6 +193,9 @@ importers:
       '@planisfy/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@planisfy/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@planisfy/style-spec':
         specifier: workspace:*
         version: link:../../packages/style-spec
@@ -364,6 +373,9 @@ importers:
       '@planisfy/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@planisfy/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@planisfy/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -444,6 +456,9 @@ importers:
 
   packages/database:
     dependencies:
+      '@planisfy/env':
+        specifier: workspace:*
+        version: link:../env
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(kysely@0.28.11)(postgres@3.4.8)
@@ -465,6 +480,25 @@ importers:
         version: 0.31.9
       typescript:
         specifier: ^5.9.2
+        version: 5.9.2
+
+  packages/env:
+    dependencies:
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@planisfy/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@planisfy/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: 5.9.2
         version: 5.9.2
 
   packages/eslint-config:
@@ -552,6 +586,10 @@ importers:
         version: 3.7.4
 
   packages/storage:
+    dependencies:
+      '@planisfy/env':
+        specifier: workspace:*
+        version: link:../env
     devDependencies:
       '@planisfy/eslint-config':
         specifier: workspace:*

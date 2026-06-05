@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { AuthEnv } from "../middleware/auth";
-
-const PELIAS_URL = process.env.PELIAS_URL || "http://localhost:4000/geocoding";
+import { env } from "../env";
 // If Pelias is not available, we'll use Nominatim as a fallback for basic geocoding
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org";
 
@@ -190,7 +189,7 @@ async function tryPelias(
   params: Record<string, string>
 ): Promise<unknown | null> {
   try {
-    const url = new URL(`/v1/${endpoint}`, PELIAS_URL);
+    const url = new URL(`/v1/${endpoint}`, env.PELIAS_URL);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
     const controller = new AbortController();
