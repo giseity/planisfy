@@ -13,6 +13,7 @@ This file is now the running restructuring log. Each completed milestone should 
 | Phase 4: Worker Split | Complete | Added `apps/worker-geodata` as the BullMQ source-processing consumer, moved storage providers to shared `@planisfy/storage`, and left API as the source-processing queue producer. |
 | Phase 5: Frontend and API DX | Complete | Console style validation now uses `@planisfy/style-spec`, the API client exposes shared response envelope types, and the main style list/editor/download paths use those typed contracts. |
 | Phase 6: Self-Host Product Proof | Complete | Docker Compose now includes `worker-geodata`, local artifact storage volume/env, API storage serving, Redis worker heartbeat health, and updated self-host docs. Seed/demo data remains a follow-up roadmap item. |
+| Follow-up: Env Validation Convention | Complete | Adopted the Geobble-style env convention through `@planisfy/env`, local app/package `env.ts` modules, validated API/worker/db/storage config, and public client navigation env files for console/admin. |
 
 ## Purpose
 
@@ -261,17 +262,16 @@ Recommended target packages:
 | `packages/logger` | add | Shared structured logging factory/middleware. |
 | config/UI packages | keep | Existing shared UI, eslint, prettier, TypeScript packages. |
 
-## Database Reset Recommendation
+## Database Reset Decision
 
-Because backward compatibility is not required, Planisfy should consider a clean schema reset instead of accreting migrations around the current alpha shape.
+Because backward compatibility was not required, Planisfy used a clean schema reset instead of accreting migrations around the current alpha shape.
 
 ### Identity Anchor
 
-Current Planisfy uses `profiles` as the shared owner type. This is conceptually good.
+Planisfy now uses `accounts` as the shared owner type. Users and organizations each have matching account rows, and owned resources point at `accounts.id`.
 
-Recommended change:
+Implemented change:
 
-- rename the shared owner anchor to `accounts`
 - make `users.id = accounts.id`
 - make `organizations.id = accounts.id`
 - rename Better Auth OAuth accounts to `oauth_accounts`
@@ -503,7 +503,7 @@ Recommended changes:
 
 - use `@hono/zod-validator` consistently
 - adopt structured logging middleware
-- add env validation
+- keep app/package `env.ts` validation in the Geobble style and extend it as new services are added
 - move direct queue enqueueing out of route handlers
 - write events through shared outbox helpers
 - expose job, upload, tileset, style, artifact, usage, and health routes

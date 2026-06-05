@@ -105,19 +105,35 @@ Planisfy v1 is credible only when a team can:
 
 Milestones 1-5 should serve this gate. Milestones 6-10 should not pull focus until this loop works end to end.
 
+## Implemented Foundation Baseline
+
+The architecture restructuring is now baseline, not future roadmap scope.
+
+Already in place:
+
+- Geobble-style `accounts` ownership anchor for users and organizations, with Better Auth provider credentials renamed to `oauth_accounts`
+- durable schema tables for uploads, datasets, tilesets, tileset versions, processing jobs, storage objects, event outbox, invoices, and usage rollups
+- shared contract packages for events, storage paths, style lifecycle helpers, logging, style spec validation, and env validation
+- `apps/worker-geodata` split from the API as the source-processing worker
+- local/S3/R2 storage abstraction plus storage ledger writes
+- Docker Compose wiring for API, console, admin, worker, Postgres, Redis, Martin, Valhalla, and local artifact storage
+- validated `env.ts` modules for API, worker, database, storage, and public console/admin navigation variables
+
+Roadmap work should now focus on making those foundations product-complete: seeded demo data, real processing handlers, publish/rollback flows, visible job UX, and operational hardening.
+
 ## Core Resource Model
 
 These concepts should become the backbone of the platform.
 
-The current implementation already has `styles`, `style_versions`, `tileset_sources`, `usage_logs`, and `audit_events`. The roadmap should reconcile that current shape with the richer future model instead of layering unrelated tables on top of it.
+The current implementation now uses a Geobble-style `accounts` ownership anchor under users and organizations. Roadmap work should build on that model instead of reviving the older `profiles` language except where temporary compatibility exports still exist.
 
-Recommended migration direction:
+Current direction:
 
 - keep `styles` and `style_versions`, but separate editable draft state from immutable published versions more explicitly
-- evolve `tileset_sources` into either `tilesets` or a Studio-facing wrapper around `tilesets` and `tileset_versions`
-- add separate `uploads` records for raw file/import lifecycle
-- add durable `processing_jobs` records instead of relying only on queue state
-- preserve `profiles` as the shared owner model for users and organizations
+- treat `tileset_sources` as legacy/compatibility surface while new upload and tileset workflows move onto `uploads`, `tilesets`, and `tileset_versions`
+- use `processing_jobs` as the durable job record and keep BullMQ as transport
+- use `storage_objects` as the artifact ledger, with object keys produced through `@planisfy/storage-paths`
+- make all owned resources reference `accounts.id`
 
 ### Dataset
 
@@ -125,7 +141,7 @@ Editable raw features, usually GeoJSON-like.
 
 Needed fields:
 
-- owner/profile
+- account owner
 - name, handle, description
 - bounds
 - feature count
@@ -139,7 +155,7 @@ A source file or remote import.
 
 Needed fields:
 
-- owner/profile
+- account owner
 - original filename
 - content type
 - size
@@ -154,7 +170,7 @@ A logical map data product served as tiles.
 
 Needed fields:
 
-- owner/profile
+- account owner
 - name, handle, description
 - type: vector, raster, raster-array, terrain
 - current published version
@@ -212,7 +228,7 @@ Needed fields:
 - type
 - status
 - progress
-- owner/profile
+- account owner
 - input references
 - output references
 - logs
@@ -223,34 +239,25 @@ Needed fields:
 - cancel/requested cancellation state
 - artifact promotion result
 
-## Milestone 0: Stabilize the Foundation
+## Milestone 0: Foundation Baseline
 
-Goal: make the current platform truthful, buildable, and safe to iterate on.
+Status: complete enough to stop treating it as the active roadmap milestone.
 
-Expected outcome:
+What changed:
 
 - docs match implementation
 - lint/type/test commands are reliable
-- Docker Compose references valid build targets
+- Docker Compose references valid build targets and includes the worker/storage path
 - internal routes are protected
 - style mutation logic is shared
 - alpha status is documented
+- app/package environment variables are validated through the `env.ts` convention
 
-Representative commits:
+Remaining foundation chores should be handled opportunistically, not as roadmap blockers:
 
-- `docs: align project documentation with implementation`
-- `build: normalize workspace lint configuration`
-- `infra: repair self-host app container builds`
-- `api: protect internal platform routes`
-- `styles: share mutation helpers across API and console`
-- `test: add alpha status and API smoke tests`
-
-Follow-up tasks:
-
-- restore local dependency install reliability
-- run full CI locally and in GitHub Actions
 - add repository license file
-- fix root `.gitignore` so app docs are not accidentally hidden by `docs/`
+- run the full CI matrix in GitHub Actions once the next product milestone is ready
+- regenerate Drizzle migrations/snapshots when the resource model settles further
 
 ## Milestone 1: Self-Hosted Demo That Works
 
@@ -388,22 +395,16 @@ Required workflow:
 
 Architecture:
 
-- `uploads` table
-- `tilesets` table
-- `tileset_versions` table
-- `processing_jobs` table
-- job log persistence
-- storage abstraction for raw and processed artifacts
-- worker process for upload validation and tiling
+- finish API/worker behavior around the existing `uploads`, `tilesets`, `tileset_versions`, and `processing_jobs` tables
+- add visible job log persistence and progress updates
+- use the existing storage abstraction for raw and processed artifacts
+- complete worker handlers for upload validation and tiling
 - Tippecanoe integration for vector tiling
 - optional GDAL integration for raster formats
 
 Representative commits:
 
-- `database: add upload and tileset tables`
-- `storage: add artifact storage abstraction`
 - `api: add upload creation and validation routes`
-- `workers: add geodata processing queue`
 - `workers: convert GeoJSON uploads to PMTiles`
 - `workers: support CSV point uploads`
 - `console: add upload and processing UI`
@@ -773,11 +774,11 @@ These should be tracked across milestones rather than treated as one late harden
 
 Short-term:
 
-1. Finish Milestone 0 cleanups.
-2. Build Milestone 1 self-host demo.
-3. Reconcile the current source/style schema with the target resource model.
-4. Build the Milestone 2 global basemap pipeline, using regional fixtures only for fast local iteration.
-5. Start the Milestone 3 upload-to-tileset workflow.
+1. Build Milestone 1 self-host demo.
+2. Seed a bootstrap account, sample style, and sample PMTiles dataset.
+3. Build the Milestone 2 global basemap pipeline, using regional fixtures only for fast local iteration.
+4. Start the Milestone 3 upload-to-tileset workflow on top of the existing accounts/resources schema.
+5. Keep roadmap/docs truthful after each milestone.
 
 Medium-term:
 
