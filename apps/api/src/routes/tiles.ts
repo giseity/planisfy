@@ -316,7 +316,7 @@ function apiBaseFromUrl(url: string) {
 
 function parsePublicTilesetSlug(slug: string) {
   const match = slug.match(
-    /^([a-z0-9][a-z0-9-]*)\.([a-z0-9][a-z0-9-]*)(?:@([1-9]\d*))?$/,
+    /^([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)(?:@([1-9]\d*))?$/,
   );
   if (!match) return null;
 

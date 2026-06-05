@@ -21,6 +21,7 @@ import {
 } from "../lib/source-queue";
 import { recordStorageObject } from "../lib/storage-ledger";
 import { logAudit } from "../lib/audit";
+import { registerPublishedMartinSources } from "../lib/martin-sources";
 
 export const resourcesRoute = new Hono<AuthEnv>();
 
@@ -357,6 +358,66 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
       { error: { code: "NOT_FOUND", message: "Tileset version not found" } },
       404,
     );
+  if (!targetVersion.artifactStorageObjectId)
+    return c.json(
+      {
+        error: {
+          code: "ARTIFACT_NOT_FOUND",
+          message: "Tileset version has no processed artifact",
+        },
+      },
+      400,
+    );
+  if (targetVersion.format !== "PMTILES" && targetVersion.format !== "MBTILES")
+    return c.json(
+      {
+        error: {
+          code: "UNSUPPORTED_TILESET_ARTIFACT",
+          message:
+            "Tileset version must be a PMTiles or MBTiles artifact before it can be published",
+        },
+      },
+      400,
+    );
+
+  const ownerHandle = await getOwnerHandle(accountId);
+  if (!ownerHandle)
+    return c.json(
+      {
+        error: {
+          code: "OWNER_HANDLE_NOT_FOUND",
+          message: "Tileset owner profile handle was not found",
+        },
+      },
+      400,
+    );
+
+  const [artifact] = await db
+    .select({
+      provider: storageObjects.provider,
+      storageKey: storageObjects.storageKey,
+    })
+    .from(storageObjects)
+    .where(eq(storageObjects.id, targetVersion.artifactStorageObjectId))
+    .limit(1);
+  if (!artifact)
+    return c.json(
+      {
+        error: {
+          code: "ARTIFACT_NOT_FOUND",
+          message: "Tileset artifact not found",
+        },
+      },
+      404,
+    );
+
+  const martinRegistration = await registerPublishedMartinSources({
+    storageObject: artifact,
+    artifactFormat: targetVersion.format,
+    ownerHandle,
+    tilesetHandle: tileset.handle,
+    version: targetVersion.version,
+  });
 
   const [updated] = await db
     .update(tilesets)
@@ -380,10 +441,10 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
     action: "tileset.published",
     resourceType: "tileset",
     resourceId: id,
-    metadata: { version },
+    metadata: { version, martinRegistration },
   });
 
-  return c.json({ data: updated });
+  return c.json({ data: { ...updated, martinRegistration } });
 });
 
 resourcesRoute.get("/jobs", async (c) => {
