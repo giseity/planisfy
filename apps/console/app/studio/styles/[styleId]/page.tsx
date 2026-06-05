@@ -1,26 +1,32 @@
-"use client"
+"use client";
 
-import { useEffect, useCallback, useState } from "react"
-import { useParams, useSearchParams } from "next/navigation"
-import { useStyleStore } from "@/lib/store/style-store"
-import { sampleStyle } from "@/lib/sample-style"
-import { MapPreview } from "@/components/studio/map-preview"
-import { LayerList } from "@/components/studio/layer-list"
-import { PropertyPanel } from "@/components/studio/property-panel"
-import { SourcePanel } from "@/components/studio/source-panel"
-import { StyleSettingsPanel } from "@/components/studio/style-settings-panel"
-import { JsonEditor } from "@/components/studio/json-editor"
-import { Separator } from "@planisfy/ui/components/separator"
-import { Button } from "@planisfy/ui/components/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@planisfy/ui/components/tabs"
-import { ValidationPanel } from "@/components/studio/validation-panel"
-import { VersionHistoryButton } from "@/components/studio/version-history"
+import { useEffect, useCallback, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useStyleStore } from "@/lib/store/style-store";
+import { sampleStyle } from "@/lib/sample-style";
+import { MapPreview } from "@/components/studio/map-preview";
+import { LayerList } from "@/components/studio/layer-list";
+import { PropertyPanel } from "@/components/studio/property-panel";
+import { SourcePanel } from "@/components/studio/source-panel";
+import { StyleSettingsPanel } from "@/components/studio/style-settings-panel";
+import { JsonEditor } from "@/components/studio/json-editor";
+import { Separator } from "@planisfy/ui/components/separator";
+import { Button } from "@planisfy/ui/components/button";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@planisfy/ui/components/tabs";
+import { ValidationPanel } from "@/components/studio/validation-panel";
+import { VersionHistoryButton } from "@/components/studio/version-history";
+import { toast } from "sonner";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@planisfy/ui/components/popover"
-import { Input } from "@planisfy/ui/components/input"
+} from "@planisfy/ui/components/popover";
+import { Input } from "@planisfy/ui/components/input";
 import {
   Download,
   Upload,
@@ -36,165 +42,216 @@ import {
   Save,
   Loader2,
   AlertCircle,
-} from "lucide-react"
+  Globe,
+  GlobeLock,
+} from "lucide-react";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function StyleEditorPage() {
-  const params = useParams<{ styleId: string }>()
-  const loadStyle = useStyleStore((s) => s.loadStyle)
-  const loadStyleFromApi = useStyleStore((s) => s.loadStyleFromApi)
-  const saveStyle = useStyleStore((s) => s.saveStyle)
-  const style = useStyleStore((s) => s.style)
-  const styleName = useStyleStore((s) => s.style?.name)
-  const updateStyleName = useStyleStore((s) => s.updateStyleName)
-  const selectedLayerId = useStyleStore((s) => s.selectedLayerId)
-  const deleteLayer = useStyleStore((s) => s.deleteLayer)
-  const duplicateLayer = useStyleStore((s) => s.duplicateLayer)
-  const undo = useStyleStore((s) => s.undo)
-  const redo = useStyleStore((s) => s.redo)
-  const canUndo = useStyleStore((s) => s.canUndo)
-  const canRedo = useStyleStore((s) => s.canRedo)
-  const saveStatus = useStyleStore((s) => s.saveStatus)
-  const styleId = useStyleStore((s) => s.styleId)
-  const [showJson, setShowJson] = useState(false)
-  const [inspectMode, setInspectMode] = useState(false)
-  const [showValidation, setShowValidation] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [urlInput, setUrlInput] = useState("")
-  const [urlLoading, setUrlLoading] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const params = useParams<{ styleId: string }>();
+  const loadStyle = useStyleStore((s) => s.loadStyle);
+  const loadStyleFromApi = useStyleStore((s) => s.loadStyleFromApi);
+  const saveStyle = useStyleStore((s) => s.saveStyle);
+  const publishStyle = useStyleStore((s) => s.publishStyle);
+  const style = useStyleStore((s) => s.style);
+  const styleName = useStyleStore((s) => s.style?.name);
+  const updateStyleName = useStyleStore((s) => s.updateStyleName);
+  const selectedLayerId = useStyleStore((s) => s.selectedLayerId);
+  const deleteLayer = useStyleStore((s) => s.deleteLayer);
+  const duplicateLayer = useStyleStore((s) => s.duplicateLayer);
+  const undo = useStyleStore((s) => s.undo);
+  const redo = useStyleStore((s) => s.redo);
+  const canUndo = useStyleStore((s) => s.canUndo);
+  const canRedo = useStyleStore((s) => s.canRedo);
+  const saveStatus = useStyleStore((s) => s.saveStatus);
+  const styleId = useStyleStore((s) => s.styleId);
+  const styleVersion = useStyleStore((s) => s.styleVersion);
+  const styleHandle = useStyleStore((s) => s.styleHandle);
+  const isPublic = useStyleStore((s) => s.isPublic);
+  const [showJson, setShowJson] = useState(false);
+  const [inspectMode, setInspectMode] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [urlLoading, setUrlLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const searchParams = useSearchParams()
+  const searchParams = useSearchParams();
 
   // Load style: from API if UUID, from URL param, or sample fallback
   useEffect(() => {
-    const id = params.styleId
+    const id = params.styleId;
     if (UUID_RE.test(id)) {
       loadStyleFromApi(id).catch((err) => {
-        setLoadError(err instanceof Error ? err.message : "Failed to load style")
-      })
-      return
+        setLoadError(
+          err instanceof Error ? err.message : "Failed to load style",
+        );
+      });
+      return;
     }
 
-    const styleUrl = searchParams.get("url")
+    const styleUrl = searchParams.get("url");
     if (styleUrl) {
       fetch(styleUrl)
         .then((r) => r.json())
         .then((json) => {
           if (json.version === 8 && Array.isArray(json.layers)) {
-            loadStyle(json)
+            loadStyle(json);
           } else {
-            loadStyle(sampleStyle)
+            loadStyle(sampleStyle);
           }
         })
-        .catch(() => loadStyle(sampleStyle))
+        .catch(() => loadStyle(sampleStyle));
     } else {
-      loadStyle(sampleStyle)
+      loadStyle(sampleStyle);
     }
-  }, [params.styleId, searchParams, loadStyle, loadStyleFromApi])
+  }, [params.styleId, searchParams, loadStyle, loadStyleFromApi]);
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey
-      const target = e.target as HTMLElement
-      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable
+      const mod = e.metaKey || e.ctrlKey;
+      const target = e.target as HTMLElement;
+      const isInput =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
 
       // Cmd+S — save
       if (mod && e.key === "s") {
-        e.preventDefault()
-        if (styleId) saveStyle().catch(() => {})
-        return
+        e.preventDefault();
+        if (styleId) saveStyle().catch(() => {});
+        return;
       }
       // Cmd+Z — undo
       if (mod && e.key === "z" && !e.shiftKey) {
-        e.preventDefault()
-        undo()
-        return
+        e.preventDefault();
+        undo();
+        return;
       }
       // Cmd+Shift+Z or Cmd+Y — redo
       if ((mod && e.key === "z" && e.shiftKey) || (mod && e.key === "y")) {
-        e.preventDefault()
-        redo()
-        return
+        e.preventDefault();
+        redo();
+        return;
       }
       // Cmd+D — duplicate selected layer
       if (mod && e.key === "d" && selectedLayerId) {
-        e.preventDefault()
-        duplicateLayer(selectedLayerId)
-        return
+        e.preventDefault();
+        duplicateLayer(selectedLayerId);
+        return;
       }
       // Delete — remove selected layer (only when not in an input)
       if (e.key === "Delete" && selectedLayerId && !isInput) {
-        e.preventDefault()
-        deleteLayer(selectedLayerId)
-        return
+        e.preventDefault();
+        deleteLayer(selectedLayerId);
+        return;
       }
     },
-    [undo, redo, selectedLayerId, deleteLayer, duplicateLayer, styleId, saveStyle]
-  )
+    [
+      undo,
+      redo,
+      selectedLayerId,
+      deleteLayer,
+      duplicateLayer,
+      styleId,
+      saveStyle,
+    ],
+  );
 
   useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [handleKeyDown])
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   const handleExport = () => {
-    if (!style) return
+    if (!style) return;
     const blob = new Blob([JSON.stringify(style, null, 2)], {
       type: "application/json",
-    })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `${style.name || "style"}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${style.name || "style"}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copyUrl = async (label: string, url: string) => {
+    await navigator.clipboard.writeText(url);
+    setCopiedUrl(label);
+    toast.success(`${label} URL copied`);
+    setTimeout(() => setCopiedUrl(null), 2000);
+  };
+
+  const draftUrl = () =>
+    `${window.location.origin}/studio/styles/${styleId ?? params.styleId}`;
+  const versionUrl = () =>
+    `${draftUrl()}${styleVersion ? `?version=${styleVersion}` : ""}`;
+  const publicUrl = () =>
+    `${window.location.origin.replace(/\/$/, "")}/styles/v1/me/${styleHandle || styleId}`;
+
+  const handlePublishToggle = async () => {
+    if (!styleId) return;
+    setPublishing(true);
+    try {
+      const nextPublic = await publishStyle();
+      toast.success(nextPublic ? "Style published" : "Style unpublished");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update publish state",
+      );
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const handleCopyToClipboard = async () => {
-    if (!style) return
-    await navigator.clipboard.writeText(JSON.stringify(style, null, 2))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    if (!style) return;
+    await navigator.clipboard.writeText(JSON.stringify(style, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleImport = () => {
-    const input = document.createElement("input")
-    input.type = "file"
-    input.accept = ".json"
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
     input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0]
-      if (!file) return
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
       try {
-        const text = await file.text()
-        const json = JSON.parse(text)
+        const text = await file.text();
+        const json = JSON.parse(text);
         if (json.version === 8 && Array.isArray(json.layers)) {
-          loadStyle(json)
+          loadStyle(json);
         }
       } catch {
         // Invalid file
       }
-    }
-    input.click()
-  }
+    };
+    input.click();
+  };
 
   const handleLoadFromUrl = async () => {
-    if (!urlInput.trim()) return
-    setUrlLoading(true)
+    if (!urlInput.trim()) return;
+    setUrlLoading(true);
     try {
-      const r = await fetch(urlInput.trim())
-      const json = await r.json()
+      const r = await fetch(urlInput.trim());
+      const json = await r.json();
       if (json.version === 8 && Array.isArray(json.layers)) {
-        loadStyle(json)
+        loadStyle(json);
       }
     } catch {
       // Invalid URL or style
     } finally {
-      setUrlLoading(false)
+      setUrlLoading(false);
     }
-  }
+  };
 
   if (loadError) {
     return (
@@ -204,7 +261,7 @@ export default function StyleEditorPage() {
           {loadError}
         </div>
       </div>
-    )
+    );
   }
 
   if (!style) {
@@ -212,7 +269,7 @@ export default function StyleEditorPage() {
       <div className="flex h-screen items-center justify-center">
         <div className="text-muted-foreground">Loading style editor...</div>
       </div>
-    )
+    );
   }
 
   return (
@@ -228,11 +285,17 @@ export default function StyleEditorPage() {
         {/* Save status */}
         {styleId && (
           <span className="text-xs text-muted-foreground ml-2">
-            {saveStatus === "saving" && <Loader2 className="h-3 w-3 animate-spin inline mr-1" />}
+            {saveStatus === "saving" && (
+              <Loader2 className="h-3 w-3 animate-spin inline mr-1" />
+            )}
             {saveStatus === "saving" && "Saving..."}
             {saveStatus === "saved" && "Saved"}
-            {saveStatus === "error" && <span className="text-destructive">Save failed</span>}
-            {saveStatus === "conflict" && <span className="text-destructive">Version conflict</span>}
+            {saveStatus === "error" && (
+              <span className="text-destructive">Save failed</span>
+            )}
+            {saveStatus === "conflict" && (
+              <span className="text-destructive">Version conflict</span>
+            )}
           </span>
         )}
         <div className="flex-1" />
@@ -249,6 +312,92 @@ export default function StyleEditorPage() {
               <Save className="h-3 w-3" />
               Save
             </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={isPublic ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  title="Publish and copy style URLs"
+                >
+                  {isPublic ? (
+                    <Globe className="h-3 w-3" />
+                  ) : (
+                    <GlobeLock className="h-3 w-3" />
+                  )}
+                  {isPublic ? "Published" : "Draft"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-3" align="end">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Publish workflow</p>
+                    <p className="text-xs text-muted-foreground">
+                      Keep editing in draft, publish when ready, or copy a
+                      version-pinned link.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full justify-start gap-2 text-xs"
+                    variant={isPublic ? "outline" : "default"}
+                    onClick={handlePublishToggle}
+                    disabled={publishing}
+                  >
+                    {publishing ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : isPublic ? (
+                      <GlobeLock className="h-3 w-3" />
+                    ) : (
+                      <Globe className="h-3 w-3" />
+                    )}
+                    {isPublic ? "Unpublish to draft" : "Publish style"}
+                  </Button>
+                  <div className="grid gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 justify-start gap-2 text-xs"
+                      onClick={() => copyUrl("Draft", draftUrl())}
+                    >
+                      {copiedUrl === "Draft" ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <Link className="h-3 w-3" />
+                      )}
+                      Copy draft editor URL
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 justify-start gap-2 text-xs"
+                      onClick={() => copyUrl("Version", versionUrl())}
+                    >
+                      {copiedUrl === "Version" ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <Link className="h-3 w-3" />
+                      )}
+                      Copy v{styleVersion ?? "latest"} URL
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 justify-start gap-2 text-xs"
+                      disabled={!isPublic}
+                      onClick={() => copyUrl("Published", publicUrl())}
+                    >
+                      {copiedUrl === "Published" ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <Globe className="h-3 w-3" />
+                      )}
+                      Copy published JSON URL
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
             <VersionHistoryButton />
           </>
         )}
@@ -308,14 +457,21 @@ export default function StyleEditorPage() {
         {/* Open from URL */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" title="Open style from URL">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              title="Open style from URL"
+            >
               <Link className="h-3 w-3" />
               URL
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80 p-2" align="end">
             <div className="flex flex-col gap-2">
-              <p className="text-xs text-muted-foreground">Load a MapLibre style from a URL</p>
+              <p className="text-xs text-muted-foreground">
+                Load a MapLibre style from a URL
+              </p>
               <div className="flex gap-1">
                 <Input
                   value={urlInput}
@@ -337,11 +493,21 @@ export default function StyleEditorPage() {
           </PopoverContent>
         </Popover>
 
-        <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={handleImport}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          onClick={handleImport}
+        >
           <Upload className="h-3 w-3" />
           Import
         </Button>
-        <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={handleExport}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          onClick={handleExport}
+        >
           <Download className="h-3 w-3" />
           Export
         </Button>
@@ -352,7 +518,11 @@ export default function StyleEditorPage() {
           onClick={handleCopyToClipboard}
           title="Copy style JSON to clipboard"
         >
-          {copied ? <Check className="h-3 w-3 text-green-500" /> : <ClipboardCopy className="h-3 w-3" />}
+          {copied ? (
+            <Check className="h-3 w-3 text-green-500" />
+          ) : (
+            <ClipboardCopy className="h-3 w-3" />
+          )}
           {copied ? "Copied" : "Copy"}
         </Button>
       </header>
@@ -376,10 +546,16 @@ export default function StyleEditorPage() {
             <TabsContent value="layers" className="flex-1 overflow-hidden mt-0">
               <LayerList />
             </TabsContent>
-            <TabsContent value="sources" className="flex-1 overflow-hidden mt-0">
+            <TabsContent
+              value="sources"
+              className="flex-1 overflow-hidden mt-0"
+            >
               <SourcePanel />
             </TabsContent>
-            <TabsContent value="settings" className="flex-1 overflow-hidden mt-0">
+            <TabsContent
+              value="settings"
+              className="flex-1 overflow-hidden mt-0"
+            >
               <StyleSettingsPanel />
             </TabsContent>
           </Tabs>
@@ -387,7 +563,11 @@ export default function StyleEditorPage() {
 
         {/* Map + optional JSON/Validation panel */}
         <main className="flex flex-1 flex-col">
-          <div className={showJson || showValidation ? "flex-1 basis-1/2" : "flex-1"}>
+          <div
+            className={
+              showJson || showValidation ? "flex-1 basis-1/2" : "flex-1"
+            }
+          >
             <MapPreview inspectMode={inspectMode} />
           </div>
           {(showJson || showValidation) && (
@@ -412,5 +592,5 @@ export default function StyleEditorPage() {
         </aside>
       </div>
     </div>
-  )
+  );
 }
