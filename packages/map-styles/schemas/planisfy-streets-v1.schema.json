@@ -3,23 +3,55 @@
   "$id": "https://planisfy.local/schemas/planisfy-streets-v1.schema.json",
   "title": "Planisfy Streets v1 source-layer contract",
   "type": "object",
-  "required": ["tileset", "sourceId", "layers"],
+  "required": [
+    "tileset",
+    "sourceId",
+    "schemaVersion",
+    "geometryEncoding",
+    "coordinateSystem",
+    "minZoom",
+    "maxZoom",
+    "layers"
+  ],
   "properties": {
     "tileset": { "const": "planisfy.basic" },
     "sourceId": { "const": "planisfy-streets" },
+    "schemaVersion": { "const": "planisfy-streets-source-layers-v1" },
+    "geometryEncoding": { "const": "Mapbox Vector Tile" },
+    "coordinateSystem": { "const": "EPSG:3857" },
+    "minZoom": { "type": "integer", "minimum": 0 },
+    "maxZoom": { "type": "integer", "minimum": 0 },
     "layers": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "requiredProperties"],
+        "required": [
+          "id",
+          "geometry",
+          "description",
+          "requiredProperties",
+          "minZoom",
+          "maxZoom"
+        ],
         "properties": {
-          "id": { "type": "string" },
+          "id": { "type": "string", "minLength": 1 },
+          "geometry": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          },
           "description": { "type": "string" },
           "requiredProperties": {
             "type": "array",
             "items": { "type": "string" }
-          }
+          },
+          "optionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "minZoom": { "type": "integer", "minimum": 0 },
+          "maxZoom": { "type": "integer", "minimum": 0 }
         },
         "additionalProperties": false
       }

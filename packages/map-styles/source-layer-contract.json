@@ -1,36 +1,83 @@
 {
   "tileset": "planisfy.basic",
   "sourceId": "planisfy-streets",
+  "schemaVersion": "planisfy-streets-source-layers-v1",
+  "geometryEncoding": "Mapbox Vector Tile",
+  "coordinateSystem": "EPSG:3857",
+  "minZoom": 0,
+  "maxZoom": 14,
   "layers": [
     {
+      "id": "land",
+      "geometry": ["Polygon", "MultiPolygon"],
+      "description": "Low-zoom land polygons for global context.",
+      "requiredProperties": ["class"],
+      "optionalProperties": ["name"],
+      "minZoom": 0,
+      "maxZoom": 14
+    },
+    {
       "id": "landuse",
+      "geometry": ["Polygon", "MultiPolygon"],
       "description": "Polygon landuse and leisure features used for parks and green areas.",
-      "requiredProperties": ["class"]
+      "requiredProperties": ["class"],
+      "optionalProperties": ["name"],
+      "minZoom": 6,
+      "maxZoom": 14
     },
     {
       "id": "water",
+      "geometry": ["Polygon", "MultiPolygon"],
       "description": "Water polygons.",
-      "requiredProperties": []
+      "requiredProperties": ["class"],
+      "optionalProperties": ["name"],
+      "minZoom": 0,
+      "maxZoom": 14
+    },
+    {
+      "id": "admin_boundary",
+      "geometry": ["LineString", "MultiLineString"],
+      "description": "Administrative boundary lines for country and region context.",
+      "requiredProperties": ["admin_level"],
+      "optionalProperties": ["name", "disputed"],
+      "minZoom": 0,
+      "maxZoom": 14
     },
     {
       "id": "transportation",
+      "geometry": ["LineString", "MultiLineString"],
       "description": "Road and path line features.",
-      "requiredProperties": ["class"]
+      "requiredProperties": ["class"],
+      "optionalProperties": ["subclass", "brunnel", "oneway", "name"],
+      "minZoom": 5,
+      "maxZoom": 14
     },
     {
       "id": "transportation_name",
+      "geometry": ["LineString", "MultiLineString"],
       "description": "Road label line features.",
-      "requiredProperties": ["name"]
+      "requiredProperties": ["name"],
+      "optionalProperties": ["class", "name:en"],
+      "minZoom": 10,
+      "maxZoom": 14
     },
     {
       "id": "building",
+      "geometry": ["Polygon", "MultiPolygon"],
       "description": "Building polygons visible at neighborhood zooms.",
-      "requiredProperties": []
+      "requiredProperties": [],
+      "optionalProperties": ["height", "render_height"],
+      "minZoom": 13,
+      "maxZoom": 14
     },
     {
       "id": "place",
+      "geometry": ["Point", "MultiPoint"],
       "description": "Place points for city and locality labels.",
-      "requiredProperties": ["name"]
+      "requiredProperties": ["name"],
+      "optionalProperties": ["name:en", "class", "rank", "population"],
+      "minZoom": 0,
+      "maxZoom": 14
     }
   ]
 }

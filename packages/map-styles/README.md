@@ -8,7 +8,9 @@ Milestone 1/2 includes a small, versioned fixture release for local demo wiring:
 
 | Asset | Path | Purpose |
 | --- | --- | --- |
-| Planisfy Streets style | `styles/planisfy-streets-v1.json` | MapLibre style pointed at the local Martin tileset `planisfy.basic`. |
+| Planisfy Streets light style | `styles/planisfy-streets-light-v1.json` | MapLibre light style pointed at the local Martin tileset `planisfy.basic`. |
+| Planisfy Streets dark style | `styles/planisfy-streets-dark-v1.json` | MapLibre dark style pointed at the local Martin tileset `planisfy.basic`. |
+| Legacy fixture alias | `styles/planisfy-streets-v1.json` | Backwards-compatible local demo style. |
 | Source-layer contract | `source-layer-contract.json` | Human- and machine-readable source-layer assumptions used by the style. |
 | JSON schema | `schemas/planisfy-streets-v1.schema.json` | Minimal schema for validating the source-layer contract shape. |
 | Release manifest | `release-manifest.json` | Release metadata tying the fixture style, schema, Martin source, and demo data expectation together. |
@@ -26,8 +28,9 @@ The default Docker Martin config composes source `stuttgart-base` into tileset
 infra/docker/data/pmtiles/stuttgart.pmtiles
 ```
 
-The style expects OpenMapTiles-like source layers: `landuse`, `water`,
-`transportation`, `transportation_name`, `building`, and `place`.
+The style expects the `planisfy-streets-source-layers-v1` contract documented in
+`source-layer-contract.json`. Regional fixtures may omit some global layers, but
+generated releases should keep the layer names stable.
 
 ## Owns
 
@@ -47,5 +50,6 @@ The style expects OpenMapTiles-like source layers: `landuse`, `water`,
 
 ```bash
 pnpm -F @planisfy/map-styles lint
+pnpm -F @planisfy/map-styles build:release
 node -e "JSON.parse(require('fs').readFileSync('packages/map-styles/styles/planisfy-streets-v1.json','utf8'))"
 ```

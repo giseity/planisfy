@@ -1,20 +1,70 @@
 {
   "package": "@planisfy/map-styles",
-  "release": "2026.06-fixture",
-  "styles": [
+  "release": "planisfy-streets-v1.0.0",
+  "status": "fixture-release",
+  "schemaVersion": "planisfy-streets-source-layers-v1",
+  "tilesets": [
     {
       "id": "planisfy-streets-v1",
       "name": "Planisfy Streets v1",
       "status": "fixture",
-      "style": "styles/planisfy-streets-v1.json",
-      "schema": "schemas/planisfy-streets-v1.schema.json",
+      "format": "pmtiles",
       "tileset": "planisfy.basic",
       "martinSource": "stuttgart-base",
+      "sourceLayerContract": "source-layer-contract.json",
+      "artifact": {
+        "path": "infra/docker/data/pmtiles/stuttgart.pmtiles",
+        "requiredForLocalRender": true,
+        "mutableLocalFixture": true
+      },
+      "bounds": [-180, -85.0511, 180, 85.0511],
+      "minZoom": 0,
+      "maxZoom": 14,
+      "dataSources": [
+        {
+          "name": "Overture Maps",
+          "purpose": "Roads, buildings, places, land, water, and admin data for future generated releases.",
+          "distribution": "GeoParquet by release/theme/type plus PMTiles inspection artifacts."
+        },
+        {
+          "name": "Natural Earth",
+          "purpose": "Low-zoom global land, water, boundaries, and label context.",
+          "distribution": "1:10m, 1:50m, and 1:110m vector/raster datasets."
+        }
+      ],
+      "attribution": "© Overture Maps contributors; Natural Earth; OpenStreetMap contributors where applicable"
+    }
+  ],
+  "styles": [
+    {
+      "id": "planisfy-streets-v1",
+      "name": "Planisfy Streets v1",
+      "status": "legacy-fixture-alias",
+      "style": "styles/planisfy-streets-v1.json",
+      "variantOf": "planisfy-streets-light-v1",
+      "schema": "schemas/planisfy-streets-v1.schema.json",
       "center": [9.1829, 48.7758],
       "notes": [
-        "Fixture style for local demo wiring and schema agreement tests.",
-        "Requires a compatible PMTiles file at infra/docker/data/pmtiles/stuttgart.pmtiles for rendered local tiles."
+        "Backwards-compatible fixture style for local demo wiring."
       ]
+    },
+    {
+      "id": "planisfy-streets-light-v1",
+      "name": "Planisfy Streets Light v1",
+      "status": "fixture",
+      "style": "styles/planisfy-streets-light-v1.json",
+      "tileset": "planisfy-streets-v1",
+      "schema": "schemas/planisfy-streets-v1.schema.json",
+      "center": [9.1829, 48.7758]
+    },
+    {
+      "id": "planisfy-streets-dark-v1",
+      "name": "Planisfy Streets Dark v1",
+      "status": "fixture",
+      "style": "styles/planisfy-streets-dark-v1.json",
+      "tileset": "planisfy-streets-v1",
+      "schema": "schemas/planisfy-streets-v1.schema.json",
+      "center": [9.1829, 48.7758]
     }
   ],
   "glyphs": {
