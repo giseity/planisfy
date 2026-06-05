@@ -46,7 +46,15 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    origin: ["http://localhost:3001", "https://console.planisfy.com"],
+    origin: [
+      "https://planisfy.localhost",
+      "https://console.planisfy.localhost",
+      "https://admin.planisfy.localhost",
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:3003",
+      "https://console.planisfy.com",
+    ],
     credentials: true,
   }),
 );

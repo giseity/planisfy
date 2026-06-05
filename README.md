@@ -46,13 +46,13 @@ See [STATUS.md](./STATUS.md) for the detailed alpha checklist.
 
 ## Apps
 
-| App | Package | Default port | Purpose |
+| App | Package | Local URL | Purpose |
 | --- | --- | --- | --- |
-| Marketing | `apps/marketing` | 3000 | Public website |
-| Console | `apps/console` | 3001 | Customer dashboard and style studio |
-| Docs | `apps/docs` | 3002 | Product and API documentation |
-| Admin | `apps/admin` | 3003 | Internal/super-admin views |
-| API | `apps/api` | 4000 | Hono API gateway |
+| Marketing | `apps/marketing` | <https://planisfy.localhost> | Public website |
+| Console | `apps/console` | <https://console.planisfy.localhost> | Customer dashboard and style studio |
+| Docs | `apps/docs` | <https://docs.planisfy.localhost> | Product and API documentation |
+| Admin | `apps/admin` | <https://admin.planisfy.localhost> | Internal/super-admin views |
+| API | `apps/api` | <https://api.planisfy.localhost> | Hono API gateway |
 | Tile worker | `apps/tile-worker` | N/A | Planned Cloudflare tile delivery |
 
 ## Packages
@@ -81,6 +81,9 @@ Run all development servers:
 ```bash
 pnpm dev
 ```
+
+Local app dev uses `portless`, so browser-facing services are available on
+the `.localhost` hostnames above rather than fixed `localhost:PORT` URLs.
 
 Run verification:
 

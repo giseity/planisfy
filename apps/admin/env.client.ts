@@ -1,10 +1,10 @@
 import { createEnv, z } from "@planisfy/env";
 
 const schema = z.object({
-  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3003"),
-  NEXT_PUBLIC_API_URL: z.string().url().default("http://localhost:4000"),
-  NEXT_PUBLIC_CONSOLE_URL: z.string().url().default("http://localhost:3001"),
-  NEXT_PUBLIC_MARKETING_URL: z.string().url().default("http://localhost:3000"),
+  NEXT_PUBLIC_APP_URL: z.string().url().default("https://admin.planisfy.localhost"),
+  NEXT_PUBLIC_API_URL: z.string().url().default("https://api.planisfy.localhost"),
+  NEXT_PUBLIC_CONSOLE_URL: z.string().url().default("https://console.planisfy.localhost"),
+  NEXT_PUBLIC_MARKETING_URL: z.string().url().default("https://planisfy.localhost"),
 });
 
 export const clientEnv = createEnv(

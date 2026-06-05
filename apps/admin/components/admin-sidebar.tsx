@@ -65,7 +65,7 @@ export function AdminSidebar() {
       </nav>
       <div className="p-2 border-t">
         <a
-          href="http://localhost:3001/studio/styles"
+          href="https://console.planisfy.localhost/studio/styles"
           className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground rounded-md transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
