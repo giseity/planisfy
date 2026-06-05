@@ -49,8 +49,8 @@ const ALL_SCOPES = [
   { value: "directions", label: "Directions", description: "Routing, isochrone, matrix" },
   { value: "elevation", label: "Elevation", description: "Elevation queries" },
   { value: "static", label: "Static images", description: "Static map images" },
-  { value: "sources:read", label: "Sources (read)", description: "List tileset sources" },
-  { value: "sources:write", label: "Sources (write)", description: "Upload/manage sources" },
+  { value: "sources:read", label: "Tilesets (read)", description: "List tilesets" },
+  { value: "sources:write", label: "Tilesets (write)", description: "Upload/manage tilesets" },
   { value: "usage:read", label: "Usage", description: "Read usage stats" },
 ] as const
 

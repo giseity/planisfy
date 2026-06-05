@@ -779,7 +779,7 @@ function BillingTab() {
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Sources</p>
+              <p className="text-sm text-muted-foreground">Tilesets</p>
               <p className="text-lg font-semibold">
                 {billing.usage.sources}
                 <span className="text-sm font-normal text-muted-foreground">
@@ -879,7 +879,7 @@ function BillingTab() {
                     {plan.maxSources === "Unlimited"
                       ? "Unlimited"
                       : plan.maxSources}{" "}
-                    data sources
+                    tilesets
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-500 shrink-0" />
