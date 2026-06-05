@@ -1,6 +1,7 @@
 import { Worker } from "bullmq";
 import Redis from "ioredis";
 import { env, redisConnection } from "./env";
+import { startOutboxDispatcher } from "./outbox-dispatcher";
 import { processSourceJob, type SourceProcessingJob } from "./source-worker";
 
 const REDIS_CONNECTION = redisConnection;
@@ -19,6 +20,10 @@ const sourceWorker = new Worker<SourceProcessingJob>(
   }
 );
 const heartbeatRedis = new Redis(REDIS_CONNECTION);
+const outboxDispatcher = startOutboxDispatcher({
+  intervalMs: env.GEODATA_OUTBOX_POLL_INTERVAL_MS,
+  batchSize: env.GEODATA_OUTBOX_BATCH_SIZE,
+});
 const heartbeat = setInterval(() => {
   writeHeartbeat().catch((err) => {
     console.error("[worker-geodata] heartbeat failed:", err);
@@ -42,6 +47,7 @@ sourceWorker.on("failed", (job, err) => {
 
 async function shutdown() {
   clearInterval(heartbeat);
+  await outboxDispatcher.close();
   await sourceWorker.close();
   await heartbeatRedis.quit();
 }
