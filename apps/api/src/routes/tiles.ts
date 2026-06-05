@@ -1,29 +1,97 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import { and, eq, isNull } from "drizzle-orm";
+import { db, profiles, storageObjects, tilesets, tilesetVersions } from "@planisfy/database";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 
 export const tilesRoute = new Hono<AuthEnv>();
+type ApiContext = Context<AuthEnv>;
 
-// ── GET /tiles/v1/:source/:z/:x/:y — Vector/raster tile (proxy to Martin)──
+// Stable owner/tileset TileJSON resolves to the promoted current version.
+tilesRoute.get("/tiles/v1/:owner/:handle.json", async (c) => {
+  const resolved = await resolveTileset(c.req.param("owner")!, c.req.param("handle")!);
+  if (!resolved?.version) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Tileset not found" } }, 404);
+  }
+
+  return c.json(toTileJson(c.req.url, resolved, "stable"), 200, {
+    "Cache-Control": "public, max-age=300",
+    ETag: `"tileset-${resolved.version.id}"`,
+  });
+});
+
+// Immutable version TileJSON.
+tilesRoute.get("/tiles/v1/:owner/:handle/versions/:version.json", async (c) => {
+  const versionNumber = Number(c.req.param("version"));
+  if (!Number.isInteger(versionNumber) || versionNumber <= 0) {
+    return c.json({ error: { code: "VALIDATION_ERROR", message: "Invalid tileset version" } }, 400);
+  }
+
+  const resolved = await resolveTileset(c.req.param("owner")!, c.req.param("handle")!, versionNumber);
+  if (!resolved?.version) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Tileset version not found" } }, 404);
+  }
+
+  return c.json(toTileJson(c.req.url, resolved, "version"), 200, {
+    "Cache-Control": "public, max-age=31536000, immutable",
+    ETag: `"tileset-${resolved.version.id}"`,
+  });
+});
+
+// ── GET /tiles/v1/:source/:z/:x/:y — Vector/raster tile (proxy to Martin) ──
 
 tilesRoute.get("/tiles/v1/:source/:z/:x/:y", async (c) => {
   const { source, z, x, y } = c.req.param();
+  return proxyMartinTile(c, `${source}/${z}/${x}/${y}`);
+});
+
+// Versioned owner/tileset tile proxy. Martin source names are conventional and
+// can be mapped by deployment glue; TileJSON above is the stable contract.
+tilesRoute.get("/tiles/v1/:owner/:handle/versions/:version/:z/:x/:y", async (c) => {
+  const { owner, handle, version, z, x, y } = c.req.param();
+  return proxyMartinTile(c, `${owner}.${handle}.v${version}/${z}/${x}/${y}`);
+});
+
+tilesRoute.get("/tiles/v1/:owner/:handle/:z/:x/:y", async (c) => {
+  const { owner, handle, z, x, y } = c.req.param();
+  return proxyMartinTile(c, `${owner}.${handle}/${z}/${x}/${y}`);
+});
+
+// ── GET /tiles/v1/:source.json — Legacy Martin TileJSON metadata ───────────
+
+tilesRoute.get("/tiles/v1/:source{.+\\.json$}", async (c) => {
+  const source = c.req.param("source").replace(/\.json$/, "");
 
   try {
-    const martinUrl = `${env.MARTIN_URL}/${source}/${z}/${x}/${y}`;
-    const res = await fetch(martinUrl);
+    const martinUrl = `${env.MARTIN_URL}/${source}`;
+    const res = await fetch(martinUrl, { headers: { Accept: "application/json" } });
+
+    if (!res.ok) {
+      return c.json({ error: { code: "NOT_FOUND", message: "Source not found" } }, 404);
+    }
+
+    const tileJson = await res.json() as { tiles?: string[] };
+    const apiBase = apiBaseFromUrl(c.req.url);
+    tileJson.tiles = [`${apiBase}/tiles/v1/${source}/{z}/{x}/{y}`];
+
+    c.header("Cache-Control", "public, max-age=300");
+    return c.json(tileJson);
+  } catch {
+    return c.json({ error: { code: "INTERNAL_ERROR", message: "Tile server unavailable" } }, 503);
+  }
+});
+
+async function proxyMartinTile(c: ApiContext, path: string) {
+  try {
+    const res = await fetch(`${env.MARTIN_URL}/${path}`);
 
     if (!res.ok) {
       if (res.status === 404) {
         return c.json({ error: { code: "NOT_FOUND", message: "Tile not found" } }, 404);
       }
-      return c.json(
-        { error: { code: "INTERNAL_ERROR", message: "Tile server error" } },
-        502
-      );
+      return c.json({ error: { code: "INTERNAL_ERROR", message: "Tile server error" } }, 502);
     }
 
-    // Pass through the tile data with appropriate headers
     const body = await res.arrayBuffer();
     const contentType = res.headers.get("content-type") || "application/x-protobuf";
     const encoding = res.headers.get("content-encoding");
@@ -36,43 +104,69 @@ tilesRoute.get("/tiles/v1/:source/:z/:x/:y", async (c) => {
     return c.body(body);
   } catch (err) {
     console.error("[tiles] Proxy error:", err);
-    return c.json(
-      { error: { code: "INTERNAL_ERROR", message: "Tile server unavailable" } },
-      503
-    );
+    return c.json({ error: { code: "INTERNAL_ERROR", message: "Tile server unavailable" } }, 503);
   }
-});
+}
 
-// ── GET /tiles/v1/:source.json — TileJSON metadata ─────────────────────────
+async function resolveTileset(ownerHandle: string, handle: string, versionNumber?: number) {
+  const [owner] = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(and(eq(profiles.handle, ownerHandle), isNull(profiles.deletedAt)))
+    .limit(1);
 
-tilesRoute.get("/tiles/v1/:source{.+\\.json$}", async (c) => {
-  const source = c.req.param("source").replace(/\.json$/, "");
+  if (!owner) return null;
 
-  try {
-    const martinUrl = `${env.MARTIN_URL}/${source}`;
-    const res = await fetch(martinUrl, {
-      headers: { Accept: "application/json" },
-    });
+  const [tileset] = await db
+    .select()
+    .from(tilesets)
+    .where(and(eq(tilesets.accountId, owner.id), eq(tilesets.handle, handle), isNull(tilesets.deletedAt)))
+    .limit(1);
 
-    if (!res.ok) {
-      return c.json({ error: { code: "NOT_FOUND", message: "Source not found" } }, 404);
-    }
+  if (!tileset) return null;
 
-    const tileJson = await res.json();
+  const versionWhere = versionNumber
+    ? and(eq(tilesetVersions.tilesetId, tileset.id), eq(tilesetVersions.version, versionNumber))
+    : eq(tilesetVersions.id, tileset.currentVersionId ?? "00000000-0000-0000-0000-000000000000");
+  const [version] = await db.select().from(tilesetVersions).where(versionWhere).limit(1);
 
-    // Rewrite tile URLs to point through our API
-    const baseUrl = new URL(c.req.url);
-    const apiBase = `${baseUrl.protocol}//${baseUrl.host}`;
-    if (tileJson.tiles) {
-      tileJson.tiles = [`${apiBase}/tiles/v1/${source}/{z}/{x}/{y}`];
-    }
+  const [artifact] = version?.artifactStorageObjectId
+    ? await db.select({ storageKey: storageObjects.storageKey }).from(storageObjects).where(eq(storageObjects.id, version.artifactStorageObjectId)).limit(1)
+    : [];
 
-    c.header("Cache-Control", "public, max-age=300");
-    return c.json(tileJson);
-  } catch {
-    return c.json(
-      { error: { code: "INTERNAL_ERROR", message: "Tile server unavailable" } },
-      503
-    );
+  return { owner: ownerHandle, tileset, version, artifact };
+}
+
+function toTileJson(url: string, resolved: NonNullable<Awaited<ReturnType<typeof resolveTileset>>>, mode: "stable" | "version") {
+  const apiBase = apiBaseFromUrl(url);
+  const tilesBase = mode === "version"
+    ? `${apiBase}/tiles/v1/${resolved.owner}/${resolved.tileset.handle}/versions/${resolved.version!.version}`
+    : `${apiBase}/tiles/v1/${resolved.owner}/${resolved.tileset.handle}`;
+
+  return {
+    tilejson: "3.0.0",
+    name: resolved.tileset.name,
+    description: resolved.tileset.description ?? undefined,
+    version: String(resolved.version!.version),
+    scheme: "xyz",
+    tiles: [`${tilesBase}/{z}/{x}/{y}`],
+    minzoom: resolved.version!.minZoom ?? resolved.tileset.minZoom ?? 0,
+    maxzoom: resolved.version!.maxZoom ?? resolved.tileset.maxZoom ?? 14,
+    bounds: resolved.version!.bounds ?? resolved.tileset.bounds ?? undefined,
+    vector_layers: extractVectorLayers(resolved.version!.schema ?? resolved.tileset.layerMetadata),
+    artifact: resolved.artifact?.storageKey,
+  };
+}
+
+function extractVectorLayers(schema: unknown) {
+  if (typeof schema === "object" && schema !== null && "vector_layers" in schema && Array.isArray(schema.vector_layers)) {
+    return schema.vector_layers;
   }
-});
+
+  return [{ id: "data", fields: {} }];
+}
+
+function apiBaseFromUrl(url: string) {
+  const baseUrl = new URL(url);
+  return `${baseUrl.protocol}//${baseUrl.host}`;
+}

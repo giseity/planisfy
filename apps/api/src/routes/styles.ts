@@ -1,12 +1,16 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
-import { db, styles, styleVersions } from "@planisfy/database";
+import {
+  db,
+  styles,
+  stylePublications,
+  styleVersions,
+} from "@planisfy/database";
 import {
   createStyleRecord,
   duplicateStyleRecord,
   softDeleteStyleRecord,
-  toggleStylePublishRecord,
 } from "@planisfy/database/style-service";
 import { logAudit } from "../lib/audit";
 import { checkResourceLimit } from "../lib/plan-check";
@@ -50,19 +54,28 @@ stylesRoute.post("/styles", async (c) => {
   const parsed = createStyleSchema.safeParse(body);
   if (!parsed.success) {
     return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid input", details: parsed.error.flatten() } },
-      400
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid input",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
     );
   }
 
   const planCheck = await checkResourceLimit(userId, ownerId, "styles");
   if (!planCheck.allowed) {
-    return c.json({
-      error: {
-        code: "PLAN_LIMIT",
-        message: `You've reached the maximum of ${planCheck.limit} styles on your current plan. Please upgrade to create more.`,
+    return c.json(
+      {
+        error: {
+          code: "PLAN_LIMIT",
+          message: `You've reached the maximum of ${planCheck.limit} styles on your current plan. Please upgrade to create more.`,
+        },
       },
-    }, 403);
+      403,
+    );
   }
 
   const { name, description, styleJson, handle } = parsed.data;
@@ -123,12 +136,18 @@ stylesRoute.get("/styles/:id", async (c) => {
     .limit(1);
 
   if (!style) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
   }
 
   // Allow access to own styles or public styles
   if (style.ownerId !== ownerId && !style.isPublic) {
-    return c.json({ error: { code: "FORBIDDEN", message: "Access denied" } }, 403);
+    return c.json(
+      { error: { code: "FORBIDDEN", message: "Access denied" } },
+      403,
+    );
   }
 
   return c.json({ data: style });
@@ -145,8 +164,14 @@ stylesRoute.put("/styles/:id", async (c) => {
   const parsed = updateStyleSchema.safeParse(body);
   if (!parsed.success) {
     return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid input", details: parsed.error.flatten() } },
-      400
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid input",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
     );
   }
 
@@ -159,7 +184,10 @@ stylesRoute.put("/styles/:id", async (c) => {
   if (styleJson !== undefined) updates.styleJson = styleJson;
 
   if (Object.keys(updates).length === 0) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "No fields to update" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "No fields to update" } },
+      400,
+    );
   }
 
   // Save a version snapshot of the current state before updating
@@ -175,8 +203,8 @@ stylesRoute.put("/styles/:id", async (c) => {
         eq(styles.id, styleId),
         eq(styles.ownerId, ownerId),
         eq(styles.version, version),
-        isNull(styles.deletedAt)
-      )
+        isNull(styles.deletedAt),
+      ),
     )
     .limit(1);
 
@@ -205,8 +233,8 @@ stylesRoute.put("/styles/:id", async (c) => {
         eq(styles.id, styleId),
         eq(styles.ownerId, ownerId),
         eq(styles.version, version),
-        isNull(styles.deletedAt)
-      )
+        isNull(styles.deletedAt),
+      ),
     )
     .returning({
       id: styles.id,
@@ -217,16 +245,26 @@ stylesRoute.put("/styles/:id", async (c) => {
   if (result.length === 0) {
     // Determine reason: not found, not owned, or version conflict
     const [existing] = await db
-      .select({ id: styles.id, ownerId: styles.ownerId, version: styles.version })
+      .select({
+        id: styles.id,
+        ownerId: styles.ownerId,
+        version: styles.version,
+      })
       .from(styles)
       .where(and(eq(styles.id, styleId), isNull(styles.deletedAt)))
       .limit(1);
 
     if (!existing) {
-      return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Style not found" } },
+        404,
+      );
     }
     if (existing.ownerId !== ownerId) {
-      return c.json({ error: { code: "FORBIDDEN", message: "Access denied" } }, 403);
+      return c.json(
+        { error: { code: "FORBIDDEN", message: "Access denied" } },
+        403,
+      );
     }
     // Version mismatch
     return c.json(
@@ -237,7 +275,7 @@ stylesRoute.put("/styles/:id", async (c) => {
           details: { currentVersion: existing.version },
         },
       },
-      409
+      409,
     );
   }
 
@@ -262,7 +300,10 @@ stylesRoute.delete("/styles/:id", async (c) => {
 
   const deleted = await softDeleteStyleRecord(ownerId, styleId);
   if (!deleted) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
   }
 
   logAudit({
@@ -277,27 +318,148 @@ stylesRoute.delete("/styles/:id", async (c) => {
   return c.json({ data: { id: styleId, deleted: true } });
 });
 
-// ── POST /console/styles/:id/publish — Toggle public ───────────────────────
+// ── POST /console/styles/:id/publish — Publish immutable snapshot ────────────
 
 stylesRoute.post("/styles/:id/publish", async (c) => {
   const styleId = c.req.param("id");
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
 
-  const updated = await toggleStylePublishRecord(ownerId, styleId);
+  const [style] = await db
+    .select()
+    .from(styles)
+    .where(
+      and(
+        eq(styles.id, styleId),
+        eq(styles.ownerId, ownerId),
+        isNull(styles.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!style) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
+  }
+
+  await db
+    .insert(styleVersions)
+    .values({
+      styleId,
+      version: style.version,
+      styleJson: style.styleJson,
+      name: style.name,
+      createdBy: userId,
+    })
+    .onConflictDoNothing();
+
+  const [snapshot] = await db
+    .select()
+    .from(styleVersions)
+    .where(
+      and(
+        eq(styleVersions.styleId, styleId),
+        eq(styleVersions.version, style.version),
+      ),
+    )
+    .limit(1);
+
+  if (!snapshot) {
+    return c.json(
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Failed to create style version",
+        },
+      },
+      500,
+    );
+  }
+
+  await db
+    .delete(stylePublications)
+    .where(
+      and(
+        eq(stylePublications.styleId, styleId),
+        eq(stylePublications.alias, "latest"),
+      ),
+    );
+
+  const [publication] = await db
+    .insert(stylePublications)
+    .values({
+      styleId,
+      styleVersionId: snapshot.id,
+      accountId: ownerId,
+      alias: "latest",
+      publishedBy: userId,
+      metadata: { version: snapshot.version },
+    })
+    .returning();
+
+  const [updated] = await db
+    .update(styles)
+    .set({ isPublic: true })
+    .where(eq(styles.id, styleId))
+    .returning({
+      id: styles.id,
+      handle: styles.handle,
+      name: styles.name,
+      isPublic: styles.isPublic,
+      version: styles.version,
+    });
+
+  logAudit({
+    profileId: userId,
+    action: "style.published",
+    resourceType: "style",
+    resourceId: styleId,
+    metadata: { version: snapshot.version, publicationId: publication!.id },
+    ipAddress: getClientIp(c.req.raw),
+  });
+
+  return c.json({
+    data: { ...updated!, publishedVersion: snapshot.version, publication },
+  });
+});
+
+stylesRoute.post("/styles/:id/unpublish", async (c) => {
+  const styleId = c.req.param("id");
+  const ownerId = c.get("ownerId");
+  const userId = c.get("userId");
+
+  const [updated] = await db
+    .update(styles)
+    .set({ isPublic: false })
+    .where(
+      and(
+        eq(styles.id, styleId),
+        eq(styles.ownerId, ownerId),
+        isNull(styles.deletedAt),
+      ),
+    )
+    .returning({ id: styles.id, isPublic: styles.isPublic });
+
   if (!updated) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
   }
 
   logAudit({
     profileId: userId,
-    action: updated.isPublic ? "style.published" : "style.unpublished",
+    action: "style.unpublished",
     resourceType: "style",
     resourceId: styleId,
     ipAddress: getClientIp(c.req.raw),
   });
 
-  return c.json({ data: updated });
+  return c.json({
+    data: { ...updated, handle: styleId, name: "", version: 0 },
+  });
 });
 
 // ── POST /console/styles/:id/duplicate — Duplicate ─────────────────────────
@@ -309,7 +471,10 @@ stylesRoute.post("/styles/:id/duplicate", async (c) => {
 
   const created = await duplicateStyleRecord(ownerId, styleId);
   if (!created) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
   }
 
   logAudit({
@@ -335,12 +500,19 @@ stylesRoute.get("/styles/:id/versions", async (c) => {
     .select({ id: styles.id })
     .from(styles)
     .where(
-      and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt))
+      and(
+        eq(styles.id, styleId),
+        eq(styles.ownerId, ownerId),
+        isNull(styles.deletedAt),
+      ),
     )
     .limit(1);
 
   if (!style) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
   }
 
   const versions = await db
@@ -367,7 +539,12 @@ stylesRoute.post("/styles/:id/versions/:versionNum/restore", async (c) => {
   const userId = c.get("userId");
 
   if (isNaN(versionNum)) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Invalid version number" } }, 400);
+    return c.json(
+      {
+        error: { code: "VALIDATION_ERROR", message: "Invalid version number" },
+      },
+      400,
+    );
   }
 
   // Get current style to check ownership and get current version
@@ -380,12 +557,19 @@ stylesRoute.post("/styles/:id/versions/:versionNum/restore", async (c) => {
     })
     .from(styles)
     .where(
-      and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt))
+      and(
+        eq(styles.id, styleId),
+        eq(styles.ownerId, ownerId),
+        isNull(styles.deletedAt),
+      ),
     )
     .limit(1);
 
   if (!current) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Style not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
   }
 
   // Get the version to restore
@@ -395,13 +579,16 @@ stylesRoute.post("/styles/:id/versions/:versionNum/restore", async (c) => {
     .where(
       and(
         eq(styleVersions.styleId, styleId),
-        eq(styleVersions.version, versionNum)
-      )
+        eq(styleVersions.version, versionNum),
+      ),
     )
     .limit(1);
 
   if (!snapshot) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Version not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Version not found" } },
+      404,
+    );
   }
 
   // Save the current state as a version before restoring
