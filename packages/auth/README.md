@@ -9,7 +9,7 @@ Shared Better Auth configuration and helpers for Planisfy.
 - Session and organization plugin setup.
 - User and organization creation hooks.
 - Shared auth client exports for frontend apps.
-- Helper functions for active profile/account context.
+- Helper functions for active account context.
 
 ## Does Not Own
 
@@ -19,12 +19,12 @@ Shared Better Auth configuration and helpers for Planisfy.
 
 ## Identity Anchor
 
-The current alpha schema uses `profiles` as the shared owner anchor:
+The current schema uses `accounts` as the shared owner anchor:
 
-- `profiles.id = users.id`
-- `profiles.id = organizations.id`
+- `accounts.id = users.id`
+- `accounts.id = organizations.id`
 
-The restructuring plan renames this anchor to `accounts` and renames Better Auth's OAuth provider table to `oauth_accounts`, following the Geobble pattern.
+The database package still exports `profiles` as a temporary alpha compatibility alias for existing callers. New code should use `accounts` terminology. Better Auth provider credentials live in `oauth_accounts`.
 
 ## Important Commands
 
