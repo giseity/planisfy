@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://planisfy.local/schemas/planisfy-streets-v1.schema.json",
+  "title": "Planisfy Streets v1 source-layer contract",
+  "type": "object",
+  "required": ["tileset", "sourceId", "layers"],
+  "properties": {
+    "tileset": { "const": "planisfy.basic" },
+    "sourceId": { "const": "planisfy-streets" },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "requiredProperties"],
+        "properties": {
+          "id": { "type": "string" },
+          "description": { "type": "string" },
+          "requiredProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
