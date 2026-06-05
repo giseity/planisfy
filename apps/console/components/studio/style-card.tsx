@@ -84,7 +84,7 @@ export function StyleCard({ style, onMutate }: StyleCardProps) {
   }
 
   const handleCopyUrl = async () => {
-    const url = `${window.location.origin}/studio/styles/${style.id}`
+    const url = await styleCopyUrl(style)
     await navigator.clipboard.writeText(url)
   }
 
@@ -221,4 +221,13 @@ export function StyleCard({ style, onMutate }: StyleCardProps) {
       </Dialog>
     </>
   )
+}
+
+async function styleCopyUrl(style: StyleData): Promise<string> {
+  if (!style.isPublic) {
+    return `${window.location.origin}/studio/styles/${style.id}`
+  }
+
+  const { data: profile } = await api.getProfile()
+  return `${window.location.origin.replace(/\/$/, "")}/styles/v1/${profile.handle}/${style.handle}`
 }

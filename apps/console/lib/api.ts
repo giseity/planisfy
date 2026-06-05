@@ -35,6 +35,17 @@ export interface ConsoleSource {
   updatedAt: string;
 }
 
+export interface ConsoleProfile {
+  id: string;
+  handle: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  email: string;
+  emailVerified: boolean;
+  createdAt: string;
+}
+
 export interface ConsoleVectorLayer {
   id: string;
   fields?: Record<string, string>;
@@ -172,6 +183,10 @@ class ApiClient {
 
   delete<T>(path: string, body?: unknown) {
     return this.request<T>("DELETE", path, body);
+  }
+
+  getProfile() {
+    return this.get<ApiEnvelope<ConsoleProfile>>("/profile");
   }
 
   listSources() {
