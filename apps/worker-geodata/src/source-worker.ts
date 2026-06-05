@@ -23,10 +23,10 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-type SourceFormat = "geojson" | "csv" | "shapefile" | "pmtiles";
+type SourceFormat = "geojson" | "csv" | "shapefile" | "pmtiles" | "mbtiles";
 
 export interface SourceProcessingJob {
-  sourceId: string;
+  sourceId?: string;
   tilesetId?: string;
   ownerId: string;
   uploadKey: string;
@@ -34,6 +34,10 @@ export interface SourceProcessingJob {
   storageObjectId?: string;
   processingJobId?: string;
   format: SourceFormat;
+  csv?: {
+    latitude?: string;
+    longitude?: string;
+  };
   options?: {
     minZoom?: number;
     maxZoom?: number;
@@ -56,9 +60,13 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
   const storage = getStorage();
   const minZoom = options?.minZoom ?? 0;
   const maxZoom = options?.maxZoom ?? 14;
+  const resourceId = sourceId ?? tilesetId;
+  if (!resourceId) {
+    throw new Error("Source processing job requires sourceId or tilesetId");
+  }
 
   console.log(
-    `[worker-geodata] processing ${tilesetId ? "tileset" : "source"} ${sourceId} (${format})`,
+    `[worker-geodata] processing ${tilesetId ? "tileset" : "source"} ${resourceId} (${format})`,
   );
 
   if (processingJobId) {
@@ -81,25 +89,35 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
 
   try {
     const rawData = await storage.download(uploadKey);
+    const validation = validateUpload(rawData, format, job.data.csv);
+    if (uploadId) {
+      await db
+        .update(uploads)
+        .set({ status: "READY", validationResult: validation })
+        .where(eq(uploads.id, uploadId));
+    }
     if (processingJobId) {
       await updateProgress(processingJobId, 20, {
         stage: "downloaded",
         bytes: rawData.byteLength,
+        validation,
       });
       await logProcessingJob(processingJobId, "Upload downloaded", {
         bytes: rawData.byteLength,
+        validation,
       });
     }
 
-    if (format === "pmtiles") {
+    if (format === "pmtiles" || format === "mbtiles") {
       const result = await storeProcessedArtifact({
         ownerId,
-        sourceId,
+        sourceId: resourceId,
         tilesetId,
         processingJobId,
         data: rawData,
-        format: "pmtiles",
-        contentType: "application/x-protobuf",
+        format,
+        contentType:
+          format === "pmtiles" ? "application/x-protobuf" : "application/vnd.sqlite3",
       });
 
       if (processingJobId) {
@@ -111,49 +129,50 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
 
       await finalizeProcessedArtifact({
         ownerId,
-        sourceId,
+        sourceId: resourceId,
         tilesetId,
         uploadId,
         processingJobId,
         artifact: result,
-        format: "pmtiles",
+        format,
         minZoom,
         maxZoom,
+        bounds: validation.bounds,
       });
       return;
     }
 
-    const inputPath = join(
+    let inputPath = join(
       tmpDir,
       `input.${format === "geojson" ? "geojson" : format}`,
     );
     await writeFile(inputPath, rawData);
 
-    let bounds: [number, number, number, number] | null = null;
+    const bounds = validation.bounds;
     if (format === "geojson") {
-      const geojson = JSON.parse(rawData.toString("utf-8"));
-      const featureCount = geojson.features?.length ?? 0;
-
-      if (
-        !geojson.type ||
-        !["FeatureCollection", "Feature", "GeometryCollection"].includes(
-          geojson.type,
-        )
-      ) {
-        throw new Error("Invalid GeoJSON: missing or invalid 'type' property");
-      }
-
-      if (featureCount === 0 && geojson.type === "FeatureCollection") {
-        throw new Error("GeoJSON FeatureCollection has no features");
-      }
-
-      bounds = calculateBounds(geojson);
       if (bounds && !tilesetId) {
         await db
           .update(tilesetSources)
           .set({ bounds })
-          .where(eq(tilesetSources.id, sourceId));
+          .where(eq(tilesetSources.id, resourceId));
       }
+    } else if (format === "shapefile") {
+      const convertedPath = join(tmpDir, "input.geojsonseq");
+      try {
+        await execFileAsync(
+          "ogr2ogr",
+          ["-f", "GeoJSONSeq", convertedPath, inputPath],
+          { timeout: 300_000 },
+        );
+      } catch (err) {
+        if (isMissingExecutableError(err)) {
+          throw new Error(
+            "Shapefile uploads require GDAL/ogr2ogr in the geodata worker.",
+          );
+        }
+        throw err;
+      }
+      inputPath = convertedPath;
     }
 
     const outputPath = join(tmpDir, "output.pmtiles");
@@ -192,12 +211,17 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         console.warn("[worker-geodata] tippecanoe not found, storing raw file");
         const result = await storeProcessedArtifact({
           ownerId,
-          sourceId,
+          sourceId: resourceId,
           tilesetId,
           processingJobId,
           data: rawData,
           format,
-          contentType: format === "csv" ? "text/csv" : "application/geo+json",
+          contentType:
+            format === "csv"
+              ? "text/csv"
+              : format === "shapefile"
+                ? "application/zip"
+                : "application/geo+json",
         });
 
         if (processingJobId) {
@@ -209,7 +233,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
 
         await finalizeProcessedArtifact({
           ownerId,
-          sourceId,
+          sourceId: resourceId,
           tilesetId,
           uploadId,
           processingJobId,
@@ -229,7 +253,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     const pmtilesData = await readFile(outputPath);
     const result = await storeProcessedArtifact({
       ownerId,
-      sourceId,
+      sourceId: resourceId,
       tilesetId,
       processingJobId,
       data: pmtilesData,
@@ -246,7 +270,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
 
     await finalizeProcessedArtifact({
       ownerId,
-      sourceId,
+      sourceId: resourceId,
       tilesetId,
       uploadId,
       processingJobId,
@@ -445,7 +469,7 @@ async function finalizeProcessedArtifact(params: {
         tilesetId: params.tilesetId,
         version: versionNumber,
         artifactStorageObjectId: params.artifact.storageObjectId,
-        format: params.format === "pmtiles" ? "PMTILES" : "DIRECTORY",
+        format: tileArtifactFormat(params.format),
         buildJobId: params.processingJobId,
         schema: {
           vector_layers: [
@@ -461,7 +485,6 @@ async function finalizeProcessedArtifact(params: {
         bounds: params.bounds,
         minZoom: params.minZoom,
         maxZoom: params.maxZoom,
-        publishedAt: new Date(),
       })
       .returning();
 
@@ -469,7 +492,6 @@ async function finalizeProcessedArtifact(params: {
       .update(tilesets)
       .set({
         status: "READY",
-        currentVersionId: tilesetVersion!.id,
         bounds: params.bounds,
         minZoom: params.minZoom,
         maxZoom: params.maxZoom,
@@ -605,6 +627,12 @@ function sourceArtifactFileName(
     : `data.${format}`;
 }
 
+function tileArtifactFormat(format: SourceFormat): "PMTILES" | "MBTILES" | "DIRECTORY" {
+  if (format === "pmtiles") return "PMTILES";
+  if (format === "mbtiles") return "MBTILES";
+  return "DIRECTORY";
+}
+
 function isMissingExecutableError(err: unknown): boolean {
   return (
     typeof err === "object" &&
@@ -665,4 +693,106 @@ function calculateBounds(
   }
 
   return hasCoords ? [minLon, minLat, maxLon, maxLat] : null;
+}
+
+type UploadValidation = {
+  format: SourceFormat;
+  featureCount?: number;
+  bounds?: [number, number, number, number] | null;
+  schema?: { fields: Record<string, string>; columns?: string[] };
+  csv?: { latitude: string; longitude: string };
+  byteLength: number;
+};
+
+function validateUpload(
+  data: Buffer,
+  format: SourceFormat,
+  csv?: { latitude?: string; longitude?: string },
+): UploadValidation {
+  if (format === "geojson") {
+    const geojson = JSON.parse(data.toString("utf-8")) as GeoJsonLike;
+    if (
+      !geojson.type ||
+      !["FeatureCollection", "Feature", "GeometryCollection"].includes(
+        geojson.type,
+      )
+    ) {
+      throw new Error("Invalid GeoJSON: missing or invalid 'type' property");
+    }
+
+    const features = geojson.features ?? [];
+    if (geojson.type === "FeatureCollection" && features.length === 0) {
+      throw new Error("GeoJSON FeatureCollection has no features");
+    }
+
+    return {
+      format,
+      featureCount: features.length,
+      bounds: calculateBounds(geojson),
+      schema: { fields: summarizeGeoJsonFields(features) },
+      byteLength: data.byteLength,
+    };
+  }
+
+  if (format === "csv") {
+    const text = data.toString("utf-8");
+    const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
+    const columns = splitCsvLine(lines[0] ?? "");
+    if (columns.length === 0) throw new Error("CSV upload has no header row");
+    const latitude = csv?.latitude ?? inferColumn(columns, ["lat", "latitude", "y"]);
+    const longitude = csv?.longitude ?? inferColumn(columns, ["lon", "lng", "longitude", "x"]);
+    if (!latitude || !longitude) {
+      throw new Error(
+        "CSV uploads require latitude/longitude columns or explicit csvLatitude/csvLongitude options.",
+      );
+    }
+    return {
+      format,
+      featureCount: Math.max(0, lines.length - 1),
+      schema: { fields: Object.fromEntries(columns.map((col) => [col, "string"])), columns },
+      csv: { latitude, longitude },
+      byteLength: data.byteLength,
+    };
+  }
+
+  if (format === "shapefile") {
+    return {
+      format,
+      schema: { fields: {}, columns: [] },
+      byteLength: data.byteLength,
+    };
+  }
+
+  return {
+    format,
+    byteLength: data.byteLength,
+  };
+}
+
+function splitCsvLine(line: string): string[] {
+  return line
+    .split(",")
+    .map((column) => column.trim().replace(/^"|"$/g, ""))
+    .filter(Boolean);
+}
+
+function inferColumn(columns: string[], candidates: string[]): string | undefined {
+  const normalized = new Map(columns.map((column) => [column.toLowerCase(), column]));
+  for (const candidate of candidates) {
+    const match = normalized.get(candidate);
+    if (match) return match;
+  }
+  return undefined;
+}
+
+function summarizeGeoJsonFields(
+  features: Array<{ geometry?: GeoJsonLike; properties?: Record<string, unknown> }>,
+): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const feature of features.slice(0, 100)) {
+    for (const [key, value] of Object.entries(feature.properties ?? {})) {
+      if (!(key in fields)) fields[key] = typeof value;
+    }
+  }
+  return fields;
 }
