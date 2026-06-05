@@ -10,7 +10,7 @@ import { EmailVerificationBanner } from "@/components/studio/email-verification-
 
 const navItems = [
   { href: "/studio/styles", label: "Styles", icon: Palette },
-  { href: "/studio/sources", label: "Sources", icon: Database },
+  { href: "/studio/sources", label: "Tilesets", icon: Database },
   { href: "/studio/keys", label: "API Keys", icon: Key },
   { href: "/studio/usage", label: "Usage", icon: BarChart3 },
   { href: "/studio/org", label: "Organization", icon: Building2 },
