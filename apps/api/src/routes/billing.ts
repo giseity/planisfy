@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthEnv } from "../middleware/auth";
 import { getUserPlan, getPlanLimits, PLANS, createCheckoutUrl, getCustomerPortalUrl } from "../lib/billing";
-import { db, styles, tilesetSources, apiKeys, usageLogs } from "@planisfy/database";
+import { db, styles, tilesets, apiKeys, usageLogs } from "@planisfy/database";
 import { eq, and, isNull, count, sql, gte } from "drizzle-orm";
 import { env } from "../env";
 
@@ -26,9 +26,9 @@ billingRoute.get("/billing", async (c) => {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [[styleCount], [sourceCount], [keyCount], [usageRow]] = await Promise.all([
+  const [[styleCount], [tilesetCount], [keyCount], [usageRow]] = await Promise.all([
     db.select({ count: count() }).from(styles).where(and(eq(styles.ownerId, ownerId), isNull(styles.deletedAt))),
-    db.select({ count: count() }).from(tilesetSources).where(and(eq(tilesetSources.ownerId, ownerId), isNull(tilesetSources.deletedAt))),
+    db.select({ count: count() }).from(tilesets).where(and(eq(tilesets.accountId, ownerId), isNull(tilesets.deletedAt))),
     db.select({ count: count() }).from(apiKeys).where(and(eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt))),
     db.select({ total: sql<number>`coalesce(sum(${usageLogs.cost}), 0)`.as("total") })
       .from(usageLogs)
@@ -45,7 +45,7 @@ billingRoute.get("/billing", async (c) => {
     usage: {
       monthlyUnits: Number(usageRow?.total ?? 0),
       styles: styleCount?.count ?? 0,
-      sources: sourceCount?.count ?? 0,
+      sources: tilesetCount?.count ?? 0,
       apiKeys: keyCount?.count ?? 0,
     },
     quotaPercent: limits.monthlyUnits === Infinity
