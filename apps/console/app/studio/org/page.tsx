@@ -754,7 +754,7 @@ function SettingsTab({
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Deleting an organization is permanent. All styles, sources, API
+            Deleting an organization is permanent. All styles, tilesets, API
             keys, and usage data owned by this organization will be lost.
           </p>
           <Button

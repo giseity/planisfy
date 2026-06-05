@@ -650,7 +650,7 @@ function DangerZone() {
           <DialogHeader>
             <DialogTitle>Delete your account?</DialogTitle>
             <DialogDescription>
-              This action is permanent. All your styles, API keys, sources, and data
+              This action is permanent. All your styles, API keys, tilesets, and data
               will be deleted. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
