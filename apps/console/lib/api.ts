@@ -205,6 +205,12 @@ class ApiClient {
     );
   }
 
+  publishStyleVersion(styleId: string, version: number) {
+    return this.post<ApiEnvelope<StylePublishResponse>>(
+      `/styles/${styleId}/versions/${version}/publish`,
+    );
+  }
+
   async upload<T>(path: string, formData: FormData): Promise<T> {
     const url = `${BASE}${path}`;
     const res = await fetch(url, {

@@ -71,6 +71,9 @@ function VersionList({
   const isPublic = useStyleStore((s) => s.isPublic);
   const publishStyle = useStyleStore((s) => s.publishStyle);
   const [publishing, setPublishing] = useState(false);
+  const [publishingVersion, setPublishingVersion] = useState<number | null>(
+    null,
+  );
 
   useEffect(() => {
     api
@@ -105,6 +108,16 @@ function VersionList({
       // ignore
     } finally {
       setRestoring(null);
+    }
+  };
+
+  const handlePublishVersion = async (version: number) => {
+    setPublishingVersion(version);
+    try {
+      await api.publishStyleVersion(styleId, version);
+      await loadStyleFromApi(styleId);
+    } finally {
+      setPublishingVersion(null);
     }
   };
 
@@ -178,20 +191,36 @@ function VersionList({
                 URL
               </Button>
               {v.version !== currentVersion && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 text-xs"
-                  onClick={() => handleRestore(v.version)}
-                  disabled={restoring !== null}
-                >
-                  {restoring === v.version ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-3 w-3" />
-                  )}
-                  Roll back
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() => handlePublishVersion(v.version)}
+                    disabled={publishingVersion !== null}
+                  >
+                    {publishingVersion === v.version ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Globe className="h-3 w-3" />
+                    )}
+                    Publish
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() => handleRestore(v.version)}
+                    disabled={restoring !== null}
+                  >
+                    {restoring === v.version ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-3 w-3" />
+                    )}
+                    Roll back
+                  </Button>
+                </>
               )}
             </div>
           </div>

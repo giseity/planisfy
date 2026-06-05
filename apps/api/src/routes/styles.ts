@@ -378,38 +378,12 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
     );
   }
 
-  await db
-    .delete(stylePublications)
-    .where(
-      and(
-        eq(stylePublications.styleId, styleId),
-        eq(stylePublications.alias, "latest"),
-      ),
-    );
-
-  const [publication] = await db
-    .insert(stylePublications)
-    .values({
-      styleId,
-      styleVersionId: snapshot.id,
-      accountId: ownerId,
-      alias: "latest",
-      publishedBy: userId,
-      metadata: { version: snapshot.version },
-    })
-    .returning();
-
-  await db
-    .insert(stylePublications)
-    .values({
-      styleId,
-      styleVersionId: snapshot.id,
-      accountId: ownerId,
-      alias: `v${snapshot.version}`,
-      publishedBy: userId,
-      metadata: { version: snapshot.version },
-    })
-    .onConflictDoNothing();
+  const publication = await publishStyleSnapshot({
+    styleId,
+    ownerId,
+    userId,
+    snapshot,
+  });
 
   const [updated] = await db
     .update(styles)
@@ -428,7 +402,98 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
     action: "style.published",
     resourceType: "style",
     resourceId: styleId,
-    metadata: { version: snapshot.version, publicationId: publication!.id },
+    metadata: { version: snapshot.version, publicationId: publication.id },
+    ipAddress: getClientIp(c.req.raw),
+  });
+
+  return c.json({
+    data: { ...updated!, publishedVersion: snapshot.version, publication },
+  });
+});
+
+stylesRoute.post("/styles/:id/versions/:versionNum/publish", async (c) => {
+  const styleId = c.req.param("id");
+  const versionNum = parseInt(c.req.param("versionNum"), 10);
+  const ownerId = c.get("ownerId");
+  const userId = c.get("userId");
+
+  if (isNaN(versionNum) || versionNum <= 0) {
+    return c.json(
+      {
+        error: { code: "VALIDATION_ERROR", message: "Invalid version number" },
+      },
+      400,
+    );
+  }
+
+  const [style] = await db
+    .select({
+      id: styles.id,
+      handle: styles.handle,
+      name: styles.name,
+      ownerId: styles.ownerId,
+      version: styles.version,
+    })
+    .from(styles)
+    .where(
+      and(
+        eq(styles.id, styleId),
+        eq(styles.ownerId, ownerId),
+        isNull(styles.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!style) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
+  }
+
+  const [snapshot] = await db
+    .select()
+    .from(styleVersions)
+    .where(
+      and(
+        eq(styleVersions.styleId, styleId),
+        eq(styleVersions.version, versionNum),
+      ),
+    )
+    .limit(1);
+
+  if (!snapshot) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Version not found" } },
+      404,
+    );
+  }
+
+  const publication = await publishStyleSnapshot({
+    styleId,
+    ownerId,
+    userId,
+    snapshot,
+  });
+
+  const [updated] = await db
+    .update(styles)
+    .set({ isPublic: true })
+    .where(eq(styles.id, styleId))
+    .returning({
+      id: styles.id,
+      handle: styles.handle,
+      name: styles.name,
+      isPublic: styles.isPublic,
+      version: styles.version,
+    });
+
+  logAudit({
+    profileId: userId,
+    action: "style.published_version",
+    resourceType: "style",
+    resourceId: styleId,
+    metadata: { version: snapshot.version, publicationId: publication.id },
     ipAddress: getClientIp(c.req.raw),
   });
 
@@ -641,3 +706,54 @@ stylesRoute.post("/styles/:id/versions/:versionNum/restore", async (c) => {
 
   return c.json({ data: updated });
 });
+
+async function publishStyleSnapshot({
+  styleId,
+  ownerId,
+  userId,
+  snapshot,
+}: {
+  styleId: string;
+  ownerId: string;
+  userId: string;
+  snapshot: typeof styleVersions.$inferSelect;
+}) {
+  await db
+    .delete(stylePublications)
+    .where(
+      and(
+        eq(stylePublications.styleId, styleId),
+        eq(stylePublications.alias, "latest"),
+      ),
+    );
+
+  const [publication] = await db
+    .insert(stylePublications)
+    .values({
+      styleId,
+      styleVersionId: snapshot.id,
+      accountId: ownerId,
+      alias: "latest",
+      publishedBy: userId,
+      metadata: { version: snapshot.version },
+    })
+    .returning();
+
+  await db
+    .insert(stylePublications)
+    .values({
+      styleId,
+      styleVersionId: snapshot.id,
+      accountId: ownerId,
+      alias: `v${snapshot.version}`,
+      publishedBy: userId,
+      metadata: { version: snapshot.version },
+    })
+    .onConflictDoNothing();
+
+  if (!publication) {
+    throw new Error("Failed to publish style snapshot");
+  }
+
+  return publication;
+}
