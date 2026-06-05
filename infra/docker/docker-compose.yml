@@ -231,6 +231,7 @@ services:
     volumes:
       - ./configs/martin.yaml:/config/config.yaml:ro
       - ./data/pmtiles:/data:ro
+      - ./data/storage:/storage:ro
     command: [ "--config", "/config/config.yaml" ]
     restart: unless-stopped
     networks:
