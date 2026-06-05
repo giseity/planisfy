@@ -14,6 +14,7 @@ import {
 } from "@planisfy/database";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { getAuthBaseURL, getAuthSecret } from "./env";
 
 // ============================================================================
 // Handle generation (OAuth users — no handle provided at signup)
@@ -43,6 +44,9 @@ function internalHeaders(): HeadersInit {
 // ============================================================================
 
 export const auth = betterAuth({
+  secret: getAuthSecret(),
+  baseURL: getAuthBaseURL(),
+
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {

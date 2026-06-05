@@ -10,12 +10,16 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table"
 import Link from "next/link"
+import { requireAdmin } from "@/lib/admin-auth"
+
+export const dynamic = "force-dynamic"
 
 export default async function AuditPage({
   searchParams,
 }: {
   searchParams: Promise<{ page?: string; action?: string; resource?: string; actor?: string }>
 }) {
+  await requireAdmin()
   const params = await searchParams
   const page = Math.max(1, Number(params.page) || 1)
   const limit = 50

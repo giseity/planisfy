@@ -10,6 +10,14 @@ export interface CreateEnvOptions {
   onInvalid?: "exit" | "throw";
 }
 
+export interface RuntimeSecretOptions {
+  buildPlaceholder?: string;
+  developmentFallback?: string;
+  env?: RuntimeEnv;
+  nodeEnv?: string;
+  requiredInProduction?: boolean;
+}
+
 export type RedisConnection = {
   host: string;
   port: number;
@@ -24,6 +32,10 @@ export const nodeEnvSchema = z
 export const urlSchema = z.string().url();
 
 export const portSchema = z.coerce.number().int().positive();
+
+export function isProductionBuild(env: RuntimeEnv = process.env) {
+  return env.NEXT_PHASE === "phase-production-build";
+}
 
 export function createEnv<TSchema extends z.ZodType>(
   schema: TSchema,
@@ -52,6 +64,30 @@ export function createEnv<TSchema extends z.ZodType>(
   }
 
   return parsed.data;
+}
+
+export function getRuntimeSecret(
+  name: string,
+  options: RuntimeSecretOptions = {}
+): string {
+  const env = options.env ?? process.env;
+  const value = env[name];
+  if (value) return value;
+
+  if (options.buildPlaceholder && isProductionBuild(env)) {
+    return options.buildPlaceholder;
+  }
+
+  const nodeEnv = options.nodeEnv ?? env.NODE_ENV;
+  if (options.requiredInProduction !== false && nodeEnv === "production") {
+    throw new Error(`${name} must be set in production.`);
+  }
+
+  if (options.developmentFallback) {
+    return options.developmentFallback;
+  }
+
+  throw new Error(`${name} is not set.`);
 }
 
 export function redisConnectionFromEnv(env: {

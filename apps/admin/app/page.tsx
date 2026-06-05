@@ -2,6 +2,9 @@ import { db, users, organizations, apiKeys, usageLogs, styles } from "@planisfy/
 import { count, gte, isNull, and } from "drizzle-orm"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
 import { Users, Building2, Key, Activity, Palette, AlertTriangle } from "lucide-react"
+import { requireAdmin } from "@/lib/admin-auth"
+
+export const dynamic = "force-dynamic"
 
 async function getStats() {
   const now = new Date()
@@ -40,6 +43,7 @@ async function getStats() {
 }
 
 export default async function AdminDashboard() {
+  await requireAdmin()
   const stats = await getStats()
 
   const cards = [

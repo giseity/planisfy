@@ -36,6 +36,8 @@ import {
   truncate,
 } from "@/lib/ops"
 
+export const dynamic = "force-dynamic"
+
 type SearchParams = {
   page?: string
   q?: string

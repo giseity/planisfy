@@ -28,6 +28,8 @@ import {
   truncate,
 } from "@/lib/ops"
 
+export const dynamic = "force-dynamic"
+
 export default async function FailuresPage() {
   await requireAdmin()
   const outboxCutoff = staleOutboxCutoff()

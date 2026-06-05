@@ -28,6 +28,8 @@ import {
   truncate,
 } from "@/lib/ops"
 
+export const dynamic = "force-dynamic"
+
 export default async function JobDetailPage({
   params,
 }: {
