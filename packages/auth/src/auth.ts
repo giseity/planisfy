@@ -68,7 +68,8 @@ export const auth = betterAuth({
         // via a fire-and-forget fetch to the internal email endpoint
         if (process.env.RESEND_API_KEY) {
           try {
-            const emailUrl = process.env.INTERNAL_API_URL || "http://localhost:4000";
+            const emailUrl =
+              process.env.INTERNAL_API_URL || "https://api.planisfy.localhost";
             await fetch(`${emailUrl}/internal/send-invitation-email`, {
               method: "POST",
               headers: internalHeaders(),
@@ -130,7 +131,8 @@ export const auth = betterAuth({
       console.log(`[password-reset] Sending reset link to ${user.email}`);
       if (process.env.RESEND_API_KEY) {
         try {
-          const emailUrl = process.env.INTERNAL_API_URL || "http://localhost:4000";
+          const emailUrl =
+            process.env.INTERNAL_API_URL || "https://api.planisfy.localhost";
           await fetch(`${emailUrl}/internal/send-password-reset-email`, {
             method: "POST",
             headers: internalHeaders(),
@@ -154,7 +156,8 @@ export const auth = betterAuth({
       console.log(`[email-verify] Sending verification to ${user.email}`);
       if (process.env.RESEND_API_KEY) {
         try {
-          const emailUrl = process.env.INTERNAL_API_URL || "http://localhost:4000";
+          const emailUrl =
+            process.env.INTERNAL_API_URL || "https://api.planisfy.localhost";
           await fetch(`${emailUrl}/internal/send-verification-email`, {
             method: "POST",
             headers: internalHeaders(),
@@ -215,10 +218,8 @@ export const auth = betterAuth({
           });
 
           // Set the user's ID to match the account, strip handle
-          const { handle: _h, ...userFields } = userData as Record<
-            string,
-            unknown
-          >;
+          const userFields = { ...(userData as Record<string, unknown>) };
+          delete userFields.handle;
           return {
             data: {
               ...userFields,

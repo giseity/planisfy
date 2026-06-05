@@ -14,7 +14,7 @@ const optionalUrl = z.preprocess(
 const schema = z.object({
   STORAGE_PROVIDER: z.enum(["local", "s3", "r2"]).default("local"),
   LOCAL_STORAGE_PATH: z.string().min(1).default(join(process.cwd(), ".storage")),
-  LOCAL_STORAGE_URL: z.string().url().default("http://localhost:4000/storage"),
+  LOCAL_STORAGE_URL: z.string().url().default("https://api.planisfy.localhost/storage"),
   LOCAL_STORAGE_BUCKET: z.string().min(1).default("local"),
   S3_BUCKET: z.string().min(1).default("planisfy-uploads"),
   S3_REGION: z.string().min(1).default("auto"),

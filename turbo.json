@@ -13,7 +13,10 @@
         "NODE_ENV",
         "DATABASE_URL",
         "INTERNAL_API_SECRET",
+        "INTERNAL_API_URL",
         "API_URL",
+        "NEXT_PUBLIC_APP_URL",
+        "RESEND_API_KEY",
         "LOCAL_STORAGE_PATH",
         "MARTIN_SOURCES_PATH",
         "MARTIN_SOURCES_PREFIX"

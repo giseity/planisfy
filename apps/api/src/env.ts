@@ -16,13 +16,13 @@ const schema = z.object({
   REDIS_HOST: z.string().min(1).default("localhost"),
   REDIS_PORT: portSchema.default(6379),
 
-  INTERNAL_API_URL: z.string().url().default("http://localhost:4000"),
+  INTERNAL_API_URL: z.string().url().default("https://api.planisfy.localhost"),
   INTERNAL_API_SECRET: z.string().min(1).optional(),
-  CONSOLE_URL: z.string().url().default("http://localhost:3001"),
+  CONSOLE_URL: z.string().url().default("https://console.planisfy.localhost"),
 
   MARTIN_URL: z.string().url().default("http://localhost:3005"),
   VALHALLA_URL: z.string().url().default("http://localhost:3007"),
-  PELIAS_URL: z.string().url().default("http://localhost:4000/geocoding"),
+  PELIAS_URL: z.string().url().default("https://api.planisfy.localhost/geocoding"),
   GLYPHS_URL: z.string().url().default("https://demotiles.maplibre.org/font"),
   STATIC_MAP_URL: z.string().url().optional(),
   ELEVATION_URL: z.string().url().default("https://api.open-elevation.com/api/v1"),
