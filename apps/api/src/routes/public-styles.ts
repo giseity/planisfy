@@ -18,7 +18,21 @@ export const publicStylesRoute = new Hono<AuthEnv>();
 
 publicStylesRoute.get("/styles/v1/:owner/:handle", async (c) => {
   const { owner } = c.req.param();
-  const { handle, version } = parseHandleVersion(c.req.param("handle"));
+  const { handle, version, invalidVersion } = parseHandleVersion(
+    c.req.param("handle"),
+  );
+
+  if (invalidVersion) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid style version",
+        },
+      },
+      400,
+    );
+  }
 
   const [profile] = await db
     .select({ id: profiles.id })
@@ -103,12 +117,17 @@ publicStylesRoute.get("/styles/v1/:owner/:handle/sprite*", async (c) => {
 function parseHandleVersion(value: string): {
   handle: string;
   version?: number;
+  invalidVersion: boolean;
 } {
   const [handle, rawVersion] = value.split("@");
   const parsed = rawVersion ? Number(rawVersion) : undefined;
   return {
     handle: handle ?? value,
-    version: parsed && Number.isInteger(parsed) ? parsed : undefined,
+    version:
+      parsed && Number.isInteger(parsed) && parsed > 0 ? parsed : undefined,
+    invalidVersion:
+      rawVersion !== undefined &&
+      (!Number.isInteger(parsed) || Number(parsed) <= 0),
   };
 }
 
@@ -136,16 +155,24 @@ async function resolvePublishedVersion(styleId: string) {
 }
 
 async function resolveExplicitVersion(styleId: string, version: number) {
-  const [snapshot] = await db
-    .select()
-    .from(styleVersions)
+  const [publication] = await db
+    .select({ styleVersionId: stylePublications.styleVersionId })
+    .from(stylePublications)
     .where(
       and(
-        eq(styleVersions.styleId, styleId),
-        eq(styleVersions.version, version),
+        eq(stylePublications.styleId, styleId),
+        eq(stylePublications.alias, `v${version}`),
       ),
     )
     .limit(1);
 
-  return snapshot ?? null;
+  if (!publication) return null;
+
+  const [snapshot] = await db
+    .select()
+    .from(styleVersions)
+    .where(eq(styleVersions.id, publication.styleVersionId))
+    .limit(1);
+
+  return snapshot?.version === version ? snapshot : null;
 }
