@@ -21,20 +21,6 @@ export interface ApiEnvelope<T> {
   data: T;
 }
 
-export interface ConsoleSource {
-  id: string;
-  name: string;
-  handle: string;
-  type: "VECTOR" | "RASTER" | "GEOJSON" | "IMAGE" | "VIDEO" | string;
-  url: string;
-  status: string;
-  minZoom: number | null;
-  maxZoom: number | null;
-  bounds: unknown;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface ConsoleProfile {
   id: string;
   handle: string;
@@ -111,35 +97,6 @@ export interface TilesetUploadResult {
   processingJob: unknown;
 }
 
-export interface SourceUploadResult {
-  ok: boolean;
-  sourceId: string;
-  status: string;
-  message: string;
-  processingJobId?: string;
-  uploadId?: string;
-}
-
-export interface ProcessingJobLog {
-  id: string;
-  level: "info" | "warning" | "error" | string;
-  message: string;
-  metadata?: unknown;
-  createdAt: string;
-}
-
-export interface SourceProcessingStatus {
-  id: string;
-  sourceId: string;
-  uploadId?: string | null;
-  status: string;
-  progress: number;
-  errorMessage?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  logs: ProcessingJobLog[];
-}
-
 export interface StylePublishResponse {
   id: string;
   handle: string;
@@ -205,29 +162,12 @@ class ApiClient {
     return this.get<ApiEnvelope<ConsoleProfile>>("/profile");
   }
 
-  listSources() {
-    return this.get<ConsoleSource[]>("/sources");
-  }
-
   async listTilesets() {
     const envelope = await this.get<ApiEnvelope<ConsoleTileset[]>>("/tilesets");
     return {
       ...envelope,
       data: envelope.data.map(normalizeTilesetUrls),
     };
-  }
-
-  uploadSource(sourceId: string, formData: FormData) {
-    return this.upload<SourceUploadResult>(
-      `/sources/${sourceId}/upload`,
-      formData,
-    );
-  }
-
-  getSourceProcessing(sourceId: string) {
-    return this.get<ApiEnvelope<SourceProcessingStatus | null>>(
-      `/sources/${sourceId}/processing`,
-    );
   }
 
   publishStyle(styleId: string) {
