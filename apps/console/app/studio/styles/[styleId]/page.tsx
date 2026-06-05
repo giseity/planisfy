@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { api } from "@/lib/api";
 import { useStyleStore } from "@/lib/store/style-store";
 import { sampleStyle } from "@/lib/sample-style";
 import { MapPreview } from "@/components/studio/map-preview";
@@ -79,6 +80,7 @@ export default function StyleEditorPage() {
   const [urlInput, setUrlInput] = useState("");
   const [urlLoading, setUrlLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [ownerHandle, setOwnerHandle] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
 
@@ -110,6 +112,13 @@ export default function StyleEditorPage() {
       loadStyle(sampleStyle);
     }
   }, [params.styleId, searchParams, loadStyle, loadStyleFromApi]);
+
+  useEffect(() => {
+    api
+      .getProfile()
+      .then(({ data }) => setOwnerHandle(data.handle))
+      .catch(() => setOwnerHandle(null));
+  }, []);
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
@@ -190,10 +199,11 @@ export default function StyleEditorPage() {
 
   const draftUrl = () =>
     `${window.location.origin}/studio/styles/${styleId ?? params.styleId}`;
-  const versionUrl = () =>
-    `${draftUrl()}${styleVersion ? `?version=${styleVersion}` : ""}`;
-  const publicUrl = () =>
-    `${window.location.origin.replace(/\/$/, "")}/styles/v1/me/${styleHandle || styleId}`;
+  const publicUrl = (version?: number | null) => {
+    const handle = styleHandle || styleId;
+    if (!ownerHandle || !handle) return "";
+    return `${window.location.origin.replace(/\/$/, "")}/styles/v1/${ownerHandle}/${handle}${version ? `@${version}` : ""}`;
+  };
 
   const handlePublishToggle = async () => {
     if (!styleId) return;
@@ -371,20 +381,21 @@ export default function StyleEditorPage() {
                       variant="ghost"
                       size="sm"
                       className="h-7 justify-start gap-2 text-xs"
-                      onClick={() => copyUrl("Version", versionUrl())}
+                      disabled={!isPublic || !ownerHandle}
+                      onClick={() => copyUrl("Version", publicUrl(styleVersion))}
                     >
                       {copiedUrl === "Version" ? (
                         <Check className="h-3 w-3" />
                       ) : (
                         <Link className="h-3 w-3" />
                       )}
-                      Copy v{styleVersion ?? "latest"} URL
+                      Copy published v{styleVersion ?? "latest"} URL
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-7 justify-start gap-2 text-xs"
-                      disabled={!isPublic}
+                      disabled={!isPublic || !ownerHandle}
                       onClick={() => copyUrl("Published", publicUrl())}
                     >
                       {copiedUrl === "Published" ? (
