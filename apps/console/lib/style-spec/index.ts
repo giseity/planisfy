@@ -7,6 +7,7 @@ import {
   validate as validateStyle,
   derefLayers,
 } from "@maplibre/maplibre-gl-style-spec"
+import { validateMapLibreStyle } from "@planisfy/style-spec"
 import type { StyleSpecification, LayerSpecification } from "maplibre-gl"
 
 export { v8Spec, validateStyle, derefLayers }
@@ -130,12 +131,10 @@ export interface StyleError {
 
 export function validateStyleJSON(style: StyleSpecification): StyleError[] {
   try {
-    // Deep-clone to strip any Proxy objects (e.g. from immer)
-    const clean = JSON.parse(JSON.stringify(style))
-    const errors = validateStyle(clean as any)
-    return errors.map((e: any) => ({
-      message: e.message,
-      line: e.line,
+    const errors = validateMapLibreStyle(style)
+    return errors.map((error) => ({
+      message: error.message,
+      line: error.line,
     }))
   } catch {
     return [{ message: "Invalid style JSON" }]

@@ -20,12 +20,16 @@ import {
 } from "@planisfy/ui/components/dialog"
 import { MoreHorizontal, Copy, Trash2, Globe, GlobeLock, Download, Link } from "lucide-react"
 import { deleteStyle, duplicateStyle, togglePublish } from "@/app/studio/styles/actions"
-import { api } from "@/lib/api"
+import { api, type ApiEnvelope } from "@/lib/api"
 import type { StyleData } from "./style-card"
 
 interface StyleListItemProps {
   style: StyleData
   onMutate?: () => void
+}
+
+interface StyleJsonResponse {
+  styleJson: unknown
 }
 
 function timeAgo(date: string | Date): string {
@@ -74,7 +78,7 @@ export function StyleListItem({ style, onMutate }: StyleListItemProps) {
 
   const handleDownloadJson = async () => {
     try {
-      const res = await api.get<{ data: { styleJson: unknown } }>(`/styles/${style.id}`)
+      const res = await api.get<ApiEnvelope<StyleJsonResponse>>(`/styles/${style.id}`)
       const blob = new Blob([JSON.stringify(res.data.styleJson, null, 2)], {
         type: "application/json",
       })

@@ -1,8 +1,14 @@
-import { validateStyle } from "@maplibre/maplibre-gl-style-spec";
+import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
 
 export type JsonObject = Record<string, unknown>;
 
 export interface StyleValidationIssue {
+  message: string;
+  line?: number;
+  identifier?: string;
+}
+
+interface MapLibreValidationError {
   message: string;
   line?: number;
   identifier?: string;
@@ -22,7 +28,7 @@ export function validateMapLibreStyle(styleJson: unknown): StyleValidationIssue[
     return [{ message: "Style must be a JSON object" }];
   }
 
-  const errors = validateStyle(styleJson);
+  const errors = validateStyleMin(styleJson as never) as MapLibreValidationError[];
   return errors.map((error) => ({
     message: error.message,
     line: typeof error.line === "number" ? error.line : undefined,

@@ -3,6 +3,7 @@ import { produce } from "immer"
 import type { StyleSpecification, LayerSpecification, SourceSpecification } from "maplibre-gl"
 import { changeLayerType } from "@/lib/style-spec/layer"
 import { api, ApiRequestError } from "@/lib/api"
+import type { ApiEnvelope } from "@/lib/api"
 
 const MAX_UNDO = 50
 
@@ -74,6 +75,16 @@ export interface StyleStore {
   getSelectedLayer: () => LayerSpecification | undefined
 }
 
+interface StyleDetailResponse {
+  styleJson: StyleSpecification
+  version: number
+  id: string
+}
+
+interface StyleSaveResponse {
+  version: number
+}
+
 // Helper: produce-based setter that avoids immer middleware type issues
 const immerSet =
   (set: (fn: (s: StyleStore) => Partial<StyleStore>) => void) =>
@@ -125,7 +136,7 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
       }),
 
     loadStyleFromApi: async (id) => {
-      const res = await api.get<{ data: { styleJson: StyleSpecification; version: number; id: string } }>(
+      const res = await api.get<ApiEnvelope<StyleDetailResponse>>(
         `/styles/${id}`
       )
       const { styleJson, version, id: styleId } = res.data
@@ -146,7 +157,7 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
 
       set({ saveStatus: "saving" })
       try {
-        const res = await api.put<{ data: { version: number } }>(`/styles/${styleId}`, {
+        const res = await api.put<ApiEnvelope<StyleSaveResponse>>(`/styles/${styleId}`, {
           styleJson: style,
           version: styleVersion,
         })
