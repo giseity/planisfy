@@ -12,7 +12,7 @@ This file is now the running restructuring log. Each completed milestone should 
 | Phase 3: Async and Storage Backbone | Complete | Added API helpers for typed outbox events, processing job state/logs, and storage ledger writes. Source uploads now use `@planisfy/storage-paths`, create upload/storage/job/outbox records, and keep BullMQ as transport while the worker split lands. |
 | Phase 4: Worker Split | Complete | Added `apps/worker-geodata` as the BullMQ source-processing consumer, moved storage providers to shared `@planisfy/storage`, and left API as the source-processing queue producer. |
 | Phase 5: Frontend and API DX | Complete | Console style validation now uses `@planisfy/style-spec`, the API client exposes shared response envelope types, and the main style list/editor/download paths use those typed contracts. |
-| Phase 6: Self-Host Product Proof | Not started | Pending compose updates, seeds, health, and smoke test. |
+| Phase 6: Self-Host Product Proof | Complete | Docker Compose now includes `worker-geodata`, local artifact storage volume/env, API storage serving, Redis worker heartbeat health, and updated self-host docs. Seed/demo data remains a follow-up roadmap item. |
 
 ## Purpose
 

@@ -2,10 +2,24 @@ import { Queue } from "bullmq";
 
 export const SOURCE_PROCESSING_QUEUE_NAME = "source-processing";
 
-export const REDIS_CONNECTION = {
-  host: process.env.REDIS_HOST || "localhost",
-  port: Number(process.env.REDIS_PORT) || 6379,
-};
+export const REDIS_CONNECTION = getRedisConnection();
+
+function getRedisConnection() {
+  if (process.env.REDIS_URL) {
+    const url = new URL(process.env.REDIS_URL);
+    return {
+      host: url.hostname,
+      port: Number(url.port || 6379),
+      username: url.username || undefined,
+      password: url.password || undefined,
+    };
+  }
+
+  return {
+    host: process.env.REDIS_HOST || "localhost",
+    port: Number(process.env.REDIS_PORT) || 6379,
+  };
+}
 
 export interface SourceProcessingJob {
   sourceId: string;

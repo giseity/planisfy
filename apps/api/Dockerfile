@@ -12,6 +12,9 @@ COPY packages/database/package.json packages/database/
 COPY packages/auth/package.json packages/auth/
 COPY packages/types/package.json packages/types/
 COPY packages/utils/package.json packages/utils/
+COPY packages/events/package.json packages/events/
+COPY packages/storage/package.json packages/storage/
+COPY packages/storage-paths/package.json packages/storage-paths/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter api...
 

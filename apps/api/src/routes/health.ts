@@ -3,6 +3,7 @@ import { db } from "@planisfy/database";
 import { sql } from "drizzle-orm";
 
 export const healthRoute = new Hono();
+const WORKER_GEODATA_HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
 
 // ── GET /health — Basic readiness check ─────────────────────────────────────
 
@@ -31,8 +32,7 @@ healthRoute.get("/health/detailed", async (c) => {
   try {
     const Redis = await import("ioredis").then((m) => m.default);
     const redis = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      port: Number(process.env.REDIS_PORT) || 6379,
+      ...getRedisConnection(),
       maxRetriesPerRequest: 1,
       connectTimeout: 3000,
       lazyConnect: true,
@@ -40,9 +40,24 @@ healthRoute.get("/health/detailed", async (c) => {
     await redis.connect();
     await redis.ping();
     checks.redis = { status: "ok", latency: Date.now() - redisStart };
+
+    const heartbeat = await redis.get(WORKER_GEODATA_HEARTBEAT_KEY);
+    if (heartbeat) {
+      const parsed = JSON.parse(heartbeat) as { timestamp?: string };
+      const timestamp = parsed.timestamp ? Date.parse(parsed.timestamp) : NaN;
+      const ageMs = Number.isFinite(timestamp) ? Date.now() - timestamp : null;
+      checks.workerGeodata = {
+        status: ageMs !== null && ageMs <= 60_000 ? "ok" : "degraded",
+        latency: ageMs ?? undefined,
+      };
+    } else {
+      checks.workerGeodata = { status: "unavailable" };
+    }
+
     await redis.quit();
   } catch (err) {
     checks.redis = { status: "error", latency: Date.now() - redisStart, error: err instanceof Error ? err.message : String(err) };
+    checks.workerGeodata = { status: "unknown", error: "Redis unavailable" };
     healthy = false;
   }
 
@@ -87,3 +102,20 @@ healthRoute.get("/health/detailed", async (c) => {
     healthy ? 200 : 503
   );
 });
+
+function getRedisConnection() {
+  if (process.env.REDIS_URL) {
+    const url = new URL(process.env.REDIS_URL);
+    return {
+      host: url.hostname,
+      port: Number(url.port || 6379),
+      username: url.username || undefined,
+      password: url.password || undefined,
+    };
+  }
+
+  return {
+    host: process.env.REDIS_HOST || "localhost",
+    port: Number(process.env.REDIS_PORT) || 6379,
+  };
+}

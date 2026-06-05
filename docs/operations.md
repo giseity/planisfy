@@ -16,6 +16,8 @@ Health should cover:
 - worker-geodata
 - storage provider
 
+The API detailed health endpoint reports `workerGeodata` from a Redis heartbeat written by the worker.
+
 ## Local Worker
 
 `apps/worker-geodata` should run beside the API anywhere uploads or tileset source processing are enabled.
