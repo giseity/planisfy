@@ -7,6 +7,7 @@ Hono API gateway for Planisfy's public map API, console API, auth handler, and i
 - Public map route groups for styles, tiles, fonts, geocoding, routing, elevation, and static maps.
 - Console API routes for styles, API keys, uploads, tilesets, usage, audit, billing status, and profile settings.
 - API key validation, session fallback, scope checks, rate limits, quota checks, and usage logging.
+- Request logging, health probes, and Prometheus-style process/request metrics.
 - Internal platform routes protected by `X-Internal-Secret`.
 - Durable backend mutations through upload records, processing jobs, storage ledger rows, and outbox events.
 
@@ -59,3 +60,5 @@ Local self-host compose serves local artifacts from `/storage/*` and records art
   product IDs. Configure the webhook endpoint at `/webhooks/dodo` so Dodo
   subscription events can update `subscriptions` and related billing ledger
   rows.
+- `/metrics` exposes in-memory Prometheus text metrics for the API process.
+  Treat this endpoint as operator-facing when deploying behind public ingress.

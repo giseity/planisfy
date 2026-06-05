@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { db } from "@planisfy/database";
 import { sql } from "drizzle-orm";
 import { env, redisConnection } from "../env";
+import { renderPrometheusMetrics } from "../lib/metrics";
 
 export const healthRoute = new Hono();
 const WORKER_GEODATA_HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
@@ -10,6 +11,14 @@ const WORKER_GEODATA_HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
 
 healthRoute.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+healthRoute.get("/metrics", (c) => {
+  return c.text(
+    renderPrometheusMetrics({ service: "api", version: env.APP_VERSION }),
+    200,
+    { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" },
+  );
 });
 
 // ── GET /health/detailed — Deep health check with service probes ────────────
