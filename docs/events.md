@@ -2,7 +2,7 @@
 
 ## Current
 
-Source uploads now write typed `event_outbox` rows for `upload.created` and cleanup requests. BullMQ remains the current transport for source processing; outbox claiming is the next worker responsibility to wire.
+Tileset uploads currently write durable upload, storage, tileset, and processing job records, then enqueue BullMQ geodata work. BullMQ remains the current transport for upload validation and tileset processing; durable outbox claiming is the next worker responsibility to wire.
 
 ## Target
 

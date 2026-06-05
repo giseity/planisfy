@@ -35,3 +35,12 @@ Planisfy now uses `accounts` as the canonical owner anchor for both users and or
 ## Rule
 
 Production URLs must resolve to immutable artifacts or explicit stable aliases. Draft edits must not mutate published behavior.
+
+## Current Publish Contracts
+
+- Tileset uploads enter through `POST /console/uploads` and create `uploads`, `tilesets`, `tileset_versions`, `processing_jobs`, and `storage_objects`.
+- A processed tileset version is not public until `POST /console/tilesets/:id/versions/:version/publish` promotes it to `tilesets.currentVersionId`.
+- Stable TileJSON is available at `/tiles/v1/{owner}/{tileset}.json` and `/tiles/v1/{owner}.{tileset}.json`.
+- Immutable TileJSON is available at `/tiles/v1/{owner}/{tileset}/versions/{version}.json` and `/tiles/v1/{owner}.{tileset}@{version}.json`.
+- Style publication creates a `latest` alias plus an immutable `v{version}` alias in `style_publications`.
+- Public style `@version` URLs only resolve for versions that have been published.

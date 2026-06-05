@@ -5,14 +5,14 @@ Hono API gateway for Planisfy's public map API, console API, auth handler, and i
 ## Owns
 
 - Public map route groups for styles, tiles, fonts, geocoding, routing, elevation, and static maps.
-- Console API routes for styles, API keys, sources, usage, audit, billing status, and profile settings.
+- Console API routes for styles, API keys, uploads, tilesets, usage, audit, billing status, and profile settings.
 - API key validation, session fallback, scope checks, rate limits, quota checks, and usage logging.
 - Internal platform routes protected by `X-Internal-Secret`.
 - Durable backend mutations through upload records, processing jobs, storage ledger rows, and outbox events.
 
 ## Does Not Own
 
-- Heavy geodata processing. `apps/worker-geodata` owns the source-processing consumer.
+- Heavy geodata processing. `apps/worker-geodata` owns upload validation and tileset artifact generation.
 - Studio client state.
 - Storage key contract definitions.
 - Event payload schema definitions.
@@ -50,5 +50,6 @@ Local self-host compose serves local artifacts from `/storage/*` and records art
 ## Gotchas
 
 - Production-like environments must set `INTERNAL_API_SECRET`; internal routes must not be exposed with the fallback development secret.
-- Source uploads create `uploads`, `storage_objects`, `processing_jobs`, and `event_outbox` records before enqueueing BullMQ transport work. The API is the producer; `apps/worker-geodata` is the consumer.
+- Tileset uploads create `uploads`, `storage_objects`, `tilesets`, and `processing_jobs` before enqueueing BullMQ transport work. The API is the producer; `apps/worker-geodata` is the consumer.
+- Published tilesets are promoted explicitly through `/console/tilesets/:id/versions/:version/publish`; processing alone does not make a new version public.
 - Billing code currently contains alpha Polar references. The target provider is Dodo Payments.
