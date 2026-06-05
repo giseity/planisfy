@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
-import { useRouter } from "next/navigation"
 import { StyleCard } from "@/components/studio/style-card"
 import { StyleListItem } from "@/components/studio/style-list-item"
 import { Button } from "@planisfy/ui/components/button"

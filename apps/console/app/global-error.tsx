@@ -7,6 +7,8 @@ export default function GlobalError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  void error
+
   return (
     <html lang="en">
       <body className="flex min-h-screen items-center justify-center bg-background font-sans antialiased">

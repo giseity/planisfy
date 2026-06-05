@@ -45,6 +45,7 @@ export interface PropertySpec {
 }
 
 export type LayerType = LayerSpecification["type"]
+type SpecDictionary = Record<string, Record<string, PropertySpec>>
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -78,11 +79,11 @@ export function getDefaultValue(spec: PropertySpec): unknown {
 // ---------------------------------------------------------------------------
 
 export function getPaintSpec(layerType: string): Record<string, PropertySpec> {
-  return (v8Spec as any)[`paint_${layerType}`] ?? {}
+  return (v8Spec as unknown as SpecDictionary)[`paint_${layerType}`] ?? {}
 }
 
 export function getLayoutSpec(layerType: string): Record<string, PropertySpec> {
-  return (v8Spec as any)[`layout_${layerType}`] ?? {}
+  return (v8Spec as unknown as SpecDictionary)[`layout_${layerType}`] ?? {}
 }
 
 export function getPropertySpec(

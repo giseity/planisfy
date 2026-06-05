@@ -112,7 +112,6 @@ const ROLE_VARIANTS: Record<string, "default" | "secondary" | "success"> = {
 // ---------------------------------------------------------------------------
 
 export default function OrgPage() {
-  const router = useRouter()
   const { data: session } = useSession()
   const [org, setOrg] = useState<OrgData | null>(null)
   const [loading, setLoading] = useState(true)

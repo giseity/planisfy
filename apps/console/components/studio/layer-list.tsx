@@ -40,6 +40,11 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import type { LayerSpecification } from "maplibre-gl"
 
+type LayerRecord = LayerSpecification & {
+  layout?: { visibility?: string }
+  "source-layer"?: string
+}
+
 const layerTypeIcons: Record<string, React.ElementType> = {
   background: Square,
   fill: Square,
@@ -94,7 +99,7 @@ export function LayerList() {
     if (!groupBySource) return null
     const map = new Map<string, LayerSpecification[]>()
     for (const layer of layers) {
-      const key = ("source-layer" in layer ? (layer as any)["source-layer"] : null) ?? "(no source-layer)"
+      const key = layerSourceLayer(layer) ?? "(no source-layer)"
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(layer)
     }
@@ -191,9 +196,7 @@ export function LayerList() {
                             onSelect={() => setSelectedLayer(layer.id)}
                             onToggleVisibility={() => {
                               const isVisible =
-                                !("layout" in layer) ||
-                                !layer.layout ||
-                                (layer.layout as any).visibility !== "none"
+                                isLayerVisible(layer)
                               setLayerVisibility(layer.id, !isVisible)
                             }}
                             onDuplicate={() => duplicateLayer(layer.id)}
@@ -210,9 +213,7 @@ export function LayerList() {
                       onSelect={() => setSelectedLayer(layer.id)}
                       onToggleVisibility={() => {
                         const isVisible =
-                          !("layout" in layer) ||
-                          !layer.layout ||
-                          (layer.layout as any).visibility !== "none"
+                          isLayerVisible(layer)
                         setLayerVisibility(layer.id, !isVisible)
                       }}
                       onDuplicate={() => duplicateLayer(layer.id)}
@@ -269,10 +270,7 @@ function SortableLayerItem({
 
   const Icon = layerTypeIcons[layer.type] || Layers
   const iconColor = layerTypeColors[layer.type] || "text-muted-foreground"
-  const isVisible =
-    !("layout" in layer) ||
-    !layer.layout ||
-    (layer.layout as any).visibility !== "none"
+  const isVisible = isLayerVisible(layer)
 
   return (
     <div
@@ -333,4 +331,12 @@ function SortableLayerItem({
       </button>
     </div>
   )
+}
+
+function layerSourceLayer(layer: LayerSpecification) {
+  return (layer as LayerRecord)["source-layer"]
+}
+
+function isLayerVisible(layer: LayerSpecification) {
+  return (layer as LayerRecord).layout?.visibility !== "none"
 }

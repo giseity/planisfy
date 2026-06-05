@@ -114,6 +114,7 @@ export function StyleCard({ style, onMutate }: StyleCardProps) {
         {/* Thumbnail area */}
         <div className="h-32 rounded-t-lg bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
           {style.thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={style.thumbnailUrl}
               alt={style.name}

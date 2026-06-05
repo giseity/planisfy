@@ -6,7 +6,7 @@ import { Input } from "@planisfy/ui/components/input"
 import { ScrollArea } from "@planisfy/ui/components/scroll-area"
 import { Popover, PopoverContent, PopoverTrigger } from "@planisfy/ui/components/popover"
 import { Plus, X, Type } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 
 // Common MapLibre fonts available from most glyph servers
 const COMMON_FONTS = [
@@ -39,16 +39,9 @@ interface FontFieldProps {
  * Font stack picker with common font suggestions.
  */
 export function FontField({ label, value, onChange, glyphsUrl }: FontFieldProps) {
-  const [availableFonts, setAvailableFonts] = useState<string[]>(COMMON_FONTS)
   const [filter, setFilter] = useState("")
   const fonts = Array.isArray(value) ? value : []
-
-  // Try to fetch available fonts from the glyphs endpoint
-  useEffect(() => {
-    if (!glyphsUrl) return
-    // Most glyph servers don't have a metadata endpoint, so we use common fonts
-    // If we had a font metadata endpoint, we'd fetch it here
-  }, [glyphsUrl])
+  void glyphsUrl
 
   const addFont = (font: string) => {
     if (!fonts.includes(font)) {
@@ -66,7 +59,7 @@ export function FontField({ label, value, onChange, glyphsUrl }: FontFieldProps)
     onChange(updated)
   }
 
-  const filteredFonts = availableFonts.filter(
+  const filteredFonts = COMMON_FONTS.filter(
     (f) =>
       f.toLowerCase().includes(filter.toLowerCase()) && !fonts.includes(f)
   )

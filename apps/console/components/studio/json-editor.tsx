@@ -35,7 +35,6 @@ export function JsonEditor() {
       externalUpdate.current = true
       editor.setValue(newValue)
       externalUpdate.current = false
-      setError(null)
     }
   }, [style, dirty])
 

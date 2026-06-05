@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { api, ApiRequestError } from "@/lib/api"
+import { api } from "@/lib/api"
 import { Button } from "@planisfy/ui/components/button"
 import { Input } from "@planisfy/ui/components/input"
 import { Badge } from "@planisfy/ui/components/badge"
@@ -254,7 +254,7 @@ export default function ApiKeysPage() {
               Copy your API key
             </DialogTitle>
             <DialogDescription>
-              This is the only time you'll see the full key. Store it securely.
+              This is the only time you&apos;ll see the full key. Store it securely.
             </DialogDescription>
           </DialogHeader>
           <div className="bg-muted rounded-md p-3 font-mono text-sm break-all select-all">

@@ -11,12 +11,15 @@ import { ScrollArea } from "@planisfy/ui/components/scroll-area"
 import {
   getPaintSpec,
   getLayoutSpec,
-  getValueType,
   LAYER_TYPES,
   SOURCE_FREE_LAYER_TYPES,
   type PropertySpec,
 } from "@/lib/style-spec"
 import type { LayerSpecification } from "maplibre-gl"
+
+type LayerRecord = LayerSpecification & {
+  "source-layer"?: string
+}
 
 export function PropertyPanel() {
   const selectedLayerId = useStyleStore((s) => s.selectedLayerId)
@@ -149,7 +152,7 @@ function LayerHeader({
           />
           <StringField
             label="source-layer"
-            value={"source-layer" in layer ? ((layer as any)["source-layer"] as string) ?? "" : ""}
+            value={(layer as LayerRecord)["source-layer"] ?? ""}
             onChange={(v) => onTopLevelChange(layer.id, "source-layer", v)}
             placeholder="e.g. water, transportation"
           />
