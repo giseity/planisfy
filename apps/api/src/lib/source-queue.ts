@@ -6,13 +6,18 @@ export const SOURCE_PROCESSING_QUEUE_NAME = "source-processing";
 export const REDIS_CONNECTION = redisConnection;
 
 export interface SourceProcessingJob {
-  sourceId: string;
+  sourceId?: string;
+  tilesetId?: string;
   ownerId: string;
   uploadKey: string;
   uploadId?: string;
   storageObjectId?: string;
   processingJobId?: string;
-  format: "geojson" | "csv" | "shapefile" | "pmtiles";
+  format: "geojson" | "csv" | "shapefile" | "pmtiles" | "mbtiles";
+  csv?: {
+    latitude?: string;
+    longitude?: string;
+  };
   options?: {
     minZoom?: number;
     maxZoom?: number;
@@ -31,7 +36,7 @@ export const sourceQueue = new Queue<SourceProcessingJob>(
       attempts: 2,
       backoff: { type: "exponential", delay: 5000 },
     },
-  }
+  },
 );
 
 export function enqueueSourceProcessing(job: SourceProcessingJob): void {

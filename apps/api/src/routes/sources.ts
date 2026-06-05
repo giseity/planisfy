@@ -2,10 +2,20 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthEnv } from "../middleware/auth";
 import { checkResourceLimit } from "../lib/plan-check";
-import { db, tilesetSources, auditEvents, uploads } from "@planisfy/database";
+import {
+  db,
+  tilesetSources,
+  auditEvents,
+  uploads,
+  processingJobs,
+  processingJobLogs,
+} from "@planisfy/database";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { getStorage } from "../lib/storage";
-import { enqueueSourceProcessing, type SourceProcessingJob } from "../lib/source-queue";
+import {
+  enqueueSourceProcessing,
+  type SourceProcessingJob,
+} from "../lib/source-queue";
 import { StoragePaths } from "@planisfy/storage-paths";
 import { enqueueOutboxEvent } from "../lib/outbox";
 import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
@@ -17,7 +27,11 @@ const MAX_UPLOAD_SIZE = 100 * 1024 * 1024; // 100 MB
 
 const createSourceSchema = z.object({
   name: z.string().min(1).max(128),
-  handle: z.string().min(1).max(64).regex(/^[a-z0-9_-]+$/),
+  handle: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9_-]+$/),
   type: z.enum(["VECTOR", "RASTER", "GEOJSON", "IMAGE", "VIDEO"]).optional(),
 });
 
@@ -33,7 +47,12 @@ sourcesRoute.get("/sources", async (c) => {
   const sources = await db
     .select()
     .from(tilesetSources)
-    .where(and(eq(tilesetSources.ownerId, ownerId), isNull(tilesetSources.deletedAt)))
+    .where(
+      and(
+        eq(tilesetSources.ownerId, ownerId),
+        isNull(tilesetSources.deletedAt),
+      ),
+    )
     .orderBy(desc(tilesetSources.createdAt));
 
   return c.json(sources);
@@ -48,17 +67,23 @@ sourcesRoute.post("/sources", async (c) => {
 
   const parsed = createSourceSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", details: parsed.error.flatten() } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", details: parsed.error.flatten() } },
+      400,
+    );
   }
 
   const planCheck = await checkResourceLimit(userId, ownerId, "sources");
   if (!planCheck.allowed) {
-    return c.json({
-      error: {
-        code: "PLAN_LIMIT",
-        message: `You've reached the maximum of ${planCheck.limit} sources on your current plan. Please upgrade to create more.`,
+    return c.json(
+      {
+        error: {
+          code: "PLAN_LIMIT",
+          message: `You've reached the maximum of ${planCheck.limit} sources on your current plan. Please upgrade to create more.`,
+        },
       },
-    }, 403);
+      403,
+    );
   }
 
   const { name, handle, type } = parsed.data;
@@ -71,13 +96,21 @@ sourcesRoute.post("/sources", async (c) => {
       and(
         eq(tilesetSources.ownerId, ownerId),
         eq(tilesetSources.handle, handle),
-        isNull(tilesetSources.deletedAt)
-      )
+        isNull(tilesetSources.deletedAt),
+      ),
     )
     .limit(1);
 
   if (existing) {
-    return c.json({ error: { code: "CONFLICT", message: "Source with this handle already exists" } }, 409);
+    return c.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message: "Source with this handle already exists",
+        },
+      },
+      409,
+    );
   }
 
   const [source] = await db
@@ -98,7 +131,8 @@ sourcesRoute.post("/sources", async (c) => {
     action: "source.created",
     resourceType: "source",
     resourceId: source!.id,
-    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || null,
+    ipAddress:
+      c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || null,
   });
 
   return c.json(source!, 201);
@@ -114,12 +148,19 @@ sourcesRoute.get("/sources/:id", async (c) => {
     .select()
     .from(tilesetSources)
     .where(
-      and(eq(tilesetSources.id, id), eq(tilesetSources.ownerId, ownerId), isNull(tilesetSources.deletedAt))
+      and(
+        eq(tilesetSources.id, id),
+        eq(tilesetSources.ownerId, ownerId),
+        isNull(tilesetSources.deletedAt),
+      ),
     )
     .limit(1);
 
   if (!source) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Source not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Source not found" } },
+      404,
+    );
   }
 
   return c.json(source);
@@ -135,19 +176,29 @@ sourcesRoute.put("/sources/:id", async (c) => {
 
   const parsed = updateSourceSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", details: parsed.error.flatten() } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", details: parsed.error.flatten() } },
+      400,
+    );
   }
 
   const [source] = await db
     .select()
     .from(tilesetSources)
     .where(
-      and(eq(tilesetSources.id, id), eq(tilesetSources.ownerId, ownerId), isNull(tilesetSources.deletedAt))
+      and(
+        eq(tilesetSources.id, id),
+        eq(tilesetSources.ownerId, ownerId),
+        isNull(tilesetSources.deletedAt),
+      ),
     )
     .limit(1);
 
   if (!source) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Source not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Source not found" } },
+      404,
+    );
   }
 
   const [updated] = await db
@@ -161,7 +212,8 @@ sourcesRoute.put("/sources/:id", async (c) => {
     action: "source.updated",
     resourceType: "source",
     resourceId: id,
-    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || null,
+    ipAddress:
+      c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || null,
   });
 
   return c.json(updated);
@@ -178,12 +230,19 @@ sourcesRoute.delete("/sources/:id", async (c) => {
     .select()
     .from(tilesetSources)
     .where(
-      and(eq(tilesetSources.id, id), eq(tilesetSources.ownerId, ownerId), isNull(tilesetSources.deletedAt))
+      and(
+        eq(tilesetSources.id, id),
+        eq(tilesetSources.ownerId, ownerId),
+        isNull(tilesetSources.deletedAt),
+      ),
     )
     .limit(1);
 
   if (!source) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Source not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Source not found" } },
+      404,
+    );
   }
 
   await db
@@ -205,7 +264,8 @@ sourcesRoute.delete("/sources/:id", async (c) => {
     action: "source.deleted",
     resourceType: "source",
     resourceId: id,
-    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || null,
+    ipAddress:
+      c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || null,
   });
 
   return c.json({ ok: true });
@@ -222,16 +282,31 @@ sourcesRoute.post("/sources/:id/upload", async (c) => {
     .select()
     .from(tilesetSources)
     .where(
-      and(eq(tilesetSources.id, id), eq(tilesetSources.ownerId, ownerId), isNull(tilesetSources.deletedAt))
+      and(
+        eq(tilesetSources.id, id),
+        eq(tilesetSources.ownerId, ownerId),
+        isNull(tilesetSources.deletedAt),
+      ),
     )
     .limit(1);
 
   if (!source) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Source not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Source not found" } },
+      404,
+    );
   }
 
   if (source.status === "PROCESSING") {
-    return c.json({ error: { code: "CONFLICT", message: "Source is already being processed" } }, 409);
+    return c.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message: "Source is already being processed",
+        },
+      },
+      409,
+    );
   }
 
   // Parse multipart form data
@@ -239,11 +314,22 @@ sourcesRoute.post("/sources/:id/upload", async (c) => {
   const file = formData.get("file") as File | null;
 
   if (!file) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "No file provided" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "No file provided" } },
+      400,
+    );
   }
 
   if (file.size > MAX_UPLOAD_SIZE) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: `File too large (max ${MAX_UPLOAD_SIZE / 1024 / 1024}MB)` } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: `File too large (max ${MAX_UPLOAD_SIZE / 1024 / 1024}MB)`,
+        },
+      },
+      400,
+    );
   }
 
   // Detect format from filename or content type
@@ -251,12 +337,16 @@ sourcesRoute.post("/sources/:id/upload", async (c) => {
   const format = detectFormat(filename, file.type);
 
   if (!format) {
-    return c.json({
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Unsupported file format. Accepted: .geojson, .json, .csv, .pmtiles",
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message:
+            "Unsupported file format. Accepted: .geojson, .json, .csv, .pmtiles",
+        },
       },
-    }, 400);
+      400,
+    );
   }
 
   const storageFileName = toStorageFileName(filename);
@@ -273,12 +363,24 @@ sourcesRoute.post("/sources/:id/upload", async (c) => {
     .returning();
 
   if (!upload) {
-    return c.json({ error: { code: "INTERNAL_ERROR", message: "Failed to create upload record" } }, 500);
+    return c.json(
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Failed to create upload record",
+        },
+      },
+      500,
+    );
   }
 
   // Store raw upload through the shared storage path contract.
   const storage = getStorage();
-  const uploadKey = StoragePaths.uploadOriginal(ownerId, upload.id, storageFileName);
+  const uploadKey = StoragePaths.uploadOriginal(
+    ownerId,
+    upload.id,
+    storageFileName,
+  );
   const buffer = Buffer.from(await file.arrayBuffer());
   const stored = await storage.upload(uploadKey, buffer, file.type);
   const storageInfo = storage.getInfo();
@@ -377,7 +479,8 @@ sourcesRoute.post("/sources/:id/upload", async (c) => {
       storageObjectId: storageObject.id,
       processingJobId: processingJob.id,
     },
-    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || null,
+    ipAddress:
+      c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || null,
   });
 
   return c.json({
@@ -385,12 +488,80 @@ sourcesRoute.post("/sources/:id/upload", async (c) => {
     sourceId: id,
     status: "PENDING",
     message: "File uploaded, processing started",
+    uploadId: upload.id,
+    processingJobId: processingJob.id,
+  });
+});
+
+// ── GET /sources/:id/processing — Latest processing job and logs ───────────
+
+sourcesRoute.get("/sources/:id/processing", async (c) => {
+  const ownerId = c.get("ownerId");
+  const { id } = c.req.param();
+
+  const [source] = await db
+    .select({ id: tilesetSources.id })
+    .from(tilesetSources)
+    .where(
+      and(
+        eq(tilesetSources.id, id),
+        eq(tilesetSources.ownerId, ownerId),
+        isNull(tilesetSources.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!source) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Source not found" } },
+      404,
+    );
+  }
+
+  const jobs = await db
+    .select()
+    .from(processingJobs)
+    .where(eq(processingJobs.accountId, ownerId))
+    .orderBy(desc(processingJobs.createdAt))
+    .limit(25);
+  const job = jobs.find((candidate) => {
+    const input = candidate.input as { sourceId?: string } | null;
+    return input?.sourceId === id;
+  });
+
+  if (!job) {
+    return c.json({ data: null });
+  }
+
+  const logs = await db
+    .select()
+    .from(processingJobLogs)
+    .where(eq(processingJobLogs.jobId, job.id))
+    .orderBy(desc(processingJobLogs.createdAt));
+
+  const input = job.input as { uploadId?: string } | null;
+
+  return c.json({
+    data: {
+      id: job.id,
+      sourceId: id,
+      uploadId: input?.uploadId ?? null,
+      status: job.status,
+      progress: job.progress,
+      errorMessage: job.errorMessage,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      logs: logs.reverse(),
+    },
   });
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function detectFormat(filename: string, mimeType: string): SourceProcessingJob["format"] | null {
+function detectFormat(
+  filename: string,
+  mimeType: string,
+): SourceProcessingJob["format"] | null {
   const ext = filename.split(".").pop()?.toLowerCase();
 
   switch (ext) {
@@ -405,7 +576,8 @@ function detectFormat(filename: string, mimeType: string): SourceProcessingJob["
       break;
   }
 
-  if (mimeType.includes("geo+json") || mimeType.includes("json")) return "geojson";
+  if (mimeType.includes("geo+json") || mimeType.includes("json"))
+    return "geojson";
   if (mimeType.includes("csv")) return "csv";
 
   return null;
