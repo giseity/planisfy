@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@planisfy/ui/components/select"
 import { Plus, Map, Search, LayoutGrid, List } from "lucide-react"
-import { api } from "@/lib/api"
+import { api, type ApiEnvelope } from "@/lib/api"
 import { createStyle } from "./actions"
 
 interface StyleSummary {
@@ -50,7 +50,7 @@ export default function StylesPage() {
 
   const loadStyles = async () => {
     try {
-      const res = await api.get<{ data: StyleSummary[] }>("/styles")
+      const res = await api.get<ApiEnvelope<StyleSummary[]>>("/styles")
       setStyles(res.data)
     } catch {
       // ignore

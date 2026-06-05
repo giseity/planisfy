@@ -14,6 +14,18 @@ interface ApiError {
   error: { code: string; message: string; details?: unknown };
 }
 
+export interface ApiEnvelope<T> {
+  data: T;
+}
+
+export interface PaginatedApiEnvelope<T> extends ApiEnvelope<T> {
+  pagination: {
+    total: number;
+    page?: number;
+    limit?: number;
+  };
+}
+
 class ApiClient {
   private async request<T>(
     method: string,

@@ -16,7 +16,7 @@ Add `vitest.workspace.ts` so `pnpm test` runs fast infrastructure-free tests by 
 - `@planisfy/style-spec`: MapLibre validation and draft/publish transforms.
 - `apps/api`: auth, scopes, style routes, upload init, outbox writes.
 - `apps/worker-geodata`: event claiming, upload validation, failure states, artifact versioning.
-- `apps/console`: Studio state helpers and publish/source flows.
+- `apps/console`: Studio state helpers, shared style validation, and publish/source flows.
 - `apps/admin`: health and dashboard logic.
 
 ## Policy

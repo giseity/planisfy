@@ -6,6 +6,7 @@ import { Button } from "@planisfy/ui/components/button"
 import { Check, AlertTriangle } from "lucide-react"
 import Editor, { type OnMount } from "@monaco-editor/react"
 import { useTheme } from "next-themes"
+import { validateMapLibreStyle } from "@planisfy/style-spec"
 
 /**
  * Full style JSON editor using Monaco (VS Code engine).
@@ -41,12 +42,9 @@ export function JsonEditor() {
   const validate = useCallback((value: string) => {
     try {
       const parsed = JSON.parse(value)
-      if (parsed.version !== 8) {
-        setError("Style version must be 8")
-        return false
-      }
-      if (!Array.isArray(parsed.layers)) {
-        setError("Style must have a layers array")
+      const issues = validateMapLibreStyle(parsed)
+      if (issues.length > 0) {
+        setError(issues[0]?.message ?? "Invalid MapLibre style")
         return false
       }
       setError(null)
@@ -63,7 +61,7 @@ export function JsonEditor() {
     const value = editor.getValue()
     try {
       const parsed = JSON.parse(value)
-      if (parsed.version === 8 && Array.isArray(parsed.layers)) {
+      if (validate(value)) {
         loadStyle(parsed)
         setDirty(false)
         setError(null)
@@ -71,7 +69,7 @@ export function JsonEditor() {
     } catch (e) {
       setError((e as Error).message)
     }
-  }, [loadStyle])
+  }, [loadStyle, validate])
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor
