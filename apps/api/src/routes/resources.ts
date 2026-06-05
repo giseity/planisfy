@@ -100,7 +100,7 @@ resourcesRoute.post("/uploads", async (c) => {
         error: {
           code: "VALIDATION_ERROR",
           message:
-            "Unsupported file format. Accepted: GeoJSON, CSV, PMTiles, MBTiles.",
+            "Unsupported file format. Accepted: GeoJSON, CSV, zipped Shapefile, PMTiles, MBTiles.",
         },
       },
       400,
@@ -453,11 +453,13 @@ function detectFormat(
   const ext = filename.split(".").pop()?.toLowerCase();
   if (ext === "geojson" || ext === "json") return "geojson";
   if (ext === "csv") return "csv";
+  if (ext === "zip") return "shapefile";
   if (ext === "pmtiles") return "pmtiles";
   if (ext === "mbtiles") return "mbtiles";
   if (mimeType.includes("geo+json") || mimeType.includes("json"))
     return "geojson";
   if (mimeType.includes("csv")) return "csv";
+  if (mimeType.includes("zip")) return "shapefile";
   return null;
 }
 
