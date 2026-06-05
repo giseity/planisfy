@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { db, organizations, members, invitations, profiles, users, styles, apiKeys } from "@planisfy/database"
-import { eq, and, isNull, desc, count, sql } from "drizzle-orm"
+import { eq, and, isNull, desc } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
 import {

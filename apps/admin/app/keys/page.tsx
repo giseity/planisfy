@@ -1,5 +1,5 @@
 import { db, apiKeys, profiles } from "@planisfy/database"
-import { eq, and, isNull, desc, count, ilike, or, sql, gte, lt } from "drizzle-orm"
+import { eq, isNull, desc, count, ilike, sql } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
 import {
   Table,

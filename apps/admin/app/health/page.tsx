@@ -1,4 +1,4 @@
-import { db, users, organizations, apiKeys, sessions, usageLogs, styles } from "@planisfy/database"
+import { db, users, apiKeys, sessions, usageLogs, styles } from "@planisfy/database"
 import { count, sql, gte, lt, lte, isNull, isNotNull, and, desc } from "drizzle-orm"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
 import { Badge } from "@planisfy/ui/components/badge"
