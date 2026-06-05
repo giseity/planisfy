@@ -1,5 +1,5 @@
-import { db, users, profiles, styles, apiKeys } from "@planisfy/database"
-import { eq, sql, desc, count, isNull, ilike, or } from "drizzle-orm"
+import { db, users, profiles } from "@planisfy/database"
+import { eq, sql, desc, count, ilike, or } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
 import {
   Table,
@@ -11,6 +11,8 @@ import {
 } from "@planisfy/ui/components/table"
 import Link from "next/link"
 
+const userRoles = ["USER", "ADMIN", "SUPER"] as const
+
 export default async function UsersPage({
   searchParams,
 }: {
@@ -21,7 +23,7 @@ export default async function UsersPage({
   const limit = 25
   const offset = (page - 1) * limit
   const search = params.q || ""
-  const roleFilter = params.role || ""
+  const roleFilter = userRoles.find((role) => role === params.role)
 
   const conditions = []
   if (search) {
@@ -34,7 +36,7 @@ export default async function UsersPage({
     )
   }
   if (roleFilter) {
-    conditions.push(eq(users.role, roleFilter as any))
+    conditions.push(eq(users.role, roleFilter))
   }
 
   const whereClause = conditions.length > 0
@@ -76,7 +78,7 @@ export default async function UsersPage({
           />
           <select
             name="role"
-            defaultValue={roleFilter}
+            defaultValue={roleFilter ?? ""}
             className="h-8 rounded-md border border-input bg-background px-2 text-sm"
           >
             <option value="">All roles</option>
