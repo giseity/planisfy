@@ -1,17 +1,25 @@
 import { createMiddleware } from "hono/factory";
+import type { Context } from "hono";
 import {
-  RateLimiterRedis,
   RateLimiterMemory,
+  RateLimiterRedis,
   RateLimiterRes,
 } from "rate-limiter-flexible";
 import Redis from "ioredis";
-import { PLAN_LIMITS, type PlanId } from "@planisfy/types";
+import { PLANS, type PlanSlug } from "@planisfy/types";
 import { getEndpointCost } from "../lib/api-key";
 import { getUserPlan } from "../lib/billing";
+import {
+  checkMonthlyUsageQuota,
+  evaluateMonthlyQuota,
+  getMonthlyUsagePeriod,
+  getMonthlyUsageUnits,
+  type QuotaEvaluation,
+} from "../lib/usage-quota";
 import { redisConnection } from "../env";
 import type { AuthEnv } from "./auth";
 
-// ── Redis client ────────────────────────────────────────────────────────────
+const MONTHLY_QUOTA_CACHE_TTL_SECONDS = 35 * 24 * 60 * 60;
 
 const redis = new Redis({
   ...redisConnection,
@@ -21,85 +29,104 @@ const redis = new Redis({
 });
 
 redis.connect().catch((err) => {
-  console.warn("[rate-limit] Redis connection failed, using memory fallback:", err.message);
+  console.warn(
+    "[rate-limit] Redis connection failed, using memory fallback:",
+    err.message,
+  );
 });
-
-// ── Per-plan rate limiters (requests per minute) ────────────────────────────
 
 const memoryFallback = new RateLimiterMemory({
   points: 100,
   duration: 60,
 });
 
-const planLimiters = {} as Record<PlanId, RateLimiterRedis>;
-
-for (const [planId, limits] of Object.entries(PLAN_LIMITS)) {
-  planLimiters[planId as PlanId] = new RateLimiterRedis({
-    storeClient: redis,
-    keyPrefix: `rl:${planId}`,
-    points: limits.requestsPerMinute,
-    duration: 60, // per minute
-    insuranceLimiter: memoryFallback,
-  });
-}
-
-// ── DDoS blocker: in-memory block list for repeat offenders ─────────────────
+const planSlugs = Object.keys(PLANS) as PlanSlug[];
+const planLimiters = Object.fromEntries(
+  planSlugs.map((planId) => [
+    planId,
+    new RateLimiterRedis({
+      storeClient: redis,
+      keyPrefix: `rl:${planId}`,
+      points: PLANS[planId].requestsPerMinute,
+      duration: 60,
+      insuranceLimiter: memoryFallback,
+    }),
+  ]),
+) as Record<PlanSlug, RateLimiterRedis>;
 
 const blockLimiter = new RateLimiterMemory({
-  points: 10, // 10 rate-limit violations...
-  duration: 300, // ...within 5 minutes → block
-  blockDuration: 600, // blocked for 10 minutes
+  points: 10,
+  duration: 300,
+  blockDuration: 600,
 });
 
-// ── Monthly quota tracking via Redis ────────────────────────────────────────
-
-function getMonthlyQuotaKey(ownerId: string): string {
-  const now = new Date();
-  const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-  return `quota:${ownerId}:${month}`;
+function getMonthlyQuotaKey(ownerId: string, periodKey: string): string {
+  return `quota:${ownerId}:${periodKey}`;
 }
 
-async function checkAndIncrementQuota(
-  ownerId: string,
-  cost: number,
-  monthlyLimit: number
-): Promise<{ allowed: boolean; used: number; limit: number }> {
-  if (monthlyLimit === Infinity) {
-    return { allowed: true, used: 0, limit: monthlyLimit };
+function setQuotaHeaders(c: Context<AuthEnv>, quota: QuotaEvaluation) {
+  c.header("X-Quota-Limit", quota.limit === Infinity ? "unlimited" : String(quota.limit));
+  c.header("X-Quota-Used", String(quota.projected));
+  c.header(
+    "X-Quota-Remaining",
+    quota.remaining === Infinity ? "unlimited" : String(quota.remaining),
+  );
+}
+
+async function reserveMonthlyQuota(params: {
+  ownerId: string;
+  cost: number;
+  monthlyLimit: number;
+}): Promise<QuotaEvaluation> {
+  if (params.monthlyLimit === Infinity) {
+    return evaluateMonthlyQuota({
+      used: 0,
+      cost: params.cost,
+      limit: params.monthlyLimit,
+    });
   }
+
+  const period = getMonthlyUsagePeriod();
+  const durableUsed = await getMonthlyUsageUnits(params.ownerId, period.start);
 
   try {
-    const key = getMonthlyQuotaKey(ownerId);
-    const newTotal = await redis.incrby(key, cost);
+    const key = getMonthlyQuotaKey(params.ownerId, period.key);
+    const cachedRaw = await redis.get(key);
+    const cachedUsed = cachedRaw ? Number(cachedRaw) : 0;
+    const baseline = Math.max(
+      Number.isFinite(cachedUsed) ? cachedUsed : 0,
+      durableUsed,
+    );
 
-    // Set TTL on first increment (35 days for cleanup)
-    if (newTotal === cost) {
-      await redis.expire(key, 35 * 24 * 60 * 60);
+    await redis.set(
+      key,
+      String(baseline),
+      "EX",
+      MONTHLY_QUOTA_CACHE_TTL_SECONDS,
+    );
+
+    const projected = await redis.incrby(key, params.cost);
+    const usedBeforeRequest = projected - params.cost;
+    const quota = evaluateMonthlyQuota({
+      used: usedBeforeRequest,
+      cost: params.cost,
+      limit: params.monthlyLimit,
+    });
+
+    if (!quota.allowed) {
+      await redis.decrby(key, params.cost);
     }
 
-    return {
-      allowed: newTotal <= monthlyLimit,
-      used: newTotal,
-      limit: monthlyLimit,
-    };
+    return quota;
   } catch {
-    // If Redis is down, allow the request (fail open for quota)
-    return { allowed: true, used: 0, limit: monthlyLimit };
+    return checkMonthlyUsageQuota({
+      ownerId: params.ownerId,
+      cost: params.cost,
+      limit: params.monthlyLimit,
+    });
   }
 }
 
-// ── Middleware ───────────────────────────────────────────────────────────────
-
-/**
- * Rate limiting middleware for public API endpoints.
- * Uses the ownerId (from API key or session) as the rate limit key.
- *
- * Flow:
- * 1. Check DDoS block list
- * 2. Check per-minute rate limit (plan-based)
- * 3. Check monthly quota (Redis counter)
- * 4. Set rate limit headers on response
- */
 export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   const ownerId = c.get("ownerId");
   if (!ownerId) {
@@ -112,46 +139,50 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
     c.req.header("x-real-ip") ||
     "unknown";
 
-  // 1. Check DDoS block list (by IP)
   try {
-    await blockLimiter.consume(clientIp, 0); // 0 = just check, don't consume
+    await blockLimiter.consume(clientIp, 0);
   } catch {
     return c.json(
-      { error: { code: "RATE_LIMITED", message: "Too many requests. Please try again later." } },
-      429
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many requests. Please try again later.",
+        },
+      },
+      429,
     );
   }
 
-  // 2. Determine the user's plan
   const userId = c.get("userId");
-  const rawPlan = userId ? await getUserPlan(userId) : "free";
-  const planId: PlanId = `prod_${rawPlan}` as PlanId;
-  const planLimits = PLAN_LIMITS[planId] || PLAN_LIMITS.prod_free;
-  const limiter = planLimiters[planId];
+  const planId = userId ? await getUserPlan(userId) : "free";
+  const plan = PLANS[planId] ?? PLANS.free;
+  const limiter = planLimiters[planId] ?? planLimiters.free;
   const cost = getEndpointCost(c.req.path);
 
-  // 3. Per-minute rate limit
   try {
     const rateLimitRes = await limiter.consume(ownerId, cost);
 
-    // Set rate limit headers
-    c.header("X-RateLimit-Limit", String(planLimits.requestsPerMinute));
-    c.header("X-RateLimit-Remaining", String(Math.max(0, rateLimitRes.remainingPoints)));
+    c.header("X-RateLimit-Limit", String(plan.requestsPerMinute));
+    c.header(
+      "X-RateLimit-Remaining",
+      String(Math.max(0, rateLimitRes.remainingPoints)),
+    );
     c.header(
       "X-RateLimit-Reset",
-      String(Math.ceil(Date.now() / 1000 + rateLimitRes.msBeforeNext / 1000))
+      String(
+        Math.ceil(Date.now() / 1000 + rateLimitRes.msBeforeNext / 1000),
+      ),
     );
   } catch (err) {
     if (err instanceof RateLimiterRes) {
-      // Rate limited — record violation for DDoS detection
       try {
         await blockLimiter.consume(clientIp);
       } catch {
-        // Now blocked
+        // The block limiter will reject subsequent requests.
       }
 
       const retryAfter = Math.ceil(err.msBeforeNext / 1000);
-      c.header("X-RateLimit-Limit", String(planLimits.requestsPerMinute));
+      c.header("X-RateLimit-Limit", String(plan.requestsPerMinute));
       c.header("X-RateLimit-Remaining", "0");
       c.header("Retry-After", String(retryAfter));
 
@@ -162,24 +193,32 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
             message: `Rate limit exceeded. Retry after ${retryAfter} seconds.`,
           },
         },
-        429
+        429,
       );
     }
-    // Unknown error — fail open
   }
 
-  // 4. Monthly quota check
-  const quota = await checkAndIncrementQuota(ownerId, cost, planLimits.monthlyUnits);
+  const quota = await reserveMonthlyQuota({
+    ownerId,
+    cost,
+    monthlyLimit: plan.monthlyUnits,
+  });
+  setQuotaHeaders(c, quota);
+
   if (!quota.allowed) {
     return c.json(
       {
         error: {
           code: "QUOTA_EXCEEDED",
           message: "Monthly quota exceeded. Please upgrade your plan.",
-          details: { used: quota.used, limit: quota.limit },
+          details: {
+            used: quota.used,
+            projected: quota.projected,
+            limit: quota.limit,
+          },
         },
       },
-      429
+      429,
     );
   }
 

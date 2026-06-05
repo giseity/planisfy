@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AuthEnv } from "../middleware/auth";
 import { getUserPlan, getPlanLimits, PLANS, createCheckoutUrl, getCustomerPortalUrl } from "../lib/billing";
-import { db, styles, tilesets, apiKeys, usageLogs } from "@planisfy/database";
-import { eq, and, isNull, count, sql, gte } from "drizzle-orm";
+import { getMonthlyUsagePeriod, getMonthlyUsageUnits } from "../lib/usage-quota";
+import { db, styles, tilesets, apiKeys } from "@planisfy/database";
+import { eq, and, isNull, count } from "drizzle-orm";
 import { env } from "../env";
 
 const checkoutSchema = z.object({
@@ -23,34 +24,47 @@ billingRoute.get("/billing", async (c) => {
     getPlanLimits(userId),
   ]);
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const period = getMonthlyUsagePeriod();
 
-  const [[styleCount], [tilesetCount], [keyCount], [usageRow]] = await Promise.all([
-    db.select({ count: count() }).from(styles).where(and(eq(styles.ownerId, ownerId), isNull(styles.deletedAt))),
-    db.select({ count: count() }).from(tilesets).where(and(eq(tilesets.accountId, ownerId), isNull(tilesets.deletedAt))),
-    db.select({ count: count() }).from(apiKeys).where(and(eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt))),
-    db.select({ total: sql<number>`coalesce(sum(${usageLogs.cost}), 0)`.as("total") })
-      .from(usageLogs)
-      .where(and(eq(usageLogs.profileId, ownerId), gte(usageLogs.timestamp, monthStart))),
-  ]);
+  const [[styleCount], [tilesetCount], [keyCount], monthlyUnits] =
+    await Promise.all([
+      db
+        .select({ count: count() })
+        .from(styles)
+        .where(and(eq(styles.ownerId, ownerId), isNull(styles.deletedAt))),
+      db
+        .select({ count: count() })
+        .from(tilesets)
+        .where(
+          and(eq(tilesets.accountId, ownerId), isNull(tilesets.deletedAt)),
+        ),
+      db
+        .select({ count: count() })
+        .from(apiKeys)
+        .where(and(eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt))),
+      getMonthlyUsageUnits(ownerId, period.start),
+    ]);
 
-  const planInfo = PLANS[plan] ?? PLANS.free!;
+  const planInfo = PLANS[plan] ?? PLANS.free;
 
   return c.json({
     plan,
-    planName: planInfo!.name,
-    price: planInfo!.price,
+    planName: planInfo.name,
+    price: planInfo.price,
     limits,
     usage: {
-      monthlyUnits: Number(usageRow?.total ?? 0),
+      monthlyUnits,
       styles: styleCount?.count ?? 0,
       sources: tilesetCount?.count ?? 0,
       apiKeys: keyCount?.count ?? 0,
     },
     quotaPercent: limits.monthlyUnits === Infinity
       ? 0
-      : Math.round((Number(usageRow?.total ?? 0) / limits.monthlyUnits) * 100),
+      : Math.round((monthlyUnits / limits.monthlyUnits) * 100),
+    period: {
+      start: period.start.toISOString(),
+      end: period.end.toISOString(),
+    },
     polarConfigured: !!env.POLAR_ACCESS_TOKEN,
   });
 });
@@ -58,10 +72,14 @@ billingRoute.get("/billing", async (c) => {
 // ── GET /billing/plans — Available plans ────────────────────────────────────
 
 billingRoute.get("/billing/plans", async (c) => {
-  const plans = Object.entries(PLANS).map(([id, plan]) => ({
-    id,
-    ...plan,
-    monthlyUnits: plan.monthlyUnits === Infinity ? "Unlimited" : plan.monthlyUnits,
+  const plans = Object.values(PLANS).map((plan) => ({
+    id: plan.id,
+    productId: plan.productId,
+    name: plan.name,
+    price: plan.price,
+    requestsPerMinute: plan.requestsPerMinute,
+    monthlyUnits:
+      plan.monthlyUnits === Infinity ? "Unlimited" : plan.monthlyUnits,
     maxStyles: plan.maxStyles === Infinity ? "Unlimited" : plan.maxStyles,
     maxSources: plan.maxSources === Infinity ? "Unlimited" : plan.maxSources,
     maxApiKeys: plan.maxApiKeys === Infinity ? "Unlimited" : plan.maxApiKeys,

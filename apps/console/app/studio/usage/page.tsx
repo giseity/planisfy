@@ -41,6 +41,25 @@ interface UsageSummary {
   totalRequests: number
   totalUnits: number
   activeApiKeys: number
+  plan: {
+    id: string
+    name: string
+    limits: {
+      monthlyUnits: number | null
+      requestsPerMinute: number
+      maxStyles: number | null
+      maxSources: number | null
+      maxApiKeys: number | null
+    }
+  }
+  quota: {
+    used: number
+    limit: number | null
+    remaining: number | null
+    percent: number
+    periodStart: string
+    periodEnd: string
+  }
   previousPeriod: {
     totalRequests: number
     totalUnits: number
@@ -95,6 +114,10 @@ function formatNumber(n: number): string {
   return n.toLocaleString()
 }
 
+function formatQuotaLimit(limit: number | null): string {
+  return limit === null ? "Unlimited" : formatNumber(limit)
+}
+
 function TrendIndicator({ current, previous }: { current: number; previous: number }) {
   if (previous === 0) return null
   const pct = Math.round(((current - previous) / previous) * 100)
@@ -147,17 +170,17 @@ export default function UsagePage() {
     value: k.requests,
   }))
 
-  // Plan quota (hardcoded for now — will come from billing in Phase 8)
-  const quotaLimit = 50_000
-  const quotaUsed = summary?.totalUnits ?? 0
-  const quotaPercent = Math.min(100, Math.round((quotaUsed / quotaLimit) * 100))
+  // Quota metadata comes from the backend plan catalog.
+  const quotaLimit = summary?.quota.limit ?? null
+  const quotaUsed = summary?.quota.used ?? 0
+  const quotaPercent = summary?.quota.percent ?? 0
 
   return (
     <div className="container max-w-6xl py-8 px-4">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold">Usage</h1>
-          <Badge variant="secondary">Free plan</Badge>
+          <Badge variant="secondary">{summary?.plan.name ?? "Plan"}</Badge>
         </div>
         <Select value={period} onValueChange={setPeriod}>
           <SelectTrigger className="w-[140px]">
@@ -214,7 +237,7 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? <div className="h-8 w-28 bg-muted animate-pulse rounded" /> : `${formatNumber(quotaUsed)} / ${formatNumber(quotaLimit)}`}
+              {loading ? <div className="h-8 w-28 bg-muted animate-pulse rounded" /> : `${formatNumber(quotaUsed)} / ${formatQuotaLimit(quotaLimit)}`}
             </div>
             <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
               <div
