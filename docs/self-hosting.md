@@ -52,6 +52,14 @@ scripts/self-host-setup.sh --up        # prepare, then start the full stack
 scripts/self-host-setup.sh --migrate   # start dependencies, then run Drizzle migrations
 ```
 
+## Optional Billing
+
+Dodo Payments checkout is disabled unless the API container receives
+`DODO_PAYMENTS_API_KEY`, `DODO_PRO_PRODUCT_ID`, and
+`DODO_PAYMENTS_WEBHOOK_SECRET`. Set `DODO_PAYMENTS_ENVIRONMENT=live_mode` for
+production and configure Dodo to send subscription webhooks to
+`/webhooks/dodo`.
+
 ## Demo Data Layout
 
 | Path | Purpose |
