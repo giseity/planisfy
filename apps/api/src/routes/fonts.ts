@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AuthEnv } from "../middleware/auth";
+import { env } from "../env";
 
 export const fontsRoute = new Hono<AuthEnv>();
 
@@ -9,8 +10,7 @@ export const fontsRoute = new Hono<AuthEnv>();
 // In production, glyphs are served from R2/S3 or a CDN.
 // For now, proxy to a known public glyph source as a fallback.
 
-const GLYPHS_BASE_URL =
-  process.env.GLYPHS_URL || "https://demotiles.maplibre.org/font";
+const GLYPHS_BASE_URL = env.GLYPHS_URL;
 
 fontsRoute.get("/fonts/v1/:fontstack/:range", async (c) => {
   const { fontstack, range } = c.req.param();

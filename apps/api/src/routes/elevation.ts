@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import type { AuthEnv } from "../middleware/auth";
+import { env } from "../env";
 
 export const elevationRoute = new Hono<AuthEnv>();
 
 // Open Elevation API (free, self-hostable) or OpenTopoData as fallback
-const ELEVATION_URL = process.env.ELEVATION_URL || "https://api.open-elevation.com/api/v1";
+const ELEVATION_URL = env.ELEVATION_URL;
 
 interface ElevationResult {
   elevation: number;

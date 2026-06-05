@@ -1,8 +1,10 @@
 // ── Email service via Resend ─────────────────────────────────────────────────
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM_EMAIL = process.env.FROM_EMAIL || "Planisfy <noreply@planisfy.com>";
-const CONSOLE_URL = process.env.CONSOLE_URL || "http://localhost:3001";
+import { env } from "../env";
+
+const RESEND_API_KEY = env.RESEND_API_KEY;
+const FROM_EMAIL = env.FROM_EMAIL;
+const CONSOLE_URL = env.CONSOLE_URL;
 
 interface SendEmailOptions {
   to: string | string[];

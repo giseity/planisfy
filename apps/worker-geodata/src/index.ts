@@ -1,25 +1,21 @@
-import "dotenv/config";
 import { Worker } from "bullmq";
 import Redis from "ioredis";
+import { env, redisConnection } from "./env";
 import { processSourceJob, type SourceProcessingJob } from "./source-worker";
 
-const REDIS_CONNECTION = getRedisConnection();
+const REDIS_CONNECTION = redisConnection;
 
 const SOURCE_PROCESSING_QUEUE_NAME = "source-processing";
 const HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
-const HEARTBEAT_INTERVAL_MS = Number(
-  process.env.GEODATA_WORKER_HEARTBEAT_INTERVAL_MS || 10_000
-);
-const HEARTBEAT_TTL_MS = Number(
-  process.env.GEODATA_WORKER_HEARTBEAT_TTL_MS || 45_000
-);
+const HEARTBEAT_INTERVAL_MS = env.GEODATA_WORKER_HEARTBEAT_INTERVAL_MS;
+const HEARTBEAT_TTL_MS = env.GEODATA_WORKER_HEARTBEAT_TTL_MS;
 
 const sourceWorker = new Worker<SourceProcessingJob>(
   SOURCE_PROCESSING_QUEUE_NAME,
   processSourceJob,
   {
     connection: REDIS_CONNECTION,
-    concurrency: Number(process.env.GEODATA_WORKER_CONCURRENCY || 2),
+    concurrency: env.GEODATA_WORKER_CONCURRENCY,
   }
 );
 const heartbeatRedis = new Redis(REDIS_CONNECTION);
@@ -68,21 +64,4 @@ async function writeHeartbeat() {
     "PX",
     HEARTBEAT_TTL_MS
   );
-}
-
-function getRedisConnection() {
-  if (process.env.REDIS_URL) {
-    const url = new URL(process.env.REDIS_URL);
-    return {
-      host: url.hostname,
-      port: Number(url.port || 6379),
-      username: url.username || undefined,
-      password: url.password || undefined,
-    };
-  }
-
-  return {
-    host: process.env.REDIS_HOST || "localhost",
-    port: Number(process.env.REDIS_PORT) || 6379,
-  };
 }

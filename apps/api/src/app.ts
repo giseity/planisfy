@@ -27,6 +27,7 @@ import { sourcesRoute } from "./routes/sources";
 import { billingRoute } from "./routes/billing";
 import { profileRoute } from "./routes/profile";
 import { auth } from "@planisfy/auth/auth";
+import { env } from "./env";
 
 const app = new Hono<AuthEnv>();
 
@@ -144,7 +145,7 @@ app.onError((err, c) => {
   return c.json({
     error: {
       code: "INTERNAL_ERROR",
-      message: process.env.NODE_ENV === "production"
+      message: env.NODE_ENV === "production"
         ? "An unexpected error occurred"
         : err.message || "Unknown error",
       requestId,

@@ -1,11 +1,9 @@
 import { Queue, Worker } from "bullmq";
 import { db, usageLogs } from "@planisfy/database";
 import type { UsageLogEntry } from "@planisfy/utils/usage-writer";
+import { redisConnection } from "../env";
 
-const REDIS_CONNECTION = {
-  host: process.env.REDIS_HOST || "localhost",
-  port: Number(process.env.REDIS_PORT) || 6379,
-};
+const REDIS_CONNECTION = redisConnection;
 
 const QUEUE_NAME = "usage-logging";
 const BATCH_SIZE = 50;

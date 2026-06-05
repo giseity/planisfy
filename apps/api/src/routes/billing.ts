@@ -4,6 +4,7 @@ import type { AuthEnv } from "../middleware/auth";
 import { getUserPlan, getPlanLimits, PLANS, createCheckoutUrl, getCustomerPortalUrl } from "../lib/billing";
 import { db, styles, tilesetSources, apiKeys, usageLogs } from "@planisfy/database";
 import { eq, and, isNull, count, sql, gte } from "drizzle-orm";
+import { env } from "../env";
 
 const checkoutSchema = z.object({
   priceId: z.string().min(1, "priceId is required").max(256),
@@ -50,7 +51,7 @@ billingRoute.get("/billing", async (c) => {
     quotaPercent: limits.monthlyUnits === Infinity
       ? 0
       : Math.round((Number(usageRow?.total ?? 0) / limits.monthlyUnits) * 100),
-    polarConfigured: !!process.env.POLAR_ACCESS_TOKEN,
+    polarConfigured: !!env.POLAR_ACCESS_TOKEN,
   });
 });
 

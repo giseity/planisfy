@@ -8,6 +8,7 @@ import {
 import { dirname, join } from "path";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
+import { env } from "./env";
 
 export interface StoredObject {
   key: string;
@@ -42,11 +43,11 @@ export class S3Storage implements StorageProvider {
   private publicUrl: string | undefined;
 
   constructor() {
-    this.bucket = process.env.S3_BUCKET || "planisfy-uploads";
-    this.region = process.env.S3_REGION || "auto";
-    this.endpoint = process.env.S3_ENDPOINT;
-    this.accessKeyId = process.env.AWS_ACCESS_KEY_ID || "";
-    this.publicUrl = process.env.S3_PUBLIC_URL;
+    this.bucket = env.S3_BUCKET;
+    this.region = env.S3_REGION;
+    this.endpoint = env.S3_ENDPOINT;
+    this.accessKeyId = env.AWS_ACCESS_KEY_ID || "";
+    this.publicUrl = env.S3_PUBLIC_URL;
   }
 
   async upload(
@@ -114,7 +115,7 @@ export class S3Storage implements StorageProvider {
 
   getInfo(): StorageProviderInfo {
     return {
-      provider: process.env.STORAGE_PROVIDER || "s3",
+      provider: env.STORAGE_PROVIDER,
       bucket: this.bucket,
     };
   }
@@ -130,9 +131,9 @@ export class LocalStorage implements StorageProvider {
   private bucket: string;
 
   constructor() {
-    this.basePath = process.env.LOCAL_STORAGE_PATH || join(process.cwd(), ".storage");
-    this.baseUrl = process.env.LOCAL_STORAGE_URL || "http://localhost:4000/storage";
-    this.bucket = process.env.LOCAL_STORAGE_BUCKET || "local";
+    this.basePath = env.LOCAL_STORAGE_PATH || join(process.cwd(), ".storage");
+    this.baseUrl = env.LOCAL_STORAGE_URL;
+    this.bucket = env.LOCAL_STORAGE_BUCKET;
 
     if (!existsSync(this.basePath)) {
       mkdirSync(this.basePath, { recursive: true });
@@ -208,7 +209,7 @@ export function getStorage(): StorageProvider {
     return storage;
   }
 
-  const provider = process.env.STORAGE_PROVIDER || "local";
+  const provider = env.STORAGE_PROVIDER;
 
   switch (provider) {
     case "s3":

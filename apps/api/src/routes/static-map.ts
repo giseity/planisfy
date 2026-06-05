@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AuthEnv } from "../middleware/auth";
+import { env } from "../env";
 
 export const staticMapRoute = new Hono<AuthEnv>();
 
@@ -7,7 +8,7 @@ export const staticMapRoute = new Hono<AuthEnv>();
 // In production, use @maplibre/maplibre-gl-native or a headless browser
 // For now, proxy to a simple tile composite service
 
-const STATIC_BASE_URL = process.env.STATIC_MAP_URL;
+const STATIC_BASE_URL = env.STATIC_MAP_URL;
 
 // ── GET /static/v1/:owner/:style/:lon,:lat,:zoom/:widthx:height.png ─────────
 

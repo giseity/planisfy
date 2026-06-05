@@ -1,12 +1,10 @@
-import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { app } from "./app";
+import { env } from "./env";
 import { logger } from "./lib/logger";
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
-
-serve({ fetch: app.fetch, port: PORT }, (info) => {
-  logger.info("API server started", { port: info.port, env: process.env.NODE_ENV || "development" });
+serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+  logger.info("API server started", { port: info.port, env: env.NODE_ENV });
 });
 
 // Graceful shutdown

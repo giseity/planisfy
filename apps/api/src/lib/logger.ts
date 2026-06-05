@@ -1,7 +1,9 @@
 // ── Structured logging ──────────────────────────────────────────────────────
 // JSON-formatted logs in production, pretty-printed in development.
 
-const isProduction = process.env.NODE_ENV === "production";
+import { env } from "../env";
+
+const isProduction = env.NODE_ENV === "production";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 

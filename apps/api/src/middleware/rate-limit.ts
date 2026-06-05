@@ -8,11 +8,13 @@ import Redis from "ioredis";
 import { PLAN_LIMITS, type PlanId } from "@planisfy/types";
 import { getEndpointCost } from "../lib/api-key";
 import { getUserPlan } from "../lib/billing";
+import { redisConnection } from "../env";
 import type { AuthEnv } from "./auth";
 
 // ── Redis client ────────────────────────────────────────────────────────────
 
-const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+const redis = new Redis({
+  ...redisConnection,
   enableOfflineQueue: false,
   maxRetriesPerRequest: 1,
   lazyConnect: true,

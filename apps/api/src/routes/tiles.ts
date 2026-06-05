@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { AuthEnv } from "../middleware/auth";
-
-const MARTIN_URL = process.env.MARTIN_URL || "http://localhost:3005";
+import { env } from "../env";
 
 export const tilesRoute = new Hono<AuthEnv>();
 
@@ -11,7 +10,7 @@ tilesRoute.get("/tiles/v1/:source/:z/:x/:y", async (c) => {
   const { source, z, x, y } = c.req.param();
 
   try {
-    const martinUrl = `${MARTIN_URL}/${source}/${z}/${x}/${y}`;
+    const martinUrl = `${env.MARTIN_URL}/${source}/${z}/${x}/${y}`;
     const res = await fetch(martinUrl);
 
     if (!res.ok) {
@@ -50,7 +49,7 @@ tilesRoute.get("/tiles/v1/:source{.+\\.json$}", async (c) => {
   const source = c.req.param("source").replace(/\.json$/, "");
 
   try {
-    const martinUrl = `${MARTIN_URL}/${source}`;
+    const martinUrl = `${env.MARTIN_URL}/${source}`;
     const res = await fetch(martinUrl, {
       headers: { Accept: "application/json" },
     });

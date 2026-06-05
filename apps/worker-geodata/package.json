@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@planisfy/database": "workspace:*",
+    "@planisfy/env": "workspace:*",
     "@planisfy/storage": "workspace:*",
     "@planisfy/storage-paths": "workspace:*",
     "bullmq": "^5.71.0",

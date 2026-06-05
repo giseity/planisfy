@@ -4,6 +4,7 @@
 
 import { db, users } from "@planisfy/database";
 import { eq } from "drizzle-orm";
+import { env } from "../env";
 
 // ── Plan definitions ────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ export const PLANS: Record<string, PlanLimits & { name: string; price: number }>
 
 export async function getUserPlan(userId: string): Promise<string> {
   // If Polar is configured, check subscription status
-  if (process.env.POLAR_ACCESS_TOKEN) {
+  if (env.POLAR_ACCESS_TOKEN) {
     try {
       const plan = await getPolarSubscriptionPlan(userId);
       if (plan) return plan;
@@ -71,7 +72,7 @@ export async function getPlanLimits(userId: string): Promise<PlanLimits> {
 const POLAR_API_URL = "https://api.polar.sh/v1";
 
 async function polarFetch(path: string, options?: RequestInit) {
-  const token = process.env.POLAR_ACCESS_TOKEN;
+  const token = env.POLAR_ACCESS_TOKEN;
   if (!token) throw new Error("POLAR_ACCESS_TOKEN not configured");
 
   const res = await fetch(`${POLAR_API_URL}${path}`, {
@@ -111,7 +112,7 @@ async function getPolarSubscriptionPlan(userId: string): Promise<string | null> 
 }
 
 export async function createCheckoutUrl(userId: string, priceId: string): Promise<string | null> {
-  if (!process.env.POLAR_ACCESS_TOKEN) return null;
+  if (!env.POLAR_ACCESS_TOKEN) return null;
 
   try {
     const data = await polarFetch("/checkouts/custom", {
@@ -119,7 +120,7 @@ export async function createCheckoutUrl(userId: string, priceId: string): Promis
       body: JSON.stringify({
         product_price_id: priceId,
         customer_external_id: userId,
-        success_url: `${process.env.CONSOLE_URL || "http://localhost:3001"}/studio/settings?billing=success`,
+        success_url: `${env.CONSOLE_URL}/studio/settings?billing=success`,
         metadata: { userId },
       }),
     });
@@ -132,7 +133,7 @@ export async function createCheckoutUrl(userId: string, priceId: string): Promis
 }
 
 export async function getCustomerPortalUrl(userId: string): Promise<string | null> {
-  if (!process.env.POLAR_ACCESS_TOKEN) return null;
+  if (!env.POLAR_ACCESS_TOKEN) return null;
 
   try {
     const data = await polarFetch("/customer-sessions", {
@@ -152,7 +153,7 @@ export async function getCustomerPortalUrl(userId: string): Promise<string | nul
 // ── Usage tracking ──────────────────────────────────────────────────────────
 
 export async function reportUsage(userId: string, units: number): Promise<void> {
-  if (!process.env.POLAR_ACCESS_TOKEN) return;
+  if (!env.POLAR_ACCESS_TOKEN) return;
 
   try {
     await polarFetch("/usage/record", {

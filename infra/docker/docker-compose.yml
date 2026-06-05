@@ -39,8 +39,12 @@ services:
       - REDIS_PORT=6379
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
+      - INTERNAL_API_URL=http://api:4000
+      - CONSOLE_URL=http://localhost:3001
       - MARTIN_URL=http://martin:3000
-      - GEOCODING_URL=${GEOCODING_URL:-}
+      - PELIAS_URL=${PELIAS_URL:-http://api:4000/geocoding}
+      - GLYPHS_URL=${GLYPHS_URL:-https://demotiles.maplibre.org/font}
+      - ELEVATION_URL=${ELEVATION_URL:-https://api.open-elevation.com/api/v1}
       - VALHALLA_URL=http://valhalla:8002
       - STORAGE_PROVIDER=local
       - LOCAL_STORAGE_PATH=/data/storage
@@ -97,7 +101,12 @@ services:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
       - BETTER_AUTH_URL=http://localhost:3001/api/auth
+      - API_URL=http://api:4000
       - NEXT_PUBLIC_APP_URL=http://localhost:3001
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_ADMIN_URL=http://localhost:3003
+      - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
+      - NEXT_PUBLIC_CONSOLE_API_PATH=/api/v1/console
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - NODE_ENV=production
     depends_on:
@@ -119,7 +128,11 @@ services:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
       - BETTER_AUTH_URL=http://localhost:3003/api/auth
+      - API_URL=http://api:4000
       - NEXT_PUBLIC_APP_URL=http://localhost:3003
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
+      - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
       - NODE_ENV=production
     depends_on:
       postgres:

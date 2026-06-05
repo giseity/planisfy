@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { db } from "@planisfy/database";
 import { sql } from "drizzle-orm";
+import { env, redisConnection } from "../env";
 
 export const healthRoute = new Hono();
 const WORKER_GEODATA_HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
@@ -62,7 +63,7 @@ healthRoute.get("/health/detailed", async (c) => {
   }
 
   // Martin (tile server)
-  const martinUrl = process.env.MARTIN_URL || "http://localhost:3005";
+  const martinUrl = env.MARTIN_URL;
   const martinStart = Date.now();
   try {
     const controller = new AbortController();
@@ -76,7 +77,7 @@ healthRoute.get("/health/detailed", async (c) => {
   }
 
   // Valhalla (routing)
-  const valhallaUrl = process.env.VALHALLA_URL || "http://localhost:3007";
+  const valhallaUrl = env.VALHALLA_URL;
   const valhallaStart = Date.now();
   try {
     const controller = new AbortController();
@@ -95,7 +96,7 @@ healthRoute.get("/health/detailed", async (c) => {
     {
       status,
       timestamp: new Date().toISOString(),
-      version: process.env.APP_VERSION || "dev",
+      version: env.APP_VERSION,
       uptime: process.uptime(),
       checks,
     },
@@ -104,18 +105,5 @@ healthRoute.get("/health/detailed", async (c) => {
 });
 
 function getRedisConnection() {
-  if (process.env.REDIS_URL) {
-    const url = new URL(process.env.REDIS_URL);
-    return {
-      host: url.hostname,
-      port: Number(url.port || 6379),
-      username: url.username || undefined,
-      password: url.password || undefined,
-    };
-  }
-
-  return {
-    host: process.env.REDIS_HOST || "localhost",
-    port: Number(process.env.REDIS_PORT) || 6379,
-  };
+  return redisConnection;
 }

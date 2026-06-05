@@ -2,8 +2,7 @@ import { Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import type { AuthEnv } from "../middleware/auth";
-
-const VALHALLA_URL = process.env.VALHALLA_URL || "http://localhost:3007";
+import { env } from "../env";
 
 const directionsBodySchema = z.object({
   locations: z.array(
@@ -28,7 +27,7 @@ async function valhallaProxy(
   body: Record<string, unknown>
 ): Promise<{ ok: boolean; status: ContentfulStatusCode; data: unknown }> {
   try {
-    const res = await fetch(`${VALHALLA_URL}/${action}`, {
+    const res = await fetch(`${env.VALHALLA_URL}/${action}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
