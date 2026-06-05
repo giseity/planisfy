@@ -12,6 +12,10 @@ import {
   ScrollText,
   Activity,
   ArrowLeft,
+  Boxes,
+  BriefcaseBusiness,
+  Inbox,
+  TriangleAlert,
 } from "lucide-react"
 
 const navItems = [
@@ -20,6 +24,10 @@ const navItems = [
   { href: "/orgs", label: "Organizations", icon: Building2 },
   { href: "/keys", label: "API Keys", icon: Key },
   { href: "/usage", label: "Usage", icon: BarChart3 },
+  { href: "/outbox", label: "Outbox", icon: Inbox },
+  { href: "/jobs", label: "Jobs", icon: BriefcaseBusiness },
+  { href: "/artifacts", label: "Artifacts", icon: Boxes },
+  { href: "/failures", label: "Failures", icon: TriangleAlert },
   { href: "/audit", label: "Audit Log", icon: ScrollText },
   { href: "/health", label: "System Health", icon: Activity },
 ]
