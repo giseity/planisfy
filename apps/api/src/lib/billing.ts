@@ -2,8 +2,6 @@
 // Integrates with Polar (polar.sh) for subscriptions.
 // Works without POLAR_ACCESS_TOKEN — defaults to free plan.
 
-import { db, users } from "@planisfy/database";
-import { eq } from "drizzle-orm";
 import { env } from "../env";
 
 // ── Plan definitions ────────────────────────────────────────────────────────
@@ -16,7 +14,10 @@ export interface PlanLimits {
   maxApiKeys: number;
 }
 
-export const PLANS: Record<string, PlanLimits & { name: string; price: number }> = {
+export const PLANS: Record<
+  string,
+  PlanLimits & { name: string; price: number }
+> = {
   free: {
     name: "Free",
     price: 0,
@@ -55,7 +56,10 @@ export async function getUserPlan(userId: string): Promise<string> {
       const plan = await getPolarSubscriptionPlan(userId);
       if (plan) return plan;
     } catch (err) {
-      console.error("[billing] Polar lookup failed, falling back to free:", err);
+      console.error(
+        "[billing] Polar lookup failed, falling back to free:",
+        err,
+      );
     }
   }
 
@@ -92,10 +96,12 @@ async function polarFetch(path: string, options?: RequestInit) {
   return res.json();
 }
 
-async function getPolarSubscriptionPlan(userId: string): Promise<string | null> {
+async function getPolarSubscriptionPlan(
+  userId: string,
+): Promise<string | null> {
   try {
     const data = await polarFetch(
-      `/subscriptions?customer_external_id=${userId}&active=true&limit=1`
+      `/subscriptions?customer_external_id=${userId}&active=true&limit=1`,
     );
 
     const sub = data.items?.[0];
@@ -111,7 +117,10 @@ async function getPolarSubscriptionPlan(userId: string): Promise<string | null> 
   }
 }
 
-export async function createCheckoutUrl(userId: string, priceId: string): Promise<string | null> {
+export async function createCheckoutUrl(
+  userId: string,
+  priceId: string,
+): Promise<string | null> {
   if (!env.POLAR_ACCESS_TOKEN) return null;
 
   try {
@@ -132,7 +141,9 @@ export async function createCheckoutUrl(userId: string, priceId: string): Promis
   }
 }
 
-export async function getCustomerPortalUrl(userId: string): Promise<string | null> {
+export async function getCustomerPortalUrl(
+  userId: string,
+): Promise<string | null> {
   if (!env.POLAR_ACCESS_TOKEN) return null;
 
   try {
@@ -152,7 +163,10 @@ export async function getCustomerPortalUrl(userId: string): Promise<string | nul
 
 // ── Usage tracking ──────────────────────────────────────────────────────────
 
-export async function reportUsage(userId: string, units: number): Promise<void> {
+export async function reportUsage(
+  userId: string,
+  units: number,
+): Promise<void> {
   if (!env.POLAR_ACCESS_TOKEN) return;
 
   try {

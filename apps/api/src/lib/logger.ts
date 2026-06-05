@@ -14,7 +14,11 @@ interface LogEntry {
   [key: string]: unknown;
 }
 
-function formatEntry(level: LogLevel, msg: string, data?: Record<string, unknown>): LogEntry {
+function formatEntry(
+  level: LogLevel,
+  msg: string,
+  data?: Record<string, unknown>,
+): LogEntry {
   return {
     level,
     msg,
@@ -25,17 +29,24 @@ function formatEntry(level: LogLevel, msg: string, data?: Record<string, unknown
 
 function output(entry: LogEntry): void {
   if (isProduction) {
-    const stream = entry.level === "error" || entry.level === "warn" ? process.stderr : process.stdout;
+    const stream =
+      entry.level === "error" || entry.level === "warn"
+        ? process.stderr
+        : process.stdout;
     stream.write(JSON.stringify(entry) + "\n");
   } else {
     const color =
-      entry.level === "error" ? "\x1b[31m" :
-      entry.level === "warn" ? "\x1b[33m" :
-      entry.level === "debug" ? "\x1b[90m" :
-      "\x1b[36m";
+      entry.level === "error"
+        ? "\x1b[31m"
+        : entry.level === "warn"
+          ? "\x1b[33m"
+          : entry.level === "debug"
+            ? "\x1b[90m"
+            : "\x1b[36m";
     const reset = "\x1b[0m";
-    const { level, msg, timestamp, ...rest } = entry;
-    const extra = Object.keys(rest).length > 0 ? " " + JSON.stringify(rest) : "";
+    const { level, msg, ...rest } = entry;
+    const extra =
+      Object.keys(rest).length > 0 ? " " + JSON.stringify(rest) : "";
     console.log(`${color}[${level.toUpperCase()}]${reset} ${msg}${extra}`);
   }
 }

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { db, apiKeys } from "@planisfy/database";
 import { logAudit } from "../lib/audit";
-import { generateApiKey, hashKey, ALL_SCOPES, type ApiKeyScope } from "../lib/api-key";
+import { generateApiKey, hashKey, ALL_SCOPES } from "../lib/api-key";
 import { checkResourceLimit } from "../lib/plan-check";
 import type { AuthEnv } from "../middleware/auth";
 
@@ -42,19 +42,28 @@ keysRoute.post("/keys", async (c) => {
   const parsed = createKeySchema.safeParse(body);
   if (!parsed.success) {
     return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid input", details: parsed.error.flatten() } },
-      400
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid input",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
     );
   }
 
   const planCheck = await checkResourceLimit(userId, ownerId, "apiKeys");
   if (!planCheck.allowed) {
-    return c.json({
-      error: {
-        code: "PLAN_LIMIT",
-        message: `You've reached the maximum of ${planCheck.limit} API keys on your current plan. Please upgrade to create more.`,
+    return c.json(
+      {
+        error: {
+          code: "PLAN_LIMIT",
+          message: `You've reached the maximum of ${planCheck.limit} API keys on your current plan. Please upgrade to create more.`,
+        },
       },
-    }, 403);
+      403,
+    );
   }
 
   const { name, scopes, allowedDomains, expiresAt } = parsed.data;
@@ -80,17 +89,20 @@ keysRoute.post("/keys", async (c) => {
   });
 
   // Return the full key — this is the ONLY time it's visible
-  return c.json({
-    data: {
-      id,
-      key: fullKey,
-      name,
-      scopes,
-      allowedDomains,
-      expiresAt: expiresAt ?? null,
-      createdAt: new Date().toISOString(),
+  return c.json(
+    {
+      data: {
+        id,
+        key: fullKey,
+        name,
+        scopes,
+        allowedDomains,
+        expiresAt: expiresAt ?? null,
+        createdAt: new Date().toISOString(),
+      },
     },
-  }, 201);
+    201,
+  );
 });
 
 // ── GET /console/keys — List ────────────────────────────────────────────────
@@ -115,7 +127,10 @@ keysRoute.get("/keys", async (c) => {
   // Add computed status field
   const data = results.map((key) => ({
     ...key,
-    status: key.expiresAt && new Date(key.expiresAt) < new Date() ? "expired" : "active",
+    status:
+      key.expiresAt && new Date(key.expiresAt) < new Date()
+        ? "expired"
+        : "active",
     prefix: key.id, // pk_xxxx — the public prefix
   }));
 
@@ -140,18 +155,28 @@ keysRoute.get("/keys/:id", async (c) => {
     })
     .from(apiKeys)
     .where(
-      and(eq(apiKeys.id, keyId), eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt))
+      and(
+        eq(apiKeys.id, keyId),
+        eq(apiKeys.ownerId, ownerId),
+        isNull(apiKeys.deletedAt),
+      ),
     )
     .limit(1);
 
   if (!key) {
-    return c.json({ error: { code: "NOT_FOUND", message: "API key not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "API key not found" } },
+      404,
+    );
   }
 
   return c.json({
     data: {
       ...key,
-      status: key.expiresAt && new Date(key.expiresAt) < new Date() ? "expired" : "active",
+      status:
+        key.expiresAt && new Date(key.expiresAt) < new Date()
+          ? "expired"
+          : "active",
       prefix: key.id,
     },
   });
@@ -168,8 +193,14 @@ keysRoute.put("/keys/:id", async (c) => {
   const parsed = updateKeySchema.safeParse(body);
   if (!parsed.success) {
     return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid input", details: parsed.error.flatten() } },
-      400
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid input",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
     );
   }
 
@@ -177,20 +208,26 @@ keysRoute.put("/keys/:id", async (c) => {
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.scopes !== undefined) updates.scopes = parsed.data.scopes;
   if (parsed.data.allowedDomains !== undefined) {
-    updates.allowedDomains = parsed.data.allowedDomains.length > 0
-      ? parsed.data.allowedDomains
-      : null;
+    updates.allowedDomains =
+      parsed.data.allowedDomains.length > 0 ? parsed.data.allowedDomains : null;
   }
 
   if (Object.keys(updates).length === 0) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "No fields to update" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "No fields to update" } },
+      400,
+    );
   }
 
   const result = await db
     .update(apiKeys)
     .set(updates)
     .where(
-      and(eq(apiKeys.id, keyId), eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt))
+      and(
+        eq(apiKeys.id, keyId),
+        eq(apiKeys.ownerId, ownerId),
+        isNull(apiKeys.deletedAt),
+      ),
     )
     .returning({
       id: apiKeys.id,
@@ -200,7 +237,10 @@ keysRoute.put("/keys/:id", async (c) => {
     });
 
   if (result.length === 0) {
-    return c.json({ error: { code: "NOT_FOUND", message: "API key not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "API key not found" } },
+      404,
+    );
   }
 
   logAudit({
@@ -226,12 +266,19 @@ keysRoute.delete("/keys/:id", async (c) => {
     .update(apiKeys)
     .set({ deletedAt: new Date() })
     .where(
-      and(eq(apiKeys.id, keyId), eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt))
+      and(
+        eq(apiKeys.id, keyId),
+        eq(apiKeys.ownerId, ownerId),
+        isNull(apiKeys.deletedAt),
+      ),
     )
     .returning({ id: apiKeys.id, name: apiKeys.name });
 
   if (result.length === 0) {
-    return c.json({ error: { code: "NOT_FOUND", message: "API key not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "API key not found" } },
+      404,
+    );
   }
 
   logAudit({
@@ -258,12 +305,19 @@ keysRoute.post("/keys/:id/rotate", async (c) => {
     .select({ id: apiKeys.id, name: apiKeys.name })
     .from(apiKeys)
     .where(
-      and(eq(apiKeys.id, keyId), eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt))
+      and(
+        eq(apiKeys.id, keyId),
+        eq(apiKeys.ownerId, ownerId),
+        isNull(apiKeys.deletedAt),
+      ),
     )
     .limit(1);
 
   if (!existing) {
-    return c.json({ error: { code: "NOT_FOUND", message: "API key not found" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "API key not found" } },
+      404,
+    );
   }
 
   // Generate a new secret but keep the same id
