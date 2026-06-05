@@ -140,6 +140,20 @@ async function dispatchTilesetBuildRequested(
     throw new Error(`Processing job not found: ${payload.jobId}`);
   }
 
+  if (processingJob.status === "CANCELED" || processingJob.cancelRequestedAt) {
+    await db.insert(processingJobLogs).values({
+      jobId: payload.jobId,
+      level: "warn",
+      message: "Build request skipped because processing job is canceled",
+      metadata: {
+        outboxEventId: event.id,
+        tilesetId: payload.tilesetId,
+        uploadId: payload.sourceResourceId,
+      },
+    });
+    return;
+  }
+
   const input = parseSourceProcessingJobInput(processingJob.input);
   await queue.add("process", input, { jobId: payload.jobId });
   await db.insert(processingJobLogs).values({
