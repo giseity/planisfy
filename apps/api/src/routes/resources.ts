@@ -1,8 +1,9 @@
 import { Hono } from "hono";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
+  profiles,
   processingJobLogs,
   processingJobs,
   storageObjects,
@@ -267,7 +268,21 @@ resourcesRoute.get("/tilesets", async (c) => {
     .where(and(eq(tilesets.accountId, accountId), isNull(tilesets.deletedAt)))
     .orderBy(desc(tilesets.updatedAt));
 
-  return c.json({ data: rows });
+  const ownerHandle = await getOwnerHandle(accountId);
+  const versions =
+    rows.length > 0
+      ? await db
+          .select()
+          .from(tilesetVersions)
+          .where(inArray(tilesetVersions.tilesetId, rows.map((row) => row.id)))
+          .orderBy(desc(tilesetVersions.version))
+      : [];
+
+  return c.json({
+    data: rows.map((row) =>
+      toConsoleTileset(row, ownerHandle, versionsForTileset(versions, row.id)),
+    ),
+  });
 });
 
 resourcesRoute.get("/tilesets/:id", async (c) => {
@@ -297,7 +312,11 @@ resourcesRoute.get("/tilesets/:id", async (c) => {
     .where(eq(tilesetVersions.tilesetId, id))
     .orderBy(desc(tilesetVersions.version));
 
-  return c.json({ data: { ...tileset, versions } });
+  const ownerHandle = await getOwnerHandle(accountId);
+
+  return c.json({
+    data: toConsoleTileset(tileset, ownerHandle, versions),
+  });
 });
 
 resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
@@ -471,4 +490,49 @@ function toStorageFileName(filename: string): string {
   return normalized && normalized !== "." && normalized !== ".."
     ? normalized
     : "upload";
+}
+
+async function getOwnerHandle(accountId: string) {
+  const [owner] = await db
+    .select({ handle: profiles.handle })
+    .from(profiles)
+    .where(and(eq(profiles.id, accountId), isNull(profiles.deletedAt)))
+    .limit(1);
+
+  return owner?.handle ?? null;
+}
+
+function versionsForTileset(
+  versions: Array<typeof tilesetVersions.$inferSelect>,
+  tilesetId: string,
+) {
+  return versions.filter((version) => version.tilesetId === tilesetId);
+}
+
+function toConsoleTileset(
+  tileset: typeof tilesets.$inferSelect,
+  ownerHandle: string | null,
+  versions: Array<typeof tilesetVersions.$inferSelect>,
+) {
+  const currentVersion =
+    versions.find((version) => version.id === tileset.currentVersionId) ?? null;
+  const latestVersion = versions[0] ?? null;
+  const tilejsonUrl =
+    ownerHandle && currentVersion
+      ? `/tiles/v1/${ownerHandle}/${tileset.handle}.json`
+      : null;
+
+  return {
+    ...tileset,
+    ownerHandle,
+    versions,
+    latestVersion,
+    currentVersion,
+    isPublished: Boolean(currentVersion),
+    tilejsonUrl,
+    versionedTilejsonUrl:
+      ownerHandle && currentVersion
+        ? `/tiles/v1/${ownerHandle}/${tileset.handle}/versions/${currentVersion.version}.json`
+        : null,
+  };
 }

@@ -11,6 +11,7 @@ const BASE =
   typeof window !== "undefined"
     ? clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH
     : (process.env.API_URL || "http://localhost:4000") + "/console";
+const API_ROOT = BASE.replace(/\/console\/?$/, "");
 
 interface ApiError {
   error: { code: string; message: string; details?: unknown };
@@ -30,6 +31,55 @@ export interface ConsoleSource {
   minZoom: number | null;
   maxZoom: number | null;
   bounds: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleVectorLayer {
+  id: string;
+  fields?: Record<string, string>;
+  description?: string;
+  minzoom?: number;
+  maxzoom?: number;
+}
+
+export interface ConsoleTilesetVersion {
+  id: string;
+  tilesetId: string;
+  version: number;
+  format: string;
+  schema: {
+    vector_layers?: ConsoleVectorLayer[];
+  } | null;
+  bounds: unknown;
+  minZoom: number | null;
+  maxZoom: number | null;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface ConsoleTileset {
+  id: string;
+  accountId: string;
+  ownerHandle: string | null;
+  name: string;
+  handle: string;
+  description: string | null;
+  type: "VECTOR" | "RASTER" | string;
+  status: string;
+  currentVersionId: string | null;
+  bounds: unknown;
+  minZoom: number | null;
+  maxZoom: number | null;
+  layerMetadata: {
+    vector_layers?: ConsoleVectorLayer[];
+  } | null;
+  versions: ConsoleTilesetVersion[];
+  latestVersion: ConsoleTilesetVersion | null;
+  currentVersion: ConsoleTilesetVersion | null;
+  isPublished: boolean;
+  tilejsonUrl: string | null;
+  versionedTilejsonUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -128,6 +178,14 @@ class ApiClient {
     return this.get<ConsoleSource[]>("/sources");
   }
 
+  async listTilesets() {
+    const envelope = await this.get<ApiEnvelope<ConsoleTileset[]>>("/tilesets");
+    return {
+      ...envelope,
+      data: envelope.data.map(normalizeTilesetUrls),
+    };
+  }
+
   uploadSource(sourceId: string, formData: FormData) {
     return this.upload<SourceUploadResult>(
       `/sources/${sourceId}/upload`,
@@ -184,3 +242,16 @@ export class ApiRequestError extends Error {
 }
 
 export const api = new ApiClient();
+
+function normalizeTilesetUrls(tileset: ConsoleTileset): ConsoleTileset {
+  return {
+    ...tileset,
+    tilejsonUrl: normalizeApiUrl(tileset.tilejsonUrl),
+    versionedTilejsonUrl: normalizeApiUrl(tileset.versionedTilejsonUrl),
+  };
+}
+
+function normalizeApiUrl(url: string | null) {
+  if (!url || /^https?:\/\//.test(url)) return url;
+  return `${API_ROOT}${url.startsWith("/") ? url : `/${url}`}`;
+}
