@@ -1,5 +1,18 @@
-# Ignore all runtime data
-data/
+# Ignore runtime and downloaded geodata while keeping tiny demo mount docs.
+data/**
+!data/
+!data/pmtiles/
+!data/pmtiles/README.md
+!data/valhalla_data/
+!data/valhalla_data/README.md
+!data/storage/
+!data/storage/README.md
+!data/storage/uploads/
+!data/storage/uploads/.gitkeep
+!data/storage/styles/
+!data/storage/styles/.gitkeep
+!data/storage/fixtures/
+!data/storage/fixtures/README.md
 
 # Ignore downloaded archives
 *.zip
