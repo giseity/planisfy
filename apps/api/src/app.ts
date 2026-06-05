@@ -31,6 +31,7 @@ import { emailRoute } from "./routes/email";
 import { billingRoute, billingWebhookRoute } from "./routes/billing";
 import { profileRoute } from "./routes/profile";
 import { resourcesRoute } from "./routes/resources";
+import { dashboardRoute } from "./routes/dashboard";
 import { auth } from "@planisfy/auth/auth";
 import { env } from "./env";
 
@@ -113,6 +114,7 @@ app.route("/", billingWebhookRoute);
 
 // ── Protected routes (require session cookie) ───────────────────────────────
 app.use("/console/*", authMiddleware);
+app.route("/console", dashboardRoute);
 app.route("/console", stylesRoute);
 app.route("/console", auditRoute);
 app.route("/console", keysRoute);
