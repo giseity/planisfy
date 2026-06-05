@@ -154,7 +154,10 @@ async function dispatchTilesetBuildRequested(
     return;
   }
 
-  const input = parseSourceProcessingJobInput(processingJob.input);
+  const input = parseSourceProcessingJobInput(processingJob.input, {
+    ownerId: processingJob.accountId,
+    processingJobId: payload.jobId,
+  });
   await queue.add("process", input, { jobId: payload.jobId });
   await db.insert(processingJobLogs).values({
     jobId: payload.jobId,
@@ -168,17 +171,21 @@ async function dispatchTilesetBuildRequested(
   });
 }
 
-function parseSourceProcessingJobInput(input: unknown): SourceProcessingJob {
+export function parseSourceProcessingJobInput(
+  input: unknown,
+  context: {
+    ownerId: string;
+    processingJobId: string;
+  },
+): SourceProcessingJob {
   if (typeof input !== "object" || input === null) {
     throw new Error("Processing job input is missing");
   }
 
   const candidate = input as Partial<SourceProcessingJob>;
   if (
-    !candidate.ownerId ||
     !candidate.tilesetId ||
     !candidate.uploadKey ||
-    !candidate.processingJobId ||
     !candidate.format ||
     !SOURCE_FORMATS.includes(candidate.format)
   ) {
@@ -186,12 +193,12 @@ function parseSourceProcessingJobInput(input: unknown): SourceProcessingJob {
   }
 
   return {
-    ownerId: candidate.ownerId,
+    ownerId: context.ownerId,
     tilesetId: candidate.tilesetId,
     uploadKey: candidate.uploadKey,
     uploadId: candidate.uploadId,
     storageObjectId: candidate.storageObjectId,
-    processingJobId: candidate.processingJobId,
+    processingJobId: context.processingJobId,
     format: candidate.format,
     csv: candidate.csv,
     options: candidate.options,

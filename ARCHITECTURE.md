@@ -66,22 +66,21 @@ Internal routes under `/internal/*` are for platform-to-platform calls such as e
 
 ## Data Model
 
-The central data model uses `profiles` as a shared owner supertype:
+The central data model uses `accounts` as a shared owner anchor:
 
-- `profiles.id = users.id` for user-owned resources
-- `profiles.id = organizations.id` for organization-owned resources
+- `accounts.id = users.id` for user-owned resources
+- `accounts.id = organizations.id` for organization-owned resources
 
-Resources reference `profiles.id` through `ownerId` or `profileId`, which lets the same style/API-key/source/usage/audit flows work for individual users and organizations.
+Resources reference `accounts.id` through ownership columns such as `ownerId` or `accountId`, which lets the same style/API-key/source/usage/audit flows work for individual users and organizations. The database package still exports `profiles` as a temporary alpha compatibility alias for `accounts`; new code should use account naming.
 
 Important tables:
 
-- `profiles`
+- `accounts`
 - `users`
 - `organizations`
 - `members`
 - `invitations`
 - `sessions`
-- `accounts`
 - `verifications`
 - `styles`
 - `style_versions`

@@ -18,7 +18,9 @@ import type {
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 
+/** @deprecated Use Account. `profiles` is an alpha compatibility alias for `accounts`. */
 export type Profile = typeof profiles.$inferSelect;
+/** @deprecated Use NewAccount. `profiles` is an alpha compatibility alias for `accounts`. */
 export type NewProfile = typeof profiles.$inferInsert;
 
 export type User = typeof users.$inferSelect;
@@ -50,6 +52,7 @@ export type NewAuditEvent = typeof auditEvents.$inferInsert;
 // ============================================================================
 
 export type AccountType = "USER" | "ORGANIZATION";
+/** @deprecated Use AccountType. */
 export type ProfileType = AccountType;
 export type AccountLifecycleStatus = "ACTIVE" | "SUSPENDED" | "BANNED";
 export type SystemRole = "USER" | "ADMIN" | "SUPER";
