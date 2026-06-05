@@ -5,7 +5,7 @@ import {
   useStyleStore,
   type SourceLayerOptions,
 } from "@/lib/store/style-store";
-import { api, type ConsoleSource } from "@/lib/api";
+import { api, type ConsoleTileset } from "@/lib/api";
 import { ScrollArea } from "@planisfy/ui/components/scroll-area";
 import { Button } from "@planisfy/ui/components/button";
 import { Input } from "@planisfy/ui/components/input";
@@ -96,7 +96,7 @@ function SourceBrowser({
   onAdd: (id: string, source: SourceSpecification) => void;
   onAddLayer: (sourceId: string, options?: SourceLayerOptions) => void;
 }) {
-  const [sources, setSources] = useState<ConsoleSource[]>([]);
+  const [tilesets, setTilesets] = useState<ConsoleTileset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,15 +104,17 @@ function SourceBrowser({
     let active = true;
 
     api
-      .listSources()
-      .then((data) => {
+      .listTilesets()
+      .then(({ data }) => {
         if (!active) return;
-        setSources(data);
+        setTilesets(data);
         setError(null);
       })
       .catch((err: unknown) => {
         if (!active) return;
-        setError(err instanceof Error ? err.message : "Failed to load sources");
+        setError(
+          err instanceof Error ? err.message : "Failed to load tilesets",
+        );
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -128,7 +130,7 @@ function SourceBrowser({
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Source browser
+            Tileset browser
           </h3>
           <p className="text-[10px] text-muted-foreground">
             Add ready tilesets to this draft style.
@@ -141,37 +143,46 @@ function SourceBrowser({
 
       {error ? (
         <p className="text-[11px] text-destructive">{error}</p>
-      ) : sources.length === 0 && !loading ? (
+      ) : tilesets.length === 0 && !loading ? (
         <p className="text-[11px] text-muted-foreground">
-          No uploaded sources yet.
+          No uploaded tilesets yet.
         </p>
       ) : (
         <div className="space-y-1">
-          {sources.slice(0, 8).map((source) => {
-            const sourceId = source.handle || source.id;
+          {tilesets.slice(0, 8).map((tileset) => {
+            const sourceId = tileset.handle || tileset.id;
             const inStyle = existingSourceIds.has(sourceId);
-            const spec = sourceToStyleSource(source);
+            const spec = tilesetToStyleSource(tileset);
+            const canAdd = Boolean(spec && tileset.isPublished);
+            const firstLayer = vectorLayersForTileset(tileset)[0]?.id;
             return (
               <div
-                key={source.id}
+                key={tileset.id}
                 className="rounded border bg-background p-2 space-y-1"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-xs font-medium">
-                      {source.name}
+                      {tileset.name}
                     </div>
                     <div className="truncate font-mono text-[10px] text-muted-foreground">
-                      {source.handle}
+                      {tileset.ownerHandle
+                        ? `${tileset.ownerHandle}.${tileset.handle}`
+                        : tileset.handle}
                     </div>
+                    {firstLayer && (
+                      <div className="truncate text-[10px] text-muted-foreground">
+                        {firstLayer}
+                      </div>
+                    )}
                   </div>
                   <Badge
                     variant={
-                      source.status === "READY" ? "success" : "secondary"
+                      tileset.isPublished ? "success" : "secondary"
                     }
                     className="text-[10px]"
                   >
-                    {source.status}
+                    {tileset.isPublished ? "PUBLISHED" : tileset.status}
                   </Badge>
                 </div>
                 <div className="flex gap-1">
@@ -179,7 +190,7 @@ function SourceBrowser({
                     size="sm"
                     variant="outline"
                     className="h-6 flex-1 gap-1 text-xs"
-                    disabled={!spec || inStyle || source.status !== "READY"}
+                    disabled={!canAdd || inStyle}
                     onClick={() => spec && onAdd(sourceId, spec)}
                   >
                     <Database className="h-3 w-3" />
@@ -188,13 +199,13 @@ function SourceBrowser({
                   <Button
                     size="sm"
                     className="h-6 flex-1 gap-1 text-xs"
-                    disabled={!spec || source.status !== "READY"}
+                    disabled={!canAdd}
                     onClick={() => {
                       if (!spec) return;
                       if (!inStyle) onAdd(sourceId, spec);
                       onAddLayer(
                         sourceId,
-                        defaultLayerOptionsForSource(source),
+                        defaultLayerOptionsForTileset(tileset),
                       );
                     }}
                   >
@@ -465,54 +476,41 @@ function buildSource(sourceType: SourceType, url: string): SourceSpecification {
   }
 }
 
-function sourceToStyleSource(
-  source: ConsoleSource,
+function tilesetToStyleSource(
+  tileset: ConsoleTileset,
 ): SourceSpecification | null {
-  if (!source.url) return null;
+  if (!tileset.tilejsonUrl) return null;
 
-  switch (source.type) {
+  switch (tileset.type) {
     case "VECTOR":
-      return { type: "vector", url: source.url } as SourceSpecification;
+      return { type: "vector", url: tileset.tilejsonUrl } as SourceSpecification;
     case "RASTER":
       return {
         type: "raster",
-        url: source.url,
+        url: tileset.tilejsonUrl,
         tileSize: 256,
-      } as SourceSpecification;
-    case "GEOJSON":
-      return { type: "geojson", data: source.url } as SourceSpecification;
-    case "IMAGE":
-      return {
-        type: "image",
-        url: source.url,
-        coordinates: [
-          [0, 0],
-          [1, 0],
-          [1, 1],
-          [0, 1],
-        ],
-      } as SourceSpecification;
-    case "VIDEO":
-      return {
-        type: "video",
-        urls: [source.url],
-        coordinates: [
-          [0, 0],
-          [1, 0],
-          [1, 1],
-          [0, 1],
-        ],
       } as SourceSpecification;
     default:
       return null;
   }
 }
 
-function defaultLayerOptionsForSource(
-  source: ConsoleSource,
+function defaultLayerOptionsForTileset(
+  tileset: ConsoleTileset,
 ): SourceLayerOptions {
-  if (source.type === "RASTER") return { layerType: "raster" };
-  return { layerType: "circle" };
+  if (tileset.type === "RASTER") return { layerType: "raster" };
+  return {
+    layerType: "circle",
+    sourceLayer: vectorLayersForTileset(tileset)[0]?.id,
+  };
+}
+
+function vectorLayersForTileset(tileset: ConsoleTileset) {
+  return (
+    tileset.currentVersion?.schema?.vector_layers ??
+    tileset.layerMetadata?.vector_layers ??
+    []
+  );
 }
 
 function defaultLayerType(
