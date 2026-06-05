@@ -9,6 +9,7 @@ Planisfy has a local/S3-like storage abstraction in the API. Source uploads now 
 Storage is built from:
 
 - `@planisfy/storage-paths` for object key builders and parsers.
+- `@planisfy/storage` for server-side local and S3/R2-compatible providers.
 - `storage_objects` as the durable artifact ledger.
 - A local filesystem provider for simple self-hosting.
 - An S3/R2-compatible provider for cloud and advanced self-hosting.

@@ -16,6 +16,15 @@ Health should cover:
 - worker-geodata
 - storage provider
 
+## Local Worker
+
+`apps/worker-geodata` should run beside the API anywhere uploads or tileset source processing are enabled.
+
+```bash
+pnpm -F worker-geodata dev
+pnpm -F worker-geodata check-types
+```
+
 ## Recovery
 
 Operators need documented paths for:

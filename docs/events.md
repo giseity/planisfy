@@ -2,7 +2,7 @@
 
 ## Current
 
-Source uploads now write typed `event_outbox` rows for `upload.created` and cleanup requests. BullMQ still exists as the current transport until `apps/worker-geodata` owns event claiming and processing.
+Source uploads now write typed `event_outbox` rows for `upload.created` and cleanup requests. BullMQ remains the current transport for source processing; outbox claiming is the next worker responsibility to wire.
 
 ## Target
 
