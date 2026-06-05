@@ -50,6 +50,6 @@ Local self-host compose serves local artifacts from `/storage/*` and records art
 ## Gotchas
 
 - Production-like environments must set `INTERNAL_API_SECRET`; internal routes must not be exposed with the fallback development secret.
-- Tileset uploads create `uploads`, `storage_objects`, `tilesets`, and `processing_jobs` before enqueueing BullMQ transport work. The API is the producer; `apps/worker-geodata` is the consumer.
+- Tileset uploads create `uploads`, `storage_objects`, `tilesets`, `processing_jobs`, and `tileset.build.requested` outbox events. `apps/worker-geodata` claims those events and dispatches BullMQ transport work.
 - Published tilesets are promoted explicitly through `/console/tilesets/:id/versions/:version/publish`; processing alone does not make a new version public.
 - Billing code currently contains alpha Polar references. The target provider is Dodo Payments.

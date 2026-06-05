@@ -1,10 +1,11 @@
 # Planisfy Geodata Worker
 
-BullMQ worker for long-running geodata processing.
+Outbox dispatcher and BullMQ worker for long-running geodata processing.
 
 ## Owns
 
 - Source upload processing.
+- Claiming `tileset.build.requested` outbox events and dispatching build jobs to BullMQ.
 - Redis heartbeat for API health reporting.
 - PMTiles passthrough and GeoJSON-to-PMTiles conversion.
 - Processing job status and log updates.
@@ -28,6 +29,11 @@ Required services:
 Optional tools:
 
 - `tippecanoe` for GeoJSON/CSV to PMTiles conversion. If missing, GeoJSON uploads are stored as raw GeoJSON for local development.
+
+Optional tuning:
+
+- `GEODATA_OUTBOX_POLL_INTERVAL_MS` controls how often due outbox events are claimed.
+- `GEODATA_OUTBOX_BATCH_SIZE` controls the number of build-request events claimed per tick.
 
 ## Commands
 

@@ -75,8 +75,10 @@ The API proxies public tileset URLs to Martin source names:
 | `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | `{owner}.{tileset}.v{version}` |
 
 The default config includes `planisfy.basic` and `planisfy.basic.v1` aliases for
-the local fixture. Uploaded tilesets still need a generated or manually extended
-Martin config that points those source names at the promoted PMTiles artifact.
+the local fixture. Local published uploads write stable and versioned aliases to
+`infra/docker/data/storage/martin-sources/`, which Martin mounts at
+`/storage/martin-sources`. Restart Martin if a newly published local PMTiles
+source does not appear immediately.
 
 ## Migrations
 
