@@ -4,6 +4,17 @@
 import type { LayerSpecification } from "maplibre-gl"
 import { getPaintSpec, getLayoutSpec } from "./index"
 
+type MutableLayer = LayerSpecification & {
+  [key: string]: unknown
+  paint?: Record<string, unknown>
+  layout?: Record<string, unknown>
+  source?: string
+  "source-layer"?: string
+  filter?: unknown
+  minzoom?: number
+  maxzoom?: number
+}
+
 /**
  * Change a layer's type while preserving compatible paint/layout properties.
  */
@@ -14,15 +25,16 @@ export function changeLayerType(
   const newPaintKeys = new Set(Object.keys(getPaintSpec(newType)))
   const newLayoutKeys = new Set(Object.keys(getLayoutSpec(newType)))
 
-  const newLayer: any = {
+  const sourceLayer = (layer as MutableLayer)["source-layer"]
+  const newLayer: MutableLayer = {
     id: layer.id,
     type: newType,
-  }
+  } as MutableLayer
 
   // Preserve source/source-layer if present
   if ("source" in layer && layer.source) newLayer.source = layer.source
-  if ("source-layer" in layer && (layer as any)["source-layer"]) {
-    newLayer["source-layer"] = (layer as any)["source-layer"]
+  if (sourceLayer) {
+    newLayer["source-layer"] = sourceLayer
   }
   if ("filter" in layer && layer.filter) newLayer.filter = layer.filter
   if ("minzoom" in layer) newLayer.minzoom = layer.minzoom

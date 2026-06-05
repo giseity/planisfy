@@ -105,6 +105,17 @@ interface StyleSaveResponse {
   version: number;
 }
 
+type MutableLayer = LayerSpecification & {
+  [key: string]: unknown;
+  paint?: Record<string, unknown>;
+  layout?: Record<string, unknown>;
+};
+
+type MutableStyle = StyleSpecification & {
+  [key: string]: unknown;
+  metadata?: Record<string, unknown>;
+};
+
 // Helper: produce-based setter that avoids immer middleware type issues
 const immerSet =
   (set: (fn: (s: StyleStore) => Partial<StyleStore>) => void) =>
@@ -229,7 +240,9 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
     updateLayerPaint: (layerId, property, value) =>
       tracked((state) => {
         if (!state.style) return;
-        const layer = state.style.layers.find((l) => l.id === layerId) as any;
+        const layer = state.style.layers.find((l) => l.id === layerId) as
+          | MutableLayer
+          | undefined;
         if (!layer) return;
         if (!layer.paint) layer.paint = {};
         layer.paint[property] = value;
@@ -238,7 +251,9 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
     updateLayerLayout: (layerId, property, value) =>
       tracked((state) => {
         if (!state.style) return;
-        const layer = state.style.layers.find((l) => l.id === layerId) as any;
+        const layer = state.style.layers.find((l) => l.id === layerId) as
+          | MutableLayer
+          | undefined;
         if (!layer) return;
         if (!layer.layout) layer.layout = {};
         layer.layout[property] = value;
@@ -258,14 +273,16 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
             value as LayerSpecification["type"],
           );
         } else {
-          (state.style.layers[idx] as any)[key] = value;
+          (state.style.layers[idx] as MutableLayer)[key] = value;
         }
       }),
 
     setLayerVisibility: (layerId, visible) =>
       tracked((state) => {
         if (!state.style) return;
-        const layer = state.style.layers.find((l) => l.id === layerId) as any;
+        const layer = state.style.layers.find((l) => l.id === layerId) as
+          | MutableLayer
+          | undefined;
         if (!layer) return;
         if (!layer.layout) layer.layout = {};
         layer.layout.visibility = visible ? "visible" : "none";
@@ -355,7 +372,7 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
       tracked((state) => {
         if (!state.style) return;
         if (!state.style.metadata) state.style.metadata = {};
-        (state.style.metadata as any)[key] = value;
+        (state.style.metadata as Record<string, unknown>)[key] = value;
       }),
 
     updateStyleName: (name) =>
@@ -367,7 +384,7 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
     updateStyleTopLevel: (key, value) =>
       tracked((state) => {
         if (!state.style) return;
-        (state.style as any)[key] = value;
+        (state.style as MutableStyle)[key] = value;
       }),
 
     // Undo/redo

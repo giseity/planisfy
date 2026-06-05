@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table"
 import { Button } from "@planisfy/ui/components/button"
-import { Activity, Zap, Key, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, BarChart3 } from "lucide-react"
+import { Activity, Zap, Key, TrendingUp, TrendingDown, ChevronLeft, ChevronRight } from "lucide-react"
 import {
   AreaChart,
   Area,
@@ -177,7 +177,7 @@ export default function UsagePage() {
           <Zap className="h-5 w-5 text-amber-500 shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-medium">
-              You've used {quotaPercent}% of your monthly quota.
+              You&apos;ve used {quotaPercent}% of your monthly quota.
             </p>
             <p className="text-xs text-muted-foreground">
               Upgrade to avoid service interruption.

@@ -9,10 +9,23 @@ import { StringField } from "./string-field"
 import { BooleanField } from "./boolean-field"
 import { ArrayField } from "./array-field"
 import { ExpressionField } from "./expression-field"
-import { ZoomFunctionField, valueToZoomFunction } from "./zoom-function-field"
-import { DataFunctionField, valueToDataFunction } from "./data-function-field"
+import { ZoomFunctionField } from "./zoom-function-field"
+import { DataFunctionField } from "./data-function-field"
 import { IconField } from "./icon-field"
 import { FontField } from "./font-field"
+
+interface ZoomFunctionValue {
+  stops: [number, unknown][]
+  base?: number
+}
+
+interface DataFunctionValue {
+  property: string
+  type?: "identity" | "categorical" | "interval" | "exponential"
+  base?: number
+  default?: unknown
+  stops?: [unknown, unknown][]
+}
 
 interface SpecFieldProps {
   property: string
@@ -35,7 +48,7 @@ export function SpecField({ property, spec, value, onChange, spriteUrl, glyphsUr
     return (
       <ZoomFunctionField
         label={property}
-        value={value as any}
+        value={value as ZoomFunctionValue}
         spec={spec}
         onChange={onChange}
         onSimplify={() => onChange(spec.default ?? undefined)}
@@ -48,7 +61,7 @@ export function SpecField({ property, spec, value, onChange, spriteUrl, glyphsUr
     return (
       <DataFunctionField
         label={property}
-        value={value as any}
+        value={value as DataFunctionValue}
         spec={spec}
         onChange={onChange}
         onSimplify={() => onChange(spec.default ?? undefined)}

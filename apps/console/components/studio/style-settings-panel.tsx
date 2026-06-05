@@ -16,10 +16,10 @@ export function StyleSettingsPanel() {
 
   if (!style) return null
 
-  const center = (style as any).center as [number, number] | undefined
-  const zoom = (style as any).zoom as number | undefined
-  const bearing = (style as any).bearing as number | undefined
-  const pitch = (style as any).pitch as number | undefined
+  const center = style.center
+  const zoom = style.zoom
+  const bearing = style.bearing
+  const pitch = style.pitch
 
   const applyMapPosition = () => {
     if (!mapPosition) return

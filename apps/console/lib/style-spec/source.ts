@@ -32,7 +32,8 @@ export function deleteSource(
   style: StyleSpecification,
   sourceId: string
 ): StyleSpecification {
-  const { [sourceId]: _, ...rest } = style.sources
+  const rest = { ...style.sources }
+  delete rest[sourceId]
   return {
     ...style,
     sources: rest,

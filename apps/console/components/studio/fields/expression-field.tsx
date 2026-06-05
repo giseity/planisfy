@@ -26,7 +26,7 @@ export function ExpressionField({ label, value, onChange }: ExpressionFieldProps
       const parsed = JSON.parse(text)
       setError(null)
       onChange(parsed)
-    } catch (e) {
+    } catch {
       setError("Invalid JSON")
     }
   }
