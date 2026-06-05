@@ -21,6 +21,7 @@ import { directionsRoute } from "./routes/directions";
 import { geocodingRoute } from "./routes/geocoding";
 import { elevationRoute } from "./routes/elevation";
 import { staticMapRoute } from "./routes/static-map";
+import { storageRoute } from "./routes/storage";
 import { emailRoute } from "./routes/email";
 import { sourcesRoute } from "./routes/sources";
 import { billingRoute } from "./routes/billing";
@@ -57,6 +58,7 @@ app.on(["GET", "POST"], "/api/auth/**", (c) => {
 
 // ── Public routes ───────────────────────────────────────────────────────────
 app.route("/", healthRoute);
+app.route("/", storageRoute);
 
 // ── Public API routes (require API key or session) ──────────────────────────
 // Pipeline: API key extraction → auth → rate limit → usage log

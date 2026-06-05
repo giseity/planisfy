@@ -5,6 +5,7 @@ BullMQ worker for long-running geodata processing.
 ## Owns
 
 - Source upload processing.
+- Redis heartbeat for API health reporting.
 - PMTiles passthrough and GeoJSON-to-PMTiles conversion.
 - Processing job status and log updates.
 - Processed artifact storage ledger rows.

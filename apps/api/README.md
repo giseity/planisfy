@@ -45,6 +45,8 @@ Optional providers:
 - Email provider via `RESEND_API_KEY`
 - Storage provider via local disk or S3/R2-compatible settings
 
+Local self-host compose serves local artifacts from `/storage/*` and records artifact metadata in `storage_objects`.
+
 ## Gotchas
 
 - Production-like environments must set `INTERNAL_API_SECRET`; internal routes must not be exposed with the fallback development secret.

@@ -17,16 +17,16 @@ The stack should produce a useful product without cloud credentials, billing, em
 - admin
 - docs
 - marketing
+- worker-geodata
 - PostgreSQL
 - Redis
 - Martin
 - Valhalla
+- local artifact storage volume
 
 ## Target Additions
 
 - PostGIS-enabled database image.
-- worker-geodata.
-- local artifact directory.
 - optional MinIO profile.
 - setup/seed script.
 - Docker smoke test.
@@ -35,5 +35,5 @@ The stack should produce a useful product without cloud credentials, billing, em
 
 - Console shows a real map.
 - Demo style, source metadata, and sample tiles agree.
-- Health reports API, database, Redis, Martin, Valhalla, and worker state.
+- Health reports API, database, Redis, Martin, Valhalla, and worker-geodata heartbeat state.
 - New developers can complete setup from the README and docs.
