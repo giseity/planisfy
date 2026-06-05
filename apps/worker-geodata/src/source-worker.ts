@@ -142,10 +142,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
       return;
     }
 
-    let inputPath = join(
-      tmpDir,
-      `input.${format === "geojson" ? "geojson" : format}`,
-    );
+    let inputPath = join(tmpDir, `input.${inputExtension(format)}`);
     await writeFile(inputPath, rawData);
 
     const bounds = validation.bounds;
@@ -627,7 +624,15 @@ function sourceArtifactFileName(
     : `data.${format}`;
 }
 
-function tileArtifactFormat(format: SourceFormat): "PMTILES" | "MBTILES" | "DIRECTORY" {
+function inputExtension(format: SourceFormat) {
+  if (format === "shapefile") return "zip";
+  if (format === "geojson") return "geojson";
+  return format;
+}
+
+function tileArtifactFormat(
+  format: SourceFormat,
+): "PMTILES" | "MBTILES" | "DIRECTORY" {
   if (format === "pmtiles") return "PMTILES";
   if (format === "mbtiles") return "MBTILES";
   return "DIRECTORY";
