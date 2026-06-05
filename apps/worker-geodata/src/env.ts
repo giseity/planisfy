@@ -21,6 +21,12 @@ const schema = z.object({
     .int()
     .positive()
     .default(45_000),
+  GEODATA_OUTBOX_POLL_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5_000),
+  GEODATA_OUTBOX_BATCH_SIZE: z.coerce.number().int().positive().default(10),
 });
 
 export const env = createEnv(schema, process.env, {

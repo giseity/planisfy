@@ -379,6 +379,9 @@ importers:
       '@planisfy/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@planisfy/events':
+        specifier: workspace:*
+        version: link:../../packages/events
       '@planisfy/storage':
         specifier: workspace:*
         version: link:../../packages/storage

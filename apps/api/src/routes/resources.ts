@@ -15,13 +15,11 @@ import { getStorage } from "@planisfy/storage";
 import { StoragePaths } from "@planisfy/storage-paths";
 import type { AuthEnv } from "../middleware/auth";
 import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
-import {
-  enqueueSourceProcessing,
-  type SourceProcessingJob,
-} from "../lib/source-queue";
+import { type SourceProcessingJob } from "../lib/source-queue";
 import { recordStorageObject } from "../lib/storage-ledger";
 import { logAudit } from "../lib/audit";
 import { registerPublishedMartinSources } from "../lib/martin-sources";
+import { enqueueOutboxEvent } from "../lib/outbox";
 
 export const resourcesRoute = new Hono<AuthEnv>();
 
@@ -228,21 +226,18 @@ resourcesRoute.post("/uploads", async (c) => {
     metadata: { uploadId: upload.id, tilesetId: tileset.id, uploadKey, format },
   });
 
-  enqueueSourceProcessing({
-    ownerId: accountId,
-    tilesetId: tileset.id,
-    uploadKey,
-    uploadId: upload.id,
-    storageObjectId: storageObject.id,
-    processingJobId: processingJob.id,
-    format,
-    csv: {
-      latitude: parsed.data.csvLatitude,
-      longitude: parsed.data.csvLongitude,
-    },
-    options: {
-      minZoom: parsed.data.minZoom ?? 0,
-      maxZoom: parsed.data.maxZoom ?? 14,
+  await enqueueOutboxEvent({
+    eventName: "tileset.build.requested",
+    payload: {
+      accountId,
+      tilesetId: tileset.id,
+      jobId: processingJob.id,
+      sourceResourceType: "upload",
+      sourceResourceId: upload.id,
+      options: {
+        minZoom: parsed.data.minZoom ?? 0,
+        maxZoom: parsed.data.maxZoom ?? 14,
+      },
     },
   });
 
@@ -436,6 +431,15 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
     .update(tilesetVersions)
     .set({ publishedAt: new Date() })
     .where(eq(tilesetVersions.id, targetVersion.id));
+  await enqueueOutboxEvent({
+    eventName: "tileset.version.published",
+    payload: {
+      accountId,
+      tilesetId: id,
+      tilesetVersionId: targetVersion.id,
+      publishedBy: userId,
+    },
+  });
   logAudit({
     profileId: userId,
     action: "tileset.published",
