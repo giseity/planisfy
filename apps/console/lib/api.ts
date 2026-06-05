@@ -95,6 +95,22 @@ export interface ConsoleTileset {
   updatedAt: string;
 }
 
+export interface TilesetUploadOptions {
+  name: string;
+  handle: string;
+  description?: string;
+  minZoom?: number;
+  maxZoom?: number;
+  csvLatitude?: string;
+  csvLongitude?: string;
+}
+
+export interface TilesetUploadResult {
+  upload: unknown;
+  tileset: unknown;
+  processingJob: unknown;
+}
+
 export interface SourceUploadResult {
   ok: boolean;
   sourceId: string;
@@ -224,6 +240,19 @@ class ApiClient {
     return this.post<ApiEnvelope<StylePublishResponse>>(
       `/styles/${styleId}/versions/${version}/publish`,
     );
+  }
+
+  publishTilesetVersion(tilesetId: string, version: number) {
+    return this.post<ApiEnvelope<ConsoleTileset>>(
+      `/tilesets/${tilesetId}/versions/${version}/publish`,
+    );
+  }
+
+  uploadTileset(file: File, options: TilesetUploadOptions) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("options", JSON.stringify(options));
+    return this.upload<ApiEnvelope<TilesetUploadResult>>("/uploads", formData);
   }
 
   async upload<T>(path: string, formData: FormData): Promise<T> {
