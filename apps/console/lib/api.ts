@@ -129,6 +129,174 @@ export interface StylePublishResponse {
   version: number;
 }
 
+export type DashboardHealthStatus =
+  | "healthy"
+  | "degraded"
+  | "not_configured"
+  | "offline";
+
+export type DashboardEndpointCategory =
+  | "tiles"
+  | "styles"
+  | "geocoding"
+  | "directions"
+  | "elevation"
+  | "static"
+  | "other";
+
+export interface ConsoleDashboard {
+  generatedAt: string;
+  account: {
+    id: string;
+    handle: string;
+    displayName: string;
+    avatarUrl: string | null;
+    type: string;
+  };
+  user: {
+    id: string;
+    email: string | null;
+    emailVerified: boolean;
+  };
+  billing: {
+    plan: string;
+    planName: string;
+    quota: {
+      monthlyUnits: number | null;
+      used: number;
+      remaining: number | null;
+      percent: number;
+    };
+  };
+  summary: {
+    totalRequests: number;
+    totalUnits: number;
+    errorRate: number;
+    activeApiKeys: number;
+    publishedStyles: number;
+    totalStyles: number;
+    publishedTilesets: number;
+    totalTilesets: number;
+    runningJobs: number;
+    failedJobs: number;
+  };
+  usage: {
+    timeseries: Array<{
+      date: string;
+      tiles: number;
+      styles: number;
+      geocoding: number;
+      directions: number;
+      elevation: number;
+      static: number;
+      other: number;
+      total: number;
+    }>;
+    endpointBreakdown: Array<{
+      category: DashboardEndpointCategory;
+      requests: number;
+      units: number;
+      errorCount: number;
+    }>;
+    topApiKeys: Array<{
+      apiKeyId: string | null;
+      name: string;
+      requests: number;
+      units: number;
+      errorCount: number;
+      lastUsedAt: string | null;
+    }>;
+  };
+  resources: {
+    recentStyles: Array<{
+      id: string;
+      handle: string;
+      name: string;
+      description: string | null;
+      isPublic: boolean;
+      thumbnailUrl: string | null;
+      version: number;
+      createdAt: string;
+      updatedAt: string;
+      publicUrl: string | null;
+    }>;
+    recentTilesets: Array<{
+      id: string;
+      handle: string;
+      name: string;
+      description: string | null;
+      status: string;
+      type: string;
+      isPublished: boolean;
+      ownerHandle: string | null;
+      createdAt: string;
+      updatedAt: string;
+      currentVersion: {
+        id: string;
+        version: number;
+        format: string;
+        createdAt: string;
+        publishedAt: string | null;
+      } | null;
+      latestVersion: {
+        id: string;
+        version: number;
+        format: string;
+        createdAt: string;
+        publishedAt: string | null;
+      } | null;
+      tilejsonUrl: string | null;
+      versionedTilejsonUrl: string | null;
+    }>;
+    recentJobs: Array<{
+      id: string;
+      type: string;
+      status: string;
+      progress: number;
+      errorCode: string | null;
+      errorMessage: string | null;
+      tilesetId: string | null;
+      createdAt: string;
+      updatedAt: string;
+      startedAt: string | null;
+      completedAt: string | null;
+    }>;
+    recentAudit: Array<{
+      id: string;
+      action: string;
+      resourceType: string;
+      resourceId: string | null;
+      timestamp: string;
+    }>;
+  };
+  health: Array<{
+    id: string;
+    label: string;
+    status: DashboardHealthStatus;
+    message?: string | null;
+    latencyMs?: number | null;
+    checkedAt: string;
+  }>;
+  readiness: Array<{
+    id: string;
+    label: string;
+    description: string;
+    complete: boolean;
+    required: boolean;
+    status: "complete" | "missing" | "attention" | "optional";
+    actionLabel?: string;
+    actionHref?: string;
+  }>;
+  integration: {
+    apiBaseUrl: string;
+    publicStyleUrl: string | null;
+    tilejsonUrl: string | null;
+    mapLibreSnippet: string | null;
+    curlSnippet: string | null;
+    missing: string[];
+  };
+}
+
 export interface PaginatedApiEnvelope<T> extends ApiEnvelope<T> {
   pagination: {
     total: number;
@@ -184,6 +352,14 @@ class ApiClient {
 
   getProfile() {
     return this.get<ApiEnvelope<ConsoleProfile>>("/profile");
+  }
+
+  async getDashboard() {
+    const envelope = await this.get<ApiEnvelope<ConsoleDashboard>>("/dashboard");
+    return {
+      ...envelope,
+      data: normalizeDashboardUrls(envelope.data),
+    };
   }
 
   async listTilesets() {
@@ -266,6 +442,38 @@ function normalizeTilesetUrls(tileset: ConsoleTileset): ConsoleTileset {
     ...tileset,
     tilejsonUrl: normalizeApiUrl(tileset.tilejsonUrl),
     versionedTilejsonUrl: normalizeApiUrl(tileset.versionedTilejsonUrl),
+  };
+}
+
+function normalizeDashboardUrls(
+  dashboard: ConsoleDashboard,
+): ConsoleDashboard {
+  return {
+    ...dashboard,
+    resources: {
+      ...dashboard.resources,
+      recentStyles: dashboard.resources.recentStyles.map((style) => ({
+        ...style,
+        publicUrl: normalizeApiUrl(style.publicUrl),
+      })),
+      recentTilesets: dashboard.resources.recentTilesets.map((tileset) => ({
+        ...tileset,
+        tilejsonUrl: normalizeApiUrl(tileset.tilejsonUrl),
+        versionedTilejsonUrl: normalizeApiUrl(tileset.versionedTilejsonUrl),
+      })),
+    },
+    integration: {
+      ...dashboard.integration,
+      publicStyleUrl: normalizeApiUrl(dashboard.integration.publicStyleUrl),
+      tilejsonUrl: normalizeApiUrl(dashboard.integration.tilejsonUrl),
+      mapLibreSnippet:
+        dashboard.integration.publicStyleUrl && dashboard.integration.tilejsonUrl
+          ? `new maplibregl.Map({\n  container: "map",\n  style: "${normalizeApiUrl(dashboard.integration.publicStyleUrl)}"\n});`
+          : dashboard.integration.mapLibreSnippet,
+      curlSnippet: dashboard.integration.tilejsonUrl
+        ? `curl "${normalizeApiUrl(dashboard.integration.tilejsonUrl)}"`
+        : dashboard.integration.curlSnippet,
+    },
   };
 }
 
