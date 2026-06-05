@@ -4,7 +4,11 @@ import { cors } from "hono/cors";
 import { ZodError } from "zod";
 import { randomUUID } from "crypto";
 import { requestLogger } from "./lib/logger";
-import { authMiddleware, dualAuthMiddleware, type AuthEnv } from "./middleware/auth";
+import {
+  authMiddleware,
+  dualAuthMiddleware,
+  type AuthEnv,
+} from "./middleware/auth";
 import { apiKeyMiddleware } from "./middleware/api-key";
 import { internalAuthMiddleware } from "./middleware/internal-auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
@@ -26,6 +30,7 @@ import { emailRoute } from "./routes/email";
 import { sourcesRoute } from "./routes/sources";
 import { billingRoute } from "./routes/billing";
 import { profileRoute } from "./routes/profile";
+import { resourcesRoute } from "./routes/resources";
 import { auth } from "@planisfy/auth/auth";
 import { env } from "./env";
 
@@ -41,12 +46,9 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    origin: [
-      "http://localhost:3001",
-      "https://console.planisfy.com",
-    ],
+    origin: ["http://localhost:3001", "https://console.planisfy.com"],
     credentials: true,
-  })
+  }),
 );
 app.use("*", requestLogger());
 
@@ -77,7 +79,13 @@ const publicApiPaths = [
   "/static/*",
 ];
 for (const path of publicApiPaths) {
-  app.use(path, apiKeyMiddleware, dualAuthMiddleware, rateLimitMiddleware, usageLogMiddleware);
+  app.use(
+    path,
+    apiKeyMiddleware,
+    dualAuthMiddleware,
+    rateLimitMiddleware,
+    usageLogMiddleware,
+  );
 }
 
 // ── Public API route handlers ────────────────────────────────────────────────
@@ -102,55 +110,73 @@ app.route("/console", usageRoute);
 app.route("/console", sourcesRoute);
 app.route("/console", billingRoute);
 app.route("/console", profileRoute);
+app.route("/console", resourcesRoute);
 
 // ── Centralized error handler ─────────────────────────────────────────────
 app.onError((err, c) => {
   // Zod validation errors → 400
   if (err instanceof ZodError) {
-    return c.json({
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "Invalid request data",
-        issues: err.issues.map((i) => ({
-          path: i.path.join("."),
-          message: i.message,
-        })),
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid request data",
+          issues: err.issues.map((i) => ({
+            path: i.path.join("."),
+            message: i.message,
+          })),
+        },
       },
-    }, 400);
+      400,
+    );
   }
 
   // Hono HTTP exceptions (thrown by middleware etc.)
   if (err instanceof HTTPException) {
-    return c.json({
-      error: {
-        code: "HTTP_ERROR",
-        message: err.message,
+    return c.json(
+      {
+        error: {
+          code: "HTTP_ERROR",
+          message: err.message,
+        },
       },
-    }, err.status);
+      err.status,
+    );
   }
 
   // JSON parse errors from malformed request bodies
   if (err instanceof SyntaxError && err.message.includes("JSON")) {
-    return c.json({
-      error: {
-        code: "BAD_REQUEST",
-        message: "Invalid JSON in request body",
+    return c.json(
+      {
+        error: {
+          code: "BAD_REQUEST",
+          message: "Invalid JSON in request body",
+        },
       },
-    }, 400);
+      400,
+    );
   }
 
   // Everything else → 500
   const requestId = c.get("requestId");
-  console.error("[unhandled]", { requestId, error: err.message, stack: err.stack });
-  return c.json({
-    error: {
-      code: "INTERNAL_ERROR",
-      message: env.NODE_ENV === "production"
-        ? "An unexpected error occurred"
-        : err.message || "Unknown error",
-      requestId,
+  console.error("[unhandled]", {
+    requestId,
+    error: err.message,
+    stack: err.stack,
+  });
+  return c.json(
+    {
+      error: {
+        code: "INTERNAL_ERROR",
+        message:
+          env.NODE_ENV === "production"
+            ? "An unexpected error occurred"
+            : err.message || "Unknown error",
+        requestId,
+      },
     },
-  }, 500);
+    500,
+  );
 });
 
 export { app };
