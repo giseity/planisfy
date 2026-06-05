@@ -20,7 +20,7 @@ The API detailed health endpoint reports `workerGeodata` from a Redis heartbeat 
 
 ## Local Worker
 
-`apps/worker-geodata` should run beside the API anywhere uploads or tileset source processing are enabled.
+`apps/worker-geodata` should run beside the API anywhere uploads or tileset processing are enabled.
 
 ```bash
 pnpm -F worker-geodata dev

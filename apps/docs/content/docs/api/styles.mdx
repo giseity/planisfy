@@ -19,13 +19,19 @@ Planisfy styles follow the <a href="https://maplibre.org/maplibre-style-spec/" t
 
 ```
 GET https://api.planisfy.com/styles/v1/{owner}/{style_id}?access_token=YOUR_KEY
+GET https://api.planisfy.com/styles/v1/{owner}/{style_id}@{version}?access_token=YOUR_KEY
 ```
 
 | Component | Description |
 |-----------|-------------|
 | `owner` | The account owner (`planisfy` for public styles) |
 | `style_id` | The style identifier (`basic`, `streets`, `dark`, `satellite`) |
+| `version` | Optional immutable published version number |
 | `access_token` | Your Planisfy API key |
+
+Stable style URLs resolve to the latest published snapshot. Version-pinned URLs
+only resolve for snapshots that have actually been published, so draft saves do
+not leak into public `@version` URLs.
 
 ---
 
@@ -58,7 +64,6 @@ If you don't specify a style, <code>basic</code> is used as the default.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `draft` | `boolean` | Retrieve the draft version instead of published (`true`/`false`) |
 | `fresh` | `boolean` | Force a fresh response, bypassing cache (`true`/`false`) |
 
 ---
@@ -93,6 +98,10 @@ When self-hosting, you can configure anonymous access or use your own authentica
 ```bash
 # Fetch the basic style JSON
 curl "https://api.planisfy.com/styles/v1/planisfy/basic?access_token=pk.your-key-here" \
+  -H "Accept: application/json"
+
+# Fetch immutable published version 3
+curl "https://api.planisfy.com/styles/v1/planisfy/basic@3?access_token=pk.your-key-here" \
   -H "Accept: application/json"
 ```
 
@@ -283,17 +292,16 @@ map.setFilter('roads', [
 
 ## Style Versioning
 
-Planisfy styles follow semantic versioning (`MAJOR.MINOR.PATCH`):
+Planisfy published styles use immutable integer snapshot versions:
 
 | Type | Description | Example |
 |------|-------------|---------|
-| **MAJOR** | Breaking changes to layer structure | `1.0.0` → `2.0.0` |
-| **MINOR** | New layers, backward-compatible | `1.0.0` → `1.1.0` |
-| **PATCH** | Bug fixes, visual tweaks | `1.0.0` → `1.0.1` |
+| **Stable** | Latest published snapshot | `planisfy/basic` |
+| **Pinned** | Specific published snapshot | `planisfy/basic@3` |
 
 <Callout type="info" title="Pinning Versions">
-To pin a specific style version, append <code>@version</code> to the style ID:<br/>
-<code>planisfy/basic@1.2.0</code>
+To pin a specific published style version, append <code>@version</code> to the style ID:<br/>
+<code>planisfy/basic@3</code>
 </Callout>
 
 ---

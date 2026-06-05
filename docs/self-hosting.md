@@ -65,6 +65,19 @@ scripts/self-host-setup.sh --migrate   # start dependencies, then run Drizzle mi
 The repository intentionally does not store binary map data. Keep downloaded
 PMTiles and Valhalla graph data outside Git while preserving these mount points.
 
+## Martin Tileset Aliases
+
+The API proxies public tileset URLs to Martin source names:
+
+| API URL | Martin source |
+| --- | --- |
+| `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}` | `{owner}.{tileset}` |
+| `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | `{owner}.{tileset}.v{version}` |
+
+The default config includes `planisfy.basic` and `planisfy.basic.v1` aliases for
+the local fixture. Uploaded tilesets still need a generated or manually extended
+Martin config that points those source names at the promoted PMTiles artifact.
+
 ## Migrations
 
 Run database migrations after Postgres is healthy:
@@ -98,7 +111,7 @@ Expected notes:
 - `/health/detailed` is the best single endpoint for database, Redis, engine,
   and worker heartbeat status.
 - Martin can start without `stuttgart.pmtiles`, but tile requests for
-  `planisfy.basic` require that local file.
+  `planisfy.basic` or `planisfy.basic@1` require that local file.
 - Valhalla starts with the mounted data directory, but routing quality depends
   on graph tiles placed in `infra/docker/data/valhalla_data/`.
 

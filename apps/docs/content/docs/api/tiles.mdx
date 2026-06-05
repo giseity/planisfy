@@ -18,18 +18,32 @@ Tiles are generated from <a href="https://overturemaps.org/" target="_blank">Ove
 ## Endpoint Overview
 
 ```
-GET https://api.planisfy.com/tiles/v1/{style}/{z}/{x}/{y}.mvt?access_token=YOUR_KEY
+GET https://api.planisfy.com/tiles/v1/{tileset}.json?access_token=YOUR_KEY
+GET https://api.planisfy.com/tiles/v1/{tileset}/{z}/{x}/{y}.mvt?access_token=YOUR_KEY
 ```
 
 | Component | Description |
 |-----------|-------------|
-| `style` | The map style (`basic`, `streets`, `dark`, `satellite`) |
+| `tileset` | A Martin source or published tileset alias, such as `basic` or `acme.roads` |
 | `z` | Zoom level (0-22) |
 | `x` | Tile column |
 | `y` | Tile row |
 | `access_token` | Your Planisfy API key |
 
 The tile coordinate system follows the [OSM slippy map tilename specification](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames).
+
+### Published Tileset Aliases
+
+Uploaded tilesets support stable and immutable aliases:
+
+| URL | Resolves to |
+|-----|-------------|
+| `/tiles/v1/{owner}.{tileset}.json` | TileJSON for the current published version |
+| `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}` | Tiles for the current published version |
+| `/tiles/v1/{owner}.{tileset}@{version}.json` | TileJSON for an immutable published version |
+| `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | Tiles for an immutable published version |
+
+Self-hosted Martin must expose matching source names: `{owner}.{tileset}` for stable tiles and `{owner}.{tileset}.v{version}` for immutable tiles.
 
 ---
 
@@ -39,7 +53,7 @@ The tile coordinate system follows the [OSM slippy map tilename specification](h
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `style` | `string` | Map style identifier. See [Available Styles](#available-styles) |
+| `tileset` | `string` | Tileset identifier or published alias |
 | `z` | `integer` | Zoom level (0-22). Higher = closer, more detail |
 | `x` | `integer` | Tile column (0 to 2<sup>z</sup>-1) |
 | `y` | `integer` | Tile row (0 to 2<sup>z</sup>-1) |
@@ -61,6 +75,7 @@ Include your API key in one of two ways:
 
 ```bash
 GET https://api.planisfy.com/tiles/v1/basic/0/0/0.mvt?access_token=pk.your-key-here
+GET https://api.planisfy.com/tiles/v1/acme.roads@3/0/0/0.mvt?access_token=pk.your-key-here
 ```
 
 ### Bearer Token

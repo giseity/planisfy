@@ -2,7 +2,7 @@
 
 ## Current
 
-Planisfy has a local/S3-like storage abstraction in the API. Source uploads now use `@planisfy/storage-paths` and write `storage_objects` ledger rows for original and processed artifacts.
+Planisfy has a local/S3-like storage abstraction in the API. Tileset uploads now use `@planisfy/storage-paths` and write `storage_objects` ledger rows for original and processed artifacts.
 
 ## Target
 
@@ -34,3 +34,5 @@ Storage is built from:
 - Do not construct storage keys inline in route handlers.
 - Every durable artifact should have a ledger row.
 - Cleanup should be auditable and recoverable.
+- Published tileset URLs should reference a promoted `tileset_versions` row, not a raw upload.
+- Martin must expose the promoted artifact under the source name expected by the API proxy, such as `owner.tileset` for stable URLs and `owner.tileset.v3` for immutable version URLs.
