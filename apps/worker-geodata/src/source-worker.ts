@@ -4,27 +4,36 @@ import { mkdtemp, readFile, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { promisify } from "util";
-import { eq } from "drizzle-orm";
+import { eq, max } from "drizzle-orm";
 import {
   db,
   processingJobLogs,
   processingJobs,
   storageObjects,
+  tilesets,
   tilesetSources,
+  tilesetVersions,
+  uploads,
 } from "@planisfy/database";
 import { getStorage } from "@planisfy/storage";
-import { StoragePaths } from "@planisfy/storage-paths";
+import {
+  StoragePaths,
+  type TilesetArtifactFormat,
+} from "@planisfy/storage-paths";
 
 const execFileAsync = promisify(execFile);
 
+type SourceFormat = "geojson" | "csv" | "shapefile" | "pmtiles";
+
 export interface SourceProcessingJob {
   sourceId: string;
+  tilesetId?: string;
   ownerId: string;
   uploadKey: string;
   uploadId?: string;
   storageObjectId?: string;
   processingJobId?: string;
-  format: "geojson" | "csv" | "shapefile" | "pmtiles";
+  format: SourceFormat;
   options?: {
     minZoom?: number;
     maxZoom?: number;
@@ -34,64 +43,103 @@ export interface SourceProcessingJob {
 }
 
 export async function processSourceJob(job: Job<SourceProcessingJob>) {
-  const { sourceId, ownerId, uploadKey, format, options, processingJobId } = job.data;
+  const {
+    sourceId,
+    tilesetId,
+    ownerId,
+    uploadKey,
+    uploadId,
+    format,
+    options,
+    processingJobId,
+  } = job.data;
   const storage = getStorage();
+  const minZoom = options?.minZoom ?? 0;
+  const maxZoom = options?.maxZoom ?? 14;
 
-  console.log(`[worker-geodata] processing source ${sourceId} (${format})`);
+  console.log(
+    `[worker-geodata] processing ${tilesetId ? "tileset" : "source"} ${sourceId} (${format})`,
+  );
 
   if (processingJobId) {
     await markProcessingJobStarted(processingJobId);
-    await logProcessingJob(processingJobId, "Source processing started", {
+    await logProcessingJob(processingJobId, "Geodata processing started", {
       sourceId,
+      tilesetId,
+      uploadId,
       uploadKey,
       format,
     });
   }
 
-  await db
-    .update(tilesetSources)
-    .set({ status: "PROCESSING" })
-    .where(eq(tilesetSources.id, sourceId));
-
+  await setProcessingStatus({
+    sourceId: tilesetId ? undefined : sourceId,
+    tilesetId,
+    uploadId,
+  });
   const tmpDir = await mkdtemp(join(tmpdir(), "planisfy-source-"));
 
   try {
     const rawData = await storage.download(uploadKey);
+    if (processingJobId) {
+      await updateProgress(processingJobId, 20, {
+        stage: "downloaded",
+        bytes: rawData.byteLength,
+      });
+      await logProcessingJob(processingJobId, "Upload downloaded", {
+        bytes: rawData.byteLength,
+      });
+    }
 
     if (format === "pmtiles") {
       const result = await storeProcessedArtifact({
         ownerId,
         sourceId,
+        tilesetId,
         processingJobId,
         data: rawData,
         format: "pmtiles",
         contentType: "application/x-protobuf",
       });
 
-      await db
-        .update(tilesetSources)
-        .set({
-          status: "READY",
-          url: storage.getUrl(result.storageKey),
-        })
-        .where(eq(tilesetSources.id, sourceId));
+      if (processingJobId) {
+        await updateProgress(processingJobId, 80, {
+          stage: "artifact_stored",
+          storageKey: result.storageKey,
+        });
+      }
 
-      await markSuccess(processingJobId, {
+      await finalizeProcessedArtifact({
+        ownerId,
         sourceId,
-        storageKey: result.storageKey,
-        size: result.size,
+        tilesetId,
+        uploadId,
+        processingJobId,
+        artifact: result,
+        format: "pmtiles",
+        minZoom,
+        maxZoom,
       });
       return;
     }
 
-    const inputPath = join(tmpDir, `input.${format === "geojson" ? "geojson" : format}`);
+    const inputPath = join(
+      tmpDir,
+      `input.${format === "geojson" ? "geojson" : format}`,
+    );
     await writeFile(inputPath, rawData);
 
+    let bounds: [number, number, number, number] | null = null;
     if (format === "geojson") {
       const geojson = JSON.parse(rawData.toString("utf-8"));
       const featureCount = geojson.features?.length ?? 0;
 
-      if (!geojson.type || !["FeatureCollection", "Feature", "GeometryCollection"].includes(geojson.type)) {
+      if (
+        !geojson.type ||
+        !["FeatureCollection", "Feature", "GeometryCollection"].includes(
+          geojson.type,
+        )
+      ) {
         throw new Error("Invalid GeoJSON: missing or invalid 'type' property");
       }
 
@@ -99,8 +147,8 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         throw new Error("GeoJSON FeatureCollection has no features");
       }
 
-      const bounds = calculateBounds(geojson);
-      if (bounds) {
+      bounds = calculateBounds(geojson);
+      if (bounds && !tilesetId) {
         await db
           .update(tilesetSources)
           .set({ bounds })
@@ -109,9 +157,6 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     }
 
     const outputPath = join(tmpDir, "output.pmtiles");
-    const minZoom = options?.minZoom ?? 0;
-    const maxZoom = options?.maxZoom ?? 14;
-
     const tippecanoeArgs = [
       "-o",
       outputPath,
@@ -134,6 +179,13 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     tippecanoeArgs.push(inputPath);
 
     try {
+      if (processingJobId) {
+        await updateProgress(processingJobId, 40, { stage: "tiling" });
+        await logProcessingJob(processingJobId, "Tile generation started", {
+          minZoom,
+          maxZoom,
+        });
+      }
       await execFileAsync("tippecanoe", tippecanoeArgs, { timeout: 300_000 });
     } catch (err) {
       if (isMissingExecutableError(err)) {
@@ -141,25 +193,31 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         const result = await storeProcessedArtifact({
           ownerId,
           sourceId,
+          tilesetId,
           processingJobId,
           data: rawData,
           format,
-          contentType: "application/geo+json",
+          contentType: format === "csv" ? "text/csv" : "application/geo+json",
         });
 
-        await db
-          .update(tilesetSources)
-          .set({
-            status: "READY",
-            url: storage.getUrl(result.storageKey),
-            type: "GEOJSON",
-          })
-          .where(eq(tilesetSources.id, sourceId));
+        if (processingJobId) {
+          await updateProgress(processingJobId, 80, {
+            stage: "fallback_stored",
+            storageKey: result.storageKey,
+          });
+        }
 
-        await markSuccess(processingJobId, {
+        await finalizeProcessedArtifact({
+          ownerId,
           sourceId,
-          storageKey: result.storageKey,
-          size: result.size,
+          tilesetId,
+          uploadId,
+          processingJobId,
+          artifact: result,
+          format,
+          minZoom,
+          maxZoom,
+          bounds,
           fallback: "raw",
         });
         return;
@@ -172,42 +230,53 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     const result = await storeProcessedArtifact({
       ownerId,
       sourceId,
+      tilesetId,
       processingJobId,
       data: pmtilesData,
       format: "pmtiles",
       contentType: "application/x-protobuf",
     });
 
-    await db
-      .update(tilesetSources)
-      .set({
-        status: "READY",
-        url: storage.getUrl(result.storageKey),
-        type: "VECTOR",
-        minZoom,
-        maxZoom,
-      })
-      .where(eq(tilesetSources.id, sourceId));
+    if (processingJobId) {
+      await updateProgress(processingJobId, 80, {
+        stage: "artifact_stored",
+        storageKey: result.storageKey,
+      });
+    }
 
-    await markSuccess(processingJobId, {
+    await finalizeProcessedArtifact({
+      ownerId,
       sourceId,
-      storageKey: result.storageKey,
-      size: result.size,
+      tilesetId,
+      uploadId,
+      processingJobId,
+      artifact: result,
+      format: "pmtiles",
       minZoom,
       maxZoom,
+      bounds,
     });
   } catch (err) {
-    await db
-      .update(tilesetSources)
-      .set({ status: "ERROR" })
-      .where(eq(tilesetSources.id, sourceId));
+    await setErrorStatus({
+      sourceId: tilesetId ? undefined : sourceId,
+      tilesetId,
+      uploadId,
+      error: err,
+    });
 
     if (processingJobId) {
       await markProcessingJobFailed(processingJobId, err);
-      await logProcessingJob(processingJobId, "Source processing failed", {
-        sourceId,
-        message: err instanceof Error ? err.message : String(err),
-      }, "error");
+      await logProcessingJob(
+        processingJobId,
+        "Geodata processing failed",
+        {
+          sourceId,
+          tilesetId,
+          uploadId,
+          message: err instanceof Error ? err.message : String(err),
+        },
+        "error",
+      );
     }
 
     throw err;
@@ -221,49 +290,259 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
   }
 }
 
+async function setProcessingStatus(params: {
+  sourceId?: string;
+  tilesetId?: string;
+  uploadId?: string;
+}) {
+  if (params.sourceId) {
+    await db
+      .update(tilesetSources)
+      .set({ status: "PROCESSING" })
+      .where(eq(tilesetSources.id, params.sourceId));
+  }
+  if (params.tilesetId) {
+    await db
+      .update(tilesets)
+      .set({ status: "BUILDING" })
+      .where(eq(tilesets.id, params.tilesetId));
+  }
+  if (params.uploadId) {
+    await db
+      .update(uploads)
+      .set({ status: "VALIDATING", linkedTilesetId: params.tilesetId })
+      .where(eq(uploads.id, params.uploadId));
+  }
+}
+
+async function setErrorStatus(params: {
+  sourceId?: string;
+  tilesetId?: string;
+  uploadId?: string;
+  error: unknown;
+}) {
+  if (params.sourceId) {
+    await db
+      .update(tilesetSources)
+      .set({ status: "ERROR" })
+      .where(eq(tilesetSources.id, params.sourceId));
+  }
+  if (params.tilesetId) {
+    await db
+      .update(tilesets)
+      .set({ status: "ERROR" })
+      .where(eq(tilesets.id, params.tilesetId));
+  }
+  if (params.uploadId) {
+    await db
+      .update(uploads)
+      .set({
+        status: "ERROR",
+        validationResult: {
+          message:
+            params.error instanceof Error
+              ? params.error.message
+              : String(params.error),
+        },
+      })
+      .where(eq(uploads.id, params.uploadId));
+  }
+}
+
 async function storeProcessedArtifact(params: {
   ownerId: string;
   sourceId: string;
+  tilesetId?: string;
   processingJobId?: string;
   data: Buffer;
-  format: string;
+  format: SourceFormat;
   contentType: string;
 }) {
   const storage = getStorage();
-  const fileName = sourceArtifactFileName(params.format, params.processingJobId);
-  const storageKey = StoragePaths.tilesetSourceArtifact(
-    params.ownerId,
-    params.sourceId,
-    fileName
+  const fileName = sourceArtifactFileName(
+    params.format,
+    params.processingJobId,
   );
-  const stored = await storage.upload(storageKey, params.data, params.contentType);
+  let versionNumber: number | undefined;
+  const storageFormat: TilesetArtifactFormat =
+    params.format === "pmtiles" ? "pmtiles" : "directory";
+  const storageKey = params.tilesetId
+    ? await (async () => {
+        const [versionState] = await db
+          .select({ latest: max(tilesetVersions.version) })
+          .from(tilesetVersions)
+          .where(eq(tilesetVersions.tilesetId, params.tilesetId!));
+        versionNumber = (versionState?.latest ?? 0) + 1;
+        return StoragePaths.tilesetVersion(
+          params.ownerId,
+          params.tilesetId!,
+          versionNumber,
+          storageFormat,
+        );
+      })()
+    : StoragePaths.tilesetSourceArtifact(
+        params.ownerId,
+        params.sourceId,
+        fileName,
+      );
+
+  const stored = await storage.upload(
+    storageKey,
+    params.data,
+    params.contentType,
+  );
   const storageInfo = storage.getInfo();
 
-  await db.insert(storageObjects).values({
-    accountId: params.ownerId,
-    provider: storageInfo.provider,
-    bucket: storageInfo.bucket,
-    storageKey,
-    fileName,
-    contentType: stored.contentType,
-    size: stored.size,
-    resourceType: "tileset_source",
-    resourceId: params.sourceId,
-    artifactKind: "processed",
-    version: "current",
-  });
+  const [storageObject] = await db
+    .insert(storageObjects)
+    .values({
+      accountId: params.ownerId,
+      provider: storageInfo.provider,
+      bucket: storageInfo.bucket,
+      storageKey,
+      fileName: params.tilesetId ? `tiles.${storageFormat}` : fileName,
+      contentType: stored.contentType,
+      size: stored.size,
+      resourceType: params.tilesetId ? "tileset" : "tileset_source",
+      resourceId: params.tilesetId ?? params.sourceId,
+      artifactKind: "processed",
+      version: versionNumber
+        ? `v${versionNumber}`
+        : (params.processingJobId ?? "current"),
+    })
+    .returning({ id: storageObjects.id });
 
   return {
+    storageObjectId: storageObject!.id,
     storageKey,
     size: stored.size,
+    versionNumber,
   };
+}
+
+async function finalizeProcessedArtifact(params: {
+  ownerId: string;
+  sourceId: string;
+  tilesetId?: string;
+  uploadId?: string;
+  processingJobId?: string;
+  artifact: Awaited<ReturnType<typeof storeProcessedArtifact>>;
+  format: SourceFormat;
+  minZoom: number;
+  maxZoom: number;
+  bounds?: [number, number, number, number] | null;
+  fallback?: string;
+}) {
+  const storage = getStorage();
+
+  if (params.tilesetId) {
+    const versionNumber =
+      params.artifact.versionNumber ??
+      (await nextTilesetVersion(params.tilesetId));
+    const [tilesetVersion] = await db
+      .insert(tilesetVersions)
+      .values({
+        tilesetId: params.tilesetId,
+        version: versionNumber,
+        artifactStorageObjectId: params.artifact.storageObjectId,
+        format: params.format === "pmtiles" ? "PMTILES" : "DIRECTORY",
+        buildJobId: params.processingJobId,
+        schema: {
+          vector_layers: [
+            {
+              id: "data",
+              fields: {},
+              minzoom: params.minZoom,
+              maxzoom: params.maxZoom,
+            },
+          ],
+          fallback: params.fallback,
+        },
+        bounds: params.bounds,
+        minZoom: params.minZoom,
+        maxZoom: params.maxZoom,
+        publishedAt: new Date(),
+      })
+      .returning();
+
+    await db
+      .update(tilesets)
+      .set({
+        status: "READY",
+        currentVersionId: tilesetVersion!.id,
+        bounds: params.bounds,
+        minZoom: params.minZoom,
+        maxZoom: params.maxZoom,
+        layerMetadata: tilesetVersion!.schema,
+      })
+      .where(eq(tilesets.id, params.tilesetId));
+
+    if (params.uploadId) {
+      await db
+        .update(uploads)
+        .set({ status: "READY", linkedTilesetId: params.tilesetId })
+        .where(eq(uploads.id, params.uploadId));
+    }
+
+    await markSuccess(params.processingJobId, {
+      tilesetId: params.tilesetId,
+      tilesetVersionId: tilesetVersion!.id,
+      version: versionNumber,
+      storageKey: params.artifact.storageKey,
+      size: params.artifact.size,
+      minZoom: params.minZoom,
+      maxZoom: params.maxZoom,
+      fallback: params.fallback,
+    });
+    return;
+  }
+
+  await db
+    .update(tilesetSources)
+    .set({
+      status: "READY",
+      url: storage.getUrl(params.artifact.storageKey),
+      type: params.format === "pmtiles" ? "VECTOR" : "GEOJSON",
+      minZoom: params.minZoom,
+      maxZoom: params.maxZoom,
+    })
+    .where(eq(tilesetSources.id, params.sourceId));
+
+  await markSuccess(params.processingJobId, {
+    sourceId: params.sourceId,
+    storageKey: params.artifact.storageKey,
+    size: params.artifact.size,
+    minZoom: params.minZoom,
+    maxZoom: params.maxZoom,
+    fallback: params.fallback,
+  });
+}
+
+async function nextTilesetVersion(tilesetId: string): Promise<number> {
+  const [versionState] = await db
+    .select({ latest: max(tilesetVersions.version) })
+    .from(tilesetVersions)
+    .where(eq(tilesetVersions.tilesetId, tilesetId));
+
+  return (versionState?.latest ?? 0) + 1;
+}
+
+async function updateProgress(
+  jobId: string,
+  progress: number,
+  output?: Record<string, unknown>,
+) {
+  await db
+    .update(processingJobs)
+    .set({ progress, output, updatedAt: new Date() })
+    .where(eq(processingJobs.id, jobId));
 }
 
 async function logProcessingJob(
   jobId: string,
   message: string,
   metadata?: Record<string, unknown>,
-  level: "info" | "error" = "info"
+  level: "info" | "error" = "info",
 ) {
   await db.insert(processingJobLogs).values({
     jobId,
@@ -286,7 +565,7 @@ async function markProcessingJobStarted(jobId: string) {
 
 async function markSuccess(
   jobId: string | undefined,
-  output: Record<string, unknown>
+  output: Record<string, unknown>,
 ) {
   if (!jobId) {
     return;
@@ -317,15 +596,35 @@ async function markProcessingJobFailed(jobId: string, error: unknown) {
     .where(eq(processingJobs.id, jobId));
 }
 
-function sourceArtifactFileName(format: string, processingJobId?: string): string {
-  return processingJobId ? `data-${processingJobId}.${format}` : `data.${format}`;
+function sourceArtifactFileName(
+  format: string,
+  processingJobId?: string,
+): string {
+  return processingJobId
+    ? `data-${processingJobId}.${format}`
+    : `data.${format}`;
 }
 
 function isMissingExecutableError(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT";
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    err.code === "ENOENT"
+  );
 }
 
-function calculateBounds(geojson: any): [number, number, number, number] | null {
+type GeoJsonLike = {
+  type?: string;
+  coordinates?: unknown;
+  geometries?: GeoJsonLike[];
+  geometry?: GeoJsonLike;
+  features?: Array<{ geometry?: GeoJsonLike }>;
+};
+
+function calculateBounds(
+  geojson: GeoJsonLike,
+): [number, number, number, number] | null {
   let minLon = Infinity;
   let minLat = Infinity;
   let maxLon = -Infinity;
@@ -351,14 +650,14 @@ function calculateBounds(geojson: any): [number, number, number, number] | null 
     }
   }
 
-  function processGeometry(geom: any) {
+  function processGeometry(geom: GeoJsonLike | undefined) {
     if (!geom) return;
     if (geom.coordinates) processCoords(geom.coordinates);
     if (geom.geometries) geom.geometries.forEach(processGeometry);
   }
 
   if (geojson.type === "FeatureCollection") {
-    geojson.features?.forEach((feature: any) => processGeometry(feature.geometry));
+    geojson.features?.forEach((feature) => processGeometry(feature.geometry));
   } else if (geojson.type === "Feature") {
     processGeometry(geojson.geometry);
   } else {

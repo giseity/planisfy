@@ -47,6 +47,21 @@ export async function logProcessingJob(
   return log!;
 }
 
+export async function updateProcessingJobProgress(
+  jobId: string,
+  progress: number,
+  output?: JsonObject
+) {
+  await db
+    .update(processingJobs)
+    .set({
+      progress: Math.max(0, Math.min(100, progress)),
+      output,
+      updatedAt: new Date(),
+    })
+    .where(eq(processingJobs.id, jobId));
+}
+
 export async function markProcessingJobStarted(jobId: string) {
   await db
     .update(processingJobs)
