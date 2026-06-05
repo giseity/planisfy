@@ -6,9 +6,12 @@
   "exports": {
     "./styles/*": "./styles/*.json",
     "./sprites/*": "./sprites/*",
-    "./glyphs/*": "./glyphs/*"
+    "./glyphs/*": "./glyphs/*",
+    "./release-manifest": "./release-manifest.json",
+    "./source-layer-contract": "./source-layer-contract.json"
   },
   "scripts": {
+    "build:release": "node scripts/build-release.mjs",
     "lint": "node ../eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0"
   }
 }
