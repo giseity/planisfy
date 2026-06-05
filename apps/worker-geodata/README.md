@@ -4,7 +4,7 @@ Outbox dispatcher and BullMQ worker for long-running geodata processing.
 
 ## Owns
 
-- Source upload processing.
+- Tileset upload processing.
 - Claiming `tileset.build.requested` outbox events and dispatching build jobs to BullMQ.
 - Redis heartbeat for API health reporting.
 - PMTiles passthrough and GeoJSON-to-PMTiles conversion.

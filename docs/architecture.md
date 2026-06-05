@@ -12,7 +12,7 @@ Planisfy is a self-hostable maps platform with optional hosted cloud later. The 
 - `apps/docs`: public and self-host documentation.
 - `apps/marketing`: public website.
 - `apps/tile-worker`: planned edge tile delivery.
-- `apps/worker-geodata`: source upload and geodata artifact processing.
+- `apps/worker-geodata`: tileset upload and geodata artifact processing.
 - `packages/auth`: Better Auth setup.
 - `packages/database`: Drizzle schema and shared DB helpers.
 - `packages/types`: broad shared types.

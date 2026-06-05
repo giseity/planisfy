@@ -6,7 +6,7 @@ Tileset uploads write durable upload, storage, tileset, processing job, and `til
 
 Publishing a tileset version writes `tileset.version.published`. That event is currently a durable integration hook for future notification/indexing workers; it is not claimed by the geodata worker.
 
-Legacy source uploads still enqueue BullMQ directly while the source workflow is folded into the same event contract.
+The legacy `/console/sources` workflow has been removed from the API surface; tileset uploads are the supported geodata ingestion path.
 
 ## Target
 

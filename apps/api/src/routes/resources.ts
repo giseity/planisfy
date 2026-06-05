@@ -15,15 +15,16 @@ import { getStorage } from "@planisfy/storage";
 import { StoragePaths } from "@planisfy/storage-paths";
 import type { AuthEnv } from "../middleware/auth";
 import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
-import { type SourceProcessingJob } from "../lib/source-queue";
 import { recordStorageObject } from "../lib/storage-ledger";
 import { logAudit } from "../lib/audit";
 import { registerPublishedMartinSources } from "../lib/martin-sources";
 import { enqueueOutboxEvent } from "../lib/outbox";
+import { checkResourceLimit } from "../lib/plan-check";
 
 export const resourcesRoute = new Hono<AuthEnv>();
 
 const MAX_UPLOAD_SIZE = 250 * 1024 * 1024;
+type UploadFormat = "geojson" | "csv" | "shapefile" | "pmtiles" | "mbtiles";
 
 const createTilesetSchema = z.object({
   name: z.string().min(1).max(128),
@@ -122,6 +123,19 @@ resourcesRoute.post("/uploads", async (c) => {
     return c.json(
       { error: { code: "CONFLICT", message: "Tileset handle already exists" } },
       409,
+    );
+  }
+
+  const planCheck = await checkResourceLimit(userId, accountId, "tilesets");
+  if (!planCheck.allowed) {
+    return c.json(
+      {
+        error: {
+          code: "PLAN_LIMIT",
+          message: `You've reached the maximum of ${planCheck.limit} tilesets on your current plan. Please upgrade to create more.`,
+        },
+      },
+      403,
     );
   }
 
@@ -530,10 +544,7 @@ resourcesRoute.get("/tilesets/:id/artifact", async (c) => {
   });
 });
 
-function detectFormat(
-  filename: string,
-  mimeType: string,
-): SourceProcessingJob["format"] | null {
+function detectFormat(filename: string, mimeType: string): UploadFormat | null {
   const ext = filename.split(".").pop()?.toLowerCase();
   if (ext === "geojson" || ext === "json") return "geojson";
   if (ext === "csv") return "csv";
