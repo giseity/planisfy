@@ -44,6 +44,8 @@ Optional providers:
 - Static map renderer via `STATIC_MAP_URL`
 - Email provider via `RESEND_API_KEY`
 - Storage provider via local disk, S3, or Cloudflare R2-compatible settings
+- Dodo Payments via `DODO_PAYMENTS_API_KEY`, `DODO_PRO_PRODUCT_ID`, and
+  `DODO_PAYMENTS_WEBHOOK_SECRET`
 
 Local self-host compose serves local artifacts from `/storage/*` and records artifact metadata in `storage_objects`.
 
@@ -53,4 +55,7 @@ Local self-host compose serves local artifacts from `/storage/*` and records art
 - Tileset uploads create `uploads`, `storage_objects`, `tilesets`, `processing_jobs`, and `tileset.build.requested` outbox events. `apps/worker-geodata` claims those events and dispatches BullMQ transport work.
 - Published tilesets are promoted explicitly through `/console/tilesets/:id/versions/:version/publish`; processing alone does not make a new version public.
 - `STORAGE_PROVIDER=r2` uses signed S3-compatible R2 access and publishes stable/versioned Martin alias objects under `MARTIN_SOURCES_PREFIX`.
-- Billing code currently contains alpha Polar references. The target provider is Dodo Payments.
+- Dodo checkout is created server-side from plan IDs, not client-supplied
+  product IDs. Configure the webhook endpoint at `/webhooks/dodo` so Dodo
+  subscription events can update `subscriptions` and related billing ledger
+  rows.

@@ -27,7 +27,7 @@ import { elevationRoute } from "./routes/elevation";
 import { staticMapRoute } from "./routes/static-map";
 import { storageRoute } from "./routes/storage";
 import { emailRoute } from "./routes/email";
-import { billingRoute } from "./routes/billing";
+import { billingRoute, billingWebhookRoute } from "./routes/billing";
 import { profileRoute } from "./routes/profile";
 import { resourcesRoute } from "./routes/resources";
 import { auth } from "@planisfy/auth/auth";
@@ -99,6 +99,7 @@ app.route("/", staticMapRoute);
 // ── Internal routes (called by platform services only) ───────────────────────
 app.use("/internal/*", internalAuthMiddleware);
 app.route("/", emailRoute);
+app.route("/", billingWebhookRoute);
 
 // ── Protected routes (require session cookie) ───────────────────────────────
 app.use("/console/*", authMiddleware);

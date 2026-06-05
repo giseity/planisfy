@@ -8,7 +8,7 @@ import {
 import Redis from "ioredis";
 import { PLANS, type PlanSlug } from "@planisfy/types";
 import { getEndpointCost } from "../lib/api-key";
-import { getUserPlan } from "../lib/billing";
+import { getAccountPlan } from "../lib/billing";
 import {
   checkMonthlyUsageQuota,
   evaluateMonthlyQuota,
@@ -153,8 +153,7 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
     );
   }
 
-  const userId = c.get("userId");
-  const planId = userId ? await getUserPlan(userId) : "free";
+  const planId = await getAccountPlan(ownerId);
   const plan = PLANS[planId] ?? PLANS.free;
   const limiter = planLimiters[planId] ?? planLimiters.free;
   const cost = getEndpointCost(c.req.path);
