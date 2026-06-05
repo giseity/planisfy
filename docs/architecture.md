@@ -12,6 +12,7 @@ Planisfy is a self-hostable maps platform with optional hosted cloud later. The 
 - `apps/docs`: public and self-host documentation.
 - `apps/marketing`: public website.
 - `apps/tile-worker`: planned edge tile delivery.
+- `apps/worker-geodata`: source upload and geodata artifact processing.
 - `packages/auth`: Better Auth setup.
 - `packages/database`: Drizzle schema and shared DB helpers.
 - `packages/types`: broad shared types.
@@ -25,7 +26,9 @@ Planisfy is a self-hostable maps platform with optional hosted cloud later. The 
 - Console and admin consume API contracts instead of duplicating business rules.
 - Heavy geodata work moves to `apps/worker-geodata`.
 - Durable async work flows through `event_outbox` and user-visible `processing_jobs`.
+- API code produces source-processing jobs; `apps/worker-geodata` consumes and executes them.
 - Storage keys are generated through `@planisfy/storage-paths`.
+- Server storage providers live in `@planisfy/storage`.
 - Async event payloads are validated through `@planisfy/events`.
 - Style lifecycle helpers live in `@planisfy/style-spec`.
 

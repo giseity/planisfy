@@ -12,7 +12,7 @@ Hono API gateway for Planisfy's public map API, console API, auth handler, and i
 
 ## Does Not Own
 
-- Heavy geodata processing.
+- Heavy geodata processing. `apps/worker-geodata` owns the source-processing consumer.
 - Studio client state.
 - Storage key contract definitions.
 - Event payload schema definitions.
@@ -48,5 +48,5 @@ Optional providers:
 ## Gotchas
 
 - Production-like environments must set `INTERNAL_API_SECRET`; internal routes must not be exposed with the fallback development secret.
-- Source uploads now create `uploads`, `storage_objects`, `processing_jobs`, and `event_outbox` records before using BullMQ as the current transport. The next restructuring step moves event claiming and geodata execution into `apps/worker-geodata`.
+- Source uploads create `uploads`, `storage_objects`, `processing_jobs`, and `event_outbox` records before enqueueing BullMQ transport work. The API is the producer; `apps/worker-geodata` is the consumer.
 - Billing code currently contains alpha Polar references. The target provider is Dodo Payments.

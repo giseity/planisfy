@@ -1,5 +1,5 @@
 {
-  "name": "api",
+  "name": "worker-geodata",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -8,26 +8,15 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "lint": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
-    "check-types": "tsc --noEmit",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.1",
-    "@planisfy/auth": "workspace:*",
     "@planisfy/database": "workspace:*",
-    "@planisfy/events": "workspace:*",
     "@planisfy/storage": "workspace:*",
     "@planisfy/storage-paths": "workspace:*",
-    "@planisfy/types": "workspace:*",
-    "@planisfy/utils": "workspace:*",
-    "better-auth": "^1.4.18",
     "bullmq": "^5.71.0",
     "dotenv": "^16.4.7",
-    "drizzle-orm": "^0.45.1",
-    "hono": "^4.7.10",
-    "ioredis": "^5.5.0",
-    "rate-limiter-flexible": "^9.1.1",
-    "zod": "^4.3.6"
+    "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {
     "@planisfy/eslint-config": "workspace:*",
