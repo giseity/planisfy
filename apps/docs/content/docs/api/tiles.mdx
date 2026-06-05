@@ -43,7 +43,7 @@ Uploaded tilesets support stable and immutable aliases:
 | `/tiles/v1/{owner}.{tileset}@{version}.json` | TileJSON for an immutable published version |
 | `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | Tiles for an immutable published version |
 
-Self-hosted Martin must expose matching source names: `{owner}.{tileset}` for stable tiles and `{owner}.{tileset}.v{version}` for immutable tiles.
+Self-hosted Martin must expose matching source names: `{owner}.{tileset}` for stable tiles and `{owner}.{tileset}.v{version}` for immutable tiles. The local Docker stack writes these aliases into the mounted `martin-sources` directory when a local tileset version is published.
 
 ---
 
