@@ -152,7 +152,7 @@ export function ContextSwitcher() {
               <DialogTitle>Create organization</DialogTitle>
               <DialogDescription>
                 Organizations let you collaborate with your team and share
-                resources like styles, sources, and API keys.
+                resources like styles, tilesets, and API keys.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
