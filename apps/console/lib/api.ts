@@ -44,6 +44,7 @@ export interface ConsoleTilesetVersion {
   id: string;
   tilesetId: string;
   version: number;
+  buildJobId: string | null;
   format: string;
   schema: {
     vector_layers?: ConsoleVectorLayer[];
@@ -79,6 +80,29 @@ export interface ConsoleTileset {
   versionedTilejsonUrl: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ConsoleProcessingJob {
+  id: string;
+  accountId: string;
+  type: string;
+  status: string;
+  progress: number;
+  input: {
+    tilesetId?: string;
+    uploadId?: string;
+    format?: string;
+  } | null;
+  output: {
+    stage?: string;
+    storageKey?: string;
+    fallback?: string;
+  } | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
 }
 
 export interface TilesetUploadOptions {
@@ -168,6 +192,10 @@ class ApiClient {
       ...envelope,
       data: envelope.data.map(normalizeTilesetUrls),
     };
+  }
+
+  listJobs() {
+    return this.get<ApiEnvelope<ConsoleProcessingJob[]>>("/jobs");
   }
 
   publishStyle(styleId: string) {

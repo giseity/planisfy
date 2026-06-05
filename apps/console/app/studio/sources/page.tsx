@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   api,
+  type ConsoleProcessingJob,
   type ConsoleTileset,
   type ConsoleTilesetVersion,
 } from "@/lib/api";
@@ -33,11 +34,13 @@ import {
   Copy,
   ExternalLink,
   Globe,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SourcesPage() {
   const [tilesets, setTilesets] = useState<ConsoleTileset[]>([]);
+  const [jobs, setJobs] = useState<ConsoleProcessingJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -55,8 +58,12 @@ export default function SourcesPage() {
 
   const fetchTilesets = useCallback(async () => {
     try {
-      const { data } = await api.listTilesets();
-      setTilesets(data);
+      const [tilesetsRes, jobsRes] = await Promise.all([
+        api.listTilesets(),
+        api.listJobs(),
+      ]);
+      setTilesets(tilesetsRes.data);
+      setJobs(jobsRes.data);
     } catch (err) {
       if (err instanceof Error) console.error(err.message);
     } finally {
@@ -293,9 +300,10 @@ export default function SourcesPage() {
             {tilesets.map((tileset) => {
               const displayVersion =
                 tileset.currentVersion ?? tileset.latestVersion;
+              const latestJob = latestJobForTileset(jobs, tileset.id);
               const canPublish = Boolean(
                 tileset.latestVersion &&
-                  tileset.latestVersion.id !== tileset.currentVersion?.id,
+                tileset.latestVersion.id !== tileset.currentVersion?.id,
               );
               return (
                 <Fragment key={tileset.id}>
@@ -315,6 +323,14 @@ export default function SourcesPage() {
                         )}
                         {tileset.isPublished ? "PUBLISHED" : tileset.status}
                       </Badge>
+                      {latestJob && (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {latestJob.status}
+                          {latestJob.status !== "SUCCEEDED"
+                            ? ` - ${latestJob.progress}%`
+                            : ""}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {displayVersion ? `v${displayVersion.version}` : "-"}
@@ -374,12 +390,17 @@ export default function SourcesPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                  {tileset.status === "BUILDING" && (
+                  {(tileset.status === "BUILDING" ||
+                    latestJob?.status === "FAILED") && (
                     <TableRow>
                       <TableCell colSpan={8} className="bg-muted/20">
                         <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-                          <RefreshCw className="h-3 w-3 animate-spin" />
-                          Upload validation and tile generation are running.
+                          {latestJob?.status === "FAILED" ? (
+                            <AlertCircle className="h-3 w-3" />
+                          ) : (
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                          )}
+                          {jobStatusMessage(latestJob)}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -409,4 +430,26 @@ function statusVariant(status: string) {
 
 function vectorLayerCount(version: ConsoleTilesetVersion | null) {
   return version?.schema?.vector_layers?.length ?? 0;
+}
+
+function latestJobForTileset(
+  jobs: ConsoleProcessingJob[],
+  tilesetId: string,
+): ConsoleProcessingJob | null {
+  return (
+    jobs.find(
+      (job) =>
+        job.type === "tileset.process_upload" &&
+        job.input?.tilesetId === tilesetId,
+    ) ?? null
+  );
+}
+
+function jobStatusMessage(job: ConsoleProcessingJob | null) {
+  if (!job) return "Upload validation and tile generation are queued.";
+  if (job.status === "FAILED") {
+    return job.errorMessage ?? "Tile generation failed.";
+  }
+  const stage = job.output?.stage ? ` (${job.output.stage})` : "";
+  return `Upload validation and tile generation are running: ${job.progress}%${stage}`;
 }
