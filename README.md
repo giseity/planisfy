@@ -6,7 +6,7 @@ The goal is to make open geospatial infrastructure easier to run by putting a Ty
 
 ## Current Status
 
-Planisfy is in the architecture and foundation phase. Several core flows are implemented, but the project is not production-ready yet.
+Planisfy is in alpha. Several core flows are implemented, but the self-hosted product loop is not yet production-ready end to end.
 
 Implemented or partially implemented:
 
@@ -16,7 +16,7 @@ Implemented or partially implemented:
 - PostgreSQL schema and Drizzle migrations
 - Map style CRUD, version history, publishing, and a browser style editor
 - Console, admin, marketing, and docs Next.js apps
-- Docker Compose wiring for local Postgres, Redis, Martin, Valhalla, and app containers
+- Docker Compose wiring for local Postgres, Redis, Martin, Valhalla, worker-geodata, local storage, and app containers
 
 Still alpha or externally dependent:
 
@@ -24,10 +24,11 @@ Still alpha or externally dependent:
 - Routing requires Valhalla data under `infra/docker/data/valhalla_data`
 - Geocoding prefers Pelias and falls back to Nominatim for basic development use
 - Static maps return a placeholder unless `STATIC_MAP_URL` is configured
-- Billing and production email delivery require external provider credentials
+- Billing uses Dodo Payments-oriented surfaces and is disabled unless provider credentials are configured
+- Production email delivery requires external provider credentials
 - Test coverage is intentionally small and currently focused on platform contracts
 
-See [STATUS.md](./STATUS.md) for the detailed alpha checklist.
+See [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md) for the canonical roadmap, current reality, and credible v1 gate.
 
 ## Tech Stack
 

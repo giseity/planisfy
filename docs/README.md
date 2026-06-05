@@ -2,6 +2,10 @@
 
 These documents describe the intended architecture, contracts, and operating model for Planisfy. They are not marketing copy. Keep them current when app boundaries, database contracts, worker behavior, storage paths, or self-hosting assumptions change.
 
+Use [the roadmap](../PLANISFY_ROADMAP.md) for product status, milestone focus,
+and planning decisions. Use this directory for durable implementation and
+operator references.
+
 ## Documents
 
 - [Architecture](./architecture.md)
