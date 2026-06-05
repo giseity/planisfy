@@ -1,56 +1,14 @@
-// ── Billing & Plan Management ────────────────────────────────────────────────
-// Integrates with Polar (polar.sh) for subscriptions.
-// Works without POLAR_ACCESS_TOKEN — defaults to free plan.
-
+import {
+  PLANS,
+  type PlanLimits,
+  type PlanSlug,
+} from "@planisfy/types";
 import { env } from "../env";
 
-// ── Plan definitions ────────────────────────────────────────────────────────
+export { PLANS };
+export type { PlanLimits, PlanSlug };
 
-export interface PlanLimits {
-  monthlyUnits: number;
-  requestsPerMinute: number;
-  maxStyles: number;
-  maxSources: number;
-  maxApiKeys: number;
-}
-
-export const PLANS: Record<
-  string,
-  PlanLimits & { name: string; price: number }
-> = {
-  free: {
-    name: "Free",
-    price: 0,
-    monthlyUnits: 50_000,
-    requestsPerMinute: 100,
-    maxStyles: 5,
-    maxSources: 3,
-    maxApiKeys: 5,
-  },
-  pro: {
-    name: "Pro",
-    price: 29,
-    monthlyUnits: 500_000,
-    requestsPerMinute: 500,
-    maxStyles: 50,
-    maxSources: 25,
-    maxApiKeys: 25,
-  },
-  enterprise: {
-    name: "Enterprise",
-    price: 199,
-    monthlyUnits: Infinity,
-    requestsPerMinute: 2000,
-    maxStyles: Infinity,
-    maxSources: Infinity,
-    maxApiKeys: Infinity,
-  },
-};
-
-// ── Plan resolution ─────────────────────────────────────────────────────────
-
-export async function getUserPlan(userId: string): Promise<string> {
-  // If Polar is configured, check subscription status
+export async function getUserPlan(userId: string): Promise<PlanSlug> {
   if (env.POLAR_ACCESS_TOKEN) {
     try {
       const plan = await getPolarSubscriptionPlan(userId);
@@ -68,10 +26,8 @@ export async function getUserPlan(userId: string): Promise<string> {
 
 export async function getPlanLimits(userId: string): Promise<PlanLimits> {
   const plan = await getUserPlan(userId);
-  return PLANS[plan] ?? PLANS.free!;
+  return PLANS[plan] ?? PLANS.free;
 }
-
-// ── Polar integration ───────────────────────────────────────────────────────
 
 const POLAR_API_URL = "https://api.polar.sh/v1";
 
@@ -98,7 +54,7 @@ async function polarFetch(path: string, options?: RequestInit) {
 
 async function getPolarSubscriptionPlan(
   userId: string,
-): Promise<string | null> {
+): Promise<PlanSlug | null> {
   try {
     const data = await polarFetch(
       `/subscriptions?customer_external_id=${userId}&active=true&limit=1`,
@@ -107,7 +63,6 @@ async function getPolarSubscriptionPlan(
     const sub = data.items?.[0];
     if (!sub) return null;
 
-    // Map Polar product/price to plan name
     const productName = sub.product?.name?.toLowerCase() || "";
     if (productName.includes("enterprise")) return "enterprise";
     if (productName.includes("pro")) return "pro";
@@ -161,8 +116,6 @@ export async function getCustomerPortalUrl(
   }
 }
 
-// ── Usage tracking ──────────────────────────────────────────────────────────
-
 export async function reportUsage(
   userId: string,
   units: number,
@@ -179,6 +132,6 @@ export async function reportUsage(
       }),
     });
   } catch {
-    // Usage reporting is best-effort
+    // Usage reporting is best-effort.
   }
 }

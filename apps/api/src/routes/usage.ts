@@ -1,17 +1,30 @@
 import { Hono } from "hono";
-import { eq, and, gte, lte, sql, desc, count } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, count, isNull } from "drizzle-orm";
 import { db, usageLogs, apiKeys } from "@planisfy/database";
 import type { AuthEnv } from "../middleware/auth";
+import { getUserPlan, getPlanLimits, PLANS } from "../lib/billing";
+import { getMonthlyUsagePeriod } from "../lib/usage-quota";
 
 export const usageRoute = new Hono<AuthEnv>();
 
 // ── GET /console/usage/summary — Aggregated usage stats ─────────────────────
 
 usageRoute.get("/usage/summary", async (c) => {
+  const userId = c.get("userId");
   const ownerId = c.get("ownerId");
-  const now = new Date();
-  const startOfMonth = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1);
-  const startOfLastMonth = new Date(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
+  const [plan, limits] = await Promise.all([
+    getUserPlan(userId),
+    getPlanLimits(userId),
+  ]);
+  const period = getMonthlyUsagePeriod();
+  const startOfMonth = period.start;
+  const startOfLastMonth = new Date(
+    Date.UTC(
+      startOfMonth.getUTCFullYear(),
+      startOfMonth.getUTCMonth() - 1,
+      1,
+    ),
+  );
 
   // This month's usage
   const [currentMonth] = await db
@@ -50,15 +63,37 @@ usageRoute.get("/usage/summary", async (c) => {
     .where(
       and(
         eq(apiKeys.ownerId, ownerId),
-        sql`${apiKeys.deletedAt} IS NULL`
+        isNull(apiKeys.deletedAt)
       )
     );
+
+  const totalUnits = Number(currentMonth?.totalUnits ?? 0);
+  const quotaPercent =
+    limits.monthlyUnits === Infinity
+      ? 0
+      : Math.min(100, Math.round((totalUnits / limits.monthlyUnits) * 100));
 
   return c.json({
     data: {
       totalRequests: currentMonth?.totalRequests ?? 0,
-      totalUnits: Number(currentMonth?.totalUnits ?? 0),
+      totalUnits,
       activeApiKeys: keysCount?.count ?? 0,
+      plan: {
+        id: plan,
+        name: PLANS[plan]?.name ?? PLANS.free.name,
+        limits,
+      },
+      quota: {
+        used: totalUnits,
+        limit: limits.monthlyUnits,
+        remaining:
+          limits.monthlyUnits === Infinity
+            ? Infinity
+            : Math.max(0, limits.monthlyUnits - totalUnits),
+        percent: quotaPercent,
+        periodStart: period.start.toISOString(),
+        periodEnd: period.end.toISOString(),
+      },
       previousPeriod: {
         totalRequests: lastMonth?.totalRequests ?? 0,
         totalUnits: Number(lastMonth?.totalUnits ?? 0),

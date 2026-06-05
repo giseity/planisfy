@@ -11,6 +11,7 @@
       "dependsOn": ["^lint"],
       "env": [
         "NODE_ENV",
+        "DATABASE_URL",
         "INTERNAL_API_SECRET",
         "API_URL",
         "LOCAL_STORAGE_PATH",
