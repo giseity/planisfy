@@ -7,6 +7,7 @@ import {
   stylePublications,
   styleVersions,
 } from "@planisfy/database";
+import { validateMapLibreStyle } from "@planisfy/style-spec";
 import {
   createStyleRecord,
   duplicateStyleRecord,
@@ -344,6 +345,20 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
     );
   }
 
+  const issues = validateMapLibreStyle(style.styleJson);
+  if (issues.length > 0) {
+    return c.json(
+      {
+        error: {
+          code: "STYLE_VALIDATION_ERROR",
+          message: "Style is not valid MapLibre JSON",
+          details: { issues },
+        },
+      },
+      400,
+    );
+  }
+
   await db
     .insert(styleVersions)
     .values({
@@ -466,6 +481,20 @@ stylesRoute.post("/styles/:id/versions/:versionNum/publish", async (c) => {
     return c.json(
       { error: { code: "NOT_FOUND", message: "Version not found" } },
       404,
+    );
+  }
+
+  const issues = validateMapLibreStyle(snapshot.styleJson);
+  if (issues.length > 0) {
+    return c.json(
+      {
+        error: {
+          code: "STYLE_VALIDATION_ERROR",
+          message: "Style version is not valid MapLibre JSON",
+          details: { issues },
+        },
+      },
+      400,
     );
   }
 

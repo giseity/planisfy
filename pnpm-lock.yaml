@@ -114,6 +114,9 @@ importers:
       '@planisfy/storage-paths':
         specifier: workspace:*
         version: link:../../packages/storage-paths
+      '@planisfy/style-spec':
+        specifier: workspace:*
+        version: link:../../packages/style-spec
       '@planisfy/types':
         specifier: workspace:*
         version: link:../../packages/types
