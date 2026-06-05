@@ -13,12 +13,16 @@ import {
 } from "@planisfy/ui/components/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@planisfy/ui/components/tabs"
 import Link from "next/link"
+import { requireAdmin } from "@/lib/admin-auth"
+
+export const dynamic = "force-dynamic"
 
 export default async function OrgDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireAdmin()
   const { id } = await params
 
   const [org] = await db

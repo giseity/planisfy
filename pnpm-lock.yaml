@@ -437,6 +437,9 @@ importers:
       '@planisfy/database':
         specifier: workspace:*
         version: link:../database
+      '@planisfy/env':
+        specifier: workspace:*
+        version: link:../env
       bcrypt:
         specifier: ^5.1.1
         version: 5.1.1

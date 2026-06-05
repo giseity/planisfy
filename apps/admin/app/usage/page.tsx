@@ -11,6 +11,9 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table"
 import { UsageCharts } from "./charts"
+import { requireAdmin } from "@/lib/admin-auth"
+
+export const dynamic = "force-dynamic"
 
 async function getUsageData() {
   const now = new Date()
@@ -123,6 +126,7 @@ async function getUsageData() {
 }
 
 export default async function UsagePage() {
+  await requireAdmin()
   const data = await getUsageData()
 
   return (

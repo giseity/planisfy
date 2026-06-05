@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@planisfy/database": "workspace:*",
+    "@planisfy/env": "workspace:*",
     "bcrypt": "^5.1.1",
     "better-auth": "^1.4.18",
     "drizzle-kit": "^0.31.9",

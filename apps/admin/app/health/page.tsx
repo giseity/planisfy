@@ -10,6 +10,9 @@ import {
   TableHeader,
   TableRow,
 } from "@planisfy/ui/components/table"
+import { requireAdmin } from "@/lib/admin-auth"
+
+export const dynamic = "force-dynamic"
 
 async function getHealthData() {
   const now = new Date()
@@ -108,6 +111,7 @@ function HealthIndicator({ value, warn, critical }: { value: number; warn: numbe
 }
 
 export default async function HealthPage() {
+  await requireAdmin()
   const health = await getHealthData()
   const errorRateNum = Number(health.errorRate)
 
