@@ -213,6 +213,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
           processingJobId,
           data: rawData,
           format,
+          artifactFormat: "directory",
           contentType:
             format === "csv"
               ? "text/csv"
@@ -377,6 +378,7 @@ async function storeProcessedArtifact(params: {
   processingJobId?: string;
   data: Buffer;
   format: SourceFormat;
+  artifactFormat?: TilesetArtifactFormat;
   contentType: string;
 }) {
   const storage = getStorage();
@@ -385,8 +387,8 @@ async function storeProcessedArtifact(params: {
     params.processingJobId,
   );
   let versionNumber: number | undefined;
-  const storageFormat: TilesetArtifactFormat =
-    params.format === "pmtiles" ? "pmtiles" : "directory";
+  const storageFormat =
+    params.artifactFormat ?? tileStorageFormat(params.format);
   const storageKey = params.tilesetId
     ? await (async () => {
         const [versionState] = await db
@@ -436,6 +438,7 @@ async function storeProcessedArtifact(params: {
   return {
     storageObjectId: storageObject!.id,
     storageKey,
+    artifactFormat: storageFormat,
     size: stored.size,
     versionNumber,
   };
@@ -466,7 +469,7 @@ async function finalizeProcessedArtifact(params: {
         tilesetId: params.tilesetId,
         version: versionNumber,
         artifactStorageObjectId: params.artifact.storageObjectId,
-        format: tileArtifactFormat(params.format),
+        format: tileArtifactFormat(params.artifact.artifactFormat),
         buildJobId: params.processingJobId,
         schema: {
           vector_layers: [
@@ -630,8 +633,14 @@ function inputExtension(format: SourceFormat) {
   return format;
 }
 
+function tileStorageFormat(format: SourceFormat): TilesetArtifactFormat {
+  if (format === "mbtiles") return "mbtiles";
+  if (format === "pmtiles") return "pmtiles";
+  return "pmtiles";
+}
+
 function tileArtifactFormat(
-  format: SourceFormat,
+  format: TilesetArtifactFormat,
 ): "PMTILES" | "MBTILES" | "DIRECTORY" {
   if (format === "pmtiles") return "PMTILES";
   if (format === "mbtiles") return "MBTILES";
