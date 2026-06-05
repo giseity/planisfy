@@ -1,7 +1,7 @@
 import { createMiddleware } from "hono/factory";
 import { db, apiKeys } from "@planisfy/database";
 import { eq, and, isNull } from "drizzle-orm";
-import { hashKey, requiredScopeForPath, type ApiKeyScope } from "../lib/api-key";
+import { hashKey, requiredScopeForPath } from "../lib/api-key";
 
 export type ApiKeyEnv = {
   Variables: {
@@ -33,7 +33,7 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
   if (!rawKey.startsWith("pk_")) {
     return c.json(
       { error: { code: "UNAUTHORIZED", message: "Invalid API key format" } },
-      401
+      401,
     );
   }
 
@@ -54,7 +54,7 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
   if (!key) {
     return c.json(
       { error: { code: "UNAUTHORIZED", message: "Invalid API key" } },
-      401
+      401,
     );
   }
 
@@ -62,7 +62,7 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
   if (key.expiresAt && new Date(key.expiresAt) < new Date()) {
     return c.json(
       { error: { code: "KEY_EXPIRED", message: "API key has expired" } },
-      401
+      401,
     );
   }
 
@@ -74,14 +74,22 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
       const requestHost = new URL(origin).hostname;
       const allowed = domains.some((pattern) => {
         if (pattern.startsWith("*.")) {
-          return requestHost.endsWith(pattern.slice(1)) || requestHost === pattern.slice(2);
+          return (
+            requestHost.endsWith(pattern.slice(1)) ||
+            requestHost === pattern.slice(2)
+          );
         }
         return requestHost === pattern;
       });
       if (!allowed) {
         return c.json(
-          { error: { code: "DOMAIN_NOT_ALLOWED", message: "Request origin not in allowed domains" } },
-          403
+          {
+            error: {
+              code: "DOMAIN_NOT_ALLOWED",
+              message: "Request origin not in allowed domains",
+            },
+          },
+          403,
         );
       }
     }
@@ -92,8 +100,13 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
   const requiredScope = requiredScopeForPath(c.req.path);
   if (requiredScope && !scopes.includes(requiredScope)) {
     return c.json(
-      { error: { code: "SCOPE_DENIED", message: `API key missing required scope: ${requiredScope}` } },
-      403
+      {
+        error: {
+          code: "SCOPE_DENIED",
+          message: `API key missing required scope: ${requiredScope}`,
+        },
+      },
+      403,
     );
   }
 

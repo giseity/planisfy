@@ -33,7 +33,7 @@ export function enqueueUsageLog(entry: UsageLogEntry): void {
 
 // ── Worker (consumer) — batch insert ────────────────────────────────────────
 
-let batch: UsageLogEntry[] = [];
+const batch: UsageLogEntry[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function flushBatch(): Promise<void> {
@@ -52,10 +52,13 @@ async function flushBatch(): Promise<void> {
         ipAddress: entry.ipAddress ?? null,
         referer: entry.referer ?? null,
         userAgent: entry.userAgent ?? null,
-      }))
+      })),
     );
   } catch (err) {
-    console.error(`[usage-worker] Failed to insert ${toInsert.length} rows:`, err);
+    console.error(
+      `[usage-worker] Failed to insert ${toInsert.length} rows:`,
+      err,
+    );
     // Put failed entries back for retry on next flush
     batch.unshift(...toInsert);
   }
@@ -82,7 +85,7 @@ export const usageWorker = new Worker<UsageLogEntry>(
   {
     connection: REDIS_CONNECTION,
     concurrency: 1, // Process sequentially for batch efficiency
-  }
+  },
 );
 
 usageWorker.on("error", (err) => {

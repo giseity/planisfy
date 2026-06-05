@@ -1,5 +1,5 @@
 import { createMiddleware } from "hono/factory";
-import { db, sessions, users } from "@planisfy/database";
+import { db, sessions } from "@planisfy/database";
 import { eq, and, gt } from "drizzle-orm";
 import { getCookie } from "hono/cookie";
 
@@ -35,7 +35,10 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     c.req.header("authorization")?.replace("Bearer ", "");
 
   if (!rawToken) {
-    return c.json({ error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Not authenticated" } },
+      401,
+    );
   }
 
   // better-auth stores the cookie as "{token}.{signature}" but
@@ -55,7 +58,12 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     .limit(1);
 
   if (!session) {
-    return c.json({ error: { code: "UNAUTHORIZED", message: "Invalid or expired session" } }, 401);
+    return c.json(
+      {
+        error: { code: "UNAUTHORIZED", message: "Invalid or expired session" },
+      },
+      401,
+    );
   }
 
   c.set("userId", session.userId);
@@ -95,8 +103,10 @@ export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
 
   if (!rawToken) {
     return c.json(
-      { error: { code: "UNAUTHORIZED", message: "API key or session required" } },
-      401
+      {
+        error: { code: "UNAUTHORIZED", message: "API key or session required" },
+      },
+      401,
     );
   }
 
@@ -116,8 +126,10 @@ export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
 
   if (!session) {
     return c.json(
-      { error: { code: "UNAUTHORIZED", message: "Invalid or expired session" } },
-      401
+      {
+        error: { code: "UNAUTHORIZED", message: "Invalid or expired session" },
+      },
+      401,
     );
   }
 
