@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { ZodError } from "zod";
 import { randomUUID } from "crypto";
 import { requestLogger } from "./lib/logger";
+import { metricsMiddleware } from "./lib/metrics";
 import {
   authMiddleware,
   dualAuthMiddleware,
@@ -50,6 +51,7 @@ app.use(
   }),
 );
 app.use("*", requestLogger());
+app.use("*", metricsMiddleware());
 
 // ── better-auth handler (signup, login, session, org endpoints) ─────────
 // better-auth's handler accepts a standard Request and returns a Response,

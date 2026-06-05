@@ -103,6 +103,7 @@ Basic checks after startup:
 ```bash
 curl http://localhost:4000/health
 curl http://localhost:4000/health/detailed
+curl http://localhost:4000/metrics
 curl http://localhost:3005/catalog
 curl http://localhost:3007/status
 ```
@@ -112,6 +113,8 @@ Expected notes:
 - `/health` should return quickly once the API container is ready.
 - `/health/detailed` is the best single endpoint for database, Redis, engine,
   and worker heartbeat status.
+- `/metrics` exposes Prometheus text metrics for API request counts, latency,
+  process uptime, and build info.
 - Martin can start without `stuttgart.pmtiles`, but tile requests for
   `planisfy.basic` or `planisfy.basic@1` require that local file.
 - Valhalla starts with the mounted data directory, but routing quality depends

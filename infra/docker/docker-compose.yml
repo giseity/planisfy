@@ -34,6 +34,7 @@ services:
       - "4000:4000"
     environment:
       - PORT=4000
+      - APP_VERSION=${APP_VERSION:-self-host}
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
