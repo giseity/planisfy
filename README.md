@@ -104,10 +104,22 @@ Copy the example environment and adjust secrets:
 cp .env.example .env
 ```
 
-Start the local stack:
+Prepare local self-host demo directories and validate Compose:
 
 ```bash
-docker compose -f infra/docker/docker-compose.yml up -d
+scripts/self-host-setup.sh
+```
+
+Start the local stack from the repository root:
+
+```bash
+docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
+```
+
+Run database migrations after Postgres is healthy:
+
+```bash
+pnpm -F @planisfy/database db:migrate
 ```
 
 Default service URLs:
@@ -120,12 +132,29 @@ Default service URLs:
 - Martin: <http://localhost:3005>
 - Valhalla: <http://localhost:3007>
 
+Local demo assets:
+
+- Planisfy Streets fixture style: `packages/map-styles/styles/planisfy-streets-v1.json`
+- Style release manifest: `packages/map-styles/release-manifest.json`
+- Martin PMTiles mount: `infra/docker/data/pmtiles`
+- Local object storage mount: `infra/docker/data/storage`
+
+Health checks:
+
+```bash
+curl http://localhost:4000/health
+curl http://localhost:4000/health/detailed
+curl http://localhost:3005/catalog
+```
+
 Required production hardening:
 
 - Set a strong `BETTER_AUTH_SECRET`
 - Set `INTERNAL_API_SECRET` for `/internal/*` API routes
 - Replace default database and Redis credentials
 - Configure tile, routing, geocoding, email, storage, and billing providers for the deployment mode you need
+
+More detail is available in [docs/self-hosting.md](./docs/self-hosting.md).
 
 ## API Surface
 

@@ -2,8 +2,9 @@
 #
 # This configuration runs all Planisfy services locally for development or self-hosting.
 #
-# Quick start:
-#   docker compose up -d
+# Quick start from the repository root:
+#   scripts/self-host-setup.sh
+#   docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
 #
 # Services:
 #   - api:        API Gateway (port 4000)
@@ -46,13 +47,19 @@ services:
       - GLYPHS_URL=${GLYPHS_URL:-https://demotiles.maplibre.org/font}
       - ELEVATION_URL=${ELEVATION_URL:-https://api.open-elevation.com/api/v1}
       - VALHALLA_URL=http://valhalla:8002
-      - STORAGE_PROVIDER=local
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
       - LOCAL_STORAGE_PATH=/data/storage
-      - LOCAL_STORAGE_URL=http://localhost:4000/storage
-      - LOCAL_STORAGE_BUCKET=planisfy-local
+      - LOCAL_STORAGE_URL=${LOCAL_STORAGE_URL:-http://localhost:4000/storage}
+      - LOCAL_STORAGE_BUCKET=${LOCAL_STORAGE_BUCKET:-planisfy-local}
       - NODE_ENV=production
     volumes:
-      - storage_data:/data/storage
+      - ./data/storage:/data/storage
+    healthcheck:
+      test: [ "CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,14 +79,14 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - STORAGE_PROVIDER=local
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
       - LOCAL_STORAGE_PATH=/data/storage
-      - LOCAL_STORAGE_URL=http://localhost:4000/storage
-      - LOCAL_STORAGE_BUCKET=planisfy-local
+      - LOCAL_STORAGE_URL=${LOCAL_STORAGE_URL:-http://localhost:4000/storage}
+      - LOCAL_STORAGE_BUCKET=${LOCAL_STORAGE_BUCKET:-planisfy-local}
       - GEODATA_WORKER_CONCURRENCY=${GEODATA_WORKER_CONCURRENCY:-2}
       - NODE_ENV=production
     volumes:
-      - storage_data:/data/storage
+      - ./data/storage:/data/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,6 +118,8 @@ services:
       - NODE_ENV=production
     depends_on:
       postgres:
+        condition: service_healthy
+      api:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -278,8 +287,6 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
-    driver: local
-  storage_data:
     driver: local
 
 # ============================================
