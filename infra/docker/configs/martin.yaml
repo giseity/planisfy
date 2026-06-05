@@ -18,7 +18,15 @@ server:
   cache_control_max_age: 604800  # 7 days
 
 # Tile source combination
-# Combine multiple sources into a single tileset
+# The API proxies public tileset URLs to Martin source names:
+#
+#   /tiles/v1/{owner}.{tileset}/{z}/{x}/{y}      -> {owner}.{tileset}
+#   /tiles/v1/{owner}.{tileset}@{version}/...    -> {owner}.{tileset}.v{version}
+#
+# Keep these composer IDs aligned with the tilesets published by the API. The
+# fixture aliases below make the Planisfy Streets demo work locally.
 composer:
   - id: "planisfy.basic"
+    sources: ["stuttgart-base"]
+  - id: "planisfy.basic.v1"
     sources: ["stuttgart-base"]
