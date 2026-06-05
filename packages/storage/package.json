@@ -11,7 +11,9 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@planisfy/env": "workspace:*"
+    "@aws-sdk/client-s3": "^3.940.0",
+    "@planisfy/env": "workspace:*",
+    "dotenv": "^16.4.7"
   },
   "devDependencies": {
     "@planisfy/eslint-config": "workspace:*",

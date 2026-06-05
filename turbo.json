@@ -14,7 +14,8 @@
         "INTERNAL_API_SECRET",
         "API_URL",
         "LOCAL_STORAGE_PATH",
-        "MARTIN_SOURCES_PATH"
+        "MARTIN_SOURCES_PATH",
+        "MARTIN_SOURCES_PREFIX"
       ]
     },
     "check-types": {

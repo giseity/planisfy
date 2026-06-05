@@ -3,7 +3,9 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { Readable } from "node:stream";
 import test from "node:test";
+import type { StorageProvider } from "@planisfy/storage";
 import { registerPublishedMartinSources } from "./martin-sources";
 
 test("registerPublishedMartinSources writes stable and versioned local aliases", async () => {
@@ -82,9 +84,52 @@ test("registerPublishedMartinSources writes stable and versioned local aliases",
   }
 });
 
-test("registerPublishedMartinSources skips non-local and raw artifacts", async () => {
+test("registerPublishedMartinSources writes stable and versioned R2 aliases", async () => {
+  const previousPrefix = process.env.MARTIN_SOURCES_PREFIX;
+  const storage = new MemoryStorage("r2", "planisfy-artifacts", {
+    "accounts/account/tilesets/tileset/v4/tiles.pmtiles": "pmtiles-fixture",
+  });
+
+  try {
+    process.env.MARTIN_SOURCES_PREFIX = "tiles/martin-sources";
+
+    const registration = await registerPublishedMartinSources({
+      storageObject: {
+        provider: "r2",
+        bucket: "planisfy-artifacts",
+        storageKey: "accounts/account/tilesets/tileset/v4/tiles.pmtiles",
+      },
+      artifactFormat: "PMTILES",
+      ownerHandle: "owner",
+      tilesetHandle: "roads",
+      version: 4,
+      storage,
+    });
+
+    assert.ok(registration);
+    assert.equal(registration.provider, "r2");
+    assert.equal(registration.stableStorageKey, "tiles/martin-sources/owner.roads.pmtiles");
+    assert.equal(registration.versionedStorageKey, "tiles/martin-sources/owner.roads.v4.pmtiles");
+    assert.equal(
+      storage.objects.get("tiles/martin-sources/owner.roads.pmtiles"),
+      "pmtiles-fixture",
+    );
+    assert.equal(
+      storage.objects.get("tiles/martin-sources/owner.roads.v4.pmtiles"),
+      "pmtiles-fixture",
+    );
+  } finally {
+    if (previousPrefix === undefined) {
+      delete process.env.MARTIN_SOURCES_PREFIX;
+    } else {
+      process.env.MARTIN_SOURCES_PREFIX = previousPrefix;
+    }
+  }
+});
+
+test("registerPublishedMartinSources skips unsupported providers and raw artifacts", async () => {
   const remoteRegistration = await registerPublishedMartinSources({
-    storageObject: { provider: "s3", storageKey: "tiles.pmtiles" },
+    storageObject: { provider: "memory", storageKey: "tiles.pmtiles" },
     artifactFormat: "PMTILES",
     ownerHandle: "owner",
     tilesetHandle: "roads",
@@ -101,3 +146,51 @@ test("registerPublishedMartinSources skips non-local and raw artifacts", async (
   assert.equal(remoteRegistration, null);
   assert.equal(directoryRegistration, null);
 });
+
+class MemoryStorage implements StorageProvider {
+  objects: Map<string, string>;
+
+  constructor(
+    private provider: "s3" | "r2",
+    private bucket: string,
+    initialObjects: Record<string, string>,
+  ) {
+    this.objects = new Map(Object.entries(initialObjects));
+  }
+
+  async upload(
+    key: string,
+    data: Buffer | Readable,
+    contentType = "application/octet-stream",
+  ) {
+    const body = Buffer.isBuffer(data) ? data : Buffer.alloc(0);
+    this.objects.set(key, body.toString("utf8"));
+    return { key, url: this.getUrl(key), size: body.length, contentType };
+  }
+
+  async download(key: string) {
+    return Buffer.from(this.objects.get(key) ?? "", "utf8");
+  }
+
+  async copy(sourceKey: string, targetKey: string) {
+    const value = this.objects.get(sourceKey);
+    if (value === undefined) throw new Error(`Missing ${sourceKey}`);
+    this.objects.set(targetKey, value);
+  }
+
+  async delete(key: string) {
+    this.objects.delete(key);
+  }
+
+  async exists(key: string) {
+    return this.objects.has(key);
+  }
+
+  getUrl(key: string) {
+    return `https://artifacts.example.com/${key}`;
+  }
+
+  getInfo() {
+    return { provider: this.provider, bucket: this.bucket };
+  }
+}

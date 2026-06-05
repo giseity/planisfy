@@ -404,6 +404,7 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
   const [artifact] = await db
     .select({
       provider: storageObjects.provider,
+      bucket: storageObjects.bucket,
       storageKey: storageObjects.storageKey,
     })
     .from(storageObjects)

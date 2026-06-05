@@ -51,6 +51,19 @@ services:
       - LOCAL_STORAGE_PATH=/data/storage
       - LOCAL_STORAGE_URL=${LOCAL_STORAGE_URL:-http://localhost:4000/storage}
       - LOCAL_STORAGE_BUCKET=${LOCAL_STORAGE_BUCKET:-planisfy-local}
+      - S3_BUCKET=${S3_BUCKET:-planisfy-uploads}
+      - S3_REGION=${S3_REGION:-auto}
+      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - S3_PUBLIC_URL=${S3_PUBLIC_URL:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_BUCKET=${R2_BUCKET:-}
+      - R2_ENDPOINT=${R2_ENDPOINT:-}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - MARTIN_SOURCES_PREFIX=${MARTIN_SOURCES_PREFIX:-martin-sources}
       - NODE_ENV=production
     volumes:
       - ./data/storage:/data/storage
@@ -83,6 +96,18 @@ services:
       - LOCAL_STORAGE_PATH=/data/storage
       - LOCAL_STORAGE_URL=${LOCAL_STORAGE_URL:-http://localhost:4000/storage}
       - LOCAL_STORAGE_BUCKET=${LOCAL_STORAGE_BUCKET:-planisfy-local}
+      - S3_BUCKET=${S3_BUCKET:-planisfy-uploads}
+      - S3_REGION=${S3_REGION:-auto}
+      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - S3_PUBLIC_URL=${S3_PUBLIC_URL:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_BUCKET=${R2_BUCKET:-}
+      - R2_ENDPOINT=${R2_ENDPOINT:-}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
       - GEODATA_WORKER_CONCURRENCY=${GEODATA_WORKER_CONCURRENCY:-2}
       - NODE_ENV=production
     volumes:
