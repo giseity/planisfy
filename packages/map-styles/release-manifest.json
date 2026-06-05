@@ -1,0 +1,27 @@
+{
+  "package": "@planisfy/map-styles",
+  "release": "2026.06-fixture",
+  "styles": [
+    {
+      "id": "planisfy-streets-v1",
+      "name": "Planisfy Streets v1",
+      "status": "fixture",
+      "style": "styles/planisfy-streets-v1.json",
+      "schema": "schemas/planisfy-streets-v1.schema.json",
+      "tileset": "planisfy.basic",
+      "martinSource": "stuttgart-base",
+      "center": [9.1829, 48.7758],
+      "notes": [
+        "Fixture style for local demo wiring and schema agreement tests.",
+        "Requires a compatible PMTiles file at infra/docker/data/pmtiles/stuttgart.pmtiles for rendered local tiles."
+      ]
+    }
+  ],
+  "glyphs": {
+    "defaultUrl": "https://demotiles.maplibre.org/font"
+  },
+  "sprites": {
+    "status": "placeholder",
+    "path": "sprites/"
+  }
+}

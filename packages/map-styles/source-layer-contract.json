@@ -1,0 +1,36 @@
+{
+  "tileset": "planisfy.basic",
+  "sourceId": "planisfy-streets",
+  "layers": [
+    {
+      "id": "landuse",
+      "description": "Polygon landuse and leisure features used for parks and green areas.",
+      "requiredProperties": ["class"]
+    },
+    {
+      "id": "water",
+      "description": "Water polygons.",
+      "requiredProperties": []
+    },
+    {
+      "id": "transportation",
+      "description": "Road and path line features.",
+      "requiredProperties": ["class"]
+    },
+    {
+      "id": "transportation_name",
+      "description": "Road label line features.",
+      "requiredProperties": ["name"]
+    },
+    {
+      "id": "building",
+      "description": "Building polygons visible at neighborhood zooms.",
+      "requiredProperties": []
+    },
+    {
+      "id": "place",
+      "description": "Place points for city and locality labels.",
+      "requiredProperties": ["name"]
+    }
+  ]
+}
