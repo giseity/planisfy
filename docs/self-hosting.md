@@ -43,8 +43,10 @@ The script:
 2. creates local demo directories under `infra/docker/data/`;
 3. copies the Planisfy Streets fixture style into local storage;
 4. downloads the configured demo PMTiles fixture when `--demo-data` is passed;
-5. reports whether the default `stuttgart.pmtiles` fixture is present;
-6. validates the Compose file with `docker compose config`.
+5. validates that the fixture style, source-layer contract, and Martin aliases agree;
+6. reports whether the default `stuttgart.pmtiles` fixture is present;
+7. validates the Compose file with `docker compose config`;
+8. prints the first-account sign-up URL.
 
 Planisfy does not commit binary map data, so a first boot without
 `infra/docker/data/pmtiles/stuttgart.pmtiles` is expected. The applications and
@@ -88,6 +90,19 @@ scripts/self-host-setup.sh --up        # prepare, then start the full stack
 scripts/self-host-setup.sh --migrate   # start dependencies, then run Drizzle migrations
 ```
 
+## First Account
+
+After the stack is running and migrations have completed, create the first local
+Console account at:
+
+```text
+http://localhost:3001/sign-up
+```
+
+The local demo does not require email delivery. If `RESEND_API_KEY` is unset,
+verification emails are not sent, and the Console shows a reminder banner while
+still allowing the signed-in user to continue.
+
 ## Optional Billing
 
 Dodo Payments checkout is disabled unless the API container receives
@@ -104,6 +119,7 @@ production and configure Dodo to send subscription webhooks to
 | `infra/docker/data/valhalla_data/` | Valhalla graph/runtime data mounted at `/custom_files`. |
 | `infra/docker/data/storage/uploads/` | Local upload/object storage area. |
 | `infra/docker/data/storage/styles/` | Demo and published style JSON. The setup script seeds `planisfy-streets-v1.json`. |
+| `infra/docker/data/storage/martin-sources/` | Local aliases for published PMTiles/MBTiles artifacts. Martin mounts this at `/storage/martin-sources`. |
 | `packages/map-styles/` | Versioned Planisfy Streets fixture style, source-layer contract, schema, and release manifest. |
 
 The repository intentionally does not store binary map data. Keep downloaded

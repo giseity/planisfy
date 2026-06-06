@@ -131,6 +131,11 @@ binary map data; when that PMTiles file is missing, the stack can still boot,
 but the default Planisfy Streets map will show a clear fixture-data-missing
 state until compatible local PMTiles are supplied.
 
+The setup script also validates that the fixture style, source-layer contract,
+and Martin source aliases agree, creates the local storage mount points,
+including `infra/docker/data/storage/martin-sources`, and prints the first
+account sign-up URL.
+
 To make the demo map render from a reproducible local artifact, set
 `DEMO_PMTILES_URL` in `.env` and optionally `DEMO_PMTILES_SHA256`, then run:
 
@@ -152,6 +157,15 @@ Run database migrations after Postgres is healthy:
 ```bash
 pnpm -F @planisfy/database db:migrate
 ```
+
+Create the first local Console account after migrations complete:
+
+```text
+http://localhost:3001/sign-up
+```
+
+Local email delivery is optional. When `RESEND_API_KEY` is not configured, the
+Console still lets the signed-in user work with an email verification reminder.
 
 Default service URLs:
 

@@ -3,12 +3,19 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/infra/docker/docker-compose.yml"
+MARTIN_CONFIG="$ROOT_DIR/infra/docker/configs/martin.yaml"
 ENV_FILE="$ROOT_DIR/.env"
 ENV_EXAMPLE="$ROOT_DIR/.env.example"
 DATA_DIR="$ROOT_DIR/infra/docker/data"
 STYLE_FIXTURE="$ROOT_DIR/packages/map-styles/styles/planisfy-streets-v1.json"
+SOURCE_LAYER_CONTRACT="$ROOT_DIR/packages/map-styles/source-layer-contract.json"
+STORAGE_DIR="$DATA_DIR/storage"
 STORAGE_STYLE_DIR="$DATA_DIR/storage/styles"
+STORAGE_MARTIN_SOURCES_DIR="$DATA_DIR/storage/martin-sources"
 DEMO_PMTILES="$DATA_DIR/pmtiles/stuttgart.pmtiles"
+FIXTURE_TILEJSON_URL="http://localhost:3005/planisfy.basic"
+FIXTURE_MARTIN_SOURCE="stuttgart-base"
+FIXTURE_COMPOSER_ID="planisfy.basic"
 
 usage() {
   cat <<USAGE
@@ -48,6 +55,46 @@ require_cmd() {
     echo "Missing required command: $1" >&2
     exit 1
   fi
+}
+
+require_file() {
+  if [[ ! -f "$1" ]]; then
+    echo "Missing required file: $1" >&2
+    exit 1
+  fi
+}
+
+require_text() {
+  local file="$1"
+  local expected="$2"
+  local label="$3"
+  if ! grep -Fq "$expected" "$file"; then
+    cat <<CHECK_ERROR >&2
+Demo wiring check failed: $label
+  file: $file
+  expected text: $expected
+CHECK_ERROR
+    exit 1
+  fi
+}
+
+check_demo_wiring() {
+  require_file "$STYLE_FIXTURE"
+  require_file "$SOURCE_LAYER_CONTRACT"
+  require_file "$MARTIN_CONFIG"
+
+  require_text "$STYLE_FIXTURE" "\"url\": \"$FIXTURE_TILEJSON_URL\"" \
+    "Planisfy Streets fixture style must point at the local Martin fixture TileJSON URL."
+  require_text "$SOURCE_LAYER_CONTRACT" "\"tileset\": \"$FIXTURE_COMPOSER_ID\"" \
+    "Source-layer contract must name the same fixture tileset that Martin composes."
+  require_text "$SOURCE_LAYER_CONTRACT" "\"sourceId\": \"planisfy-streets\"" \
+    "Source-layer contract must match the style source id."
+  require_text "$MARTIN_CONFIG" "$FIXTURE_MARTIN_SOURCE: \"/data/stuttgart.pmtiles\"" \
+    "Martin config must mount the expected Stuttgart PMTiles fixture source."
+  require_text "$MARTIN_CONFIG" "id: \"$FIXTURE_COMPOSER_ID\"" \
+    "Martin config must expose the stable Planisfy fixture tileset."
+  require_text "$MARTIN_CONFIG" "id: \"$FIXTURE_COMPOSER_ID.v1\"" \
+    "Martin config must expose the immutable Planisfy fixture tileset alias."
 }
 
 compose() {
@@ -121,7 +168,15 @@ mkdir -p \
   "$DATA_DIR/valhalla_data" \
   "$DATA_DIR/storage/uploads" \
   "$DATA_DIR/storage/styles" \
-  "$DATA_DIR/storage/fixtures"
+  "$DATA_DIR/storage/fixtures" \
+  "$STORAGE_MARTIN_SOURCES_DIR"
+
+if [[ ! -w "$STORAGE_DIR" ]]; then
+  echo "Local storage directory is not writable: infra/docker/data/storage" >&2
+  exit 1
+fi
+
+check_demo_wiring
 
 if [[ -f "$STYLE_FIXTURE" ]]; then
   cp "$STYLE_FIXTURE" "$STORAGE_STYLE_DIR/planisfy-streets-v1.json"
@@ -183,6 +238,7 @@ Self-host demo prep complete.
 Next steps:
   docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
   pnpm -F @planisfy/database db:migrate
+  visit http://localhost:3001/sign-up
   curl http://localhost:4000/health
   curl http://localhost:4000/health/detailed
 
@@ -192,4 +248,12 @@ Demo data directories:
                                    Use --demo-data with DEMO_PMTILES_URL to fetch it.
   infra/docker/data/valhalla_data  Put Valhalla tiles/config data here.
   infra/docker/data/storage        Local object storage mount.
+  infra/docker/data/storage/martin-sources
+                                   Published local tileset aliases for Martin.
+
+First account:
+  After migrations complete, create the first local user at:
+    http://localhost:3001/sign-up
+  Email delivery is optional for the local demo; unverified users can still use
+  the Console, with a verification reminder banner.
 NEXT
