@@ -2,16 +2,22 @@ import { Queue } from "bullmq";
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import {
   db,
+  datasets,
+  datasetVersions,
   eventOutbox,
   processingJobLogs,
   processingJobs,
+  sourceImports,
 } from "@planisfy/database";
 import { parseEventPayload } from "@planisfy/events";
 import { redisConnection } from "./env";
 import type { SourceProcessingJob } from "./source-worker";
 
 const SOURCE_PROCESSING_QUEUE_NAME = "source-processing";
-const DISPATCHABLE_EVENTS = ["tileset.build.requested"] as const;
+const DISPATCHABLE_EVENTS = [
+  "tileset.build.requested",
+  "source.import.requested",
+] as const;
 const SOURCE_FORMATS = ["geojson", "csv", "shapefile", "pmtiles", "mbtiles"];
 const MAX_ATTEMPTS = 5;
 
@@ -116,6 +122,9 @@ async function dispatchEvent(
       case "tileset.build.requested":
         await dispatchTilesetBuildRequested(queue, event);
         break;
+      case "source.import.requested":
+        await dispatchSourceImportRequested(event);
+        break;
       default:
         throw new Error(`Unsupported geodata outbox event: ${event.eventName}`);
     }
@@ -123,6 +132,90 @@ async function dispatchEvent(
   } catch (err) {
     await failOutboxEvent(event, err);
   }
+}
+
+async function dispatchSourceImportRequested(event: OutboxEvent) {
+  const payload = parseEventPayload("source.import.requested", event.payload);
+  const [processingJob] = await db
+    .select()
+    .from(processingJobs)
+    .where(eq(processingJobs.id, payload.jobId))
+    .limit(1);
+
+  if (!processingJob) {
+    throw new Error(`Processing job not found: ${payload.jobId}`);
+  }
+
+  const now = new Date();
+  const output = {
+    provider: payload.provider,
+    importId: payload.importId,
+    datasetId: payload.datasetId,
+    stage: "metadata_recorded",
+    provenance: processingJob.input,
+    warnings: [
+      "DuckDB extract execution is not configured in this worker build; recorded import metadata only.",
+    ],
+  };
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(processingJobs)
+      .set({
+        status: "PROCESSING",
+        progress: 25,
+        startedAt: processingJob.startedAt ?? now,
+        updatedAt: now,
+      })
+      .where(eq(processingJobs.id, payload.jobId));
+
+    await tx.insert(datasetVersions).values({
+      datasetId: payload.datasetId,
+      version: 1,
+      schemaSummary: {
+        provider: payload.provider,
+        importId: payload.importId,
+        mode: "metadata-only",
+      },
+      createdAt: now,
+    });
+
+    await tx
+      .update(datasets)
+      .set({
+        status: "READY",
+        schemaSummary: output,
+        updatedAt: now,
+      })
+      .where(eq(datasets.id, payload.datasetId));
+
+    await tx
+      .update(sourceImports)
+      .set({
+        status: "SUCCEEDED",
+        output,
+        updatedAt: now,
+      })
+      .where(eq(sourceImports.id, payload.importId));
+
+    await tx
+      .update(processingJobs)
+      .set({
+        status: "SUCCEEDED",
+        progress: 100,
+        output,
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(processingJobs.id, payload.jobId));
+
+    await tx.insert(processingJobLogs).values({
+      jobId: payload.jobId,
+      level: "warn",
+      message: "Overture import metadata recorded without DuckDB extract",
+      metadata: output,
+    });
+  });
 }
 
 async function dispatchTilesetBuildRequested(
