@@ -48,12 +48,18 @@ done
 
 echo "Checking detailed health"
 detailed="$(curl -fsS http://localhost:4000/health/detailed)"
-for check in postgres redis storage; do
+for check in postgres redis storage workerGeodata martin valhalla; do
   if ! grep -q "\"$check\"" <<<"$detailed"; then
     echo "Detailed health is missing '$check'" >&2
     echo "$detailed" >&2
     exit 1
   fi
 done
+
+if curl -fsS http://localhost:3005/catalog >/dev/null 2>&1; then
+  echo "Martin catalog is reachable"
+else
+  echo "Martin catalog is not running in this smoke subset; skipping direct catalog check"
+fi
 
 echo "Docker Compose smoke test passed"

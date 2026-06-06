@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import Redis from "ioredis";
 import { and, count, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { access } from "node:fs/promises";
+import { join } from "node:path";
 import {
   apiKeys,
   auditEvents,
@@ -605,14 +607,35 @@ function probeConfiguredOnly(
   });
 }
 
-function probeStorage(checkedAt: string) {
+async function probeStorage(checkedAt: string) {
+  const startedAt = Date.now();
   try {
+    const provider = storageProviderFromEnv();
+    if (provider === "local") {
+      const storagePath =
+        process.env.LOCAL_STORAGE_PATH ?? join(process.cwd(), ".storage");
+      await access(storagePath);
+      return makeHealthEntry({
+        id: "storage",
+        label: "Storage",
+        status: "healthy",
+        latencyMs: Date.now() - startedAt,
+        message: `local path reachable: ${storagePath}`,
+        checkedAt,
+      });
+    }
+
     const info = getStorage().getInfo();
+    const configured =
+      provider === "s3" ? Boolean(process.env.S3_BUCKET) : isR2Configured();
     return makeHealthEntry({
       id: "storage",
       label: "Storage",
-      status: "healthy",
-      message: `${info.provider}${info.bucket ? `/${info.bucket}` : ""}`,
+      status: configured ? "healthy" : "degraded",
+      latencyMs: Date.now() - startedAt,
+      message: configured
+        ? `${info.provider}${info.bucket ? `/${info.bucket}` : ""} configured`
+        : `${provider.toUpperCase()} storage is not fully configured`,
       checkedAt,
     });
   } catch (error) {
@@ -620,10 +643,28 @@ function probeStorage(checkedAt: string) {
       id: "storage",
       label: "Storage",
       status: "offline",
+      latencyMs: Date.now() - startedAt,
       message: errorMessage(error),
       checkedAt,
     });
   }
+}
+
+function storageProviderFromEnv(): "local" | "s3" | "r2" {
+  if (process.env.STORAGE_PROVIDER === "s3") return "s3";
+  if (process.env.STORAGE_PROVIDER === "r2") return "r2";
+  return "local";
+}
+
+function isR2Configured() {
+  return (
+    Boolean(process.env.R2_BUCKET || process.env.S3_BUCKET) &&
+    Boolean(process.env.R2_ENDPOINT || process.env.R2_ACCOUNT_ID) &&
+    Boolean(
+      (process.env.R2_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) &&
+        (process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY),
+    )
+  );
 }
 
 function buildTimeseries(
