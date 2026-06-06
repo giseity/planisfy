@@ -1,5 +1,5 @@
 import { Queue } from "bullmq";
-import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, max, sql } from "drizzle-orm";
 import {
   db,
   datasets,
@@ -8,9 +8,17 @@ import {
   processingJobLogs,
   processingJobs,
   sourceImports,
+  storageObjects,
 } from "@planisfy/database";
 import { parseEventPayload } from "@planisfy/events";
-import { redisConnection } from "./env";
+import { getStorage } from "@planisfy/storage";
+import { StoragePaths } from "@planisfy/storage-paths";
+import { env, redisConnection } from "./env";
+import {
+  parseOvertureImportInput,
+  runOvertureImport,
+  type OvertureImportResult,
+} from "./overture-import";
 import type { SourceProcessingJob } from "./source-worker";
 
 const SOURCE_PROCESSING_QUEUE_NAME = "source-processing";
@@ -147,75 +155,259 @@ async function dispatchSourceImportRequested(event: OutboxEvent) {
   }
 
   const now = new Date();
-  const output = {
-    provider: payload.provider,
+  await markSourceImportProcessing({
+    jobId: payload.jobId,
     importId: payload.importId,
     datasetId: payload.datasetId,
-    stage: "metadata_recorded",
-    provenance: processingJob.input,
-    warnings: [
-      "DuckDB extract execution is not configured in this worker build; recorded import metadata only.",
-    ],
-  };
+    startedAt: processingJob.startedAt ?? now,
+  });
 
+  try {
+    if (processingJob.status === "CANCELED" || processingJob.cancelRequestedAt) {
+      throw new Error("Source import skipped because processing job is canceled");
+    }
+
+    const input = parseOvertureImportInput(processingJob.input);
+    const result = await runOvertureImport(input, {
+      duckdbPath: env.DUCKDB_PATH,
+      release: env.OVERTURE_RELEASE,
+      parquetUrlTemplate: env.OVERTURE_PARQUET_URL_TEMPLATE,
+      maxFeatures: env.SOURCE_IMPORT_MAX_FEATURES,
+      timeoutMs: env.SOURCE_IMPORT_TIMEOUT_MS,
+    });
+    const stored = await storeDatasetArtifact({
+      accountId: payload.accountId,
+      datasetId: payload.datasetId,
+      result,
+    });
+
+    const output = {
+      provider: payload.provider,
+      importId: payload.importId,
+      datasetId: payload.datasetId,
+      stage: "extracted",
+      storageKey: stored.storageKey,
+      storageObjectId: stored.storageObjectId,
+      datasetVersionId: stored.datasetVersionId,
+      version: stored.version,
+      featureCount: result.featureCount,
+      bounds: result.bounds,
+      schema: result.schemaSummary,
+      provenance: result.provenance,
+      warnings: result.warnings,
+    };
+
+    await markSourceImportSucceeded({
+      jobId: payload.jobId,
+      importId: payload.importId,
+      datasetId: payload.datasetId,
+      datasetVersionId: stored.datasetVersionId,
+      output,
+    });
+  } catch (err) {
+    await markSourceImportFailed({
+      jobId: payload.jobId,
+      importId: payload.importId,
+      datasetId: payload.datasetId,
+      error: err,
+    });
+  }
+}
+
+async function markSourceImportProcessing(params: {
+  jobId: string;
+  importId: string;
+  datasetId: string;
+  startedAt: Date;
+}) {
+  const now = new Date();
   await db.transaction(async (tx) => {
     await tx
       .update(processingJobs)
       .set({
         status: "PROCESSING",
-        progress: 25,
-        startedAt: processingJob.startedAt ?? now,
+        progress: 20,
+        startedAt: params.startedAt,
         updatedAt: now,
       })
-      .where(eq(processingJobs.id, payload.jobId));
+      .where(eq(processingJobs.id, params.jobId));
 
-    await tx.insert(datasetVersions).values({
-      datasetId: payload.datasetId,
-      version: 1,
-      schemaSummary: {
-        provider: payload.provider,
-        importId: payload.importId,
-        mode: "metadata-only",
-      },
-      createdAt: now,
+    await tx
+      .update(sourceImports)
+      .set({ status: "PROCESSING", updatedAt: now })
+      .where(eq(sourceImports.id, params.importId));
+
+    await tx
+      .update(datasets)
+      .set({ updatedAt: now })
+      .where(eq(datasets.id, params.datasetId));
+
+    await tx.insert(processingJobLogs).values({
+      jobId: params.jobId,
+      level: "info",
+      message: "Overture DuckDB extract started",
+      metadata: { importId: params.importId, datasetId: params.datasetId },
     });
+  });
+}
 
+async function storeDatasetArtifact(params: {
+  accountId: string;
+  datasetId: string;
+  result: OvertureImportResult;
+}) {
+  const version = await nextDatasetVersion(params.datasetId);
+  const storageKey = StoragePaths.datasetVersion(
+    params.accountId,
+    params.datasetId,
+    version,
+  );
+  const storage = getStorage();
+  const stored = await storage.upload(
+    storageKey,
+    params.result.data,
+    "application/geo+json",
+  );
+  const storageInfo = storage.getInfo();
+
+  const [storageObject] = await db
+    .insert(storageObjects)
+    .values({
+      accountId: params.accountId,
+      provider: storageInfo.provider,
+      bucket: storageInfo.bucket,
+      storageKey,
+      fileName: "features.geojson",
+      contentType: stored.contentType,
+      size: stored.size,
+      resourceType: "dataset",
+      resourceId: params.datasetId,
+      artifactKind: "import",
+      version: `v${version}`,
+    })
+    .returning({ id: storageObjects.id });
+
+  const [datasetVersion] = await db
+    .insert(datasetVersions)
+    .values({
+      datasetId: params.datasetId,
+      version,
+      storageObjectId: storageObject!.id,
+      bounds: params.result.bounds,
+      featureCount: params.result.featureCount,
+      schemaSummary: params.result.schemaSummary,
+    })
+    .returning({ id: datasetVersions.id });
+
+  return {
+    storageKey,
+    storageObjectId: storageObject!.id,
+    datasetVersionId: datasetVersion!.id,
+    version,
+  };
+}
+
+async function markSourceImportSucceeded(params: {
+  jobId: string;
+  importId: string;
+  datasetId: string;
+  datasetVersionId: string;
+  output: Record<string, unknown>;
+}) {
+  const now = new Date();
+  await db.transaction(async (tx) => {
     await tx
       .update(datasets)
       .set({
         status: "READY",
-        schemaSummary: output,
+        currentVersionId: params.datasetVersionId,
+        bounds: params.output.bounds,
+        featureCount: params.output.featureCount as number | undefined,
+        schemaSummary: params.output.schema,
         updatedAt: now,
       })
-      .where(eq(datasets.id, payload.datasetId));
+      .where(eq(datasets.id, params.datasetId));
 
     await tx
       .update(sourceImports)
       .set({
         status: "SUCCEEDED",
-        output,
+        output: params.output,
         updatedAt: now,
       })
-      .where(eq(sourceImports.id, payload.importId));
+      .where(eq(sourceImports.id, params.importId));
 
     await tx
       .update(processingJobs)
       .set({
         status: "SUCCEEDED",
         progress: 100,
-        output,
+        output: params.output,
         completedAt: now,
         updatedAt: now,
       })
-      .where(eq(processingJobs.id, payload.jobId));
+      .where(eq(processingJobs.id, params.jobId));
 
     await tx.insert(processingJobLogs).values({
-      jobId: payload.jobId,
-      level: "warn",
-      message: "Overture import metadata recorded without DuckDB extract",
-      metadata: output,
+      jobId: params.jobId,
+      level: "info",
+      message: "Overture import extracted and stored",
+      metadata: params.output,
     });
   });
+}
+
+async function markSourceImportFailed(params: {
+  jobId: string;
+  importId: string;
+  datasetId: string;
+  error: unknown;
+}) {
+  const now = new Date();
+  const message = params.error instanceof Error ? params.error.message : String(params.error);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(datasets)
+      .set({ status: "ERROR", updatedAt: now })
+      .where(eq(datasets.id, params.datasetId));
+
+    await tx
+      .update(sourceImports)
+      .set({
+        status: "FAILED",
+        errorCode: "OVERTURE_IMPORT_FAILED",
+        errorMessage: message,
+        updatedAt: now,
+      })
+      .where(eq(sourceImports.id, params.importId));
+
+    await tx
+      .update(processingJobs)
+      .set({
+        status: "FAILED",
+        errorCode: "OVERTURE_IMPORT_FAILED",
+        errorMessage: message,
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(processingJobs.id, params.jobId));
+
+    await tx.insert(processingJobLogs).values({
+      jobId: params.jobId,
+      level: "error",
+      message: "Overture DuckDB extract failed",
+      metadata: { importId: params.importId, datasetId: params.datasetId, message },
+    });
+  });
+}
+
+async function nextDatasetVersion(datasetId: string) {
+  const [versionState] = await db
+    .select({ latest: max(datasetVersions.version) })
+    .from(datasetVersions)
+    .where(eq(datasetVersions.datasetId, datasetId));
+
+  return (versionState?.latest ?? 0) + 1;
 }
 
 async function dispatchTilesetBuildRequested(
