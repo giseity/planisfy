@@ -1,0 +1,17 @@
+Planisfy
+
+Planisfy source code in this repository is licensed under the GNU Affero
+General Public License version 3 only (AGPL-3.0-only), unless a package,
+directory, or file states a different license.
+
+Planisfy map styles, sample manifests, sprites, glyph references, imported data,
+generated tiles, and third-party geospatial datasets can carry separate
+copyright, database-right, trademark, and attribution obligations. Operators are
+responsible for preserving and displaying the required notices for the data and
+assets they use.
+
+The default Planisfy basemap fixtures are intended to document and test product
+workflows. They do not grant rights to redistribute third-party map data beyond
+the permissions supplied by the original data providers.
+
+See docs/data-attribution-policy.md for the project attribution policy.
