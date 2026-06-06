@@ -20,13 +20,14 @@ Valhalla, and processing workflows.
 - `@planisfy/database`: schema helpers, source import model, and version/publish helpers.
 - `@planisfy/style-spec`: MapLibre validation and draft/publish transforms.
 - `apps/api`: auth, scopes, style routes, upload/import init, outbox writes.
-- `apps/worker-geodata`: event claiming, upload validation, failure states, artifact versioning, and metadata-only source import dispatch.
+- `apps/worker-geodata`: event claiming, upload validation, failure states, artifact versioning, Tippecanoe/GDAL toolchain behavior, and DuckDB source import dispatch.
+- `@planisfy/map-styles`: style release manifests, source-layer contracts, and Planetiler regional build command/metadata behavior.
 - `apps/console`: Studio state helpers, shared style validation, publish/source flows, and upload job controls.
 - `apps/admin`: health and dashboard logic.
 
 ## Policy
 
-Fast tests should not require Postgres, Redis, S3/R2, Martin, Valhalla, GDAL, DuckDB, or Tippecanoe. DB and Docker smoke tests should be opt-in or clearly marked.
+Fast tests should not require Postgres, Redis, S3/R2, Martin, Valhalla, GDAL, DuckDB, Tippecanoe, Docker, or Planetiler. DB, Docker, and real geodata toolchain smoke tests should be opt-in or clearly marked.
 
 ## Smoke Tests
 

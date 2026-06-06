@@ -24,11 +24,17 @@ basemap release pipeline.
 - Release manifests.
 - Attribution metadata.
 
-## Ownership
+## Engine Split
 
-`apps/worker-geodata` owns build jobs. DuckDB is acceptable for Overture and
-Parquet-heavy processing. PostGIS is useful for staging, validation, geometry
-checks, and metadata extraction.
+- `apps/worker-geodata` uses Tippecanoe plus GDAL/`ogr2ogr` for ad hoc upload
+  tiling.
+- `apps/worker-geodata` uses DuckDB for Overture/source import extraction from
+  GeoParquet.
+- `packages/map-styles` owns the Planetiler regional basemap build harness and
+  release metadata packaging.
+- Future global basemap jobs can move into a scheduler/worker once the regional
+  release loop is stable. PostGIS remains useful for staging, validation,
+  geometry checks, and metadata extraction.
 
 ## Fixture Release
 
@@ -45,18 +51,25 @@ pipeline. The release lives in `packages/map-styles` and contains:
 - `schemas/planisfy-streets-v1.schema.json` - JSON schema for the source-layer
   contract document.
 - `release-manifest.json` - fixture release metadata and demo data expectations.
+- `planetiler/planisfy-streets-regional.yml` - minimal Planetiler custom-map
+  profile for regional Planisfy Streets builds.
+- `fixtures/regional/planisfy-streets-fixture.geojson` - tiny tracked source
+  fixture used by the Planetiler harness and tests.
 
 Validate and package release metadata with:
 
 ```bash
 pnpm -F @planisfy/map-styles test
 pnpm -F @planisfy/map-styles build:release
+pnpm -F @planisfy/map-styles build:planetiler-regional -- --name fixture --version dev
 ```
 
 The fixture style assumes an OpenMapTiles-like regional PMTiles file at
-`infra/docker/data/pmtiles/stuttgart.pmtiles`. Future milestones can replace the
-fixture with generated artifacts while keeping the release manifest shape
-stable.
+`infra/docker/data/pmtiles/stuttgart.pmtiles`. The Planetiler regional harness
+can also generate ignored PMTiles under `packages/map-styles/dist/regional/`
+from the tracked fixture profile, then write manifest/style metadata through
+`build:regional-release`. This is a reproducibility harness, not the polished
+global basemap.
 
 ## Data Access Notes
 

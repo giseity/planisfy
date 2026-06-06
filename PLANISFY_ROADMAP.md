@@ -80,8 +80,8 @@ Partial:
 
 - Self-host setup creates directories and fixture styles, but does not yet feel
   one-command complete.
-- Default basemap is a fixture style and manifest, not a generated Planisfy
-  basemap release.
+- Default basemap is a fixture style and manifest, with a Planetiler regional
+  harness but not a polished generated global Planisfy basemap release.
 - Upload processing exists with job progress, retry/cancel controls,
   validation summaries, artifact links, and rebuild from original uploads.
 - Tileset version promotion exists with Console rollback affordances, though
@@ -89,8 +89,11 @@ Partial:
 - Studio can add published uploaded tilesets without JSON edits, including
   source-layer selection and draft/published URL copy flows.
 - Saved regions, source credentials, source connections, and Overture import
-  job records exist; the worker currently records metadata-only import results
-  until DuckDB extract execution is configured.
+  job records exist; the worker runs DuckDB extraction when `OVERTURE_RELEASE`
+  is configured and records dataset versions, schema, bounds, counts, warnings,
+  artifacts, and provenance.
+- The geodata toolchain split is explicit: Tippecanoe/GDAL for uploads, DuckDB
+  for imports, and Planetiler for regional basemap release builds.
 - Usage dashboards still query raw logs in places; rollups and retention are not
   productionized.
 - Static maps need an external render service.
@@ -101,8 +104,8 @@ Partial:
 
 Planned:
 
-- Full DuckDB-first import/query execution.
-- Planetiler-based basemap generation.
+- Broader DuckDB-first import/query execution.
+- Global Planetiler-based basemap generation.
 - Overture-first basemap and data workflows.
 - Preview deployments, webhooks, scheduled imports, cache purge, environments,
   and managed/hybrid data packages.
@@ -306,7 +309,8 @@ a file uploader.
 
 #### Milestone 2: Default Basemap v1
 
-Status: Partial, with fixture assets and manifest/contract tests present.
+Status: Partial, with fixture assets, manifest/contract tests, and a Planetiler
+regional build harness present.
 
 Goal: ship one attractive, reliable Planisfy basemap.
 
@@ -314,7 +318,7 @@ Practical order:
 
 1. Ship a working regional fixture first.
 2. Keep the source-layer schema explicit and tested.
-3. Add reproducible regional build.
+3. Harden the reproducible regional Planetiler build.
 4. Add global Overture/Natural Earth build once the smaller loop works.
 
 Acceptance:
@@ -338,8 +342,10 @@ Acceptance:
 - Import requests create datasets, source import records, processing jobs, and
   provenance metadata.
 - Credentials are represented as server-only encrypted payload records.
-- DuckDB execution still needs to turn metadata-only imports into extracted
-  dataset versions with schema, bounds, counts, and artifacts.
+- DuckDB execution turns configured Overture imports into extracted dataset
+  versions with schema, bounds, counts, warnings, artifacts, and provenance;
+  additional providers, larger imports, previews, and production hardening
+  remain.
 - Remote import paths include SSRF and egress controls.
 
 ### Later

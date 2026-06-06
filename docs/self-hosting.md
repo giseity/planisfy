@@ -124,7 +124,28 @@ pnpm -F @planisfy/map-styles build:regional-release -- \
 Generated output lives under ignored `packages/map-styles/dist/regional/` and
 records the source PMTiles SHA-256, size, source-layer contract, and style URL.
 
+To generate a tiny regional PMTiles artifact through Planetiler from the tracked
+fixture input and then write release metadata:
+
+```bash
+pnpm -F @planisfy/map-styles build:planetiler-regional -- \
+  --name fixture \
+  --version dev
+```
+
+This command requires Docker because it runs
+`ghcr.io/onthegomap/planetiler:0.10.2`. The resulting PMTiles and metadata stay
+under ignored `packages/map-styles/dist/regional/`.
+
 ## Source Imports
+
+The geodata split is explicit:
+
+- Tippecanoe plus GDAL/`ogr2ogr` power ad hoc GeoJSON, CSV, and zipped
+  Shapefile upload tiling in `worker-geodata`.
+- DuckDB powers Overture/source import extraction in `worker-geodata`.
+- Planetiler powers reproducible regional basemap release builds in
+  `@planisfy/map-styles`, outside the default worker runtime.
 
 Overture imports run in `worker-geodata` through DuckDB. Set `OVERTURE_RELEASE`
 to a concrete Overture release and make sure `DUCKDB_PATH` resolves inside the
@@ -132,6 +153,11 @@ worker image or host process. The default parquet template reads the public
 Overture S3 layout and requires import requests to include a theme, type, and
 saved-region bbox. If DuckDB or release config is missing, the import job fails
 with `OVERTURE_IMPORT_FAILED` instead of recording metadata-only success.
+
+Upload tiling requires `TIPPECANOE_PATH` and `OGR2OGR_PATH`; the worker Docker
+image installs both. `GEODATA_ALLOW_RAW_FALLBACK=false` is the default. Set it
+to `true` only for local degraded development where storing a non-served raw
+artifact is preferable to failing a job.
 
 Saved source credentials are encrypted by the API before they are written to the
 database. Set `SOURCE_CREDENTIAL_ENCRYPTION_KEY` to a `base64:`-prefixed 32-byte
