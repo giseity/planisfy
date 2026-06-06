@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
     "lint:fix": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --fix",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@better-fetch/fetch": "^1.1.21",
