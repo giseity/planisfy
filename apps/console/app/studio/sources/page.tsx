@@ -3,11 +3,14 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   api,
+  type ConsoleExecutionTarget,
   type ConsoleProcessingJob,
+  type ConsoleWorkerProfile,
   type ConsoleSourceImport,
   type ConsoleTileset,
   type ConsoleUploadValidation,
   type ConsoleTilesetVersion,
+  type ProcessingEstimate,
 } from "@/lib/api";
 import { Badge } from "@planisfy/ui/components/badge";
 import {
@@ -28,6 +31,13 @@ import {
 import { Button } from "@planisfy/ui/components/button";
 import { Input } from "@planisfy/ui/components/input";
 import { Label } from "@planisfy/ui/components/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@planisfy/ui/components/select";
 import {
   Plus,
   Upload,
@@ -57,6 +67,8 @@ export default function SourcesPage() {
   const [tilesets, setTilesets] = useState<ConsoleTileset[]>([]);
   const [jobs, setJobs] = useState<ConsoleProcessingJob[]>([]);
   const [sourceImports, setSourceImports] = useState<ConsoleSourceImport[]>([]);
+  const [executionTargets, setExecutionTargets] = useState<ConsoleExecutionTarget[]>([]);
+  const [workerProfiles, setWorkerProfiles] = useState<ConsoleWorkerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -77,17 +89,25 @@ export default function SourcesPage() {
     null,
   );
   const [tilingImportId, setTilingImportId] = useState<string | null>(null);
+  const [selectedExecutionTargetId, setSelectedExecutionTargetId] = useState("default");
+  const [selectedWorkerProfileId, setSelectedWorkerProfileId] = useState("default");
+  const [uploadEstimate, setUploadEstimate] = useState<ProcessingEstimate | null>(null);
+  const [importEstimates, setImportEstimates] = useState<Record<string, ProcessingEstimate>>({});
 
   const fetchTilesets = useCallback(async () => {
     try {
-      const [tilesetsRes, jobsRes, importsRes] = await Promise.all([
+      const [tilesetsRes, jobsRes, importsRes, targetsRes, profilesRes] = await Promise.all([
         api.listTilesets(),
         api.listJobs(),
         api.listSourceImports(),
+        api.listExecutionTargets(),
+        api.listWorkerProfiles(),
       ]);
       setTilesets(tilesetsRes.data);
       setJobs(jobsRes.data);
       setSourceImports(importsRes.data);
+      setExecutionTargets(targetsRes.data);
+      setWorkerProfiles(profilesRes.data);
     } catch (err) {
       if (err instanceof Error) console.error(err.message);
     } finally {
@@ -101,6 +121,76 @@ export default function SourcesPage() {
     return () => clearInterval(interval);
   }, [fetchTilesets]);
 
+  useEffect(() => {
+    setImportEstimates({});
+  }, [selectedExecutionTargetId, selectedWorkerProfileId]);
+
+  useEffect(() => {
+    if (!uploadOpen || !file) {
+      setUploadEstimate(null);
+      return;
+    }
+    let canceled = false;
+    api
+      .estimateProcessingJob({
+        ...runtimeSelectionPayload(selectedExecutionTargetId, selectedWorkerProfileId),
+        sourceSizeBytes: file.size,
+        minZoom,
+        maxZoom,
+      })
+      .then((res) => {
+        if (!canceled) setUploadEstimate(res.data);
+      })
+      .catch(() => {
+        if (!canceled) setUploadEstimate(null);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [
+    file,
+    maxZoom,
+    minZoom,
+    selectedExecutionTargetId,
+    selectedWorkerProfileId,
+    uploadOpen,
+  ]);
+
+  useEffect(() => {
+    const importsToEstimate = sourceImports.filter(
+      (sourceImport) =>
+        canCreateTilesetFromImport(sourceImport) &&
+        typeof sourceImport.output?.featureCount === "number" &&
+        !importEstimates[sourceImport.id],
+    );
+    if (importsToEstimate.length === 0) return;
+    let canceled = false;
+    Promise.all(
+      importsToEstimate.map(async (sourceImport) => {
+        const res = await api.estimateProcessingJob({
+          ...runtimeSelectionPayload(selectedExecutionTargetId, selectedWorkerProfileId),
+          featureCount: sourceImport.output?.featureCount,
+          minZoom: 0,
+          maxZoom: 14,
+        });
+        return [sourceImport.id, res.data] as const;
+      }),
+    )
+      .then((entries) => {
+        if (canceled) return;
+        setImportEstimates((current) => ({ ...current, ...Object.fromEntries(entries) }));
+      })
+      .catch(() => {});
+    return () => {
+      canceled = true;
+    };
+  }, [
+    importEstimates,
+    selectedExecutionTargetId,
+    selectedWorkerProfileId,
+    sourceImports,
+  ]);
+
   async function handleUpload() {
     if (!newName || !newHandle || !file) return;
     setUploading(true);
@@ -113,6 +203,7 @@ export default function SourcesPage() {
         maxZoom,
         csvLatitude: csvLatitude || undefined,
         csvLongitude: csvLongitude || undefined,
+        ...runtimeSelectionPayload(selectedExecutionTargetId, selectedWorkerProfileId),
       });
       resetUploadForm();
       setUploadOpen(false);
@@ -167,6 +258,7 @@ export default function SourcesPage() {
       await api.createTilesetFromDataset(sourceImport.datasetId, {
         ...defaultTilesetOptionsForImport(sourceImport),
         datasetVersionId: sourceImport.output.datasetVersionId,
+        ...runtimeSelectionPayload(selectedExecutionTargetId, selectedWorkerProfileId),
       });
       toast.success("Dataset tiling queued");
       fetchTilesets();
@@ -342,6 +434,19 @@ export default function SourcesPage() {
                   GeoJSON, CSV, zipped Shapefile, PMTiles, or MBTiles.
                 </p>
               </div>
+              <RuntimeSelectors
+                executionTargets={executionTargets}
+                workerProfiles={workerProfiles}
+                selectedExecutionTargetId={selectedExecutionTargetId}
+                selectedWorkerProfileId={selectedWorkerProfileId}
+                onExecutionTargetChange={setSelectedExecutionTargetId}
+                onWorkerProfileChange={setSelectedWorkerProfileId}
+              />
+              {uploadEstimate && (
+                <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                  Estimate: {estimateSummary(uploadEstimate)}
+                </div>
+              )}
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
@@ -690,11 +795,19 @@ export default function SourcesPage() {
 
           {sourceImports.length > 0 && (
             <div className="space-y-3">
-              <div>
-                <h2 className="text-lg font-semibold">Imported datasets</h2>
-                <p className="text-sm text-muted-foreground">
-                  Successful imports can be queued for tileset processing.
-                </p>
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">Imported datasets</h2>
+                </div>
+                <RuntimeSelectors
+                  executionTargets={executionTargets}
+                  workerProfiles={workerProfiles}
+                  selectedExecutionTargetId={selectedExecutionTargetId}
+                  selectedWorkerProfileId={selectedWorkerProfileId}
+                  onExecutionTargetChange={setSelectedExecutionTargetId}
+                  onWorkerProfileChange={setSelectedWorkerProfileId}
+                  compact
+                />
               </div>
               <Table>
                 <TableHeader>
@@ -723,6 +836,11 @@ export default function SourcesPage() {
                         {sourceImport.errorMessage && (
                           <div className="mt-1 text-xs text-destructive">
                             {sourceImport.errorMessage}
+                          </div>
+                        )}
+                        {importEstimates[sourceImport.id] && (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            Estimate: {estimateSummary(importEstimates[sourceImport.id]!)}
                           </div>
                         )}
                       </TableCell>
@@ -790,6 +908,87 @@ function statusVariant(status: string) {
     default:
       return "secondary" as const;
   }
+}
+
+function RuntimeSelectors({
+  executionTargets,
+  workerProfiles,
+  selectedExecutionTargetId,
+  selectedWorkerProfileId,
+  onExecutionTargetChange,
+  onWorkerProfileChange,
+  compact = false,
+}: {
+  executionTargets: ConsoleExecutionTarget[];
+  workerProfiles: ConsoleWorkerProfile[];
+  selectedExecutionTargetId: string;
+  selectedWorkerProfileId: string;
+  onExecutionTargetChange: (value: string) => void;
+  onWorkerProfileChange: (value: string) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className={compact ? "flex flex-wrap gap-2" : "grid grid-cols-2 gap-3"}>
+      <div className={compact ? "min-w-40" : "space-y-2"}>
+        {!compact && <Label>Execution target</Label>}
+        <Select value={selectedExecutionTargetId} onValueChange={onExecutionTargetChange}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Local default</SelectItem>
+            {executionTargets.map((target) => (
+              <SelectItem key={target.id} value={target.id}>
+                {target.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className={compact ? "min-w-40" : "space-y-2"}>
+        {!compact && <Label>Worker profile</Label>}
+        <Select value={selectedWorkerProfileId} onValueChange={onWorkerProfileChange}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Default worker</SelectItem>
+            {workerProfiles.map((profile) => (
+              <SelectItem key={profile.id} value={profile.id}>
+                {profile.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+function runtimeSelectionPayload(
+  executionTargetId: string,
+  workerProfileId: string,
+) {
+  return {
+    executionTargetId:
+      executionTargetId === "default" ? undefined : executionTargetId,
+    workerProfileId: workerProfileId === "default" ? undefined : workerProfileId,
+  };
+}
+
+function estimateSummary(estimate: ProcessingEstimate) {
+  return `${formatDuration(estimate.minSeconds)}-${formatDuration(
+    estimate.maxSeconds,
+  )} (${estimate.confidence})`;
+}
+
+function formatDuration(seconds: number) {
+  if (seconds < 90) return `${seconds}s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
 function vectorLayerCount(version: ConsoleTilesetVersion | null) {
