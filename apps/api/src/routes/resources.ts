@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
-  profiles,
+  accounts,
   processingJobLogs,
   processingJobs,
   storageObjects,
@@ -395,7 +395,7 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
       {
         error: {
           code: "OWNER_HANDLE_NOT_FOUND",
-          message: "Tileset owner profile handle was not found",
+          message: "Tileset owner account handle was not found",
         },
       },
       400,
@@ -571,9 +571,9 @@ function toStorageFileName(filename: string): string {
 
 async function getOwnerHandle(accountId: string) {
   const [owner] = await db
-    .select({ handle: profiles.handle })
-    .from(profiles)
-    .where(and(eq(profiles.id, accountId), isNull(profiles.deletedAt)))
+    .select({ handle: accounts.handle })
+    .from(accounts)
+    .where(and(eq(accounts.id, accountId), isNull(accounts.deletedAt)))
     .limit(1);
 
   return owner?.handle ?? null;

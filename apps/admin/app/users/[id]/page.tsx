@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { db, users, profiles, styles, apiKeys, auditEvents } from "@planisfy/database"
+import { db, users, accounts, styles, apiKeys, auditEvents } from "@planisfy/database"
 import { eq, and, isNull, desc } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
@@ -32,12 +32,12 @@ export default async function UserDetailPage({
       email: users.email,
       role: users.role,
       createdAt: users.createdAt,
-      handle: profiles.handle,
-      displayName: profiles.displayName,
-      bio: profiles.bio,
+      handle: accounts.handle,
+      displayName: accounts.displayName,
+      bio: accounts.bio,
     })
     .from(users)
-    .leftJoin(profiles, eq(users.id, profiles.id))
+    .leftJoin(accounts, eq(users.id, accounts.id))
     .where(eq(users.id, id))
     .limit(1)
 

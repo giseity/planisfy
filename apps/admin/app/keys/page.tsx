@@ -1,4 +1,4 @@
-import { db, apiKeys, profiles } from "@planisfy/database"
+import { db, apiKeys, accounts } from "@planisfy/database"
 import { eq, isNull, desc, count, ilike, sql } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
 import {
@@ -45,7 +45,7 @@ export default async function KeysPage({
 
   if (search) {
     conditions.push(
-      sql`(${ilike(apiKeys.name, `%${search}%`)} OR ${ilike(apiKeys.id, `%${search}%`)} OR ${ilike(profiles.handle, `%${search}%`)})`
+      sql`(${ilike(apiKeys.name, `%${search}%`)} OR ${ilike(apiKeys.id, `%${search}%`)} OR ${ilike(accounts.handle, `%${search}%`)})`
     )
   }
 
@@ -64,11 +64,11 @@ export default async function KeysPage({
       lastUsedAt: apiKeys.lastUsedAt,
       createdAt: apiKeys.createdAt,
       deletedAt: apiKeys.deletedAt,
-      ownerHandle: profiles.handle,
-      ownerDisplayName: profiles.displayName,
+      ownerHandle: accounts.handle,
+      ownerDisplayName: accounts.displayName,
     })
     .from(apiKeys)
-    .leftJoin(profiles, eq(apiKeys.ownerId, profiles.id))
+    .leftJoin(accounts, eq(apiKeys.ownerId, accounts.id))
     .where(whereClause)
     .orderBy(desc(apiKeys.createdAt))
     .limit(limit)
@@ -77,7 +77,7 @@ export default async function KeysPage({
   const [totalRow] = await db
     .select({ count: count() })
     .from(apiKeys)
-    .leftJoin(profiles, eq(apiKeys.ownerId, profiles.id))
+    .leftJoin(accounts, eq(apiKeys.ownerId, accounts.id))
     .where(whereClause)
   const total = totalRow?.count ?? 0
 

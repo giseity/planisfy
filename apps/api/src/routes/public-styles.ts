@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { and, eq, isNull } from "drizzle-orm";
 import {
   db,
-  profiles,
+  accounts,
   stylePublications,
   styles,
   styleVersions,
@@ -34,13 +34,13 @@ publicStylesRoute.get("/styles/v1/:owner/:handle", async (c) => {
     );
   }
 
-  const [profile] = await db
-    .select({ id: profiles.id })
-    .from(profiles)
-    .where(and(eq(profiles.handle, owner), isNull(profiles.deletedAt)))
+  const [account] = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(eq(accounts.handle, owner), isNull(accounts.deletedAt)))
     .limit(1);
 
-  if (!profile) {
+  if (!account) {
     return c.json(
       { error: { code: "NOT_FOUND", message: "Owner not found" } },
       404,
@@ -60,7 +60,7 @@ publicStylesRoute.get("/styles/v1/:owner/:handle", async (c) => {
     .from(styles)
     .where(
       and(
-        eq(styles.ownerId, profile.id),
+        eq(styles.ownerId, account.id),
         eq(styles.handle, handle),
         isNull(styles.deletedAt),
       ),

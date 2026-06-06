@@ -44,6 +44,16 @@ The script:
 3. copies the Planisfy Streets fixture style into local storage;
 4. validates the Compose file with `docker compose config`.
 
+Run the smoke test when Docker is available:
+
+```bash
+scripts/docker-compose-smoke.sh
+```
+
+The smoke test validates Compose, starts Postgres, Redis, and the API, waits for
+`/health`, checks `/health/detailed`, and removes the smoke-test containers and
+volumes on exit.
+
 Optional flags:
 
 ```bash
@@ -120,7 +130,10 @@ Expected notes:
 
 - `/health` should return quickly once the API container is ready.
 - `/health/detailed` is the best single endpoint for database, Redis, engine,
-  and worker heartbeat status.
+  worker heartbeat, and storage configuration status.
+- `/health/detailed` reports local storage as `ok` when the configured path is
+  reachable. S3 and R2 storage are reported as configured or degraded based on
+  environment variables without making remote bucket calls.
 - `/metrics` exposes Prometheus text metrics for API request counts, latency,
   process uptime, and build info.
 - Martin can start without `stuttgart.pmtiles`, but tile requests for
@@ -144,7 +157,6 @@ Expected notes:
 
 - PostGIS-enabled database image.
 - optional MinIO profile.
-- Docker smoke test.
 - Seeded bootstrap account flow.
 
 ## Acceptance

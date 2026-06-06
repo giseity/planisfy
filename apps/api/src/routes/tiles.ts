@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { and, eq, isNull } from "drizzle-orm";
 import {
   db,
-  profiles,
+  accounts,
   storageObjects,
   tilesetVersions,
   tilesets,
@@ -217,9 +217,9 @@ async function resolveTileset(
   versionNumber?: number,
 ) {
   const [owner] = await db
-    .select({ id: profiles.id })
-    .from(profiles)
-    .where(and(eq(profiles.handle, ownerHandle), isNull(profiles.deletedAt)))
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(eq(accounts.handle, ownerHandle), isNull(accounts.deletedAt)))
     .limit(1);
 
   if (!owner) return null;

@@ -1,4 +1,4 @@
-import { db, organizations, profiles } from "@planisfy/database"
+import { db, organizations, accounts } from "@planisfy/database"
 import { eq, isNull, desc, count, ilike, or, sql } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
 import {
@@ -53,12 +53,12 @@ export default async function OrgsPage({
       slug: organizations.slug,
       createdAt: organizations.createdAt,
       deletedAt: organizations.deletedAt,
-      handle: profiles.handle,
+      handle: accounts.handle,
       memberCount: sql<number>`(SELECT count(*) FROM members WHERE members.organization_id = ${organizations.id})`.as("member_count"),
       pendingInvites: sql<number>`(SELECT count(*) FROM invitations WHERE invitations.organization_id = ${organizations.id} AND invitations.status = 'pending')`.as("pending_invites"),
     })
     .from(organizations)
-    .leftJoin(profiles, eq(organizations.id, profiles.id))
+    .leftJoin(accounts, eq(organizations.id, accounts.id))
     .where(whereClause)
     .orderBy(desc(organizations.createdAt))
     .limit(limit)

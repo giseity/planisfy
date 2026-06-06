@@ -151,6 +151,12 @@ curl http://localhost:4000/health/detailed
 curl http://localhost:3005/catalog
 ```
 
+Run the Docker Compose smoke test:
+
+```bash
+scripts/docker-compose-smoke.sh
+```
+
 Required production hardening:
 
 - Set a strong `BETTER_AUTH_SECRET`
@@ -182,4 +188,4 @@ Internal platform routes live under `/internal/*` and require `X-Internal-Secret
 
 ## License
 
-No license file is currently included in this repository. Add one before distributing or accepting outside contributions.
+Planisfy source code in this repository is licensed under AGPL-3.0-only unless a package, directory, or file states a different license. Map data, styles, sprites, fonts, tiles, and other assets can carry separate attribution and license obligations; see [NOTICE](./NOTICE) and [docs/data-attribution-policy.md](./docs/data-attribution-policy.md).

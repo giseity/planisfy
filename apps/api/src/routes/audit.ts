@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
-import { db, auditEvents, profiles } from "@planisfy/database";
+import { db, auditEvents, accounts } from "@planisfy/database";
 import type { AuthEnv } from "../middleware/auth";
 
 export const auditRoute = new Hono<AuthEnv>();
@@ -49,10 +49,10 @@ auditRoute.get("/audit", async (c) => {
         metadata: auditEvents.metadata,
         ipAddress: auditEvents.ipAddress,
         timestamp: auditEvents.timestamp,
-        actorName: profiles.displayName,
+        actorName: accounts.displayName,
       })
       .from(auditEvents)
-      .leftJoin(profiles, eq(auditEvents.profileId, profiles.id))
+      .leftJoin(accounts, eq(auditEvents.profileId, accounts.id))
       .where(where)
       .orderBy(desc(auditEvents.timestamp))
       .limit(limit)
