@@ -57,8 +57,9 @@ scripts/docker-compose-smoke.sh
 ```
 
 The smoke test validates Compose, starts Postgres, Redis, and the API, waits for
-`/health`, checks `/health/detailed`, and removes the smoke-test containers and
-volumes on exit.
+`/health`, checks `/health/detailed` for core runtime dependency entries,
+optionally reports Martin catalog reachability, and removes the smoke-test
+containers and volumes on exit.
 
 Optional flags:
 

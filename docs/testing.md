@@ -17,11 +17,11 @@ Valhalla, and processing workflows.
 
 - `@planisfy/events`: event payload schemas and invalid examples.
 - `@planisfy/storage-paths`: key builders, parsers, and path safety.
-- `@planisfy/database`: schema helpers and version/publish helpers.
+- `@planisfy/database`: schema helpers, source import model, and version/publish helpers.
 - `@planisfy/style-spec`: MapLibre validation and draft/publish transforms.
-- `apps/api`: auth, scopes, style routes, upload init, outbox writes.
-- `apps/worker-geodata`: event claiming, upload validation, failure states, artifact versioning.
-- `apps/console`: Studio state helpers, shared style validation, and publish/source flows.
+- `apps/api`: auth, scopes, style routes, upload/import init, outbox writes.
+- `apps/worker-geodata`: event claiming, upload validation, failure states, artifact versioning, and metadata-only source import dispatch.
+- `apps/console`: Studio state helpers, shared style validation, publish/source flows, and upload job controls.
 - `apps/admin`: health and dashboard logic.
 
 ## Policy
@@ -37,5 +37,6 @@ scripts/docker-compose-smoke.sh
 ```
 
 The smoke script validates Compose, starts Postgres, Redis, and the API, polls
-`/health`, checks `/health/detailed` for Postgres, Redis, and storage entries,
-and then cleans up containers and volumes.
+`/health`, checks `/health/detailed` for Postgres, Redis, storage,
+worker-geodata, Martin, and Valhalla entries, optionally reports a reachable
+Martin catalog, and then cleans up containers and volumes.

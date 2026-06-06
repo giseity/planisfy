@@ -14,6 +14,10 @@ Planisfy now uses `accounts` as the canonical owner anchor for both users and or
 
 ## Target Map Resources
 
+- `source_credentials`: server-side provider credential payloads.
+- `saved_regions`: reusable named regions with bbox/geometry metadata.
+- `source_connections`: remote source definitions such as Overture or custom URLs.
+- `source_imports`: import attempts tied to datasets and processing jobs.
 - `uploads`: raw files or remote imports.
 - `datasets`: normalized inspectable source data.
 - `dataset_versions`: immutable source snapshots when needed.
@@ -44,3 +48,5 @@ Production URLs must resolve to immutable artifacts or explicit stable aliases. 
 - Immutable TileJSON is available at `/tiles/v1/{owner}/{tileset}/versions/{version}.json` and `/tiles/v1/{owner}.{tileset}@{version}.json`.
 - Style publication creates a `latest` alias plus an immutable `v{version}` alias in `style_publications`.
 - Public style `@version` URLs only resolve for versions that have been published.
+- Overture import requests enter through `POST /console/source-imports/overture` and create a dataset, `source_imports` row, processing job, and outbox event.
+- The current geodata worker records source import provenance as metadata-only output until DuckDB extract execution is configured.
