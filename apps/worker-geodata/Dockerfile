@@ -8,6 +8,8 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/worker-geodata/package.json apps/worker-geodata/
 COPY packages/database/package.json packages/database/
+COPY packages/env/package.json packages/env/
+COPY packages/events/package.json packages/events/
 COPY packages/storage/package.json packages/storage/
 COPY packages/storage-paths/package.json packages/storage-paths/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
@@ -22,7 +24,7 @@ COPY . .
 RUN pnpm --filter worker-geodata build
 
 FROM base AS runner
-WORKDIR /app
+WORKDIR /app/apps/worker-geodata
 ENV NODE_ENV=production
 ARG DUCKDB_VERSION=v1.1.3
 ARG TIPPECANOE_VERSION=1.36.0
@@ -52,9 +54,10 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 worker
 USER worker
 
+COPY --from=build --chown=worker:nodejs /app/node_modules /app/node_modules
+COPY --from=build --chown=worker:nodejs /app/packages /app/packages
+COPY --from=build --chown=worker:nodejs /app/apps/worker-geodata/node_modules ./node_modules
 COPY --from=build --chown=worker:nodejs /app/apps/worker-geodata/dist ./dist
 COPY --from=build --chown=worker:nodejs /app/apps/worker-geodata/package.json ./
-COPY --from=build --chown=worker:nodejs /app/node_modules ./node_modules
-COPY --from=build --chown=worker:nodejs /app/packages ./packages
 
 CMD ["node", "dist/index.js"]
