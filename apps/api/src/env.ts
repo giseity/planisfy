@@ -18,6 +18,7 @@ const schema = z.object({
 
   INTERNAL_API_URL: z.string().url().default("https://api.planisfy.localhost"),
   INTERNAL_API_SECRET: z.string().min(1).optional(),
+  BETTER_AUTH_SECRET: z.string().min(1).optional(),
   CONSOLE_URL: z.string().url().default("https://console.planisfy.localhost"),
 
   MARTIN_URL: z.string().url().default("http://localhost:3005"),
@@ -37,6 +38,13 @@ const schema = z.object({
   DODO_PAYMENTS_WEBHOOK_SECRET: z.string().min(1).optional(),
   DODO_PRO_PRODUCT_ID: z.string().min(1).optional(),
   DODO_ENTERPRISE_PRODUCT_ID: z.string().min(1).optional(),
+  SOURCE_CREDENTIAL_ENCRYPTION_KEY: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().min(1).optional(),
+  ),
+  ALLOW_PRIVATE_SOURCE_URLS: z
+    .preprocess((value) => value === "true" || value === true, z.boolean())
+    .default(false),
 });
 
 export const env = createEnv(schema, process.env, { appName: "api" });

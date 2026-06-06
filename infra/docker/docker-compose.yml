@@ -42,6 +42,8 @@ services:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
       - INTERNAL_API_URL=http://api:4000
+      - SOURCE_CREDENTIAL_ENCRYPTION_KEY=${SOURCE_CREDENTIAL_ENCRYPTION_KEY:-}
+      - ALLOW_PRIVATE_SOURCE_URLS=${ALLOW_PRIVATE_SOURCE_URLS:-false}
       - CONSOLE_URL=http://localhost:3001
       - MARTIN_URL=http://martin:3000
       - PELIAS_URL=${PELIAS_URL:-http://api:4000/geocoding}
