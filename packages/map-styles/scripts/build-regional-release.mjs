@@ -26,6 +26,7 @@ const { values } = parseArgs({
       type: "string",
       default: join(root, "styles/planisfy-streets-light-v1.json"),
     },
+    "source-version": { type: "string", multiple: true, default: [] },
   },
 });
 
@@ -43,6 +44,7 @@ const [contract, sourceStyle] = await Promise.all([
   readJson(stylePath),
 ]);
 const pmtiles = await inspectPmtiles(pmtilesPath);
+validateStyleSourceLayers(sourceStyle, contract);
 
 if (!sourceStyle.sources?.[contract.sourceId]) {
   throw new Error(`Style is missing source ${contract.sourceId}`);
@@ -78,6 +80,8 @@ const manifest = {
     center: sourceStyle.center ?? null,
   },
   sourceLayerContract: "source-layer-contract.json",
+  sourceLayers: contract.layers.map((layer) => layer.id),
+  sourceDataVersions: parseSourceVersions(values["source-version"]),
   source: {
     pmtilesPath: relative(repoRoot, pmtilesPath).replaceAll("\\", "/"),
     sha256: pmtiles.sha256,
@@ -85,6 +89,8 @@ const manifest = {
     format: "pmtiles",
     binaryCommitted: false,
   },
+  attribution:
+    "&copy; OpenStreetMap contributors, Overture Maps Foundation, Natural Earth",
   artifacts: {
     manifest: "manifest.json",
     style: "style.json",
@@ -136,4 +142,38 @@ async function inspectPmtiles(path) {
     size: details.size,
     sha256: createHash("sha256").update(data).digest("hex"),
   };
+}
+
+function parseSourceVersions(values) {
+  return Object.fromEntries(
+    values.map((value) => {
+      const separator = value.indexOf("=");
+      if (separator === -1) {
+        throw new Error(`Source version must use name=value format: ${value}`);
+      }
+      const key = value.slice(0, separator);
+      const version = value.slice(separator + 1);
+      if (!key || !version) {
+        throw new Error(`Source version must use name=value format: ${value}`);
+      }
+      return [key, version];
+    }),
+  );
+}
+
+function validateStyleSourceLayers(style, contract) {
+  const contractLayerIds = new Set(contract.layers.map((layer) => layer.id));
+  const missing = new Set();
+  for (const layer of style.layers ?? []) {
+    const sourceLayer = layer["source-layer"];
+    if (layer.source === contract.sourceId && !contractLayerIds.has(sourceLayer)) {
+      missing.add(sourceLayer);
+    }
+  }
+
+  if (missing.size > 0) {
+    throw new Error(
+      `Style references source layers missing from contract: ${Array.from(missing).join(", ")}`,
+    );
+  }
 }
