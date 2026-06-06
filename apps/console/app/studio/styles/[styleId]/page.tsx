@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { clientEnv } from "@/env.client";
 import { useStyleStore } from "@/lib/store/style-store";
 import { sampleStyle } from "@/lib/sample-style";
 import { MapPreview } from "@/components/studio/map-preview";
@@ -71,6 +72,7 @@ export default function StyleEditorPage() {
   const styleVersion = useStyleStore((s) => s.styleVersion);
   const styleHandle = useStyleStore((s) => s.styleHandle);
   const isPublic = useStyleStore((s) => s.isPublic);
+  const lastSavedAt = useStyleStore((s) => s.lastSavedAt);
   const [showJson, setShowJson] = useState(false);
   const [inspectMode, setInspectMode] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
@@ -199,10 +201,17 @@ export default function StyleEditorPage() {
 
   const draftUrl = () =>
     `${window.location.origin}/studio/styles/${styleId ?? params.styleId}`;
+  const publicApiRoot = () =>
+    `${window.location.origin}${clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH.replace(/\/console\/?$/, "")}`;
   const publicUrl = (version?: number | null) => {
     const handle = styleHandle || styleId;
     if (!ownerHandle || !handle) return "";
-    return `${window.location.origin.replace(/\/$/, "")}/styles/v1/${ownerHandle}/${handle}${version ? `@${version}` : ""}`;
+    return `${publicApiRoot()}/styles/v1/${ownerHandle}/${handle}${version ? `@${version}` : ""}`;
+  };
+  const mapLibreSnippet = () => {
+    const url = publicUrl();
+    if (!url) return "";
+    return `new maplibregl.Map({\n  container: "map",\n  style: "${url}"\n});`;
   };
 
   const handlePublishToggle = async () => {
@@ -299,7 +308,9 @@ export default function StyleEditorPage() {
               <Loader2 className="h-3 w-3 animate-spin inline mr-1" />
             )}
             {saveStatus === "saving" && "Saving..."}
-            {saveStatus === "saved" && "Saved"}
+            {saveStatus === "saved" &&
+              `Saved${lastSavedAt ? ` ${lastSavedAt.toLocaleTimeString()}` : ""}`}
+            {saveStatus === "idle" && "Unsaved draft"}
             {saveStatus === "error" && (
               <span className="text-destructive">Save failed</span>
             )}
@@ -404,6 +415,22 @@ export default function StyleEditorPage() {
                         <Globe className="h-3 w-3" />
                       )}
                       Copy published JSON URL
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 justify-start gap-2 text-xs"
+                      disabled={!isPublic || !ownerHandle}
+                      onClick={() =>
+                        copyUrl("MapLibre", mapLibreSnippet())
+                      }
+                    >
+                      {copiedUrl === "MapLibre" ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <Code2 className="h-3 w-3" />
+                      )}
+                      Copy MapLibre snippet
                     </Button>
                   </div>
                 </div>
