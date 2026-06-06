@@ -42,7 +42,13 @@ The script:
 1. copies `.env.example` to `.env` when needed;
 2. creates local demo directories under `infra/docker/data/`;
 3. copies the Planisfy Streets fixture style into local storage;
-4. validates the Compose file with `docker compose config`.
+4. reports whether the default `stuttgart.pmtiles` fixture is present;
+5. validates the Compose file with `docker compose config`.
+
+The PMTiles check is informational. Planisfy does not commit binary map data, so
+a first boot without `infra/docker/data/pmtiles/stuttgart.pmtiles` is expected.
+The applications and health checks should still start, while the default map
+remains in a fixture-data-missing state until compatible PMTiles are supplied.
 
 Run the smoke test when Docker is available:
 
@@ -74,7 +80,7 @@ production and configure Dodo to send subscription webhooks to
 
 | Path | Purpose |
 | --- | --- |
-| `infra/docker/data/pmtiles/` | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `stuttgart-base` source. |
+| `infra/docker/data/pmtiles/` | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `stuttgart-base` source used by Planisfy Streets. |
 | `infra/docker/data/valhalla_data/` | Valhalla graph/runtime data mounted at `/custom_files`. |
 | `infra/docker/data/storage/uploads/` | Local upload/object storage area. |
 | `infra/docker/data/storage/styles/` | Demo and published style JSON. The setup script seeds `planisfy-streets-v1.json`. |
@@ -161,6 +167,7 @@ Expected notes:
 
 ## Acceptance
 
+- Setup reports whether the default PMTiles fixture is present.
 - Console shows a real map when compatible PMTiles are supplied.
 - Demo style, source metadata, and sample tiles agree.
 - Health reports API, database, Redis, Martin, Valhalla, and worker-geodata heartbeat state.
