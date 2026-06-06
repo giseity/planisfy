@@ -19,6 +19,16 @@ import {
   StoragePaths,
   type TilesetArtifactFormat,
 } from "@planisfy/storage-paths";
+import { env } from "./env";
+import {
+  getToolchainCapabilities,
+  summarizeToolchainCapabilities,
+} from "./toolchain";
+import {
+  buildTippecanoeArgs,
+  missingTippecanoeMessage,
+  shouldStoreRawFallback,
+} from "./upload-tiling";
 
 const execFileAsync = promisify(execFile);
 
@@ -72,6 +82,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         uploadKey,
         format,
       });
+      await logToolchainCapabilities(processingJobId);
     }
 
     await setProcessingStatus({
@@ -153,7 +164,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
       const convertedPath = join(tmpDir, "input.geojsonseq");
       try {
         await execFileAsync(
-          "ogr2ogr",
+          env.OGR2OGR_PATH,
           ["-f", "GeoJSONSeq", convertedPath, inputPath],
           { timeout: 300_000 },
         );
@@ -163,7 +174,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
       } catch (err) {
         if (isMissingExecutableError(err)) {
           throw new Error(
-            "Shapefile uploads require GDAL/ogr2ogr in the geodata worker.",
+            `Shapefile uploads require GDAL/ogr2ogr at ${env.OGR2OGR_PATH} in the geodata worker.`,
           );
         }
         throw err;
@@ -172,26 +183,16 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     }
 
     const outputPath = join(tmpDir, "output.pmtiles");
-    const tippecanoeArgs = [
-      "-o",
+    const tippecanoeArgs = buildTippecanoeArgs({
+      inputPath,
       outputPath,
-      `-z${maxZoom}`,
-      `-Z${minZoom}`,
-      "--force",
-      "--no-tile-compression",
-    ];
-
-    if (options?.dropDensest) {
-      tippecanoeArgs.push("--drop-densest-as-needed");
-    } else {
-      tippecanoeArgs.push("--coalesce-densest-as-needed");
-    }
-
-    if (options?.simplification) {
-      tippecanoeArgs.push(`--simplification=${options.simplification}`);
-    }
-
-    tippecanoeArgs.push(inputPath);
+      options: {
+        minZoom,
+        maxZoom,
+        dropDensest: options?.dropDensest,
+        simplification: options?.simplification,
+      },
+    });
 
     try {
       if (processingJobId) {
@@ -202,13 +203,22 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         });
         await throwIfCancellationRequested(processingJobId);
       }
-      await execFileAsync("tippecanoe", tippecanoeArgs, { timeout: 300_000 });
+      await execFileAsync(env.TIPPECANOE_PATH, tippecanoeArgs, {
+        timeout: 300_000,
+      });
       if (processingJobId) {
         await throwIfCancellationRequested(processingJobId);
       }
     } catch (err) {
-      if (isMissingExecutableError(err)) {
-        console.warn("[worker-geodata] tippecanoe not found, storing raw file");
+      if (
+        shouldStoreRawFallback({
+          missingTippecanoe: isMissingExecutableError(err),
+          allowRawFallback: env.GEODATA_ALLOW_RAW_FALLBACK,
+        })
+      ) {
+        console.warn(
+          "[worker-geodata] tippecanoe not found, storing raw file because GEODATA_ALLOW_RAW_FALLBACK=true",
+        );
         if (processingJobId) {
           await throwIfCancellationRequested(processingJobId);
         }
@@ -250,6 +260,10 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
           fallback: "raw",
         });
         return;
+      }
+
+      if (isMissingExecutableError(err)) {
+        throw new Error(missingTippecanoeMessage(env.TIPPECANOE_PATH));
       }
 
       throw err;
@@ -556,6 +570,22 @@ async function logProcessingJob(
     message,
     metadata,
   });
+}
+
+async function logToolchainCapabilities(jobId: string) {
+  const capabilities = await getToolchainCapabilities({
+    duckdbPath: env.DUCKDB_PATH,
+    tippecanoePath: env.TIPPECANOE_PATH,
+    ogr2ogrPath: env.OGR2OGR_PATH,
+  });
+  await logProcessingJob(
+    jobId,
+    `Geodata toolchain: ${summarizeToolchainCapabilities(capabilities)}`,
+    { toolchain: capabilities },
+    Object.values(capabilities).every((tool) => tool.available)
+      ? "info"
+      : "warn",
+  );
 }
 
 async function markProcessingJobStarted(jobId: string) {

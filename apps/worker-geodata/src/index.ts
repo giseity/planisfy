@@ -3,6 +3,11 @@ import Redis from "ioredis";
 import { env, redisConnection } from "./env";
 import { startOutboxDispatcher } from "./outbox-dispatcher";
 import { processSourceJob, type SourceProcessingJob } from "./source-worker";
+import {
+  getToolchainCapabilities,
+  summarizeToolchainCapabilities,
+  type ToolchainCapabilities,
+} from "./toolchain";
 
 const REDIS_CONNECTION = redisConnection;
 
@@ -10,6 +15,7 @@ const SOURCE_PROCESSING_QUEUE_NAME = "source-processing";
 const HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
 const HEARTBEAT_INTERVAL_MS = env.GEODATA_WORKER_HEARTBEAT_INTERVAL_MS;
 const HEARTBEAT_TTL_MS = env.GEODATA_WORKER_HEARTBEAT_TTL_MS;
+let toolchainCapabilities: ToolchainCapabilities | undefined;
 
 const sourceWorker = new Worker<SourceProcessingJob>(
   SOURCE_PROCESSING_QUEUE_NAME,
@@ -29,6 +35,10 @@ const heartbeat = setInterval(() => {
     console.error("[worker-geodata] heartbeat failed:", err);
   });
 }, HEARTBEAT_INTERVAL_MS);
+
+refreshToolchainCapabilities().catch((err) => {
+  console.error("[worker-geodata] toolchain capability check failed:", err);
+});
 
 sourceWorker.on("ready", () => {
   console.log("[worker-geodata] source worker ready");
@@ -66,8 +76,20 @@ async function writeHeartbeat() {
       status: "ok",
       pid: process.pid,
       timestamp: new Date().toISOString(),
+      toolchain: toolchainCapabilities,
     }),
     "PX",
     HEARTBEAT_TTL_MS
+  );
+}
+
+async function refreshToolchainCapabilities() {
+  toolchainCapabilities = await getToolchainCapabilities({
+    duckdbPath: env.DUCKDB_PATH,
+    tippecanoePath: env.TIPPECANOE_PATH,
+    ogr2ogrPath: env.OGR2OGR_PATH,
+  });
+  console.log(
+    `[worker-geodata] toolchain ${summarizeToolchainCapabilities(toolchainCapabilities)}`,
   );
 }

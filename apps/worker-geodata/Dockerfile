@@ -25,13 +25,28 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ARG DUCKDB_VERSION=v1.1.3
+ARG TIPPECANOE_VERSION=1.36.0
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl unzip && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      g++ \
+      gdal-bin \
+      libsqlite3-dev \
+      make \
+      tar \
+      unzip \
+      zlib1g-dev && \
     curl -fsSL -o /tmp/duckdb.zip "https://github.com/duckdb/duckdb/releases/download/${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip" && \
     unzip -q /tmp/duckdb.zip -d /usr/local/bin && \
     chmod +x /usr/local/bin/duckdb && \
-    rm -rf /var/lib/apt/lists/* /tmp/duckdb.zip
+    curl -fsSL -o /tmp/tippecanoe.tar.gz "https://github.com/mapbox/tippecanoe/archive/refs/tags/${TIPPECANOE_VERSION}.tar.gz" && \
+    mkdir -p /tmp/tippecanoe && \
+    tar -xzf /tmp/tippecanoe.tar.gz -C /tmp/tippecanoe --strip-components=1 && \
+    make -C /tmp/tippecanoe -j"$(nproc)" && \
+    make -C /tmp/tippecanoe install && \
+    rm -rf /var/lib/apt/lists/* /tmp/duckdb.zip /tmp/tippecanoe /tmp/tippecanoe.tar.gz
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 worker
