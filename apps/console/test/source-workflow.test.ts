@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ConsoleTileset, ConsoleTilesetVersion } from "@/lib/api";
+import type {
+  ConsoleSourceImport,
+  ConsoleTileset,
+  ConsoleTilesetVersion,
+} from "@/lib/api";
 import { normalizeApiUrl } from "@/lib/api";
 import { useStyleStore } from "@/lib/store/style-store";
 import {
@@ -13,6 +17,12 @@ import {
   tilesetToStyleSource,
   vectorLayersForTileset,
 } from "@/lib/studio/source-workflow";
+import {
+  canCreateTilesetFromImport,
+  defaultTilesetOptionsForImport,
+  sourceImportStatusVariant,
+  sourceImportSummary,
+} from "@/lib/studio/import-workflow";
 
 describe("Studio source workflow", () => {
   it("creates stable source IDs and vector sources from published tilesets", () => {
@@ -146,6 +156,69 @@ describe("Console tileset workflow", () => {
   });
 });
 
+describe("Console import workflow", () => {
+  it("allows tileset creation only from succeeded imports with dataset artifacts", () => {
+    expect(
+      canCreateTilesetFromImport(
+        sourceImportFixture({
+          status: "SUCCEEDED",
+          datasetId: "dataset-1",
+          output: { datasetVersionId: "dataset-version-1" },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canCreateTilesetFromImport(
+        sourceImportFixture({
+          status: "PROCESSING",
+          datasetId: "dataset-1",
+          output: { datasetVersionId: "dataset-version-1" },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      canCreateTilesetFromImport(
+        sourceImportFixture({
+          status: "SUCCEEDED",
+          datasetId: "dataset-1",
+          output: {},
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("derives safe default tileset options from import catalog metadata", () => {
+    expect(
+      defaultTilesetOptionsForImport(
+        sourceImportFixture({
+          sourceName: "transportation",
+          input: {
+            type: "segment",
+            catalog: { label: "Segment", geometry: ["LineString"] },
+          },
+        }),
+      ),
+    ).toEqual({
+      name: "Segment tiles",
+      handle: "transportation-segment",
+      description: "Tiles generated from OVERTURE transportation/segment.",
+    });
+  });
+
+  it("summarizes import state for list rows", () => {
+    expect(sourceImportStatusVariant("SUCCEEDED")).toBe("success");
+    expect(
+      sourceImportSummary(
+        sourceImportFixture({
+          sourceName: "places",
+          input: { type: "place" },
+          output: { featureCount: 1250 },
+        }),
+      ),
+    ).toBe("OVERTURE places/place - 1,250 features");
+  });
+});
+
 describe("publish URL normalization", () => {
   it("normalizes relative TileJSON and style URLs against the API root", () => {
     expect(normalizeApiUrl("/tilesets/acme.roads/tilejson.json")).toBe(
@@ -213,4 +286,27 @@ function versionFixture(
     },
     ...overrides,
   } as ConsoleTilesetVersion;
+}
+
+function sourceImportFixture(
+  overrides: Partial<ConsoleSourceImport> = {},
+): ConsoleSourceImport {
+  return {
+    id: "import-1",
+    accountId: "account-1",
+    sourceConnectionId: null,
+    regionId: "region-1",
+    datasetId: "dataset-1",
+    processingJobId: "job-1",
+    provider: "OVERTURE",
+    sourceName: "places",
+    status: "SUCCEEDED",
+    input: { theme: "places", type: "place" },
+    output: { datasetVersionId: "dataset-version-1", featureCount: 10 },
+    errorCode: null,
+    errorMessage: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
 }

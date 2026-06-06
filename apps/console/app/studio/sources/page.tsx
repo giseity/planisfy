@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   api,
   type ConsoleProcessingJob,
+  type ConsoleSourceImport,
   type ConsoleTileset,
   type ConsoleUploadValidation,
   type ConsoleTilesetVersion,
@@ -44,10 +45,17 @@ import {
   canRebuildTileset,
   tilesetVersionActionLabel,
 } from "@/lib/studio/tileset-workflow";
+import {
+  canCreateTilesetFromImport,
+  defaultTilesetOptionsForImport,
+  sourceImportStatusVariant,
+  sourceImportSummary,
+} from "@/lib/studio/import-workflow";
 
 export default function SourcesPage() {
   const [tilesets, setTilesets] = useState<ConsoleTileset[]>([]);
   const [jobs, setJobs] = useState<ConsoleProcessingJob[]>([]);
+  const [sourceImports, setSourceImports] = useState<ConsoleSourceImport[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -66,15 +74,18 @@ export default function SourcesPage() {
   const [rebuildingTilesetId, setRebuildingTilesetId] = useState<string | null>(
     null,
   );
+  const [tilingImportId, setTilingImportId] = useState<string | null>(null);
 
   const fetchTilesets = useCallback(async () => {
     try {
-      const [tilesetsRes, jobsRes] = await Promise.all([
+      const [tilesetsRes, jobsRes, importsRes] = await Promise.all([
         api.listTilesets(),
         api.listJobs(),
+        api.listSourceImports(),
       ]);
       setTilesets(tilesetsRes.data);
       setJobs(jobsRes.data);
+      setSourceImports(importsRes.data);
     } catch (err) {
       if (err instanceof Error) console.error(err.message);
     } finally {
@@ -144,6 +155,25 @@ export default function SourcesPage() {
       );
     } finally {
       setRebuildingTilesetId(null);
+    }
+  }
+
+  async function handleCreateTilesetFromImport(sourceImport: ConsoleSourceImport) {
+    if (!sourceImport.datasetId || !sourceImport.output?.datasetVersionId) return;
+    setTilingImportId(sourceImport.id);
+    try {
+      await api.createTilesetFromDataset(sourceImport.datasetId, {
+        ...defaultTilesetOptionsForImport(sourceImport),
+        datasetVersionId: sourceImport.output.datasetVersionId,
+      });
+      toast.success("Dataset tiling queued");
+      fetchTilesets();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to queue dataset tiling",
+      );
+    } finally {
+      setTilingImportId(null);
     }
   }
 
@@ -334,7 +364,7 @@ export default function SourcesPage() {
             />
           ))}
         </div>
-      ) : tilesets.length === 0 ? (
+      ) : tilesets.length === 0 && sourceImports.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Database className="mb-4 h-12 w-12 text-muted-foreground/50" />
           <h3 className="text-lg font-medium">No tilesets yet</h3>
@@ -347,21 +377,23 @@ export default function SourcesPage() {
           </Button>
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Handle</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Version</TableHead>
-              <TableHead>Layers</TableHead>
-              <TableHead>Zoom</TableHead>
-              <TableHead>Updated</TableHead>
-              <TableHead className="w-32">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {tilesets.map((tileset) => {
+        <div className="space-y-8">
+          {tilesets.length > 0 && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Handle</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Version</TableHead>
+                  <TableHead>Layers</TableHead>
+                  <TableHead>Zoom</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead className="w-32">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tilesets.map((tileset) => {
               const displayVersion =
                 tileset.currentVersion ?? tileset.latestVersion;
               const latestJob = latestJobForTileset(jobs, tileset.id);
@@ -379,9 +411,9 @@ export default function SourcesPage() {
                   latestJob?.status === "FAILED" ||
                   latestJob?.cancelRequestedAt,
               );
-              return (
-                <Fragment key={tileset.id}>
-                  <TableRow>
+                  return (
+                    <Fragment key={tileset.id}>
+                      <TableRow>
                     <TableCell className="font-medium">
                       {tileset.name}
                     </TableCell>
@@ -512,9 +544,9 @@ export default function SourcesPage() {
                         )}
                       </div>
                     </TableCell>
-                  </TableRow>
-                  {showDetails && (
-                    <TableRow>
+                      </TableRow>
+                      {showDetails && (
+                        <TableRow>
                       <TableCell colSpan={8} className="bg-muted/20">
                         <div className="space-y-2 py-2 text-xs text-muted-foreground">
                           {(tileset.status === "BUILDING" ||
@@ -625,13 +657,101 @@ export default function SourcesPage() {
                           )}
                         </div>
                       </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+
+          {sourceImports.length > 0 && (
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-lg font-semibold">Imported datasets</h2>
+                <p className="text-sm text-muted-foreground">
+                  Successful imports can be queued for tileset processing.
+                </p>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Features</TableHead>
+                    <TableHead>Dataset</TableHead>
+                    <TableHead>Updated</TableHead>
+                    <TableHead className="w-28">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sourceImports.map((sourceImport) => (
+                    <TableRow key={sourceImport.id}>
+                      <TableCell>
+                        <div className="font-medium">
+                          {sourceImportSummary(sourceImport)}
+                        </div>
+                        {sourceImport.output?.warnings &&
+                          sourceImport.output.warnings.length > 0 && (
+                            <div className="mt-1 text-xs text-amber-600">
+                              {sourceImport.output.warnings.join(", ")}
+                            </div>
+                          )}
+                        {sourceImport.errorMessage && (
+                          <div className="mt-1 text-xs text-destructive">
+                            {sourceImport.errorMessage}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={sourceImportStatusVariant(
+                            sourceImport.status,
+                          )}
+                        >
+                          {sourceImport.status === "PROCESSING" && (
+                            <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
+                          )}
+                          {sourceImport.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {typeof sourceImport.output?.featureCount === "number"
+                          ? sourceImport.output.featureCount.toLocaleString()
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {sourceImport.datasetId ?? "-"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(sourceImport.updatedAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCreateTilesetFromImport(sourceImport)}
+                          disabled={
+                            !canCreateTilesetFromImport(sourceImport) ||
+                            tilingImportId === sourceImport.id
+                          }
+                          title="Create tileset from import"
+                        >
+                          {tilingImportId === sourceImport.id ? (
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Database className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
                     </TableRow>
-                  )}
-                </Fragment>
-              );
-            })}
-          </TableBody>
-        </Table>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
