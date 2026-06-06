@@ -72,6 +72,7 @@ Done or close:
   MBTiles.
 - Basic Valhalla proxy endpoints.
 - Health, detailed health, and Prometheus-style metrics endpoints.
+- Docker Compose smoke coverage for API readiness and detailed runtime checks.
 - Dodo Payments-oriented billing schema and UI/API surface, disabled unless
   credentials are configured.
 
@@ -81,12 +82,15 @@ Partial:
   one-command complete.
 - Default basemap is a fixture style and manifest, not a generated Planisfy
   basemap release.
-- Upload processing exists, but job detail, retry/cancel UX, schema review,
-  bounds review, and one-click rebuild need polish.
-- Tileset versioning/promotion exists, but rollback and version management UX
-  are thin.
-- Studio is real, but adding uploaded tilesets to styles is not yet a polished
-  visual source/layer workflow.
+- Upload processing exists with job progress, retry/cancel controls,
+  validation summaries, artifact links, and rebuild from original uploads.
+- Tileset version promotion exists with Console rollback affordances, though
+  broader Admin/operator version management can still improve.
+- Studio can add published uploaded tilesets without JSON edits, including
+  source-layer selection and draft/published URL copy flows.
+- Saved regions, source credentials, source connections, and Overture import
+  job records exist; the worker currently records metadata-only import results
+  until DuckDB extract execution is configured.
 - Usage dashboards still query raw logs in places; rollups and retention are not
   productionized.
 - Static maps need an external render service.
@@ -97,9 +101,7 @@ Partial:
 
 Planned:
 
-- Remote data sources and credential storage.
-- Saved regions and region-aware processing.
-- DuckDB-first import/query pipeline.
+- Full DuckDB-first import/query execution.
 - Planetiler-based basemap generation.
 - Overture-first basemap and data workflows.
 - Preview deployments, webhooks, scheduled imports, cache purge, environments,
@@ -111,8 +113,8 @@ Immediate foundation chores:
   license carve-outs and basemap releases evolve.
 - Keep CI for lint, typecheck, tests, builds, and Docker image matrix builds
   healthy.
-- Expand core API and Docker Compose smoke tests beyond the current health,
-  metrics, auth-protection, and minimum Compose boot checks.
+- Keep core API and Docker Compose smoke tests aligned with health, metrics,
+  auth protection, storage, worker, Martin, and Valhalla readiness behavior.
 - Clean up stale docs/status mismatches as milestones move.
 - Finish account/profiles terminology cleanup where safe.
 
@@ -304,14 +306,14 @@ a file uploader.
 
 #### Milestone 2: Default Basemap v1
 
-Status: Planned, with fixture assets already present.
+Status: Partial, with fixture assets and manifest/contract tests present.
 
 Goal: ship one attractive, reliable Planisfy basemap.
 
 Practical order:
 
 1. Ship a working regional fixture first.
-2. Make the source-layer schema explicit and tested.
+2. Keep the source-layer schema explicit and tested.
 3. Add reproducible regional build.
 4. Add global Overture/Natural Earth build once the smaller loop works.
 
@@ -324,17 +326,20 @@ Acceptance:
 
 #### Milestone 3: Sources, Credentials, Regions, Imports, And DuckDB
 
-Status: Planned.
+Status: Partial.
 
 Goal: users can get data from places other than local files and turn it into
 inspectable datasets and tilesets.
 
 Acceptance:
 
-- A user can import an Overture theme for a region without hand-written scripts.
-- Import results become dataset versions with schema, bounds, counts, and
-  provenance.
-- Credentials are server-only, encrypted at rest, and audited.
+- A user can request an Overture theme import for a saved region without
+  hand-written scripts.
+- Import requests create datasets, source import records, processing jobs, and
+  provenance metadata.
+- Credentials are represented as server-only encrypted payload records.
+- DuckDB execution still needs to turn metadata-only imports into extracted
+  dataset versions with schema, bounds, counts, and artifacts.
 - Remote import paths include SSRF and egress controls.
 
 ### Later

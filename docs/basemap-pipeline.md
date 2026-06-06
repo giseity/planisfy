@@ -49,6 +49,7 @@ pipeline. The release lives in `packages/map-styles` and contains:
 Validate and package release metadata with:
 
 ```bash
+pnpm -F @planisfy/map-styles test
 pnpm -F @planisfy/map-styles build:release
 ```
 

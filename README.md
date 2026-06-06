@@ -15,12 +15,18 @@ Implemented or partially implemented:
 - API key authentication, scopes, rate limits, quotas, and usage logging
 - PostgreSQL schema and Drizzle migrations
 - Map style CRUD, version history, publishing, and a browser style editor
+- Tileset upload processing with validation, artifacts, retry/cancel, rebuild,
+  and version promotion controls
+- Saved regions and source import records, with metadata-only Overture import
+  dispatch until DuckDB extract execution is configured
 - Console, admin, marketing, and docs Next.js apps
 - Docker Compose wiring for local Postgres, Redis, Martin, Valhalla, worker-geodata, local storage, and app containers
 
 Still alpha or externally dependent:
 
 - Tiles require Martin and configured PMTiles data
+- Overture imports currently record dataset/import/job provenance only; full
+  DuckDB extraction is still planned
 - Routing requires Valhalla data under `infra/docker/data/valhalla_data`
 - Geocoding prefers Pelias and falls back to Nominatim for basic development use
 - Static maps return a placeholder unless `STATIC_MAP_URL` is configured
