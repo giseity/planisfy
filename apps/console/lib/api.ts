@@ -136,6 +136,8 @@ export interface ConsoleProcessingJob {
   input: {
     tilesetId?: string;
     uploadId?: string;
+    datasetId?: string;
+    datasetVersionId?: string;
     format?: string;
   } | null;
   output: {
@@ -181,6 +183,55 @@ export interface DatasetTilesetResult {
   datasetVersion: unknown;
   tileset: ConsoleTileset;
   processingJob: ConsoleProcessingJob;
+}
+
+export interface ConsoleSourceImport {
+  id: string;
+  accountId: string;
+  sourceConnectionId: string | null;
+  regionId: string | null;
+  datasetId: string | null;
+  processingJobId: string | null;
+  provider: "OVERTURE" | "NATURAL_EARTH" | "CUSTOM" | string;
+  sourceName: string;
+  status: string;
+  input: {
+    theme?: string;
+    type?: string;
+    catalog?: {
+      label?: string;
+      geometry?: string[];
+      defaultLayerId?: string;
+    };
+  } | null;
+  output: {
+    stage?: string;
+    datasetVersionId?: string;
+    featureCount?: number;
+    bounds?: [number, number, number, number] | null;
+    schema?: Record<string, unknown>;
+    warnings?: string[];
+  } | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OvertureCatalogType {
+  theme: string;
+  type: string;
+  label: string;
+  description: string;
+  geometry: string[];
+  defaultLayerId: string;
+}
+
+export interface OvertureCatalogTheme {
+  theme: string;
+  label: string;
+  description: string;
+  types: OvertureCatalogType[];
 }
 
 export interface StylePublishResponse {
@@ -434,6 +485,16 @@ class ApiClient {
 
   listJobs() {
     return this.get<ApiEnvelope<ConsoleProcessingJob[]>>("/jobs");
+  }
+
+  listSourceImports() {
+    return this.get<ApiEnvelope<ConsoleSourceImport[]>>("/source-imports");
+  }
+
+  getOvertureCatalog() {
+    return this.get<ApiEnvelope<{ themes: OvertureCatalogTheme[] }>>(
+      "/source-imports/overture/catalog",
+    );
   }
 
   publishStyle(styleId: string) {
