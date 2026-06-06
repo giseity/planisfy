@@ -16,6 +16,11 @@ export interface OvertureImportInput {
   sourceConnectionId?: string;
   theme: string;
   type?: string;
+  catalog?: {
+    label?: string;
+    geometry?: string[];
+    defaultLayerId?: string;
+  };
 }
 
 export interface OvertureImportPlan {
@@ -76,6 +81,7 @@ export function parseOvertureImportInput(input: unknown): OvertureImportInput {
     sourceConnectionId: candidate.sourceConnectionId,
     theme: candidate.theme,
     type: candidate.type,
+    catalog: candidate.catalog,
   };
 }
 
@@ -116,6 +122,7 @@ export async function runOvertureImport(
         release: plan.provenance.release,
         theme: input.theme,
         type: input.type,
+        catalog: input.catalog,
         format: "GeoJSON",
         columns: schemaRows,
       },
