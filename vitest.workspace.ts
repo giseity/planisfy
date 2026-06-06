@@ -5,4 +5,5 @@ export default defineWorkspace([
   "packages/map-styles",
   "packages/storage-paths",
   "packages/style-spec",
+  "apps/console",
 ]);

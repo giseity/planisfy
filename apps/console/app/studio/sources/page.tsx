@@ -40,6 +40,10 @@ import {
   Ban,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  canRebuildTileset,
+  tilesetVersionActionLabel,
+} from "@/lib/studio/tileset-workflow";
 
 export default function SourcesPage() {
   const [tilesets, setTilesets] = useState<ConsoleTileset[]>([]);
@@ -440,7 +444,7 @@ export default function SourcesPage() {
                           size="sm"
                           onClick={() => handleRebuild(tileset)}
                           disabled={
-                            !tileset.latestUpload ||
+                            !canRebuildTileset(tileset) ||
                             rebuildingTilesetId === tileset.id
                           }
                           title="Rebuild from original upload"
@@ -584,6 +588,12 @@ export default function SourcesPage() {
                               {tileset.versions.map((version) => {
                                 const current =
                                   version.id === tileset.currentVersionId;
+                                const currentVersionNumber =
+                                  tileset.currentVersion?.version ??
+                                  tileset.versions.find(
+                                    (candidate) =>
+                                      candidate.id === tileset.currentVersionId,
+                                  )?.version;
                                 return (
                                   <Button
                                     key={version.id}
@@ -602,8 +612,12 @@ export default function SourcesPage() {
                                     {publishingVersionId === version.id && (
                                       <RefreshCw className="h-3 w-3 animate-spin" />
                                     )}
-                                    v{version.version}
-                                    {current ? " current" : " promote"}
+                                    {tilesetVersionActionLabel({
+                                      version,
+                                      currentVersionId:
+                                        tileset.currentVersionId,
+                                      currentVersionNumber,
+                                    })}
                                   </Button>
                                 );
                               })}

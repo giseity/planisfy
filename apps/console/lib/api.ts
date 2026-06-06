@@ -541,7 +541,7 @@ function normalizeDashboardUrls(
   };
 }
 
-function normalizeApiUrl(url: string | null) {
+export function normalizeApiUrl(url: string | null) {
   if (!url || /^https?:\/\//.test(url)) return url;
   return `${API_ROOT}${url.startsWith("/") ? url : `/${url}`}`;
 }
