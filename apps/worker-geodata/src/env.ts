@@ -6,6 +6,11 @@ import {
   z,
 } from "@planisfy/env";
 
+const optionalString = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.string().min(1).optional(),
+);
+
 const schema = z.object({
   REDIS_URL: z.string().url().optional(),
   REDIS_HOST: z.string().min(1).default("localhost"),
@@ -54,6 +59,9 @@ const schema = z.object({
     .int()
     .positive()
     .default(900_000),
+  SOURCE_CREDENTIAL_ENCRYPTION_KEY: optionalString,
+  BETTER_AUTH_SECRET: optionalString,
+  INTERNAL_API_SECRET: optionalString,
 });
 
 export const env = createEnv(schema, process.env, {
