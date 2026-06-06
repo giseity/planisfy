@@ -10,11 +10,13 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/
 COPY packages/database/package.json packages/database/
 COPY packages/auth/package.json packages/auth/
+COPY packages/env/package.json packages/env/
 COPY packages/types/package.json packages/types/
 COPY packages/utils/package.json packages/utils/
 COPY packages/events/package.json packages/events/
 COPY packages/storage/package.json packages/storage/
 COPY packages/storage-paths/package.json packages/storage-paths/
+COPY packages/style-spec/package.json packages/style-spec/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter api...
 
@@ -29,17 +31,18 @@ RUN pnpm --filter api build
 
 # ── Production image ──────────────────────────────────────────────────────────
 FROM base AS runner
-WORKDIR /app
+WORKDIR /app/apps/api
 ENV NODE_ENV=production
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 hono
 USER hono
 
+COPY --from=build --chown=hono:nodejs /app/node_modules /app/node_modules
+COPY --from=build --chown=hono:nodejs /app/packages /app/packages
+COPY --from=build --chown=hono:nodejs /app/apps/api/node_modules ./node_modules
 COPY --from=build --chown=hono:nodejs /app/apps/api/dist ./dist
 COPY --from=build --chown=hono:nodejs /app/apps/api/package.json ./
-COPY --from=build --chown=hono:nodejs /app/node_modules ./node_modules
-COPY --from=build --chown=hono:nodejs /app/packages ./packages
 
 EXPOSE 4000
 CMD ["node", "dist/index.js"]
