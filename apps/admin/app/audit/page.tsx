@@ -1,4 +1,4 @@
-import { db, auditEvents, profiles } from "@planisfy/database"
+import { db, auditEvents, accounts } from "@planisfy/database"
 import { eq, desc, count, ilike, sql } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
 import {
@@ -36,7 +36,7 @@ export default async function AuditPage({
     conditions.push(ilike(auditEvents.resourceType, `%${resourceFilter}%`))
   }
   if (actorFilter) {
-    conditions.push(ilike(profiles.handle, `%${actorFilter}%`))
+    conditions.push(ilike(accounts.handle, `%${actorFilter}%`))
   }
 
   const whereClause = conditions.length > 0
@@ -54,11 +54,11 @@ export default async function AuditPage({
         metadata: auditEvents.metadata,
         ipAddress: auditEvents.ipAddress,
         timestamp: auditEvents.timestamp,
-        actorHandle: profiles.handle,
-        actorDisplayName: profiles.displayName,
+        actorHandle: accounts.handle,
+        actorDisplayName: accounts.displayName,
       })
       .from(auditEvents)
-      .leftJoin(profiles, eq(auditEvents.profileId, profiles.id))
+      .leftJoin(accounts, eq(auditEvents.profileId, accounts.id))
       .where(whereClause)
       .orderBy(desc(auditEvents.timestamp))
       .limit(limit)
@@ -66,7 +66,7 @@ export default async function AuditPage({
     db
       .select({ count: count() })
       .from(auditEvents)
-      .leftJoin(profiles, eq(auditEvents.profileId, profiles.id))
+      .leftJoin(accounts, eq(auditEvents.profileId, accounts.id))
       .where(whereClause),
     db
       .selectDistinct({ action: auditEvents.action })

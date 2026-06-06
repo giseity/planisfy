@@ -3,7 +3,7 @@ import {
   billingTransactions,
   db,
   plans,
-  profiles,
+  accounts,
   subscriptions,
   users,
 } from "@planisfy/database";
@@ -142,10 +142,10 @@ export async function createCheckoutSession(params: {
     .select({
       email: users.email,
       name: users.name,
-      displayName: profiles.displayName,
+      displayName: accounts.displayName,
     })
     .from(users)
-    .leftJoin(profiles, eq(profiles.id, users.id))
+    .leftJoin(accounts, eq(accounts.id, users.id))
     .where(eq(users.id, params.userId))
     .limit(1);
 

@@ -6,7 +6,7 @@ import {
   auditEvents,
   db,
   processingJobs,
-  profiles,
+  accounts,
   styles,
   tilesetVersions,
   tilesets,
@@ -54,14 +54,14 @@ dashboardRoute.get("/dashboard", async (c) => {
 
   const [account] = await db
     .select({
-      id: profiles.id,
-      handle: profiles.handle,
-      displayName: profiles.displayName,
-      avatarUrl: profiles.avatarUrl,
-      type: profiles.type,
+      id: accounts.id,
+      handle: accounts.handle,
+      displayName: accounts.displayName,
+      avatarUrl: accounts.avatarUrl,
+      type: accounts.type,
     })
-    .from(profiles)
-    .where(and(eq(profiles.id, accountId), isNull(profiles.deletedAt)))
+    .from(accounts)
+    .where(and(eq(accounts.id, accountId), isNull(accounts.deletedAt)))
     .limit(1);
 
   if (!account) {

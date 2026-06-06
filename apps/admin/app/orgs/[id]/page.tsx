@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { db, organizations, members, invitations, profiles, users, styles, apiKeys } from "@planisfy/database"
+import { db, organizations, members, invitations, accounts, users, styles, apiKeys } from "@planisfy/database"
 import { eq, and, isNull, desc } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
@@ -33,12 +33,12 @@ export default async function OrgDetailPage({
       createdAt: organizations.createdAt,
       updatedAt: organizations.updatedAt,
       deletedAt: organizations.deletedAt,
-      handle: profiles.handle,
-      displayName: profiles.displayName,
-      bio: profiles.bio,
+      handle: accounts.handle,
+      displayName: accounts.displayName,
+      bio: accounts.bio,
     })
     .from(organizations)
-    .leftJoin(profiles, eq(organizations.id, profiles.id))
+    .leftJoin(accounts, eq(organizations.id, accounts.id))
     .where(eq(organizations.id, id))
     .limit(1)
 
@@ -53,11 +53,11 @@ export default async function OrgDetailPage({
         createdAt: members.createdAt,
         userName: users.name,
         userEmail: users.email,
-        userHandle: profiles.handle,
+        userHandle: accounts.handle,
       })
       .from(members)
       .leftJoin(users, eq(members.userId, users.id))
-      .leftJoin(profiles, eq(members.userId, profiles.id))
+      .leftJoin(accounts, eq(members.userId, accounts.id))
       .where(eq(members.organizationId, id))
       .orderBy(desc(members.createdAt)),
     db

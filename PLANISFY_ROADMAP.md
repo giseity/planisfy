@@ -107,9 +107,12 @@ Planned:
 
 Immediate foundation chores:
 
-- Add repository license and data attribution policy.
-- Add CI for lint, typecheck, tests, and Docker builds.
-- Add core API and Docker Compose smoke tests.
+- Keep repository license and data attribution policy current as package-level
+  license carve-outs and basemap releases evolve.
+- Keep CI for lint, typecheck, tests, builds, and Docker image matrix builds
+  healthy.
+- Expand core API and Docker Compose smoke tests beyond the current health,
+  metrics, auth-protection, and minimum Compose boot checks.
 - Clean up stale docs/status mismatches as milestones move.
 - Finish account/profiles terminology cleanup where safe.
 
@@ -202,8 +205,10 @@ Recommended model:
 - Proprietary enterprise/cloud modules for managed and governance-heavy
   features.
 
-This needs a real repository license file before outside distribution or
-substantial outside contribution.
+A root AGPL-3.0-only license, notice file, and data attribution policy now
+exist. Future SDKs, examples, helper packages, and enterprise/cloud modules
+should carry explicit package-level license metadata when they diverge from the
+core license.
 
 ## Engineering Principles
 

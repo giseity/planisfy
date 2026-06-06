@@ -1,4 +1,4 @@
-import { db, users, profiles } from "@planisfy/database"
+import { db, users, accounts } from "@planisfy/database"
 import { eq, sql, desc, count, ilike, or } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
 import {
@@ -35,7 +35,7 @@ export default async function UsersPage({
       or(
         ilike(users.name, `%${search}%`),
         ilike(users.email, `%${search}%`),
-        ilike(profiles.handle, `%${search}%`)
+        ilike(accounts.handle, `%${search}%`)
       )
     )
   }
@@ -53,13 +53,13 @@ export default async function UsersPage({
       name: users.name,
       email: users.email,
       role: users.role,
-      handle: profiles.handle,
+      handle: accounts.handle,
       createdAt: users.createdAt,
       styleCount: sql<number>`(SELECT count(*) FROM styles WHERE styles.owner_id = ${users.id} AND styles.deleted_at IS NULL)`.as("style_count"),
       keyCount: sql<number>`(SELECT count(*) FROM api_keys WHERE api_keys.owner_id = ${users.id} AND api_keys.deleted_at IS NULL)`.as("key_count"),
     })
     .from(users)
-    .leftJoin(profiles, eq(users.id, profiles.id))
+    .leftJoin(accounts, eq(users.id, accounts.id))
     .where(whereClause)
     .orderBy(desc(users.createdAt))
     .limit(limit)
