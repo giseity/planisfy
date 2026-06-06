@@ -9,6 +9,8 @@ export async function createProcessingJob(
     accountId: string;
     type: string;
     input?: JsonObject;
+    executionTargetId?: string | null;
+    workerProfileId?: string | null;
   },
   database: DatabaseClient = db
 ) {
@@ -18,6 +20,8 @@ export async function createProcessingJob(
       accountId: params.accountId,
       type: params.type,
       input: params.input,
+      executionTargetId: params.executionTargetId ?? null,
+      workerProfileId: params.workerProfileId ?? null,
       status: "PENDING",
     })
     .returning();
