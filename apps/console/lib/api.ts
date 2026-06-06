@@ -151,6 +151,8 @@ export interface ConsoleProcessingJob {
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  executionTargetId?: string | null;
+  workerProfileId?: string | null;
 }
 
 export interface TilesetUploadOptions {
@@ -161,6 +163,8 @@ export interface TilesetUploadOptions {
   maxZoom?: number;
   csvLatitude?: string;
   csvLongitude?: string;
+  executionTargetId?: string;
+  workerProfileId?: string;
 }
 
 export interface TilesetUploadResult {
@@ -176,6 +180,60 @@ export interface DatasetTilesetOptions {
   datasetVersionId?: string;
   minZoom?: number;
   maxZoom?: number;
+  executionTargetId?: string;
+  workerProfileId?: string;
+}
+
+export type ExecutionTargetProvider = "local" | "aws_batch" | "gcp_batch";
+export type ExecutionTargetAuthMode = "federated" | "static" | "external";
+
+export interface ConsoleExecutionTarget {
+  id: string;
+  accountId: string;
+  name: string;
+  provider: ExecutionTargetProvider;
+  authMode: ExecutionTargetAuthMode;
+  region: string | null;
+  config: Record<string, unknown>;
+  hasCredentials: boolean;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleExecutionTargetEnvVar {
+  id: string;
+  accountId: string;
+  executionTargetId: string;
+  name: string;
+  value: string;
+  isSecret: boolean;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleWorkerProfile {
+  id: string;
+  accountId: string;
+  name: string;
+  image: string | null;
+  command: string[];
+  args: string[];
+  cpu: number | null;
+  memoryMb: number | null;
+  timeoutSeconds: number | null;
+  concurrency: number | null;
+  config: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProcessingEstimate {
+  minSeconds: number;
+  maxSeconds: number;
+  confidence: "low" | "medium" | "high";
+  basis: string[];
 }
 
 export interface DatasetTilesetResult {
@@ -495,6 +553,10 @@ class ApiClient {
     return this.request<T>("PUT", path, body);
   }
 
+  patch<T>(path: string, body?: unknown) {
+    return this.request<T>("PATCH", path, body);
+  }
+
   delete<T>(path: string, body?: unknown) {
     return this.request<T>("DELETE", path, body);
   }
@@ -529,6 +591,152 @@ class ApiClient {
 
   listRegions() {
     return this.get<ApiEnvelope<ConsoleSavedRegion[]>>("/regions");
+  }
+
+  listExecutionTargets() {
+    return this.get<ApiEnvelope<ConsoleExecutionTarget[]>>(
+      "/execution-targets",
+    );
+  }
+
+  createExecutionTarget(options: {
+    name: string;
+    provider: ExecutionTargetProvider;
+    authMode: ExecutionTargetAuthMode;
+    region?: string;
+    config?: Record<string, unknown>;
+    credentials?: Record<string, unknown>;
+  }) {
+    return this.post<ApiEnvelope<ConsoleExecutionTarget>>(
+      "/execution-targets",
+      options,
+    );
+  }
+
+  updateExecutionTarget(
+    id: string,
+    options: Partial<{
+      name: string;
+      provider: ExecutionTargetProvider;
+      authMode: ExecutionTargetAuthMode;
+      region: string;
+      config: Record<string, unknown>;
+      credentials: Record<string, unknown>;
+    }>,
+  ) {
+    return this.patch<ApiEnvelope<ConsoleExecutionTarget>>(
+      `/execution-targets/${id}`,
+      options,
+    );
+  }
+
+  deleteExecutionTarget(id: string) {
+    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
+      `/execution-targets/${id}`,
+    );
+  }
+
+  listExecutionTargetEnv(targetId: string) {
+    return this.get<ApiEnvelope<ConsoleExecutionTargetEnvVar[]>>(
+      `/execution-targets/${targetId}/env`,
+    );
+  }
+
+  createExecutionTargetEnv(
+    targetId: string,
+    options: {
+      name: string;
+      value: string;
+      isSecret?: boolean;
+      description?: string;
+    },
+  ) {
+    return this.post<ApiEnvelope<ConsoleExecutionTargetEnvVar>>(
+      `/execution-targets/${targetId}/env`,
+      options,
+    );
+  }
+
+  updateExecutionTargetEnv(
+    targetId: string,
+    name: string,
+    options: Partial<{
+      value: string;
+      isSecret: boolean;
+      description: string | null;
+    }>,
+  ) {
+    return this.patch<ApiEnvelope<ConsoleExecutionTargetEnvVar>>(
+      `/execution-targets/${targetId}/env/${encodeURIComponent(name)}`,
+      options,
+    );
+  }
+
+  deleteExecutionTargetEnv(targetId: string, name: string) {
+    return this.delete<ApiEnvelope<{ name: string; deleted: boolean }>>(
+      `/execution-targets/${targetId}/env/${encodeURIComponent(name)}`,
+    );
+  }
+
+  listWorkerProfiles() {
+    return this.get<ApiEnvelope<ConsoleWorkerProfile[]>>("/worker-profiles");
+  }
+
+  createWorkerProfile(options: {
+    name: string;
+    image?: string;
+    command?: string[];
+    args?: string[];
+    cpu?: number;
+    memoryMb?: number;
+    timeoutSeconds?: number;
+    concurrency?: number;
+    config?: Record<string, unknown>;
+  }) {
+    return this.post<ApiEnvelope<ConsoleWorkerProfile>>(
+      "/worker-profiles",
+      options,
+    );
+  }
+
+  updateWorkerProfile(
+    id: string,
+    options: Partial<{
+      name: string;
+      image: string;
+      command: string[];
+      args: string[];
+      cpu: number;
+      memoryMb: number;
+      timeoutSeconds: number;
+      concurrency: number;
+      config: Record<string, unknown>;
+    }>,
+  ) {
+    return this.patch<ApiEnvelope<ConsoleWorkerProfile>>(
+      `/worker-profiles/${id}`,
+      options,
+    );
+  }
+
+  deleteWorkerProfile(id: string) {
+    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
+      `/worker-profiles/${id}`,
+    );
+  }
+
+  estimateProcessingJob(options: {
+    executionTargetId?: string;
+    workerProfileId?: string;
+    sourceSizeBytes?: number;
+    featureCount?: number;
+    minZoom?: number;
+    maxZoom?: number;
+  }) {
+    return this.post<ApiEnvelope<ProcessingEstimate>>(
+      "/processing-jobs/estimate",
+      options,
+    );
   }
 
   createRegion(options: SavedRegionOptions) {
