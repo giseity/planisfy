@@ -18,7 +18,11 @@ import {
   vectorLayersForTileset,
 } from "@/lib/studio/source-workflow";
 import {
+  canRequestOvertureImport,
   canCreateTilesetFromImport,
+  catalogTypeForSelection,
+  catalogTypesForTheme,
+  defaultOvertureImportOptions,
   defaultTilesetOptionsForImport,
   sourceImportStatusVariant,
   sourceImportSummary,
@@ -157,6 +161,47 @@ describe("Console tileset workflow", () => {
 });
 
 describe("Console import workflow", () => {
+  const catalog = [
+    {
+      theme: "transportation",
+      label: "Transportation",
+      description: "Transportation network.",
+      types: [
+        {
+          theme: "transportation",
+          type: "segment",
+          label: "Segment",
+          description: "Road, rail, and ferry centerlines.",
+          geometry: ["LineString"],
+          defaultLayerId: "segment",
+        },
+      ],
+    },
+  ];
+
+  it("derives Overture import defaults from catalog selections", () => {
+    expect(catalogTypesForTheme(catalog, "transportation")).toHaveLength(1);
+    expect(
+      catalogTypeForSelection(catalog, "transportation", "segment")?.label,
+    ).toBe("Segment");
+    expect(
+      defaultOvertureImportOptions(catalog, "transportation", "segment"),
+    ).toEqual({
+      name: "Overture Segment",
+      handle: "overture-transportation-segment",
+      description: "DuckDB import of Overture Transportation Segment.",
+    });
+    expect(
+      canRequestOvertureImport({
+        theme: "transportation",
+        type: "segment",
+        name: "Overture Segment",
+        handle: "overture-transportation-segment",
+        regionReady: true,
+      }),
+    ).toBe(true);
+  });
+
   it("allows tileset creation only from succeeded imports with dataset artifacts", () => {
     expect(
       canCreateTilesetFromImport(
