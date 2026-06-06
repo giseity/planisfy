@@ -28,6 +28,12 @@ const schema = z.object({
     .default(5_000),
   GEODATA_OUTBOX_BATCH_SIZE: z.coerce.number().int().positive().default(10),
   DUCKDB_PATH: z.string().min(1).default("duckdb"),
+  TIPPECANOE_PATH: z.string().min(1).default("tippecanoe"),
+  OGR2OGR_PATH: z.string().min(1).default("ogr2ogr"),
+  GEODATA_ALLOW_RAW_FALLBACK: z.preprocess(
+    (value) => value === "true" || value === "1",
+    z.boolean().default(false),
+  ),
   OVERTURE_RELEASE: z.preprocess(
     (value) => (value === "" ? undefined : value),
     z.string().min(1).optional(),
