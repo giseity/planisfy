@@ -133,7 +133,9 @@ function getRedisConnection() {
   return redisConnection;
 }
 
-async function checkStorageHealth(start: number): Promise<HealthCheck> {
+export async function checkStorageHealth(
+  start = Date.now(),
+): Promise<HealthCheck> {
   const provider = storageProviderFromEnv();
 
   if (provider === "local") {
