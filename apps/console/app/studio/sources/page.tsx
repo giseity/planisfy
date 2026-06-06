@@ -41,6 +41,7 @@ import {
   Ban,
 } from "lucide-react";
 import { toast } from "sonner";
+import { OvertureImportDialog } from "@/components/studio/overture-import-dialog";
 import {
   canRebuildTileset,
   tilesetVersionActionLabel,
@@ -58,6 +59,7 @@ export default function SourcesPage() {
   const [sourceImports, setSourceImports] = useState<ConsoleSourceImport[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newHandle, setNewHandle] = useState("");
   const [description, setDescription] = useState("");
@@ -234,7 +236,19 @@ export default function SourcesPage() {
     <div className="container max-w-6xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Tilesets</h1>
-        <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <div className="flex items-center gap-2">
+          <OvertureImportDialog
+            open={importOpen}
+            onOpenChange={setImportOpen}
+            onImported={fetchTilesets}
+            trigger={
+              <Button variant="outline">
+                <Globe className="mr-2 h-4 w-4" />
+                Import Overture
+              </Button>
+            }
+          />
+          <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -352,7 +366,8 @@ export default function SourcesPage() {
               </div>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {loading ? (
@@ -369,12 +384,19 @@ export default function SourcesPage() {
           <Database className="mb-4 h-12 w-12 text-muted-foreground/50" />
           <h3 className="text-lg font-medium">No tilesets yet</h3>
           <p className="mb-4 mt-1 text-sm text-muted-foreground">
-            Upload a data file to create a versioned tileset.
+            Upload a data file or import Overture data to create a versioned
+            tileset.
           </p>
-          <Button onClick={() => setUploadOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Upload tileset
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Globe className="mr-2 h-4 w-4" />
+              Import Overture
+            </Button>
+            <Button onClick={() => setUploadOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Upload tileset
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="space-y-8">
@@ -822,7 +844,8 @@ function latestJobForTileset(
   return (
     jobs.find(
       (job) =>
-        job.type === "tileset.process_upload" &&
+        (job.type === "tileset.process_upload" ||
+          job.type === "tileset.process_dataset") &&
         job.input?.tilesetId === tilesetId,
     ) ?? null
   );

@@ -185,6 +185,26 @@ export interface DatasetTilesetResult {
   processingJob: ConsoleProcessingJob;
 }
 
+export interface ConsoleSavedRegion {
+  id: string;
+  accountId: string;
+  handle: string;
+  name: string;
+  description: string | null;
+  bbox: [number, number, number, number];
+  geometry: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedRegionOptions {
+  handle: string;
+  name: string;
+  description?: string;
+  bbox: [number, number, number, number];
+  geometry?: unknown;
+}
+
 export interface ConsoleSourceImport {
   id: string;
   accountId: string;
@@ -232,6 +252,22 @@ export interface OvertureCatalogTheme {
   label: string;
   description: string;
   types: OvertureCatalogType[];
+}
+
+export interface OvertureImportOptions {
+  handle: string;
+  name: string;
+  description?: string;
+  regionId: string;
+  sourceConnectionId?: string;
+  theme: string;
+  type?: string;
+}
+
+export interface OvertureImportResult {
+  dataset: unknown;
+  sourceImport: ConsoleSourceImport;
+  processingJob: ConsoleProcessingJob;
 }
 
 export interface StylePublishResponse {
@@ -491,9 +527,24 @@ class ApiClient {
     return this.get<ApiEnvelope<ConsoleSourceImport[]>>("/source-imports");
   }
 
+  listRegions() {
+    return this.get<ApiEnvelope<ConsoleSavedRegion[]>>("/regions");
+  }
+
+  createRegion(options: SavedRegionOptions) {
+    return this.post<ApiEnvelope<ConsoleSavedRegion>>("/regions", options);
+  }
+
   getOvertureCatalog() {
     return this.get<ApiEnvelope<{ themes: OvertureCatalogTheme[] }>>(
       "/source-imports/overture/catalog",
+    );
+  }
+
+  createOvertureImport(options: OvertureImportOptions) {
+    return this.post<ApiEnvelope<OvertureImportResult>>(
+      "/source-imports/overture",
+      options,
     );
   }
 

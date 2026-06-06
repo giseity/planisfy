@@ -1,4 +1,8 @@
-import type { ConsoleSourceImport } from "@/lib/api";
+import type {
+  ConsoleSourceImport,
+  OvertureCatalogTheme,
+  OvertureCatalogType,
+} from "@/lib/api";
 
 export function canCreateTilesetFromImport(sourceImport: ConsoleSourceImport) {
   return Boolean(
@@ -44,6 +48,58 @@ export function sourceImportSummary(sourceImport: ConsoleSourceImport) {
       ? `${featureCount.toLocaleString()} features`
       : "features pending";
   return `${sourceImport.provider} ${sourceImport.sourceName}${type ? `/${type}` : ""} - ${features}`;
+}
+
+export function catalogTypesForTheme(
+  catalog: OvertureCatalogTheme[],
+  theme: string,
+) {
+  return catalog.find((entry) => entry.theme === theme)?.types ?? [];
+}
+
+export function catalogTypeForSelection(
+  catalog: OvertureCatalogTheme[],
+  theme: string,
+  type: string,
+): OvertureCatalogType | null {
+  return (
+    catalogTypesForTheme(catalog, theme).find((entry) => entry.type === type) ??
+    null
+  );
+}
+
+export function defaultOvertureImportOptions(
+  catalog: OvertureCatalogTheme[],
+  theme: string,
+  type: string,
+) {
+  const entry = catalogTypeForSelection(catalog, theme, type);
+  const label = entry?.label ?? titleCase(type.replaceAll("_", " "));
+  const themeLabel =
+    catalog.find((candidate) => candidate.theme === theme)?.label ??
+    titleCase(theme.replaceAll("_", " "));
+
+  return {
+    name: `Overture ${label}`,
+    handle: safeHandle(`overture-${theme}-${type}`),
+    description: `DuckDB import of Overture ${themeLabel} ${label}.`,
+  };
+}
+
+export function canRequestOvertureImport(params: {
+  theme: string;
+  type: string;
+  name: string;
+  handle: string;
+  regionReady: boolean;
+}) {
+  return Boolean(
+    params.theme &&
+      params.type &&
+      params.name.trim() &&
+      params.handle.trim() &&
+      params.regionReady,
+  );
 }
 
 function safeHandle(value: string) {
