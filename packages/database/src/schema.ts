@@ -90,6 +90,16 @@ export const eventStatusEnum = pgEnum("event_status", [
   "FAILED",
   "ARCHIVED",
 ]);
+export const executionTargetProviderEnum = pgEnum("execution_target_provider", [
+  "local",
+  "aws_batch",
+  "gcp_batch",
+]);
+export const executionTargetAuthModeEnum = pgEnum("execution_target_auth_mode", [
+  "federated",
+  "static",
+  "external",
+]);
 export const billingProviderEnum = pgEnum("billing_provider", ["DODO"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "ACTIVE",
@@ -786,6 +796,102 @@ export const tilesetVersions = pgTable(
   ]
 );
 
+export const executionTargets = pgTable(
+  "execution_targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 128 }).notNull(),
+    provider: executionTargetProviderEnum("provider").notNull().default("local"),
+    authMode: executionTargetAuthModeEnum("auth_mode")
+      .notNull()
+      .default("federated"),
+    region: varchar("region", { length: 128 }),
+    config: jsonb("config").notNull().default({}),
+    encryptedCredentials: jsonb("encrypted_credentials").notNull().default({}),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("execution_targets_account_idx").on(table.accountId),
+    index("execution_targets_provider_idx").on(table.provider),
+    uniqueIndex("execution_targets_account_name_unique")
+      .on(table.accountId, table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ]
+);
+
+export const executionTargetEnvVars = pgTable(
+  "execution_target_env_vars",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    executionTargetId: uuid("execution_target_id")
+      .notNull()
+      .references(() => executionTargets.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 128 }).notNull(),
+    encryptedValue: jsonb("encrypted_value").notNull(),
+    isSecret: boolean("is_secret").notNull().default(true),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("execution_target_env_vars_account_idx").on(table.accountId),
+    index("execution_target_env_vars_target_idx").on(table.executionTargetId),
+    uniqueIndex("execution_target_env_vars_target_name_unique")
+      .on(table.executionTargetId, table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ]
+);
+
+export const workerProfiles = pgTable(
+  "worker_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 128 }).notNull(),
+    image: text("image"),
+    command: jsonb("command").notNull().default([]),
+    args: jsonb("args").notNull().default([]),
+    cpu: integer("cpu"),
+    memoryMb: integer("memory_mb"),
+    timeoutSeconds: integer("timeout_seconds"),
+    concurrency: integer("concurrency"),
+    config: jsonb("config").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("worker_profiles_account_idx").on(table.accountId),
+    uniqueIndex("worker_profiles_account_name_unique")
+      .on(table.accountId, table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ]
+);
+
 export const stylePublications = pgTable(
   "style_publications",
   {
@@ -827,6 +933,14 @@ export const processingJobs = pgTable(
     type: varchar("type", { length: 64 }).notNull(),
     status: processingJobStatusEnum("status").notNull().default("PENDING"),
     progress: integer("progress").notNull().default(0),
+    executionTargetId: uuid("execution_target_id").references(
+      () => executionTargets.id,
+      { onDelete: "set null" }
+    ),
+    workerProfileId: uuid("worker_profile_id").references(
+      () => workerProfiles.id,
+      { onDelete: "set null" }
+    ),
     input: jsonb("input"),
     output: jsonb("output"),
     errorCode: varchar("error_code", { length: 128 }),
@@ -845,6 +959,8 @@ export const processingJobs = pgTable(
   (table) => [
     index("processing_jobs_account_idx").on(table.accountId),
     index("processing_jobs_status_idx").on(table.status),
+    index("processing_jobs_execution_target_idx").on(table.executionTargetId),
+    index("processing_jobs_worker_profile_idx").on(table.workerProfileId),
   ]
 );
 

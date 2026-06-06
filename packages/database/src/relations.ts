@@ -23,6 +23,9 @@ import {
   tilesetVersions,
   processingJobs,
   processingJobLogs,
+  executionTargets,
+  executionTargetEnvVars,
+  workerProfiles,
   eventOutbox,
   storageObjects,
   basemapReleases,
@@ -60,6 +63,9 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   datasets: many(datasets),
   tilesets: many(tilesets),
   processingJobs: many(processingJobs),
+  executionTargets: many(executionTargets),
+  executionTargetEnvVars: many(executionTargetEnvVars),
+  workerProfiles: many(workerProfiles),
   storageObjects: many(storageObjects),
   usageLogs: many(usageLogs),
   usageRollups: many(usageRollups),
@@ -312,7 +318,49 @@ export const processingJobsRelations = relations(processingJobs, ({ one, many })
     fields: [processingJobs.accountId],
     references: [accounts.id],
   }),
+  executionTarget: one(executionTargets, {
+    fields: [processingJobs.executionTargetId],
+    references: [executionTargets.id],
+  }),
+  workerProfile: one(workerProfiles, {
+    fields: [processingJobs.workerProfileId],
+    references: [workerProfiles.id],
+  }),
   logs: many(processingJobLogs),
+}));
+
+export const executionTargetsRelations = relations(
+  executionTargets,
+  ({ one, many }) => ({
+    account: one(accounts, {
+      fields: [executionTargets.accountId],
+      references: [accounts.id],
+    }),
+    envVars: many(executionTargetEnvVars),
+    processingJobs: many(processingJobs),
+  })
+);
+
+export const executionTargetEnvVarsRelations = relations(
+  executionTargetEnvVars,
+  ({ one }) => ({
+    account: one(accounts, {
+      fields: [executionTargetEnvVars.accountId],
+      references: [accounts.id],
+    }),
+    executionTarget: one(executionTargets, {
+      fields: [executionTargetEnvVars.executionTargetId],
+      references: [executionTargets.id],
+    }),
+  })
+);
+
+export const workerProfilesRelations = relations(workerProfiles, ({ one, many }) => ({
+  account: one(accounts, {
+    fields: [workerProfiles.accountId],
+    references: [accounts.id],
+  }),
+  processingJobs: many(processingJobs),
 }));
 
 export const processingJobLogsRelations = relations(processingJobLogs, ({ one }) => ({
