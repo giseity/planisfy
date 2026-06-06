@@ -34,6 +34,10 @@ import {
   sourceImportHandleSchema,
   type OvertureImportRequest,
 } from "../lib/source-import-requests";
+import {
+  ExecutionRuntimeSelectionError,
+  resolveExecutionRuntimeSelection,
+} from "../lib/execution-runtime";
 
 export const importsRoute = new Hono<AuthEnv>();
 
@@ -76,6 +80,8 @@ const datasetTilesetSchema = z.object({
   datasetVersionId: z.string().uuid().optional(),
   minZoom: z.number().int().min(0).max(24).optional(),
   maxZoom: z.number().int().min(0).max(24).optional(),
+  executionTargetId: z.string().uuid().optional(),
+  workerProfileId: z.string().uuid().optional(),
 });
 
 importsRoute.get("/regions", async (c) => {
@@ -488,6 +494,24 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
 
   const minZoom = parsed.data.minZoom ?? 0;
   const maxZoom = parsed.data.maxZoom ?? 14;
+  let runtimeSelection: Awaited<
+    ReturnType<typeof resolveExecutionRuntimeSelection>
+  >;
+  try {
+    runtimeSelection = await resolveExecutionRuntimeSelection(accountId, {
+      executionTargetId: parsed.data.executionTargetId,
+      workerProfileId: parsed.data.workerProfileId,
+    });
+  } catch (err) {
+    if (err instanceof ExecutionRuntimeSelectionError) {
+      return c.json(
+        { error: { code: err.code, message: err.message } },
+        404,
+      );
+    }
+    throw err;
+  }
+
   const [tileset] = await db
     .insert(tilesets)
     .values({
@@ -522,6 +546,8 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
   const processingJob = await createProcessingJob({
     accountId,
     type: "tileset.process_dataset",
+    executionTargetId: runtimeSelection.executionTargetId,
+    workerProfileId: runtimeSelection.workerProfileId,
     input: jobInput,
   });
 
@@ -531,6 +557,8 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
       datasetVersionId: version.id,
       storageObjectId: storageObject.id,
       tilesetId: tileset.id,
+      executionTargetId: runtimeSelection.executionTargetId,
+      workerProfileId: runtimeSelection.workerProfileId,
     },
   });
   await enqueueOutboxEvent({
