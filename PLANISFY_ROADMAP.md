@@ -140,6 +140,152 @@ Planisfy v1 is credible only when a team can:
 Milestones 1-6 serve this gate. Later milestones should not pull focus until the
 loop works end to end.
 
+## Fresh-Context Backlog
+
+This section is intentionally more explicit than the strategic roadmap. A fresh
+conversation should be able to start here, inspect the named areas, and continue
+without rediscovering the product state from scratch.
+
+Current invariants:
+
+- Keep `apps/console/next-env.d.ts` out of commits when it appears as a local
+  generated modification.
+- Keep binary PMTiles, MBTiles, Valhalla graphs, and large source extracts out
+  of git.
+- Preserve existing public route names, style URLs, TileJSON URLs, auth
+  contracts, and account/profile compatibility aliases unless a migration is
+  explicitly planned.
+- Keep the toolchain split: Tippecanoe/GDAL for user uploads, DuckDB for source
+  imports, Planetiler for basemap/regional release builds.
+- Prefer small logical commits with focused checks after each task group.
+
+Self-hosted v1 tasks remaining:
+
+1. Demo bootstrap polish.
+   - Make `scripts/self-host-setup.sh` plus documented compose commands produce
+     a useful first-run demo without manual data hunting.
+   - Verify seeded styles, source metadata, Martin PMTiles paths, layer IDs, and
+     Console URLs agree.
+   - Make missing demo data, missing writable storage directories, or missing
+     optional runtime inputs fail with clear setup guidance.
+   - Confirm bootstrap account creation works from README alone.
+
+2. Default basemap v1.
+   - Produce a small but attractive `planisfy-streets-v1` regional release using
+     the Planetiler harness under `@planisfy/map-styles`.
+   - Keep the source-layer contract explicit and tested for roads, places,
+     boundaries, water, landuse, buildings, and any other rendered layers.
+   - Generate or validate light and dark styles against the same release
+     manifest.
+   - Document how self-host users obtain or build the PMTiles artifact without
+     committing the binary to the repository.
+
+3. Upload processing hardening.
+   - Prove GeoJSON, CSV, zipped Shapefile, PMTiles, and MBTiles upload paths
+     produce served tilesets across API, Redis, and worker restarts.
+   - Tighten validation for size, extension, MIME hints, filename safety,
+     geometry detection, bounds, schema summaries, and useful user-facing
+     failure messages.
+   - Ensure retry, cancel, rebuild, and version promotion state is durable and
+     reflected consistently in Console and Admin.
+   - Add focused smoke or integration coverage for uploaded tiles resolving
+     through Martin/TileJSON after publication.
+
+4. Overture/source imports.
+   - Keep the current Overture catalog as the stable UI/API vocabulary, then add
+     missing theme/type pairs only when the worker can handle them honestly.
+   - Add previews and clearer region sizing estimates before expensive imports.
+   - Harden remote import SSRF/egress controls and credential audit behavior.
+   - Expand DuckDB execution beyond the current configured Overture path only
+     after failure modes, logs, artifacts, provenance, and bounds/count metadata
+     remain reliable.
+   - Add larger-import safeguards: timeouts, row/feature limits, temp-space
+     checks, cancellation checkpoints, and cleanup after failed jobs.
+
+5. Console and Studio workflow confidence.
+   - Make the Console path from upload/import to tileset build to artifact review
+     obvious without relying on Admin pages.
+   - Keep Studio source IDs, layer IDs, source-layer selection, duplicate
+     protection, and generated layer defaults stable and tested.
+   - Add browser-level coverage for adding an uploaded/imported tileset,
+     publishing a style, copying URLs, and loading the published style in a
+     MapLibre example.
+   - Improve empty, loading, failed, retrying, cancelled, and succeeded states
+     for jobs and tilesets.
+
+6. Publishing, rollback, and rebuild safety.
+   - Verify draft edits cannot mutate already published style artifacts.
+   - Make style version restore and tileset version promotion visible in both
+     Console and Admin.
+   - Record rebuild/promote inputs, outputs, actor, warnings, artifacts, and
+     alias registration results in existing job/audit structures.
+   - Add regression tests around published URL stability after draft edits,
+     rollback, rebuild, and alias re-registration.
+
+7. Self-host operations.
+   - Add documented backup and restore for Postgres, Redis/job state where
+     needed, local storage, and PMTiles artifacts.
+   - Add upgrade guidance for migrations, storage layout, worker compatibility,
+     and basemap release changes.
+   - Improve health and Admin status pages so storage, Martin, Valhalla,
+     worker-geodata, queues, outbox lag, and toolchain capabilities are easy to
+     diagnose.
+   - Replace raw usage-log dashboard queries with rollups or retention-aware
+     summaries where scale matters.
+
+Managed/cloud tasks remaining:
+
+1. Hosted runtime platform.
+   - Define deployable environments for API, Console, Admin, workers, Postgres,
+     Redis, object storage, Martin/tile serving, CDN, observability, secrets,
+     and migrations.
+   - Add release promotion, preview deployment, rollback, and environment
+     configuration practices for Planisfy Cloud.
+   - Add abuse controls for signups, API keys, tile requests, uploads, imports,
+     storage growth, and worker CPU/runtime.
+
+2. Managed tile delivery.
+   - Implement the planned Cloudflare/R2 tile worker or equivalent CDN edge
+     layer.
+   - Add cache purge, immutable artifact caching, usage metering at the edge,
+     and clear behavior for private/public tilesets.
+   - Keep MapLibre-compatible style, TileJSON, glyph, sprite, and tile URLs
+     stable across managed and self-hosted deployments.
+
+3. Managed data products.
+   - Automate managed basemap releases from Planetiler with provenance,
+     attribution, QA checks, changelogs, and versioned manifests.
+   - Build managed Overture regional extracts with scheduled refreshes,
+     customer-selectable regions/themes, and artifact/version retention.
+   - Decide which premium data packages are open-core compatible, hosted-only,
+     or commercial-license-only.
+
+4. Billing and metering productionization.
+   - Wire the Dodo Payments-oriented schema/UI to real subscription lifecycle,
+     webhook verification, invoices, plan changes, cancellations, trials, and
+     failed-payment states.
+   - Enforce quotas consistently across API requests, tile delivery, uploads,
+     imports, storage, and worker runtime.
+   - Add customer-visible usage breakdowns that match billable units.
+
+5. Collaboration and governance.
+   - Add advanced Studio collaboration only after the single-user/org workflow is
+     reliable.
+   - Plan SSO, SCIM, advanced RBAC, approval workflows, audit export,
+     long-retention logs, and private-cloud/Helm packaging as enterprise work.
+   - Keep these behind the credible self-hosted v1 loop unless a paying managed
+     deployment requires a narrow slice sooner.
+
+Suggested execution order from here:
+
+1. Finish self-hosted demo bootstrap and visible default map.
+2. Ship the regional basemap v1 artifact flow.
+3. Harden upload/import processing through restart and failure scenarios.
+4. Add browser-level Console/Studio publish workflow tests.
+5. Add backup/restore/upgrade docs and checks.
+6. Only then start managed CDN, billing enforcement, and managed data release
+   automation.
+
 ## Strategic Boundaries
 
 ### Open Core
