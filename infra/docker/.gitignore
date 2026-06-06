@@ -11,6 +11,8 @@ data/**
 !data/storage/uploads/.gitkeep
 !data/storage/styles/
 !data/storage/styles/.gitkeep
+!data/storage/martin-sources/
+!data/storage/martin-sources/.gitkeep
 !data/storage/fixtures/
 !data/storage/fixtures/README.md
 
