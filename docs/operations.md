@@ -39,6 +39,52 @@ Operators need documented paths for:
 - upgrades
 - basemap release verification
 
+## Backup
+
+Use the self-host backup script from the repository root:
+
+```bash
+scripts/self-host-backup.sh
+```
+
+The script creates `backups/planisfy-<timestamp>/` by default and includes:
+
+- `postgres.dump`: custom-format PostgreSQL dump.
+- `redis.dump.rdb`: Redis snapshot when Redis is reachable.
+- `storage.tgz`: local object storage, including uploaded artifacts and Martin
+  source aliases.
+- `pmtiles.tgz`: local PMTiles mount.
+- `valhalla_data.tgz`: local Valhalla graph/runtime data mount.
+- `manifest.json`: backup timestamp, git SHA, and included sections.
+
+Use `--output DIR` to write a specific backup directory.
+
+## Restore
+
+Restore is intentionally guarded because it overwrites database and local data
+directories:
+
+```bash
+scripts/self-host-restore.sh --backup backups/planisfy-YYYYMMDDTHHMMSSZ --confirm
+```
+
+The restore script starts Postgres and Redis, restores `postgres.dump`, restores
+`redis.dump.rdb` when present, and replaces local `storage`, `pmtiles`, and
+`valhalla_data` directories when their archives are present. Restart the full
+stack after restore.
+
+## Upgrade
+
+Recommended self-host upgrade flow:
+
+1. Run `scripts/self-host-backup.sh`.
+2. Pull or checkout the target Planisfy release.
+3. Review `.env.example` for new required variables.
+4. Rebuild or pull containers.
+5. Run `pnpm -F @planisfy/database db:migrate`.
+6. Start the stack and check `/health/detailed`.
+7. Verify at least one published style URL and one TileJSON URL.
+
 ## Admin Surface
 
 Admin should eventually inspect jobs, job logs, storage objects, usage rollups, audit events, tenants/accounts, and service health.

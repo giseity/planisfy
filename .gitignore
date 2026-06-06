@@ -15,6 +15,9 @@ node_modules
 # Testing
 coverage
 
+# Self-host backups
+backups/
+
 # Turbo
 .turbo
 
