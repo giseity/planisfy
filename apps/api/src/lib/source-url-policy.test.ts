@@ -19,10 +19,18 @@ test("validateRemoteSourceUrl accepts public http and https URLs", () => {
 test("validateRemoteSourceUrl rejects local and private targets by default", () => {
   for (const url of [
     "http://localhost:4000/data",
+    "http://localhost./data",
     "http://127.0.0.1/data",
+    "http://2130706433/data",
+    "http://0177.0.0.1/data",
+    "http://0x7f.0.0.1/data",
+    "http://127.1/data",
     "http://10.0.0.2/data",
     "http://172.20.0.2/data",
     "http://192.168.1.1/data",
+    "http://[::1]/data",
+    "http://[::ffff:127.0.0.1]/data",
+    "http://[2001:db8::1]/data",
     "http://169.254.169.254/latest/meta-data",
     "http://metadata.google.internal/computeMetadata/v1",
     "ftp://example.com/file",
