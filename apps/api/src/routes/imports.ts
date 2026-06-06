@@ -28,16 +28,16 @@ import { buildDatasetTilesetProcessingInput } from "../lib/tileset-build-input";
 import {
   UnsupportedOvertureTypeError,
   overtureCatalogResponse,
-  validateOvertureThemeType,
 } from "../lib/overture-catalog";
+import {
+  parseOvertureImportRequest,
+  sourceImportHandleSchema,
+  type OvertureImportRequest,
+} from "../lib/source-import-requests";
 
 export const importsRoute = new Hono<AuthEnv>();
 
-const handleSchema = z
-  .string()
-  .min(1)
-  .max(64)
-  .regex(/^[a-z0-9][a-z0-9-]*$/);
+const handleSchema = sourceImportHandleSchema;
 const bboxSchema = z
   .tuple([z.number(), z.number(), z.number(), z.number()])
   .refine(([west, south, east, north]) => west < east && south < north, {
@@ -67,16 +67,6 @@ const sourceConnectionSchema = z.object({
   url: z.string().url().optional(),
   credentialId: z.string().uuid().optional(),
   config: z.record(z.string(), z.unknown()).default({}),
-});
-
-const overtureImportSchema = z.object({
-  handle: handleSchema,
-  name: z.string().min(1).max(128),
-  description: z.string().max(1000).optional(),
-  regionId: z.string().uuid(),
-  sourceConnectionId: z.string().uuid().optional(),
-  theme: z.string().min(1).max(64),
-  type: z.string().min(1).max(64).optional(),
 });
 
 const datasetTilesetSchema = z.object({
@@ -260,29 +250,24 @@ importsRoute.get("/source-imports/overture/catalog", (c) => {
 importsRoute.post("/source-imports/overture", async (c) => {
   const accountId = c.get("ownerId");
   const userId = c.get("userId");
-  const parsed = overtureImportSchema.safeParse(await c.req.json());
-  if (!parsed.success) return validationError(c, parsed.error);
-  let catalogEntry: ReturnType<typeof validateOvertureThemeType>;
-  try {
-    catalogEntry = validateOvertureThemeType({
-      theme: parsed.data.theme,
-      type: parsed.data.type,
-      allowExperimental: env.OVERTURE_ALLOW_EXPERIMENTAL_TYPES,
-    });
-  } catch (err) {
-    if (err instanceof UnsupportedOvertureTypeError) {
+  const parsed = parseOvertureImportRequest(await c.req.json(), {
+    allowExperimental: env.OVERTURE_ALLOW_EXPERIMENTAL_TYPES,
+  });
+  if (!parsed.success) {
+    if (parsed.error instanceof UnsupportedOvertureTypeError) {
       return c.json(
         {
           error: {
             code: "UNSUPPORTED_OVERTURE_TYPE",
-            message: err.message,
+            message: parsed.error.message,
           },
         },
         400,
       );
     }
-    throw err;
+    return validationError(c, parsed.error);
   }
+  const catalogEntry = parsed.catalogEntry;
 
   const [existing] = await db
     .select({ id: datasets.id })
@@ -579,7 +564,7 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
 
 async function createDataset(
   accountId: string,
-  data: z.infer<typeof overtureImportSchema>,
+  data: OvertureImportRequest,
 ) {
   const [dataset] = await db
     .insert(datasets)
