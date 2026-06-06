@@ -45,6 +45,9 @@ const schema = z.object({
   ALLOW_PRIVATE_SOURCE_URLS: z
     .preprocess((value) => value === "true" || value === true, z.boolean())
     .default(false),
+  OVERTURE_ALLOW_EXPERIMENTAL_TYPES: z
+    .preprocess((value) => value === "true" || value === true, z.boolean())
+    .default(false),
 });
 
 export const env = createEnv(schema, process.env, { appName: "api" });

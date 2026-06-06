@@ -25,6 +25,11 @@ import {
 } from "../lib/source-url-policy";
 import { checkResourceLimit } from "../lib/plan-check";
 import { buildDatasetTilesetProcessingInput } from "../lib/tileset-build-input";
+import {
+  UnsupportedOvertureTypeError,
+  overtureCatalogResponse,
+  validateOvertureThemeType,
+} from "../lib/overture-catalog";
 
 export const importsRoute = new Hono<AuthEnv>();
 
@@ -248,11 +253,36 @@ importsRoute.get("/source-imports", async (c) => {
   return c.json({ data: rows });
 });
 
+importsRoute.get("/source-imports/overture/catalog", (c) => {
+  return c.json(overtureCatalogResponse());
+});
+
 importsRoute.post("/source-imports/overture", async (c) => {
   const accountId = c.get("ownerId");
   const userId = c.get("userId");
   const parsed = overtureImportSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
+  let catalogEntry: ReturnType<typeof validateOvertureThemeType>;
+  try {
+    catalogEntry = validateOvertureThemeType({
+      theme: parsed.data.theme,
+      type: parsed.data.type,
+      allowExperimental: env.OVERTURE_ALLOW_EXPERIMENTAL_TYPES,
+    });
+  } catch (err) {
+    if (err instanceof UnsupportedOvertureTypeError) {
+      return c.json(
+        {
+          error: {
+            code: "UNSUPPORTED_OVERTURE_TYPE",
+            message: err.message,
+          },
+        },
+        400,
+      );
+    }
+    throw err;
+  }
 
   const [existing] = await db
     .select({ id: datasets.id })
@@ -302,6 +332,13 @@ importsRoute.post("/source-imports/overture", async (c) => {
       sourceConnectionId: parsed.data.sourceConnectionId,
       theme: parsed.data.theme,
       type: parsed.data.type,
+      catalog: catalogEntry
+        ? {
+            label: catalogEntry.label,
+            geometry: catalogEntry.geometry,
+            defaultLayerId: catalogEntry.defaultLayerId,
+          }
+        : undefined,
     },
   });
   const [sourceImport] = await db
@@ -325,6 +362,7 @@ importsRoute.post("/source-imports/overture", async (c) => {
       regionId: region.id,
       theme: parsed.data.theme,
       type: parsed.data.type,
+      catalog: catalogEntry,
     },
   });
   await enqueueOutboxEvent({
