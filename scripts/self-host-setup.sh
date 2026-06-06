@@ -8,6 +8,7 @@ ENV_EXAMPLE="$ROOT_DIR/.env.example"
 DATA_DIR="$ROOT_DIR/infra/docker/data"
 STYLE_FIXTURE="$ROOT_DIR/packages/map-styles/styles/planisfy-streets-v1.json"
 STORAGE_STYLE_DIR="$DATA_DIR/storage/styles"
+DEMO_PMTILES="$DATA_DIR/pmtiles/stuttgart.pmtiles"
 
 usage() {
   cat <<USAGE
@@ -73,6 +74,18 @@ if [[ -f "$STYLE_FIXTURE" ]]; then
   echo "Seeded local storage style fixture: infra/docker/data/storage/styles/planisfy-streets-v1.json"
 fi
 
+if [[ -f "$DEMO_PMTILES" ]]; then
+  echo "Found demo PMTiles fixture: infra/docker/data/pmtiles/stuttgart.pmtiles"
+else
+  cat <<'PMTILES_WARNING'
+Demo PMTiles fixture is missing: infra/docker/data/pmtiles/stuttgart.pmtiles
+
+The stack can still start, but the default Planisfy Streets map will not render
+tiles until a compatible PMTiles file is placed at that path. Keep downloaded
+map data out of Git.
+PMTILES_WARNING
+fi
+
 cat > "$DATA_DIR/storage/fixtures/README.md" <<'FIXTURE_README'
 # Local demo storage fixtures
 
@@ -116,6 +129,7 @@ Next steps:
 
 Demo data directories:
   infra/docker/data/pmtiles        Put *.pmtiles files here for Martin.
+                                   The default fixture expects stuttgart.pmtiles.
   infra/docker/data/valhalla_data  Put Valhalla tiles/config data here.
   infra/docker/data/storage        Local object storage mount.
 NEXT
