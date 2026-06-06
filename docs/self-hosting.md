@@ -111,6 +111,19 @@ PMTiles and Valhalla graph data outside Git while preserving these mount points.
 Use `DEMO_PMTILES_URL` plus `scripts/self-host-setup.sh --demo-data` when a
 team wants a repeatable local download path for the default fixture.
 
+After the PMTiles file is present, generate regional basemap release metadata
+without committing the binary:
+
+```bash
+pnpm -F @planisfy/map-styles build:regional-release -- \
+  --name stuttgart \
+  --version v1 \
+  --pmtiles infra/docker/data/pmtiles/stuttgart.pmtiles
+```
+
+Generated output lives under ignored `packages/map-styles/dist/regional/` and
+records the source PMTiles SHA-256, size, source-layer contract, and style URL.
+
 ## Source Imports
 
 Overture imports run in `worker-geodata` through DuckDB. Set `OVERTURE_RELEASE`

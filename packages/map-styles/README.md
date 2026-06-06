@@ -32,6 +32,23 @@ The style expects the `planisfy-streets-source-layers-v1` contract documented in
 `source-layer-contract.json`. Regional fixtures may omit some global layers, but
 generated releases should keep the layer names stable.
 
+## Generated Regional Release Metadata
+
+When a compatible regional PMTiles file exists locally, generate ignored release
+metadata and a style JSON under `dist/regional/`:
+
+```bash
+pnpm -F @planisfy/map-styles build:regional-release -- \
+  --name stuttgart \
+  --version v1 \
+  --pmtiles infra/docker/data/pmtiles/stuttgart.pmtiles \
+  --tilejson-url http://localhost:3005/planisfy.basic
+```
+
+The command validates the PMTiles header, records size and SHA-256, and writes a
+manifest/style pair. It does not copy the PMTiles binary into the package or any
+tracked path.
+
 ## Owns
 
 - Default MapLibre-compatible style JSON.
@@ -51,5 +68,6 @@ generated releases should keep the layer names stable.
 ```bash
 pnpm -F @planisfy/map-styles lint
 pnpm -F @planisfy/map-styles build:release
+pnpm -F @planisfy/map-styles build:regional-release -- --pmtiles infra/docker/data/pmtiles/stuttgart.pmtiles
 node -e "JSON.parse(require('fs').readFileSync('packages/map-styles/styles/planisfy-streets-v1.json','utf8'))"
 ```

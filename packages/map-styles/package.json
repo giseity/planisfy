@@ -12,6 +12,7 @@
   },
   "scripts": {
     "build:release": "node scripts/build-release.mjs",
+    "build:regional-release": "node scripts/build-regional-release.mjs",
     "lint": "node ../eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
     "test": "vitest run"
   }
