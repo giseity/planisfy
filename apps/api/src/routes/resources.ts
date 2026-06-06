@@ -499,6 +499,145 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
   return c.json({ data: { ...updated, martinRegistration } });
 });
 
+resourcesRoute.post("/tilesets/:id/rebuild", async (c) => {
+  const accountId = c.get("ownerId");
+  const userId = c.get("userId");
+  const id = c.req.param("id");
+  const [tileset] = await db
+    .select()
+    .from(tilesets)
+    .where(
+      and(
+        eq(tilesets.id, id),
+        eq(tilesets.accountId, accountId),
+        isNull(tilesets.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!tileset)
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Tileset not found" } },
+      404,
+    );
+
+  const [upload] = await db
+    .select()
+    .from(uploads)
+    .where(
+      and(
+        eq(uploads.accountId, accountId),
+        eq(uploads.linkedTilesetId, id),
+        isNull(uploads.deletedAt),
+      ),
+    )
+    .orderBy(desc(uploads.createdAt))
+    .limit(1);
+  if (!upload?.storageObjectId) {
+    return c.json(
+      {
+        error: {
+          code: "UPLOAD_NOT_FOUND",
+          message: "No original upload is available to rebuild this tileset",
+        },
+      },
+      400,
+    );
+  }
+
+  const [storageObject] = await db
+    .select()
+    .from(storageObjects)
+    .where(eq(storageObjects.id, upload.storageObjectId))
+    .limit(1);
+  if (!storageObject) {
+    return c.json(
+      {
+        error: {
+          code: "UPLOAD_ARTIFACT_NOT_FOUND",
+          message: "Original upload artifact was not found",
+        },
+      },
+      404,
+    );
+  }
+
+  const format = detectFormat(
+    storageObject.fileName ?? upload.originalFileName,
+    upload.contentType ?? storageObject.contentType ?? "",
+  );
+  if (!format) {
+    return c.json(
+      {
+        error: {
+          code: "UNSUPPORTED_UPLOAD",
+          message: "Original upload format is no longer supported",
+        },
+      },
+      400,
+    );
+  }
+
+  const processingJob = await createProcessingJob({
+    accountId,
+    type: "tileset.process_upload",
+    input: {
+      tilesetId: tileset.id,
+      uploadId: upload.id,
+      storageObjectId: storageObject.id,
+      uploadKey: storageObject.storageKey,
+      format,
+      options: {
+        minZoom: tileset.minZoom ?? 0,
+        maxZoom: tileset.maxZoom ?? 14,
+      },
+    },
+  });
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(tilesets)
+      .set({ status: "BUILDING", updatedAt: new Date() })
+      .where(eq(tilesets.id, tileset.id));
+    await tx
+      .update(uploads)
+      .set({ status: "VALIDATING", linkedTilesetId: tileset.id })
+      .where(eq(uploads.id, upload.id));
+  });
+
+  await logProcessingJob(processingJob.id, "Console rebuild requested", {
+    metadata: { uploadId: upload.id, tilesetId: tileset.id, format },
+  });
+
+  await enqueueOutboxEvent({
+    eventName: "tileset.build.requested",
+    payload: {
+      accountId,
+      tilesetId: tileset.id,
+      jobId: processingJob.id,
+      sourceResourceType: "upload",
+      sourceResourceId: upload.id,
+      options: {
+        minZoom: tileset.minZoom ?? 0,
+        maxZoom: tileset.maxZoom ?? 14,
+      },
+    },
+  });
+
+  logAudit({
+    profileId: userId,
+    action: "tileset.rebuild_requested",
+    resourceType: "tileset",
+    resourceId: tileset.id,
+    metadata: {
+      uploadId: upload.id,
+      processingJobId: processingJob.id,
+      format,
+    },
+  });
+
+  return c.json({ data: processingJob }, 202);
+});
+
 resourcesRoute.get("/jobs", async (c) => {
   const accountId = c.get("ownerId");
   const rows = await db

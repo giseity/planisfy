@@ -450,6 +450,12 @@ class ApiClient {
     );
   }
 
+  rebuildTileset(tilesetId: string) {
+    return this.post<ApiEnvelope<ConsoleProcessingJob>>(
+      `/tilesets/${tilesetId}/rebuild`,
+    );
+  }
+
   uploadTileset(file: File, options: TilesetUploadOptions) {
     const formData = new FormData();
     formData.append("file", file);

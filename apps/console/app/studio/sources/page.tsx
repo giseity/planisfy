@@ -59,6 +59,9 @@ export default function SourcesPage() {
     null,
   );
   const [controllingJobId, setControllingJobId] = useState<string | null>(null);
+  const [rebuildingTilesetId, setRebuildingTilesetId] = useState<string | null>(
+    null,
+  );
 
   const fetchTilesets = useCallback(async () => {
     try {
@@ -105,21 +108,38 @@ export default function SourcesPage() {
     }
   }
 
-  async function handlePublish(tileset: ConsoleTileset) {
-    const version = tileset.latestVersion;
+  async function handlePublish(
+    tileset: ConsoleTileset,
+    version = tileset.latestVersion,
+  ) {
     if (!version) return;
 
     setPublishingVersionId(version.id);
     try {
       await api.publishTilesetVersion(tileset.id, version.version);
-      toast.success(`Published ${tileset.handle} v${version.version}`);
+      toast.success(`Promoted ${tileset.handle} v${version.version}`);
       fetchTilesets();
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Failed to publish tileset",
+        err instanceof Error ? err.message : "Failed to promote tileset version",
       );
     } finally {
       setPublishingVersionId(null);
+    }
+  }
+
+  async function handleRebuild(tileset: ConsoleTileset) {
+    setRebuildingTilesetId(tileset.id);
+    try {
+      await api.rebuildTileset(tileset.id);
+      toast.success("Tileset rebuild queued");
+      fetchTilesets();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to rebuild tileset",
+      );
+    } finally {
+      setRebuildingTilesetId(null);
     }
   }
 
@@ -418,6 +438,22 @@ export default function SourcesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => handleRebuild(tileset)}
+                          disabled={
+                            !tileset.latestUpload ||
+                            rebuildingTilesetId === tileset.id
+                          }
+                          title="Rebuild from original upload"
+                        >
+                          {rebuildingTilesetId === tileset.id ? (
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RotateCcw className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleCopyUrl(tileset)}
                           disabled={!tileset.tilejsonUrl}
                           title="Copy TileJSON URL"
@@ -540,6 +576,39 @@ export default function SourcesPage() {
                               )}
                             </div>
                           </div>
+                          {tileset.versions.length > 1 && (
+                            <div className="flex flex-wrap items-center gap-1 border-t pt-2">
+                              <span className="mr-1 font-medium text-foreground">
+                                Versions
+                              </span>
+                              {tileset.versions.map((version) => {
+                                const current =
+                                  version.id === tileset.currentVersionId;
+                                return (
+                                  <Button
+                                    key={version.id}
+                                    variant={current ? "secondary" : "ghost"}
+                                    size="sm"
+                                    className="h-6 gap-1 px-2 text-xs"
+                                    disabled={
+                                      current ||
+                                      publishingVersionId === version.id ||
+                                      !version.artifact
+                                    }
+                                    onClick={() =>
+                                      handlePublish(tileset, version)
+                                    }
+                                  >
+                                    {publishingVersionId === version.id && (
+                                      <RefreshCw className="h-3 w-3 animate-spin" />
+                                    )}
+                                    v{version.version}
+                                    {current ? " current" : " promote"}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
