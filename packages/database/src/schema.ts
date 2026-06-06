@@ -100,6 +100,42 @@ export const executionTargetAuthModeEnum = pgEnum("execution_target_auth_mode", 
   "static",
   "external",
 ]);
+export const notificationChannelProviderEnum = pgEnum(
+  "notification_channel_provider",
+  ["webhook", "email", "slack", "discord"]
+);
+export const scheduledOperationKindEnum = pgEnum("scheduled_operation_kind", [
+  "tileset_rebuild",
+  "source_import",
+  "custom_command",
+]);
+export const scheduledOperationStatusEnum = pgEnum(
+  "scheduled_operation_status",
+  ["active", "paused"]
+);
+export const artifactBackupStatusEnum = pgEnum("artifact_backup_status", [
+  "pending",
+  "completed",
+  "failed",
+  "restored",
+]);
+export const workerNodeKindEnum = pgEnum("worker_node_kind", [
+  "local",
+  "remote",
+  "cloud",
+]);
+export const workerNodeStatusEnum = pgEnum("worker_node_status", [
+  "pending",
+  "healthy",
+  "degraded",
+  "offline",
+]);
+export const customDomainStatusEnum = pgEnum("custom_domain_status", [
+  "pending",
+  "verified",
+  "active",
+  "failed",
+]);
 export const billingProviderEnum = pgEnum("billing_provider", ["DODO"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "ACTIVE",
@@ -889,6 +925,203 @@ export const workerProfiles = pgTable(
     uniqueIndex("worker_profiles_account_name_unique")
       .on(table.accountId, table.name)
       .where(sql`${table.deletedAt} IS NULL`),
+  ]
+);
+
+export const notificationChannels = pgTable(
+  "notification_channels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 128 }).notNull(),
+    provider: notificationChannelProviderEnum("provider").notNull(),
+    target: text("target").notNull(),
+    events: jsonb("events").notNull().default([]),
+    encryptedConfig: jsonb("encrypted_config").notNull().default({}),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("notification_channels_account_idx").on(table.accountId),
+    uniqueIndex("notification_channels_account_name_unique")
+      .on(table.accountId, table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ]
+);
+
+export const scheduledOperations = pgTable(
+  "scheduled_operations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 128 }).notNull(),
+    kind: scheduledOperationKindEnum("kind").notNull(),
+    status: scheduledOperationStatusEnum("status").notNull().default("active"),
+    cron: varchar("cron", { length: 128 }).notNull(),
+    timezone: varchar("timezone", { length: 64 }).notNull().default("UTC"),
+    payload: jsonb("payload").notNull().default({}),
+    nextRunAt: timestamp("next_run_at", { withTimezone: true }),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("scheduled_operations_account_idx").on(table.accountId),
+    index("scheduled_operations_next_run_idx").on(table.status, table.nextRunAt),
+  ]
+);
+
+export const artifactBackups = pgTable(
+  "artifact_backups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    storageObjectId: uuid("storage_object_id").references(
+      () => storageObjects.id,
+      { onDelete: "set null" }
+    ),
+    status: artifactBackupStatusEnum("status").notNull().default("pending"),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    bucket: varchar("bucket", { length: 256 }).notNull(),
+    sourceStorageKey: text("source_storage_key").notNull(),
+    backupStorageKey: text("backup_storage_key").notNull(),
+    size: integer("size"),
+    metadata: jsonb("metadata").notNull().default({}),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    restoredAt: timestamp("restored_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("artifact_backups_account_idx").on(table.accountId),
+    index("artifact_backups_storage_object_idx").on(table.storageObjectId),
+  ]
+);
+
+export const workerNodes = pgTable(
+  "worker_nodes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id").references(() => accounts.id, {
+      onDelete: "cascade",
+    }),
+    name: varchar("name", { length: 128 }).notNull(),
+    kind: workerNodeKindEnum("kind").notNull().default("local"),
+    endpoint: text("endpoint"),
+    status: workerNodeStatusEnum("status").notNull().default("pending"),
+    validation: jsonb("validation").notNull().default({}),
+    metadata: jsonb("metadata").notNull().default({}),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("worker_nodes_account_idx").on(table.accountId),
+    index("worker_nodes_status_idx").on(table.status),
+  ]
+);
+
+export const previewLinks = pgTable(
+  "preview_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    resourceType: varchar("resource_type", { length: 64 }).notNull(),
+    resourceId: uuid("resource_id").notNull(),
+    slug: varchar("slug", { length: 128 }).notNull(),
+    targetUrl: text("target_url").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("preview_links_account_idx").on(table.accountId),
+    uniqueIndex("preview_links_slug_unique")
+      .on(table.slug)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ]
+);
+
+export const customDomains = pgTable(
+  "custom_domains",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    resourceType: varchar("resource_type", { length: 64 }).notNull(),
+    resourceId: uuid("resource_id"),
+    host: varchar("host", { length: 255 }).notNull(),
+    path: varchar("path", { length: 255 }).notNull().default("/"),
+    status: customDomainStatusEnum("status").notNull().default("pending"),
+    verificationToken: varchar("verification_token", { length: 128 }).notNull(),
+    tlsEnabled: boolean("tls_enabled").notNull().default(true),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("custom_domains_account_idx").on(table.accountId),
+    uniqueIndex("custom_domains_host_path_unique")
+      .on(table.host, table.path)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ]
+);
+
+export const workflowTemplates = pgTable(
+  "workflow_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id").references(() => accounts.id, {
+      onDelete: "cascade",
+    }),
+    name: varchar("name", { length: 128 }).notNull(),
+    category: varchar("category", { length: 64 }).notNull(),
+    description: text(),
+    template: jsonb("template").notNull().default({}),
+    builtIn: boolean("built_in").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("workflow_templates_account_idx").on(table.accountId),
+    index("workflow_templates_category_idx").on(table.category),
   ]
 );
 
