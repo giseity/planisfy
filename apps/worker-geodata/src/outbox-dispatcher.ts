@@ -19,6 +19,7 @@ import {
   runOvertureImport,
   type OvertureImportResult,
 } from "./overture-import";
+import { resolveLocalExecutionRuntime } from "./execution-runtime";
 import type { SourceProcessingJob } from "./source-worker";
 
 const SOURCE_PROCESSING_QUEUE_NAME = "source-processing";
@@ -443,7 +444,13 @@ async function dispatchTilesetBuildRequested(
     ownerId: processingJob.accountId,
     processingJobId: payload.jobId,
   });
-  await queue.add("process", input, { jobId: payload.jobId });
+  const runtime = await resolveLocalExecutionRuntime({
+    accountId: processingJob.accountId,
+    executionTargetId: processingJob.executionTargetId,
+    workerProfileId: processingJob.workerProfileId,
+    secret: credentialSecret(),
+  });
+  await queue.add("process", { ...input, ...runtime }, { jobId: payload.jobId });
   await db.insert(processingJobLogs).values({
     jobId: payload.jobId,
     level: "info",
@@ -452,6 +459,9 @@ async function dispatchTilesetBuildRequested(
       outboxEventId: event.id,
       tilesetId: payload.tilesetId,
       uploadId: payload.sourceResourceId,
+      executionTargetId: processingJob.executionTargetId,
+      workerProfileId: processingJob.workerProfileId,
+      env: Object.keys(runtime.env),
     },
   });
 }
@@ -490,6 +500,14 @@ export function parseSourceProcessingJobInput(
     csv: candidate.csv,
     options: candidate.options,
   };
+}
+
+function credentialSecret() {
+  return (
+    env.SOURCE_CREDENTIAL_ENCRYPTION_KEY ??
+    env.BETTER_AUTH_SECRET ??
+    env.INTERNAL_API_SECRET
+  );
 }
 
 async function completeOutboxEvent(id: string) {
