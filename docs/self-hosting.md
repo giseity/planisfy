@@ -120,6 +120,12 @@ Overture S3 layout and requires import requests to include a theme, type, and
 saved-region bbox. If DuckDB or release config is missing, the import job fails
 with `OVERTURE_IMPORT_FAILED` instead of recording metadata-only success.
 
+Saved source credentials are encrypted by the API before they are written to the
+database. Set `SOURCE_CREDENTIAL_ENCRYPTION_KEY` to a `base64:`-prefixed 32-byte
+key in production. Remote source URLs reject localhost, private IP ranges, and
+metadata-service hosts by default; only set `ALLOW_PRIVATE_SOURCE_URLS=true` for
+explicitly isolated deployments that need internal source endpoints.
+
 ## Martin Tileset Aliases
 
 The API proxies public tileset URLs to Martin source names:

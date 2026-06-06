@@ -14,6 +14,12 @@ import type { AuthEnv } from "../middleware/auth";
 import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
 import { enqueueOutboxEvent } from "../lib/outbox";
 import { logAudit } from "../lib/audit";
+import { env } from "../env";
+import { encryptCredentialPayload } from "../lib/source-credentials";
+import {
+  SourceUrlRejectedError,
+  validateRemoteSourceUrl,
+} from "../lib/source-url-policy";
 
 export const importsRoute = new Hono<AuthEnv>();
 
@@ -40,7 +46,8 @@ const regionSchema = z.object({
 const credentialSchema = z.object({
   name: z.string().min(1).max(128),
   provider: providerSchema,
-  encryptedPayload: z.record(z.string(), z.unknown()).default({}),
+  payload: z.record(z.string(), z.unknown()).optional(),
+  encryptedPayload: z.record(z.string(), z.unknown()).optional(),
 });
 
 const sourceConnectionSchema = z.object({
@@ -121,6 +128,21 @@ importsRoute.post("/source-credentials", async (c) => {
   const accountId = c.get("ownerId");
   const parsed = credentialSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
+  const payload = parsed.data.payload ?? parsed.data.encryptedPayload ?? {};
+  let encryptedPayload: ReturnType<typeof encryptCredentialPayload>;
+  try {
+    encryptedPayload = encryptCredentialPayload(payload, credentialSecret());
+  } catch (err) {
+    return c.json(
+      {
+        error: {
+          code: "CREDENTIAL_ENCRYPTION_NOT_CONFIGURED",
+          message: err instanceof Error ? err.message : String(err),
+        },
+      },
+      500,
+    );
+  }
 
   const [created] = await db
     .insert(sourceCredentials)
@@ -128,7 +150,7 @@ importsRoute.post("/source-credentials", async (c) => {
       accountId,
       name: parsed.data.name,
       provider: parsed.data.provider,
-      encryptedPayload: parsed.data.encryptedPayload,
+      encryptedPayload,
     })
     .returning({
       id: sourceCredentials.id,
@@ -163,6 +185,27 @@ importsRoute.post("/source-connections", async (c) => {
   const accountId = c.get("ownerId");
   const parsed = sourceConnectionSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
+  const urlResult = validateSourceUrl(parsed.data.url);
+  if (urlResult instanceof Response) return urlResult;
+  if (parsed.data.credentialId) {
+    const [credential] = await db
+      .select({ id: sourceCredentials.id })
+      .from(sourceCredentials)
+      .where(
+        and(
+          eq(sourceCredentials.id, parsed.data.credentialId),
+          eq(sourceCredentials.accountId, accountId),
+          isNull(sourceCredentials.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!credential) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Credential not found" } },
+        404,
+      );
+    }
+  }
 
   const [created] = await db
     .insert(sourceConnections)
@@ -171,7 +214,7 @@ importsRoute.post("/source-connections", async (c) => {
       handle: parsed.data.handle,
       name: parsed.data.name,
       provider: parsed.data.provider,
-      url: parsed.data.url ?? null,
+      url: urlResult ?? null,
       credentialId: parsed.data.credentialId ?? null,
       config: parsed.data.config,
     })
@@ -319,4 +362,29 @@ function validationError(c: Context, error: z.ZodError) {
     },
     400,
   );
+}
+
+function credentialSecret() {
+  return (
+    env.SOURCE_CREDENTIAL_ENCRYPTION_KEY ??
+    env.BETTER_AUTH_SECRET ??
+    env.INTERNAL_API_SECRET
+  );
+}
+
+function validateSourceUrl(url: string | undefined): string | Response | null {
+  if (!url) return null;
+  try {
+    return validateRemoteSourceUrl(url, {
+      allowPrivateUrls: env.ALLOW_PRIVATE_SOURCE_URLS,
+    });
+  } catch (err) {
+    if (err instanceof SourceUrlRejectedError) {
+      return Response.json(
+        { error: { code: "SOURCE_URL_REJECTED", message: err.message } },
+        { status: 400 },
+      );
+    }
+    throw err;
+  }
 }
