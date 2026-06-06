@@ -229,6 +229,132 @@ export interface ConsoleWorkerProfile {
   updatedAt: string;
 }
 
+export interface ConsoleNotificationChannel {
+  id: string;
+  accountId: string;
+  name: string;
+  provider: "webhook" | "email" | "slack" | "discord";
+  target: string;
+  events: string[];
+  enabled: boolean;
+  hasConfig: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleScheduledOperation {
+  id: string;
+  accountId: string;
+  name: string;
+  kind: "tileset_rebuild" | "source_import" | "custom_command";
+  status: "active" | "paused";
+  cron: string;
+  timezone: string;
+  payload: Record<string, unknown>;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleArtifactBackup {
+  id: string;
+  accountId: string;
+  storageObjectId: string | null;
+  provider: string;
+  bucket: string | null;
+  sourceStorageKey: string;
+  backupStorageKey: string;
+  size: number | null;
+  status: "pending" | "completed" | "failed" | "restored";
+  errorMessage: string | null;
+  completedAt: string | null;
+  restoredAt: string | null;
+  createdAt: string;
+}
+
+export interface ConsoleWorkerNode {
+  id: string;
+  accountId: string;
+  name: string;
+  kind: "local" | "remote" | "cloud";
+  status: "pending" | "healthy" | "degraded" | "offline";
+  endpoint: string | null;
+  validation: Record<string, unknown> | null;
+  metadata: Record<string, unknown>;
+  lastSeenAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsolePreviewLink {
+  id: string;
+  accountId: string;
+  resourceType: string;
+  resourceId: string;
+  slug: string;
+  targetUrl: string;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface ConsoleCustomDomain {
+  id: string;
+  accountId: string;
+  resourceType: string;
+  resourceId: string | null;
+  host: string;
+  path: string;
+  status: "pending" | "verified" | "active" | "failed";
+  verificationToken: string;
+  tlsEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleWorkflowTemplate {
+  id: string;
+  accountId: string | null;
+  name: string;
+  category: string;
+  description: string | null;
+  template: Record<string, unknown>;
+  builtIn: boolean;
+  createdAt: string;
+}
+
+export interface ConsoleWorkerHealth {
+  status: "healthy" | "degraded" | "offline" | string;
+  message: string;
+  latencyMs: number | null;
+  toolchain?: unknown;
+}
+
+export interface ConsoleOperationsOverview {
+  recentJobs: ConsoleProcessingJob[];
+  notificationChannels: ConsoleNotificationChannel[];
+  scheduledOperations: ConsoleScheduledOperation[];
+  artifactBackups: ConsoleArtifactBackup[];
+  workerNodes: ConsoleWorkerNode[];
+  previewLinks: ConsolePreviewLink[];
+  customDomains: ConsoleCustomDomain[];
+  workflowTemplates: ConsoleWorkflowTemplate[];
+  workerHealth: ConsoleWorkerHealth;
+}
+
+export interface ConsoleJobTimelineEvent {
+  id: string;
+  message: string;
+  timestamp: string | null;
+  level: string;
+  metadata: unknown;
+}
+
+export interface ConsoleJobTimeline {
+  job: ConsoleProcessingJob;
+  timeline: ConsoleJobTimelineEvent[];
+}
+
 export interface ProcessingEstimate {
   minSeconds: number;
   maxSeconds: number;
@@ -736,6 +862,168 @@ class ApiClient {
     return this.post<ApiEnvelope<ProcessingEstimate>>(
       "/processing-jobs/estimate",
       options,
+    );
+  }
+
+  getOperations() {
+    return this.get<ApiEnvelope<ConsoleOperationsOverview>>("/operations");
+  }
+
+  getJobTimeline(jobId: string) {
+    return this.get<ApiEnvelope<ConsoleJobTimeline>>(
+      `/operations/jobs/${jobId}/timeline`,
+    );
+  }
+
+  createNotificationChannel(options: {
+    name: string;
+    provider: ConsoleNotificationChannel["provider"];
+    target: string;
+    events?: string[];
+    enabled?: boolean;
+  }) {
+    return this.post<ApiEnvelope<ConsoleNotificationChannel>>(
+      "/operations/notification-channels",
+      options,
+    );
+  }
+
+  deleteNotificationChannel(id: string) {
+    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
+      `/operations/notification-channels/${id}`,
+    );
+  }
+
+  testNotificationChannel(id: string) {
+    return this.post<ApiEnvelope<{ delivered: boolean; message: string }>>(
+      `/operations/notification-channels/${id}/test`,
+    );
+  }
+
+  createScheduledOperation(options: {
+    name: string;
+    kind: ConsoleScheduledOperation["kind"];
+    status?: ConsoleScheduledOperation["status"];
+    cron: string;
+    timezone?: string;
+    payload?: Record<string, unknown>;
+  }) {
+    return this.post<ApiEnvelope<ConsoleScheduledOperation>>(
+      "/operations/schedules",
+      options,
+    );
+  }
+
+  runScheduledOperation(id: string) {
+    return this.post<ApiEnvelope<{ schedule: ConsoleScheduledOperation; queued: boolean }>>(
+      `/operations/schedules/${id}/run`,
+    );
+  }
+
+  deleteScheduledOperation(id: string) {
+    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
+      `/operations/schedules/${id}`,
+    );
+  }
+
+  createArtifactBackup(storageObjectId: string) {
+    return this.post<ApiEnvelope<ConsoleArtifactBackup>>(
+      "/operations/artifact-backups",
+      { storageObjectId },
+    );
+  }
+
+  restoreArtifactBackup(id: string) {
+    return this.post<ApiEnvelope<ConsoleArtifactBackup>>(
+      `/operations/artifact-backups/${id}/restore`,
+    );
+  }
+
+  createWorkerNode(options: {
+    name: string;
+    kind?: ConsoleWorkerNode["kind"];
+    endpoint?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    return this.post<ApiEnvelope<ConsoleWorkerNode>>(
+      "/operations/worker-nodes",
+      options,
+    );
+  }
+
+  validateWorkerNode(id: string) {
+    return this.post<ApiEnvelope<ConsoleWorkerNode>>(
+      `/operations/worker-nodes/${id}/validate`,
+    );
+  }
+
+  deleteWorkerNode(id: string) {
+    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
+      `/operations/worker-nodes/${id}`,
+    );
+  }
+
+  createPreviewLink(options: {
+    resourceType: string;
+    resourceId: string;
+    targetUrl: string;
+    slug?: string;
+    expiresAt?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    return this.post<ApiEnvelope<ConsolePreviewLink>>(
+      "/operations/preview-links",
+      options,
+    );
+  }
+
+  deletePreviewLink(id: string) {
+    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
+      `/operations/preview-links/${id}`,
+    );
+  }
+
+  createCustomDomain(options: {
+    resourceType: string;
+    resourceId?: string;
+    host: string;
+    path?: string;
+    tlsEnabled?: boolean;
+    metadata?: Record<string, unknown>;
+  }) {
+    return this.post<ApiEnvelope<ConsoleCustomDomain>>(
+      "/operations/custom-domains",
+      options,
+    );
+  }
+
+  verifyCustomDomain(id: string) {
+    return this.post<ApiEnvelope<ConsoleCustomDomain>>(
+      `/operations/custom-domains/${id}/verify`,
+    );
+  }
+
+  deleteCustomDomain(id: string) {
+    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
+      `/operations/custom-domains/${id}`,
+    );
+  }
+
+  createWorkflowTemplate(options: {
+    name: string;
+    category: string;
+    description?: string;
+    template?: Record<string, unknown>;
+  }) {
+    return this.post<ApiEnvelope<ConsoleWorkflowTemplate>>(
+      "/operations/workflow-templates",
+      options,
+    );
+  }
+
+  deleteWorkflowTemplate(id: string) {
+    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
+      `/operations/workflow-templates/${id}`,
     );
   }
 
