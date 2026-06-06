@@ -20,11 +20,17 @@ import { logAudit } from "../lib/audit";
 import { registerPublishedMartinSources } from "../lib/martin-sources";
 import { enqueueOutboxEvent } from "../lib/outbox";
 import { checkResourceLimit } from "../lib/plan-check";
+import {
+  buildRetrySourceResource,
+  parseSourceProcessingJobInput,
+  type SourceProcessingJobInput,
+  type TilesetBuildFormat,
+} from "../lib/tileset-build-input";
 
 export const resourcesRoute = new Hono<AuthEnv>();
 
 const MAX_UPLOAD_SIZE = 250 * 1024 * 1024;
-type UploadFormat = "geojson" | "csv" | "shapefile" | "pmtiles" | "mbtiles";
+type UploadFormat = TilesetBuildFormat;
 
 const createTilesetSchema = z.object({
   name: z.string().min(1).max(128),
@@ -757,14 +763,15 @@ resourcesRoute.post("/jobs/:id/retry", async (c) => {
     }
   });
 
+  const retrySource = buildRetrySourceResource(input);
   await enqueueOutboxEvent({
     eventName: "tileset.build.requested",
     payload: {
       accountId,
       tilesetId: input.tilesetId,
       jobId: job.id,
-      sourceResourceType: "upload",
-      sourceResourceId: input.uploadId,
+      sourceResourceType: retrySource.sourceResourceType,
+      sourceResourceId: retrySource.sourceResourceId,
       options: input.options,
     },
   });
@@ -1022,47 +1029,3 @@ type ConsoleArtifact = {
   url: string;
 };
 
-type SourceProcessingJobInput = {
-  tilesetId: string;
-  uploadId: string;
-  uploadKey: string;
-  format: UploadFormat;
-  csv?: {
-    latitude?: string;
-    longitude?: string;
-  };
-  options?: Record<string, unknown>;
-};
-
-function parseSourceProcessingJobInput(input: unknown): SourceProcessingJobInput {
-  if (typeof input !== "object" || input === null) {
-    throw new Error("Processing job input is missing");
-  }
-
-  const candidate = input as Partial<SourceProcessingJobInput>;
-  if (
-    !candidate.tilesetId ||
-    !candidate.uploadId ||
-    !candidate.uploadKey ||
-    !candidate.format
-  ) {
-    throw new Error("Processing job input cannot reconstruct a tileset build request");
-  }
-
-  if (
-    !["geojson", "csv", "shapefile", "pmtiles", "mbtiles"].includes(
-      candidate.format,
-    )
-  ) {
-    throw new Error("Processing job input has an unsupported source format");
-  }
-
-  return {
-    tilesetId: candidate.tilesetId,
-    uploadId: candidate.uploadId,
-    uploadKey: candidate.uploadKey,
-    format: candidate.format,
-    csv: candidate.csv,
-    options: candidate.options,
-  };
-}

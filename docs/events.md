@@ -4,6 +4,8 @@
 
 Tileset uploads write durable upload, storage, tileset, processing job, and `tileset.build.requested` outbox records. `apps/worker-geodata` claims due build-request events and dispatches BullMQ geodata work, so BullMQ remains the execution transport while `event_outbox` is the durable trigger source.
 
+Imported datasets can enter the same build path after extraction. `POST /console/datasets/:id/tilesets` creates a `tileset.process_dataset` processing job whose input points at the selected `dataset_versions` GeoJSON storage object, then writes `tileset.build.requested` with `sourceResourceType=dataset`.
+
 Publishing a tileset version writes `tileset.version.published`. That event is currently a durable integration hook for future notification/indexing workers; it is not claimed by the geodata worker.
 
 The legacy `/console/sources` workflow has been removed from the API surface; tileset uploads are the supported geodata ingestion path.

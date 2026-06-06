@@ -167,6 +167,22 @@ export interface TilesetUploadResult {
   processingJob: unknown;
 }
 
+export interface DatasetTilesetOptions {
+  handle: string;
+  name: string;
+  description?: string;
+  datasetVersionId?: string;
+  minZoom?: number;
+  maxZoom?: number;
+}
+
+export interface DatasetTilesetResult {
+  dataset: unknown;
+  datasetVersion: unknown;
+  tileset: ConsoleTileset;
+  processingJob: ConsoleProcessingJob;
+}
+
 export interface StylePublishResponse {
   id: string;
   handle: string;
@@ -453,6 +469,13 @@ class ApiClient {
   rebuildTileset(tilesetId: string) {
     return this.post<ApiEnvelope<ConsoleProcessingJob>>(
       `/tilesets/${tilesetId}/rebuild`,
+    );
+  }
+
+  createTilesetFromDataset(datasetId: string, options: DatasetTilesetOptions) {
+    return this.post<ApiEnvelope<DatasetTilesetResult>>(
+      `/datasets/${datasetId}/tilesets`,
+      options,
     );
   }
 
