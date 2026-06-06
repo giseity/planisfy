@@ -23,9 +23,19 @@
         "NEXT_PUBLIC_APP_URL",
         "RESEND_API_KEY",
         "LOCAL_STORAGE_PATH",
+        "LOCAL_STORAGE_BUCKET",
         "LOG_LEVEL",
         "MARTIN_SOURCES_PATH",
-        "MARTIN_SOURCES_PREFIX"
+        "MARTIN_SOURCES_PREFIX",
+        "STORAGE_PROVIDER",
+        "S3_BUCKET",
+        "R2_BUCKET",
+        "R2_ENDPOINT",
+        "R2_ACCOUNT_ID",
+        "R2_ACCESS_KEY_ID",
+        "R2_SECRET_ACCESS_KEY",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY"
       ]
     },
     "check-types": {
