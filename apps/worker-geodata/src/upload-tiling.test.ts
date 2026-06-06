@@ -4,6 +4,7 @@ import {
   buildTippecanoeArgs,
   missingTippecanoeMessage,
   shouldStoreRawFallback,
+  validateUpload,
 } from "./upload-tiling";
 
 test("buildTippecanoeArgs creates deterministic upload tiling args", () => {
@@ -64,5 +65,109 @@ test("missing Tippecanoe message points to env configuration", () => {
   assert.match(
     missingTippecanoeMessage("/usr/local/bin/tippecanoe"),
     /GEODATA_ALLOW_RAW_FALLBACK=true/,
+  );
+});
+
+test("validateUpload summarizes GeoJSON bounds and properties", () => {
+  const validation = validateUpload(
+    Buffer.from(
+      JSON.stringify({
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: { name: "Depot", capacity: 12 },
+            geometry: { type: "Point", coordinates: [9.1, 48.7] },
+          },
+          {
+            type: "Feature",
+            properties: { name: "Hub", active: true },
+            geometry: { type: "Point", coordinates: [9.3, 48.9] },
+          },
+        ],
+      }),
+    ),
+    "geojson",
+  );
+
+  assert.equal(validation.featureCount, 2);
+  assert.deepEqual(validation.bounds, [9.1, 48.7, 9.3, 48.9]);
+  assert.deepEqual(validation.schema?.fields, {
+    active: "boolean",
+    capacity: "number",
+    name: "string",
+  });
+});
+
+test("validateUpload rejects GeoJSON without usable coordinates", () => {
+  assert.throws(
+    () =>
+      validateUpload(
+        Buffer.from(
+          JSON.stringify({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                properties: {},
+                geometry: null,
+              },
+            ],
+          }),
+        ),
+        "geojson",
+      ),
+    /no valid coordinates/,
+  );
+});
+
+test("validateUpload infers CSV coordinate columns and bounds", () => {
+  const validation = validateUpload(
+    Buffer.from("name,lat,lng\nDepot,48.7,9.1\nHub,48.9,9.3\n"),
+    "csv",
+  );
+
+  assert.equal(validation.featureCount, 2);
+  assert.deepEqual(validation.csv, { latitude: "lat", longitude: "lng" });
+  assert.deepEqual(validation.bounds, [9.1, 48.7, 9.3, 48.9]);
+  assert.deepEqual(validation.schema?.columns, ["name", "lat", "lng"]);
+});
+
+test("validateUpload verifies explicit CSV coordinate columns", () => {
+  assert.throws(
+    () =>
+      validateUpload(
+        Buffer.from("name,lat,lng\nDepot,48.7,9.1\n"),
+        "csv",
+        { latitude: "latitude", longitude: "lng" },
+      ),
+    /latitude column 'latitude' was not found/,
+  );
+});
+
+test("validateUpload rejects CSV coordinates outside WGS84 bounds", () => {
+  assert.throws(
+    () => validateUpload(Buffer.from("name,lat,lon\nDepot,95,9.1\n"), "csv"),
+    /outside WGS84/,
+  );
+});
+
+test("validateUpload checks PMTiles and MBTiles magic headers", () => {
+  assert.equal(
+    validateUpload(Buffer.from("PMTiles fixture bytes"), "pmtiles").format,
+    "pmtiles",
+  );
+  assert.equal(
+    validateUpload(Buffer.from("SQLite format 3\0fixture bytes"), "mbtiles")
+      .format,
+    "mbtiles",
+  );
+  assert.throws(
+    () => validateUpload(Buffer.from("not really pmtiles"), "pmtiles"),
+    /PMTiles magic header/,
+  );
+  assert.throws(
+    () => validateUpload(Buffer.from("not really mbtiles"), "mbtiles"),
+    /SQLite database/,
   );
 });
