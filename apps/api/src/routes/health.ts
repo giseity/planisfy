@@ -1,11 +1,21 @@
 import { Hono } from "hono";
 import { db } from "@planisfy/database";
 import { sql } from "drizzle-orm";
+import { access } from "node:fs/promises";
+import { join } from "node:path";
 import { env, redisConnection } from "../env";
 import { renderPrometheusMetrics } from "../lib/metrics";
 
 export const healthRoute = new Hono();
 const WORKER_GEODATA_HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
+type HealthCheck = {
+  status: string;
+  latency?: number;
+  error?: string;
+  provider?: string;
+  bucket?: string;
+  path?: string;
+};
 
 // ── GET /health — Basic readiness check ─────────────────────────────────────
 
@@ -24,7 +34,7 @@ healthRoute.get("/metrics", (c) => {
 // ── GET /health/detailed — Deep health check with service probes ────────────
 
 healthRoute.get("/health/detailed", async (c) => {
-  const checks: Record<string, { status: string; latency?: number; error?: string }> = {};
+  const checks: Record<string, HealthCheck> = {};
   let healthy = true;
 
   // PostgreSQL
@@ -68,6 +78,12 @@ healthRoute.get("/health/detailed", async (c) => {
   } catch (err) {
     checks.redis = { status: "error", latency: Date.now() - redisStart, error: err instanceof Error ? err.message : String(err) };
     checks.workerGeodata = { status: "unknown", error: "Redis unavailable" };
+    healthy = false;
+  }
+
+  const storageStart = Date.now();
+  checks.storage = await checkStorageHealth(storageStart);
+  if (checks.storage.status === "error") {
     healthy = false;
   }
 
@@ -115,4 +131,65 @@ healthRoute.get("/health/detailed", async (c) => {
 
 function getRedisConnection() {
   return redisConnection;
+}
+
+async function checkStorageHealth(start: number): Promise<HealthCheck> {
+  const provider = storageProviderFromEnv();
+
+  if (provider === "local") {
+    const storagePath =
+      process.env.LOCAL_STORAGE_PATH ?? join(process.cwd(), ".storage");
+    try {
+      await access(storagePath);
+      return {
+        status: "ok",
+        provider,
+        bucket: process.env.LOCAL_STORAGE_BUCKET ?? "local",
+        path: storagePath,
+        latency: Date.now() - start,
+      };
+    } catch (err) {
+      return {
+        status: "error",
+        provider,
+        bucket: process.env.LOCAL_STORAGE_BUCKET ?? "local",
+        path: storagePath,
+        latency: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  if (provider === "s3") {
+    return {
+      status: process.env.S3_BUCKET ? "configured" : "degraded",
+      provider,
+      bucket: process.env.S3_BUCKET ?? "planisfy-uploads",
+      latency: Date.now() - start,
+      error: process.env.S3_BUCKET ? undefined : "S3_BUCKET is not configured",
+    };
+  }
+
+  const r2Configured =
+    Boolean(process.env.R2_BUCKET || process.env.S3_BUCKET) &&
+    Boolean(process.env.R2_ENDPOINT || process.env.R2_ACCOUNT_ID) &&
+    Boolean(
+      (process.env.R2_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) &&
+        (process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY),
+    );
+  return {
+    status: r2Configured ? "configured" : "degraded",
+    provider,
+    bucket: process.env.R2_BUCKET ?? process.env.S3_BUCKET ?? "planisfy-uploads",
+    latency: Date.now() - start,
+    error: r2Configured
+      ? undefined
+      : "R2 bucket, endpoint/account, and credentials are not fully configured",
+  };
+}
+
+function storageProviderFromEnv(): "local" | "s3" | "r2" {
+  if (process.env.STORAGE_PROVIDER === "s3") return "s3";
+  if (process.env.STORAGE_PROVIDER === "r2") return "r2";
+  return "local";
 }
