@@ -5,6 +5,7 @@ import {
   api,
   type ConsoleProcessingJob,
   type ConsoleTileset,
+  type ConsoleUploadValidation,
   type ConsoleTilesetVersion,
 } from "@/lib/api";
 import { Badge } from "@planisfy/ui/components/badge";
@@ -156,6 +157,12 @@ export default function SourcesPage() {
     if (!tileset.tilejsonUrl) return;
     await navigator.clipboard.writeText(tileset.tilejsonUrl);
     toast.success("TileJSON URL copied");
+  }
+
+  async function handleCopyArtifactUrl(version: ConsoleTilesetVersion | null) {
+    if (!version?.artifact?.url) return;
+    await navigator.clipboard.writeText(version.artifact.url);
+    toast.success("Artifact URL copied");
   }
 
   function resetUploadForm() {
@@ -334,9 +341,19 @@ export default function SourcesPage() {
               const displayVersion =
                 tileset.currentVersion ?? tileset.latestVersion;
               const latestJob = latestJobForTileset(jobs, tileset.id);
+              const validation = tileset.latestUpload?.validationResult;
+              const artifact = displayVersion?.artifact;
               const canPublish = Boolean(
                 tileset.latestVersion &&
                 tileset.latestVersion.id !== tileset.currentVersion?.id,
+              );
+              const showDetails = Boolean(
+                validation ||
+                  artifact ||
+                  tileset.latestUpload ||
+                  tileset.status === "BUILDING" ||
+                  latestJob?.status === "FAILED" ||
+                  latestJob?.cancelRequestedAt,
               );
               return (
                 <Fragment key={tileset.id}>
@@ -456,17 +473,73 @@ export default function SourcesPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                  {(tileset.status === "BUILDING" ||
-                    latestJob?.status === "FAILED") && (
+                  {showDetails && (
                     <TableRow>
                       <TableCell colSpan={8} className="bg-muted/20">
-                        <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-                          {latestJob?.status === "FAILED" ? (
-                            <AlertCircle className="h-3 w-3" />
-                          ) : (
-                            <RefreshCw className="h-3 w-3 animate-spin" />
+                        <div className="space-y-2 py-2 text-xs text-muted-foreground">
+                          {(tileset.status === "BUILDING" ||
+                            latestJob?.status === "FAILED" ||
+                            latestJob?.cancelRequestedAt) && (
+                            <div className="flex items-center gap-2">
+                              {latestJob?.status === "FAILED" ? (
+                                <AlertCircle className="h-3 w-3" />
+                              ) : (
+                                <RefreshCw className="h-3 w-3 animate-spin" />
+                              )}
+                              {jobStatusMessage(latestJob)}
+                            </div>
                           )}
-                          {jobStatusMessage(latestJob)}
+                          <div className="grid gap-2 md:grid-cols-3">
+                            <div>
+                              <div className="font-medium text-foreground">
+                                Upload
+                              </div>
+                              <div>{uploadSummary(tileset)}</div>
+                            </div>
+                            <div>
+                              <div className="font-medium text-foreground">
+                                Validation
+                              </div>
+                              <div>{validationSummary(validation)}</div>
+                              <div>{boundsSummary(validation?.bounds)}</div>
+                            </div>
+                            <div>
+                              <div className="font-medium text-foreground">
+                                Artifact
+                              </div>
+                              <div>{artifactSummary(displayVersion)}</div>
+                              {artifact && (
+                                <div className="mt-1 flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2"
+                                    onClick={() =>
+                                      handleCopyArtifactUrl(displayVersion)
+                                    }
+                                  >
+                                    <Copy className="mr-1 h-3 w-3" />
+                                    Copy
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2"
+                                    onClick={() =>
+                                      window.open(
+                                        artifact.url,
+                                        "_blank",
+                                        "noopener,noreferrer",
+                                      )
+                                    }
+                                  >
+                                    <ExternalLink className="mr-1 h-3 w-3" />
+                                    Open
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -496,6 +569,47 @@ function statusVariant(status: string) {
 
 function vectorLayerCount(version: ConsoleTilesetVersion | null) {
   return version?.schema?.vector_layers?.length ?? 0;
+}
+
+function uploadSummary(tileset: ConsoleTileset) {
+  const upload = tileset.latestUpload;
+  if (!upload) return "No linked upload.";
+  const size = upload.size ? formatBytes(upload.size) : "unknown size";
+  return `${upload.originalFileName} - ${upload.status} - ${size}`;
+}
+
+function validationSummary(validation: ConsoleUploadValidation | null | undefined) {
+  if (!validation) return "No validation result yet.";
+  const fields = Object.keys(validation.schema?.fields ?? {}).length;
+  const features =
+    typeof validation.featureCount === "number"
+      ? `${validation.featureCount.toLocaleString()} features`
+      : "feature count unavailable";
+  return `${validation.format ?? "source"} - ${features} - ${fields} fields`;
+}
+
+function boundsSummary(
+  bounds: [number, number, number, number] | null | undefined,
+) {
+  if (!bounds) return "Bounds unavailable.";
+  return `Bounds ${bounds.map((value) => value.toFixed(4)).join(", ")}`;
+}
+
+function artifactSummary(version: ConsoleTilesetVersion | null) {
+  if (!version?.artifact) return "No processed artifact yet.";
+  const size = version.artifact.size
+    ? formatBytes(version.artifact.size)
+    : "unknown size";
+  return `${version.format} v${version.version} - ${size}`;
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
 function latestJobForTileset(

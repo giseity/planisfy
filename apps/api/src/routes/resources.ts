@@ -287,10 +287,28 @@ resourcesRoute.get("/tilesets", async (c) => {
           .where(inArray(tilesetVersions.tilesetId, rows.map((row) => row.id)))
           .orderBy(desc(tilesetVersions.version))
       : [];
+  const linkedUploads =
+    rows.length > 0
+      ? await db
+          .select()
+          .from(uploads)
+          .where(
+            and(
+              eq(uploads.accountId, accountId),
+              inArray(uploads.linkedTilesetId, rows.map((row) => row.id)),
+              isNull(uploads.deletedAt),
+            ),
+          )
+          .orderBy(desc(uploads.createdAt))
+      : [];
+  const artifactById = await fetchArtifactMap(versions);
 
   return c.json({
     data: rows.map((row) =>
-      toConsoleTileset(row, ownerHandle, versionsForTileset(versions, row.id)),
+      toConsoleTileset(row, ownerHandle, versionsForTileset(versions, row.id), {
+        uploads: uploadsForTileset(linkedUploads, row.id),
+        artifactById,
+      }),
     ),
   });
 });
@@ -323,9 +341,24 @@ resourcesRoute.get("/tilesets/:id", async (c) => {
     .orderBy(desc(tilesetVersions.version));
 
   const ownerHandle = await getOwnerHandle(accountId);
+  const linkedUploads = await db
+    .select()
+    .from(uploads)
+    .where(
+      and(
+        eq(uploads.accountId, accountId),
+        eq(uploads.linkedTilesetId, id),
+        isNull(uploads.deletedAt),
+      ),
+    )
+    .orderBy(desc(uploads.createdAt));
+  const artifactById = await fetchArtifactMap(versions);
 
   return c.json({
-    data: toConsoleTileset(tileset, ownerHandle, versions),
+    data: toConsoleTileset(tileset, ownerHandle, versions, {
+      uploads: linkedUploads,
+      artifactById,
+    }),
   });
 });
 
@@ -750,14 +783,61 @@ function versionsForTileset(
   return versions.filter((version) => version.tilesetId === tilesetId);
 }
 
+function uploadsForTileset(
+  rows: Array<typeof uploads.$inferSelect>,
+  tilesetId: string,
+) {
+  return rows.filter((upload) => upload.linkedTilesetId === tilesetId);
+}
+
+async function fetchArtifactMap(
+  versions: Array<typeof tilesetVersions.$inferSelect>,
+) {
+  const artifactIds = versions
+    .map((version) => version.artifactStorageObjectId)
+    .filter((id): id is string => Boolean(id));
+  if (artifactIds.length === 0) return new Map<string, ConsoleArtifact>();
+
+  const rows = await db
+    .select()
+    .from(storageObjects)
+    .where(inArray(storageObjects.id, artifactIds));
+  const storage = getStorage();
+  return new Map(
+    rows.map((object) => [
+      object.id,
+      {
+        id: object.id,
+        provider: object.provider,
+        bucket: object.bucket,
+        storageKey: object.storageKey,
+        fileName: object.fileName,
+        contentType: object.contentType,
+        size: object.size,
+        url: storage.getUrl(object.storageKey),
+      },
+    ]),
+  );
+}
+
 function toConsoleTileset(
   tileset: typeof tilesets.$inferSelect,
   ownerHandle: string | null,
   versions: Array<typeof tilesetVersions.$inferSelect>,
+  params: {
+    uploads?: Array<typeof uploads.$inferSelect>;
+    artifactById?: Map<string, ConsoleArtifact>;
+  } = {},
 ) {
   const currentVersion =
     versions.find((version) => version.id === tileset.currentVersionId) ?? null;
-  const latestVersion = versions[0] ?? null;
+  const consoleVersions = versions.map((version) =>
+    toConsoleTilesetVersion(version, params.artifactById),
+  );
+  const currentConsoleVersion =
+    consoleVersions.find((version) => version.id === tileset.currentVersionId) ??
+    null;
+  const latestConsoleVersion = consoleVersions[0] ?? null;
   const tilejsonUrl =
     ownerHandle && currentVersion
       ? `/tiles/v1/${ownerHandle}/${tileset.handle}.json`
@@ -766,9 +846,11 @@ function toConsoleTileset(
   return {
     ...tileset,
     ownerHandle,
-    versions,
-    latestVersion,
-    currentVersion,
+    uploads: params.uploads ?? [],
+    latestUpload: params.uploads?.[0] ?? null,
+    versions: consoleVersions,
+    latestVersion: latestConsoleVersion,
+    currentVersion: currentConsoleVersion,
     isPublished: Boolean(currentVersion),
     tilejsonUrl,
     versionedTilejsonUrl:
@@ -777,6 +859,29 @@ function toConsoleTileset(
         : null,
   };
 }
+
+function toConsoleTilesetVersion(
+  version: typeof tilesetVersions.$inferSelect,
+  artifactById?: Map<string, ConsoleArtifact>,
+) {
+  return {
+    ...version,
+    artifact: version.artifactStorageObjectId
+      ? (artifactById?.get(version.artifactStorageObjectId) ?? null)
+      : null,
+  };
+}
+
+type ConsoleArtifact = {
+  id: string;
+  provider: string;
+  bucket: string | null;
+  storageKey: string;
+  fileName: string | null;
+  contentType: string | null;
+  size: number | null;
+  url: string;
+};
 
 type SourceProcessingJobInput = {
   tilesetId: string;

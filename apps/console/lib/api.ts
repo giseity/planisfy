@@ -54,6 +54,47 @@ export interface ConsoleTilesetVersion {
   maxZoom: number | null;
   createdAt: string;
   publishedAt: string | null;
+  artifact: ConsoleStorageArtifact | null;
+}
+
+export interface ConsoleUploadValidation {
+  format?: string;
+  featureCount?: number;
+  bounds?: [number, number, number, number] | null;
+  schema?: {
+    fields?: Record<string, string>;
+    columns?: string[];
+  };
+  csv?: {
+    latitude?: string;
+    longitude?: string;
+  };
+  byteLength?: number;
+}
+
+export interface ConsoleUpload {
+  id: string;
+  accountId: string;
+  originalFileName: string;
+  contentType: string | null;
+  size: number | null;
+  storageObjectId: string | null;
+  status: string;
+  validationResult: ConsoleUploadValidation | null;
+  linkedTilesetId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleStorageArtifact {
+  id: string;
+  provider: string;
+  bucket: string | null;
+  storageKey: string;
+  fileName: string | null;
+  contentType: string | null;
+  size: number | null;
+  url: string;
 }
 
 export interface ConsoleTileset {
@@ -72,6 +113,8 @@ export interface ConsoleTileset {
   layerMetadata: {
     vector_layers?: ConsoleVectorLayer[];
   } | null;
+  uploads: ConsoleUpload[];
+  latestUpload: ConsoleUpload | null;
   versions: ConsoleTilesetVersion[];
   latestVersion: ConsoleTilesetVersion | null;
   currentVersion: ConsoleTilesetVersion | null;
