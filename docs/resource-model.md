@@ -49,4 +49,4 @@ Production URLs must resolve to immutable artifacts or explicit stable aliases. 
 - Style publication creates a `latest` alias plus an immutable `v{version}` alias in `style_publications`.
 - Public style `@version` URLs only resolve for versions that have been published.
 - Overture import requests enter through `POST /console/source-imports/overture` and create a dataset, `source_imports` row, processing job, and outbox event.
-- The current geodata worker records source import provenance as metadata-only output until DuckDB extract execution is configured.
+- The current geodata worker runs DuckDB extraction for Overture imports when `OVERTURE_RELEASE` is configured, then records dataset versions, schema, bounds, counts, warnings, artifacts, and provenance. Missing DuckDB/release configuration fails the job instead of recording metadata-only success.

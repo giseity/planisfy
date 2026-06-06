@@ -14,6 +14,8 @@ Milestone 1/2 includes a small, versioned fixture release for local demo wiring:
 | Source-layer contract | `source-layer-contract.json` | Human- and machine-readable source-layer assumptions used by the style. |
 | JSON schema | `schemas/planisfy-streets-v1.schema.json` | Minimal schema for validating the source-layer contract shape. |
 | Release manifest | `release-manifest.json` | Release metadata tying the fixture style, schema, Martin source, and demo data expectation together. |
+| Planetiler regional profile | `planetiler/planisfy-streets-regional.yml` | Minimal custom-map profile for reproducible regional PMTiles builds. |
+| Regional fixture input | `fixtures/regional/planisfy-streets-fixture.geojson` | Tiny tracked source input for the Planetiler harness. |
 
 The fixture is intentionally lightweight. It does not include binary PMTiles,
 sprites, or glyph PBF files. Local demos default glyph loading to the MapLibre
@@ -46,13 +48,31 @@ pnpm -F @planisfy/map-styles build:regional-release -- \
 ```
 
 The command validates the PMTiles header, records size and SHA-256, and writes a
-manifest/style pair. It does not copy the PMTiles binary into the package or any
-tracked path.
+manifest/style pair with source versions, attribution, source layers, and
+`binaryCommitted=false`. It does not copy the PMTiles binary into the package or
+any tracked path.
+
+## Planetiler Regional Harness
+
+Build a small ignored regional PMTiles artifact with Planetiler, then generate
+the release metadata from that artifact:
+
+```bash
+pnpm -F @planisfy/map-styles build:planetiler-regional -- \
+  --name fixture \
+  --version dev
+```
+
+The script runs `ghcr.io/onthegomap/planetiler:0.10.2` through Docker with the
+tracked regional profile and fixture GeoJSON. Planetiler is intentionally kept
+out of `worker-geodata`; the worker uses Tippecanoe/GDAL for ad hoc uploads and
+DuckDB for imports.
 
 ## Owns
 
 - Default MapLibre-compatible style JSON.
 - Fixture source-layer contracts and release manifests.
+- Planetiler regional build harness and fixture inputs.
 - Future sprite and glyph metadata used by Planisfy basemap styles.
 - Basemap style assets that should be versioned with the product.
 
@@ -68,6 +88,7 @@ tracked path.
 ```bash
 pnpm -F @planisfy/map-styles lint
 pnpm -F @planisfy/map-styles build:release
+pnpm -F @planisfy/map-styles build:planetiler-regional -- --name fixture --version dev
 pnpm -F @planisfy/map-styles build:regional-release -- --pmtiles infra/docker/data/pmtiles/stuttgart.pmtiles
 node -e "JSON.parse(require('fs').readFileSync('packages/map-styles/styles/planisfy-streets-v1.json','utf8'))"
 ```

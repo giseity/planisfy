@@ -17,16 +17,18 @@ Implemented or partially implemented:
 - Map style CRUD, version history, publishing, and a browser style editor
 - Tileset upload processing with validation, artifacts, retry/cancel, rebuild,
   and version promotion controls
-- Saved regions and source import records, with metadata-only Overture import
-  dispatch until DuckDB extract execution is configured
+- Saved regions and source import records, with DuckDB-backed Overture extract
+  execution when `OVERTURE_RELEASE` is configured
 - Console, admin, marketing, and docs Next.js apps
 - Docker Compose wiring for local Postgres, Redis, Martin, Valhalla, worker-geodata, local storage, and app containers
 
 Still alpha or externally dependent:
 
 - Tiles require Martin and configured PMTiles data
-- Overture imports currently record dataset/import/job provenance only; full
-  DuckDB extraction is still planned
+- Overture imports require DuckDB, `OVERTURE_RELEASE`, and compatible public
+  GeoParquet access; larger import UX and managed data releases are still alpha
+- Basemap generation now has a Planetiler regional harness, but global basemap
+  releases and managed data packages remain later work
 - Routing requires Valhalla data under `infra/docker/data/valhalla_data`
 - Geocoding prefers Pelias and falls back to Nominatim for basic development use
 - Static maps return a placeholder unless `STATIC_MAP_URL` is configured
@@ -48,6 +50,9 @@ See [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md) for the canonical roadmap, curr
 | Rate limiting and queues | Redis, BullMQ, rate-limiter-flexible |
 | Tiles | Martin |
 | Routing | Valhalla |
+| Upload tiling | Tippecanoe + GDAL/ogr2ogr in `worker-geodata` |
+| Source imports | DuckDB in `worker-geodata` |
+| Basemap release builds | Planetiler under `@planisfy/map-styles` |
 | Maps | MapLibre GL JS |
 | UI | shared `@planisfy/ui` components |
 
@@ -164,6 +169,7 @@ Local demo assets:
 - Style release manifest: `packages/map-styles/release-manifest.json`
 - Martin PMTiles mount: `infra/docker/data/pmtiles`; the default fixture expects `stuttgart.pmtiles`
 - Optional PMTiles download controls: `DEMO_PMTILES_URL` and `DEMO_PMTILES_SHA256`
+- Regional basemap build harness: `pnpm -F @planisfy/map-styles build:planetiler-regional`
 - Local object storage mount: `infra/docker/data/storage`
 
 Health checks:
