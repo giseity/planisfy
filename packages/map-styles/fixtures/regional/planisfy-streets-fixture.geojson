@@ -1,0 +1,67 @@
+{
+  "type": "FeatureCollection",
+  "name": "planisfy-streets-regional-fixture",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "layer": "land", "class": "land" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[9.16, 48.76], [9.21, 48.76], [9.21, 48.79], [9.16, 48.79], [9.16, 48.76]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "layer": "landuse", "class": "park", "name": "Fixture Park" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[9.17, 48.77], [9.18, 48.77], [9.18, 48.78], [9.17, 48.78], [9.17, 48.77]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "layer": "water", "class": "river", "name": "Fixture Water" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[9.19, 48.765], [9.205, 48.765], [9.205, 48.772], [9.19, 48.772], [9.19, 48.765]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "layer": "admin_boundary", "admin_level": 8, "name": "Fixture Boundary" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[9.165, 48.765], [9.205, 48.785]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "layer": "transportation", "class": "primary", "name": "Fixture Road" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[9.165, 48.775], [9.205, 48.775]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "layer": "transportation_name", "class": "primary", "name": "Fixture Road" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [[9.165, 48.775], [9.205, 48.775]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "layer": "building", "height": 12 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[9.182, 48.776], [9.184, 48.776], [9.184, 48.778], [9.182, 48.778], [9.182, 48.776]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "layer": "place", "class": "city", "name": "Fixture City", "rank": 1 },
+      "geometry": { "type": "Point", "coordinates": [9.1829, 48.7758] }
+    }
+  ]
+}

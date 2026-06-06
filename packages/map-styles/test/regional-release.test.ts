@@ -31,6 +31,10 @@ describe("regional basemap release builder", () => {
         outDir,
         "--tilejson-url",
         "https://tiles.example.com/test-region",
+        "--source-version",
+        "planetiler=0.10.2",
+        "--source-version",
+        "fixture=planisfy-streets-regional-v1",
       ],
       { cwd: root },
     );
@@ -39,6 +43,9 @@ describe("regional basemap release builder", () => {
       await readFile(join(outDir, "manifest.json"), "utf8"),
     ) as {
       release: string;
+      attribution: string;
+      sourceDataVersions: Record<string, string>;
+      sourceLayers: string[];
       source: { sha256: string; size: number; binaryCommitted: boolean };
       style: { tilejsonUrl: string };
     };
@@ -55,6 +62,14 @@ describe("regional basemap release builder", () => {
     );
     expect(manifest.style.tilejsonUrl).toBe(
       "https://tiles.example.com/test-region",
+    );
+    expect(manifest.attribution).toContain("OpenStreetMap");
+    expect(manifest.sourceDataVersions).toEqual({
+      fixture: "planisfy-streets-regional-v1",
+      planetiler: "0.10.2",
+    });
+    expect(manifest.sourceLayers).toEqual(
+      expect.arrayContaining(["land", "transportation", "place"]),
     );
     expect(style.sources["planisfy-streets"]?.url).toBe(
       "https://tiles.example.com/test-region",

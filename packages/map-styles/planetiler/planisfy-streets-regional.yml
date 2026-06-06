@@ -1,0 +1,117 @@
+schema_name: Planisfy Streets Regional Fixture
+schema_description: Minimal regional Planetiler profile for Planisfy Streets harness tests and local builds.
+attribution: '&copy; OpenStreetMap contributors, Overture Maps Foundation, Natural Earth'
+version: 1
+args:
+  minzoom: 0
+  maxzoom: 14
+
+sources:
+  fixture:
+    type: geojson
+    local_path: /data/packages/map-styles/fixtures/regional/planisfy-streets-fixture.geojson
+    projection: EPSG:4326
+
+layers:
+  - id: land
+    features:
+      - source: fixture
+        geometry: polygon
+        min_zoom: 0
+        include_when:
+          layer: land
+        attributes:
+          - key: class
+            tag_value: class
+          - key: name
+            tag_value: name
+  - id: landuse
+    features:
+      - source: fixture
+        geometry: polygon
+        min_zoom: 6
+        include_when:
+          layer: landuse
+        attributes:
+          - key: class
+            tag_value: class
+          - key: name
+            tag_value: name
+  - id: water
+    features:
+      - source: fixture
+        geometry: polygon
+        min_zoom: 0
+        include_when:
+          layer: water
+        attributes:
+          - key: class
+            tag_value: class
+          - key: name
+            tag_value: name
+  - id: admin_boundary
+    features:
+      - source: fixture
+        geometry: line
+        min_zoom: 0
+        include_when:
+          layer: admin_boundary
+        attributes:
+          - key: admin_level
+            tag_value: admin_level
+          - key: name
+            tag_value: name
+  - id: transportation
+    features:
+      - source: fixture
+        geometry: line
+        min_zoom: 5
+        include_when:
+          layer: transportation
+        attributes:
+          - key: class
+            tag_value: class
+          - key: name
+            tag_value: name
+  - id: transportation_name
+    features:
+      - source: fixture
+        geometry: line
+        min_zoom: 10
+        include_when:
+          layer: transportation_name
+        attributes:
+          - key: class
+            tag_value: class
+          - key: name
+            tag_value: name
+  - id: building
+    features:
+      - source: fixture
+        geometry: polygon
+        min_zoom: 13
+        include_when:
+          layer: building
+        attributes:
+          - key: height
+            tag_value: height
+          - key: render_height
+            tag_value: render_height
+  - id: place
+    features:
+      - source: fixture
+        geometry: point
+        min_zoom: 0
+        include_when:
+          layer: place
+        attributes:
+          - key: class
+            tag_value: class
+          - key: name
+            tag_value: name
+          - key: name:en
+            tag_value: name:en
+          - key: rank
+            tag_value: rank
+          - key: population
+            tag_value: population
