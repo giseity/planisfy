@@ -111,6 +111,15 @@ PMTiles and Valhalla graph data outside Git while preserving these mount points.
 Use `DEMO_PMTILES_URL` plus `scripts/self-host-setup.sh --demo-data` when a
 team wants a repeatable local download path for the default fixture.
 
+## Source Imports
+
+Overture imports run in `worker-geodata` through DuckDB. Set `OVERTURE_RELEASE`
+to a concrete Overture release and make sure `DUCKDB_PATH` resolves inside the
+worker image or host process. The default parquet template reads the public
+Overture S3 layout and requires import requests to include a theme, type, and
+saved-region bbox. If DuckDB or release config is missing, the import job fails
+with `OVERTURE_IMPORT_FAILED` instead of recording metadata-only success.
+
 ## Martin Tileset Aliases
 
 The API proxies public tileset URLs to Martin source names:

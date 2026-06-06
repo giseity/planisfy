@@ -24,6 +24,14 @@ RUN pnpm --filter worker-geodata build
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ARG DUCKDB_VERSION=v1.1.3
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl unzip && \
+    curl -fsSL -o /tmp/duckdb.zip "https://github.com/duckdb/duckdb/releases/download/${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip" && \
+    unzip -q /tmp/duckdb.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/duckdb && \
+    rm -rf /var/lib/apt/lists/* /tmp/duckdb.zip
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 worker
