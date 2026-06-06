@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@planisfy/ui/lib/utils"
-import { Palette, Key, BarChart3, Settings, Database, Building2, LayoutDashboard } from "lucide-react"
+import { Palette, Key, BarChart3, Settings, Database, Building2, LayoutDashboard, ServerCog } from "lucide-react"
 import { ContextSwitcher } from "@/components/studio/context-switcher"
 import { ThemeToggle } from "@/components/studio/theme-toggle"
 import { EmailVerificationBanner } from "@/components/studio/email-verification-banner"
@@ -12,6 +12,7 @@ const navItems = [
   { href: "/studio", label: "Dashboard", icon: LayoutDashboard },
   { href: "/studio/styles", label: "Styles", icon: Palette },
   { href: "/studio/sources", label: "Tilesets", icon: Database },
+  { href: "/studio/operations", label: "Operations", icon: ServerCog },
   { href: "/studio/keys", label: "API Keys", icon: Key },
   { href: "/studio/usage", label: "Usage", icon: BarChart3 },
   { href: "/studio/org", label: "Organization", icon: Building2 },
