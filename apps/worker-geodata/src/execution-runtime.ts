@@ -11,7 +11,7 @@ export interface LocalExecutionRuntime {
   executionTarget: {
     id: string;
     name: string;
-    provider: "local";
+    provider: "local" | "aws_batch" | "gcp_batch";
     config: Record<string, unknown>;
   } | null;
   workerProfile: {
@@ -48,18 +48,30 @@ export async function resolveLocalExecutionRuntime(
   },
   database: DatabaseClient = db,
 ): Promise<LocalExecutionRuntime> {
+  const runtime = await resolveExecutionRuntime(params, database);
+  if (runtime.executionTarget && runtime.executionTarget.provider !== "local") {
+    throw new Error(
+      `Execution target ${runtime.executionTarget.name} uses ${runtime.executionTarget.provider}; this local worker can only run local targets`,
+    );
+  }
+  return runtime;
+}
+
+export async function resolveExecutionRuntime(
+  params: {
+    accountId: string;
+    executionTargetId?: string | null;
+    workerProfileId?: string | null;
+    secret?: string;
+  },
+  database: DatabaseClient = db,
+): Promise<LocalExecutionRuntime> {
   const target = params.executionTargetId
     ? await fetchExecutionTarget(params.accountId, params.executionTargetId, database)
     : null;
   if (params.executionTargetId && !target) {
     throw new Error("Execution target is unavailable or no longer exists");
   }
-  if (target && target.provider !== "local") {
-    throw new Error(
-      `Execution target ${target.name} uses ${target.provider}; this local worker can only run local targets`,
-    );
-  }
-
   const profile = params.workerProfileId
     ? await fetchWorkerProfile(params.accountId, params.workerProfileId, database)
     : null;
@@ -85,7 +97,7 @@ export async function resolveLocalExecutionRuntime(
       ? {
           id: target.id,
           name: target.name,
-          provider: "local",
+          provider: target.provider,
           config: asRecord(target.config),
         }
       : null,
