@@ -205,6 +205,24 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml up -d postgres
 pnpm -F @planisfy/database db:migrate
 ```
 
+## Backup And Restore
+
+Create a self-host backup before upgrades or risky maintenance:
+
+```bash
+scripts/self-host-backup.sh
+```
+
+Restore from a backup directory with an explicit confirmation flag:
+
+```bash
+scripts/self-host-restore.sh --backup backups/planisfy-YYYYMMDDTHHMMSSZ --confirm
+```
+
+Backups include PostgreSQL, Redis when reachable, local storage, PMTiles, and
+Valhalla data. See [docs/operations.md](./operations.md) for the full recovery
+and upgrade flow.
+
 For a full demo boot:
 
 ```bash
