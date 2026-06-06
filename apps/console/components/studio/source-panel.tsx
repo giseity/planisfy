@@ -99,6 +99,9 @@ function SourceBrowser({
   const [tilesets, setTilesets] = useState<ConsoleTileset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSourceLayers, setSelectedSourceLayers] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
     let active = true;
@@ -150,11 +153,13 @@ function SourceBrowser({
       ) : (
         <div className="space-y-1">
           {tilesets.slice(0, 8).map((tileset) => {
-            const sourceId = tileset.handle || tileset.id;
+            const sourceId = styleSourceIdForTileset(tileset);
             const inStyle = existingSourceIds.has(sourceId);
             const spec = tilesetToStyleSource(tileset);
             const canAdd = Boolean(spec && tileset.isPublished);
-            const firstLayer = vectorLayersForTileset(tileset)[0]?.id;
+            const vectorLayers = vectorLayersForTileset(tileset);
+            const selectedSourceLayer =
+              selectedSourceLayers[tileset.id] ?? vectorLayers[0]?.id;
             return (
               <div
                 key={tileset.id}
@@ -170,11 +175,11 @@ function SourceBrowser({
                         ? `${tileset.ownerHandle}.${tileset.handle}`
                         : tileset.handle}
                     </div>
-                    {firstLayer && (
-                      <div className="truncate text-[10px] text-muted-foreground">
-                        {firstLayer}
-                      </div>
-                    )}
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {canAdd
+                        ? sourceId
+                        : publishabilityMessage(tileset)}
+                    </div>
                   </div>
                   <Badge
                     variant={
@@ -185,6 +190,32 @@ function SourceBrowser({
                     {tileset.isPublished ? "PUBLISHED" : tileset.status}
                   </Badge>
                 </div>
+                {vectorLayers.length > 1 && (
+                  <Select
+                    value={selectedSourceLayer}
+                    onValueChange={(value) =>
+                      setSelectedSourceLayers((current) => ({
+                        ...current,
+                        [tileset.id]: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-6 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vectorLayers.map((layer) => (
+                        <SelectItem
+                          key={layer.id}
+                          value={layer.id}
+                          className="text-xs"
+                        >
+                          {layer.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <div className="flex gap-1">
                   <Button
                     size="sm"
@@ -205,7 +236,10 @@ function SourceBrowser({
                       if (!inStyle) onAdd(sourceId, spec);
                       onAddLayer(
                         sourceId,
-                        defaultLayerOptionsForTileset(tileset),
+                        defaultLayerOptionsForTileset(
+                          tileset,
+                          selectedSourceLayer,
+                        ),
                       );
                     }}
                   >
@@ -497,11 +531,12 @@ function tilesetToStyleSource(
 
 function defaultLayerOptionsForTileset(
   tileset: ConsoleTileset,
+  sourceLayer?: string,
 ): SourceLayerOptions {
   if (tileset.type === "RASTER") return { layerType: "raster" };
   return {
-    layerType: "circle",
-    sourceLayer: vectorLayersForTileset(tileset)[0]?.id,
+    layerType: inferLayerType(sourceLayer),
+    sourceLayer,
   };
 }
 
@@ -511,6 +546,27 @@ function vectorLayersForTileset(tileset: ConsoleTileset) {
     tileset.layerMetadata?.vector_layers ??
     []
   );
+}
+
+function styleSourceIdForTileset(tileset: ConsoleTileset) {
+  const owner = tileset.ownerHandle ? `${tileset.ownerHandle}-` : "";
+  return `${owner}${tileset.handle || tileset.id}`.replace(/[^A-Za-z0-9_-]+/g, "-");
+}
+
+function publishabilityMessage(tileset: ConsoleTileset) {
+  if (!tileset.isPublished) return "Publish a processed version first";
+  if (!tileset.tilejsonUrl) return "TileJSON URL unavailable";
+  return tileset.status;
+}
+
+function inferLayerType(
+  sourceLayer: string | undefined,
+): NonNullable<SourceLayerOptions["layerType"]> {
+  const layer = sourceLayer?.toLowerCase() ?? "";
+  if (/(road|transport|route|line|rail|boundary)/.test(layer)) return "line";
+  if (/(building|land|water|park|area|polygon)/.test(layer)) return "fill";
+  if (/(label|place|name|poi)/.test(layer)) return "symbol";
+  return "circle";
 }
 
 function defaultLayerType(
