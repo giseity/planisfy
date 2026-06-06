@@ -57,7 +57,7 @@ export interface SourceProcessingJob {
   executionTarget?: {
     id: string;
     name: string;
-    provider: "local";
+    provider: "local" | "aws_batch" | "gcp_batch";
     config: Record<string, unknown>;
   } | null;
   workerProfile?: {
