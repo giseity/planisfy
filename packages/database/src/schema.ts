@@ -38,6 +38,11 @@ export const sourceTypeEnum = pgEnum("source_type", [
   "IMAGE",
   "VIDEO",
 ]);
+export const sourceProviderEnum = pgEnum("source_provider", [
+  "OVERTURE",
+  "NATURAL_EARTH",
+  "CUSTOM",
+]);
 
 export const uploadStatusEnum = pgEnum("upload_status", [
   "PENDING",
@@ -440,6 +445,92 @@ export const tilesetSources = pgTable(
   ]
 );
 
+export const sourceCredentials = pgTable(
+  "source_credentials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 128 }).notNull(),
+    provider: sourceProviderEnum("provider").notNull(),
+    encryptedPayload: jsonb("encrypted_payload").notNull().default({}),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("source_credentials_account_idx").on(table.accountId),
+    uniqueIndex("source_credentials_account_name_unique")
+      .on(table.accountId, table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ]
+);
+
+export const savedRegions = pgTable(
+  "saved_regions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    handle: varchar("handle", { length: 64 }).notNull(),
+    name: varchar("name", { length: 128 }).notNull(),
+    description: text("description"),
+    geometry: jsonb("geometry"),
+    bbox: jsonb("bbox").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("saved_regions_account_idx").on(table.accountId),
+    uniqueIndex("saved_regions_account_handle_unique")
+      .on(table.accountId, table.handle)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ]
+);
+
+export const sourceConnections = pgTable(
+  "source_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    handle: varchar("handle", { length: 64 }).notNull(),
+    name: varchar("name", { length: 128 }).notNull(),
+    provider: sourceProviderEnum("provider").notNull(),
+    url: text("url"),
+    credentialId: uuid("credential_id").references(() => sourceCredentials.id, {
+      onDelete: "set null",
+    }),
+    config: jsonb("config").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("source_connections_account_idx").on(table.accountId),
+    uniqueIndex("source_connections_account_handle_unique")
+      .on(table.accountId, table.handle)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ]
+);
+
 export const usageLogs = pgTable(
   "usage_logs",
   {
@@ -588,6 +679,48 @@ export const datasetVersions = pgTable(
       table.datasetId,
       table.version
     ),
+  ]
+);
+
+export const sourceImports = pgTable(
+  "source_imports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    sourceConnectionId: uuid("source_connection_id").references(
+      () => sourceConnections.id,
+      { onDelete: "set null" }
+    ),
+    regionId: uuid("region_id").references(() => savedRegions.id, {
+      onDelete: "set null",
+    }),
+    datasetId: uuid("dataset_id").references(() => datasets.id, {
+      onDelete: "set null",
+    }),
+    processingJobId: uuid("processing_job_id").references(
+      () => processingJobs.id,
+      { onDelete: "set null" }
+    ),
+    provider: sourceProviderEnum("provider").notNull(),
+    sourceName: varchar("source_name", { length: 128 }).notNull(),
+    status: processingJobStatusEnum("status").notNull().default("PENDING"),
+    input: jsonb("input").notNull().default({}),
+    output: jsonb("output"),
+    errorCode: varchar("error_code", { length: 128 }),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("source_imports_account_idx").on(table.accountId),
+    index("source_imports_status_idx").on(table.status),
+    index("source_imports_dataset_idx").on(table.datasetId),
   ]
 );
 

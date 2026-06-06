@@ -12,6 +12,10 @@ import {
   stylePublications,
   apiKeys,
   tilesetSources,
+  sourceConnections,
+  sourceCredentials,
+  sourceImports,
+  savedRegions,
   uploads,
   datasets,
   datasetVersions,
@@ -47,6 +51,10 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
 
   ownedStyles: many(styles),
   ownedTilesetSources: many(tilesetSources),
+  sourceConnections: many(sourceConnections),
+  sourceCredentials: many(sourceCredentials),
+  savedRegions: many(savedRegions),
+  sourceImports: many(sourceImports),
   apiKeys: many(apiKeys),
   uploads: many(uploads),
   datasets: many(datasets),
@@ -189,6 +197,40 @@ export const tilesetSourcesRelations = relations(
   })
 );
 
+export const sourceCredentialsRelations = relations(
+  sourceCredentials,
+  ({ one, many }) => ({
+    account: one(accounts, {
+      fields: [sourceCredentials.accountId],
+      references: [accounts.id],
+    }),
+    sourceConnections: many(sourceConnections),
+  })
+);
+
+export const savedRegionsRelations = relations(savedRegions, ({ one, many }) => ({
+  account: one(accounts, {
+    fields: [savedRegions.accountId],
+    references: [accounts.id],
+  }),
+  imports: many(sourceImports),
+}));
+
+export const sourceConnectionsRelations = relations(
+  sourceConnections,
+  ({ one, many }) => ({
+    account: one(accounts, {
+      fields: [sourceConnections.accountId],
+      references: [accounts.id],
+    }),
+    credential: one(sourceCredentials, {
+      fields: [sourceConnections.credentialId],
+      references: [sourceCredentials.id],
+    }),
+    imports: many(sourceImports),
+  })
+);
+
 export const uploadsRelations = relations(uploads, ({ one }) => ({
   account: one(accounts, {
     fields: [uploads.accountId],
@@ -216,6 +258,29 @@ export const datasetVersionsRelations = relations(datasetVersions, ({ one }) => 
   storageObject: one(storageObjects, {
     fields: [datasetVersions.storageObjectId],
     references: [storageObjects.id],
+  }),
+}));
+
+export const sourceImportsRelations = relations(sourceImports, ({ one }) => ({
+  account: one(accounts, {
+    fields: [sourceImports.accountId],
+    references: [accounts.id],
+  }),
+  sourceConnection: one(sourceConnections, {
+    fields: [sourceImports.sourceConnectionId],
+    references: [sourceConnections.id],
+  }),
+  region: one(savedRegions, {
+    fields: [sourceImports.regionId],
+    references: [savedRegions.id],
+  }),
+  dataset: one(datasets, {
+    fields: [sourceImports.datasetId],
+    references: [datasets.id],
+  }),
+  processingJob: one(processingJobs, {
+    fields: [sourceImports.processingJobId],
+    references: [processingJobs.id],
   }),
 }));
 

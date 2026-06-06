@@ -31,6 +31,7 @@ import { emailRoute } from "./routes/email";
 import { billingRoute, billingWebhookRoute } from "./routes/billing";
 import { profileRoute } from "./routes/profile";
 import { resourcesRoute } from "./routes/resources";
+import { importsRoute } from "./routes/imports";
 import { dashboardRoute } from "./routes/dashboard";
 import { auth } from "@planisfy/auth/auth";
 import { env } from "./env";
@@ -122,6 +123,7 @@ app.route("/console", usageRoute);
 app.route("/console", billingRoute);
 app.route("/console", profileRoute);
 app.route("/console", resourcesRoute);
+app.route("/console", importsRoute);
 
 // ── Centralized error handler ─────────────────────────────────────────────
 app.onError((err, c) => {
