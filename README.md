@@ -120,11 +120,21 @@ Prepare local self-host demo directories and validate Compose:
 scripts/self-host-setup.sh
 ```
 
-The setup script is intentionally non-blocking about binary map data. It seeds
-the fixture style and checks whether `infra/docker/data/pmtiles/stuttgart.pmtiles`
-exists. When that PMTiles file is missing, the stack can still boot, but the
-default Planisfy Streets map will show a clear fixture-data-missing state until
-compatible local PMTiles are supplied.
+The setup script seeds the fixture style and checks whether
+`infra/docker/data/pmtiles/stuttgart.pmtiles` exists. Planisfy does not commit
+binary map data; when that PMTiles file is missing, the stack can still boot,
+but the default Planisfy Streets map will show a clear fixture-data-missing
+state until compatible local PMTiles are supplied.
+
+To make the demo map render from a reproducible local artifact, set
+`DEMO_PMTILES_URL` in `.env` and optionally `DEMO_PMTILES_SHA256`, then run:
+
+```bash
+scripts/self-host-setup.sh --demo-data
+```
+
+The downloaded file is validated as PMTiles before it is installed at the
+Martin mount path.
 
 Start the local stack from the repository root:
 
@@ -153,6 +163,7 @@ Local demo assets:
 - Planisfy Streets fixture style: `packages/map-styles/styles/planisfy-streets-v1.json`
 - Style release manifest: `packages/map-styles/release-manifest.json`
 - Martin PMTiles mount: `infra/docker/data/pmtiles`; the default fixture expects `stuttgart.pmtiles`
+- Optional PMTiles download controls: `DEMO_PMTILES_URL` and `DEMO_PMTILES_SHA256`
 - Local object storage mount: `infra/docker/data/storage`
 
 Health checks:

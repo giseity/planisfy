@@ -42,13 +42,31 @@ The script:
 1. copies `.env.example` to `.env` when needed;
 2. creates local demo directories under `infra/docker/data/`;
 3. copies the Planisfy Streets fixture style into local storage;
-4. reports whether the default `stuttgart.pmtiles` fixture is present;
-5. validates the Compose file with `docker compose config`.
+4. downloads the configured demo PMTiles fixture when `--demo-data` is passed;
+5. reports whether the default `stuttgart.pmtiles` fixture is present;
+6. validates the Compose file with `docker compose config`.
 
-The PMTiles check is informational. Planisfy does not commit binary map data, so
-a first boot without `infra/docker/data/pmtiles/stuttgart.pmtiles` is expected.
-The applications and health checks should still start, while the default map
-remains in a fixture-data-missing state until compatible PMTiles are supplied.
+Planisfy does not commit binary map data, so a first boot without
+`infra/docker/data/pmtiles/stuttgart.pmtiles` is expected. The applications and
+health checks should still start, while the default map remains in a
+fixture-data-missing state until compatible PMTiles are supplied.
+
+To fetch a known fixture as part of setup, configure `.env`:
+
+```bash
+DEMO_PMTILES_URL="https://example.com/path/to/stuttgart.pmtiles"
+DEMO_PMTILES_SHA256="optional-lowercase-sha256"
+```
+
+Then run:
+
+```bash
+scripts/self-host-setup.sh --demo-data
+```
+
+The setup script downloads to a temporary file, validates the PMTiles magic
+header, checks `DEMO_PMTILES_SHA256` when present, and then installs the file as
+`infra/docker/data/pmtiles/stuttgart.pmtiles`.
 
 Run the smoke test when Docker is available:
 
@@ -64,6 +82,7 @@ containers and volumes on exit.
 Optional flags:
 
 ```bash
+scripts/self-host-setup.sh --demo-data # download DEMO_PMTILES_URL when missing
 scripts/self-host-setup.sh --pull      # pull public engine/database images
 scripts/self-host-setup.sh --up        # prepare, then start the full stack
 scripts/self-host-setup.sh --migrate   # start dependencies, then run Drizzle migrations
@@ -89,6 +108,8 @@ production and configure Dodo to send subscription webhooks to
 
 The repository intentionally does not store binary map data. Keep downloaded
 PMTiles and Valhalla graph data outside Git while preserving these mount points.
+Use `DEMO_PMTILES_URL` plus `scripts/self-host-setup.sh --demo-data` when a
+team wants a repeatable local download path for the default fixture.
 
 ## Martin Tileset Aliases
 
