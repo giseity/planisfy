@@ -338,11 +338,17 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
 
         const layerType =
           options.layerType ?? defaultLayerTypeForSource(source);
+        const layerId =
+          options.layerId ??
+          uniqueLayerId(
+            `${sourceId}-${options.sourceLayer ?? layerType ?? "layer"}`,
+            state.style.layers.map((layer) => layer.id),
+          );
         const layer = buildLayerFromSource(
           sourceId,
           source,
           layerType,
-          options,
+          { ...options, layerId },
         );
         state.style.layers.push(layer);
         state.selectedLayerId = layer.id;
@@ -434,6 +440,16 @@ function slugifyLayerId(value: string): string {
       .replace(/[^a-z0-9_-]+/g, "-")
       .replace(/^-+|-+$/g, "") || "layer"
   );
+}
+
+export function uniqueLayerId(value: string, existingIds: string[]): string {
+  const base = slugifyLayerId(value);
+  const existing = new Set(existingIds);
+  if (!existing.has(base)) return base;
+
+  let index = 2;
+  while (existing.has(`${base}-${index}`)) index += 1;
+  return `${base}-${index}`;
 }
 
 function defaultLayerTypeForSource(
