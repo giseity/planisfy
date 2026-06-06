@@ -26,6 +26,13 @@ import {
   executionTargets,
   executionTargetEnvVars,
   workerProfiles,
+  notificationChannels,
+  scheduledOperations,
+  artifactBackups,
+  workerNodes,
+  previewLinks,
+  customDomains,
+  workflowTemplates,
   eventOutbox,
   storageObjects,
   basemapReleases,
@@ -66,6 +73,13 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   executionTargets: many(executionTargets),
   executionTargetEnvVars: many(executionTargetEnvVars),
   workerProfiles: many(workerProfiles),
+  notificationChannels: many(notificationChannels),
+  scheduledOperations: many(scheduledOperations),
+  artifactBackups: many(artifactBackups),
+  workerNodes: many(workerNodes),
+  previewLinks: many(previewLinks),
+  customDomains: many(customDomains),
+  workflowTemplates: many(workflowTemplates),
   storageObjects: many(storageObjects),
   usageLogs: many(usageLogs),
   usageRollups: many(usageRollups),
@@ -361,6 +375,65 @@ export const workerProfilesRelations = relations(workerProfiles, ({ one, many })
     references: [accounts.id],
   }),
   processingJobs: many(processingJobs),
+}));
+
+export const notificationChannelsRelations = relations(
+  notificationChannels,
+  ({ one }) => ({
+    account: one(accounts, {
+      fields: [notificationChannels.accountId],
+      references: [accounts.id],
+    }),
+  })
+);
+
+export const scheduledOperationsRelations = relations(
+  scheduledOperations,
+  ({ one }) => ({
+    account: one(accounts, {
+      fields: [scheduledOperations.accountId],
+      references: [accounts.id],
+    }),
+  })
+);
+
+export const artifactBackupsRelations = relations(artifactBackups, ({ one }) => ({
+  account: one(accounts, {
+    fields: [artifactBackups.accountId],
+    references: [accounts.id],
+  }),
+  storageObject: one(storageObjects, {
+    fields: [artifactBackups.storageObjectId],
+    references: [storageObjects.id],
+  }),
+}));
+
+export const workerNodesRelations = relations(workerNodes, ({ one }) => ({
+  account: one(accounts, {
+    fields: [workerNodes.accountId],
+    references: [accounts.id],
+  }),
+}));
+
+export const previewLinksRelations = relations(previewLinks, ({ one }) => ({
+  account: one(accounts, {
+    fields: [previewLinks.accountId],
+    references: [accounts.id],
+  }),
+}));
+
+export const customDomainsRelations = relations(customDomains, ({ one }) => ({
+  account: one(accounts, {
+    fields: [customDomains.accountId],
+    references: [accounts.id],
+  }),
+}));
+
+export const workflowTemplatesRelations = relations(workflowTemplates, ({ one }) => ({
+  account: one(accounts, {
+    fields: [workflowTemplates.accountId],
+    references: [accounts.id],
+  }),
 }));
 
 export const processingJobLogsRelations = relations(processingJobLogs, ({ one }) => ({
