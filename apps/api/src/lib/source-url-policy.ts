@@ -27,7 +27,7 @@ export function validateRemoteSourceUrl(
 }
 
 function assertPublicHostname(hostname: string) {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
   if (
     host === "localhost" ||
     host.endsWith(".localhost") ||
@@ -62,14 +62,38 @@ function isPrivateIpv4(host: string) {
 
 function isPrivateIpv6(host: string) {
   const normalized = host.toLowerCase();
+  const mappedIpv4 = ipv4MappedIpv6ToIpv4(normalized);
+  if (mappedIpv4 && isPrivateIpv4(mappedIpv4)) return true;
+
   return (
     normalized === "::" ||
     normalized === "::1" ||
     normalized.startsWith("fc") ||
     normalized.startsWith("fd") ||
     normalized.startsWith("fe80:") ||
-    normalized.startsWith("::ffff:127.") ||
-    normalized.startsWith("::ffff:10.") ||
-    normalized.startsWith("::ffff:192.168.")
+    normalized.startsWith("2001:db8:")
   );
+}
+
+function ipv4MappedIpv6ToIpv4(host: string): string | null {
+  if (!host.startsWith("::ffff:")) return null;
+
+  const suffix = host.slice("::ffff:".length);
+  if (suffix.includes(".")) return suffix;
+
+  const parts = suffix.split(":").map((part) => Number.parseInt(part, 16));
+  if (
+    parts.length !== 2 ||
+    parts.some((part) => Number.isNaN(part) || part < 0 || part > 0xffff)
+  ) {
+    return null;
+  }
+
+  const [high, low] = parts as [number, number];
+  return [
+    (high >> 8) & 0xff,
+    high & 0xff,
+    (low >> 8) & 0xff,
+    low & 0xff,
+  ].join(".");
 }
