@@ -29,6 +29,16 @@ export const datasetNormalizedPayloadSchema = z
   })
   .strict();
 
+export const sourceImportRequestedPayloadSchema = z
+  .object({
+    importId: uuid,
+    accountId: uuid,
+    jobId: uuid,
+    datasetId: uuid,
+    provider: z.enum(["OVERTURE", "NATURAL_EARTH", "CUSTOM"]),
+  })
+  .strict();
+
 export const tilesetBuildRequestedPayloadSchema = z
   .object({
     tilesetId: uuid,
@@ -118,6 +128,7 @@ export const eventPayloadSchemas = {
   "upload.created": uploadCreatedPayloadSchema,
   "upload.validated": uploadValidatedPayloadSchema,
   "dataset.normalized": datasetNormalizedPayloadSchema,
+  "source.import.requested": sourceImportRequestedPayloadSchema,
   "tileset.build.requested": tilesetBuildRequestedPayloadSchema,
   "tileset.build.completed": tilesetBuildCompletedPayloadSchema,
   "tileset.build.failed": tilesetBuildFailedPayloadSchema,
