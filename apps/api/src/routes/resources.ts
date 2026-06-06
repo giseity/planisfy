@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
@@ -500,6 +500,170 @@ resourcesRoute.get("/jobs/:id", async (c) => {
   return c.json({ data: { ...job, logs: logs.reverse() } });
 });
 
+resourcesRoute.post("/jobs/:id/retry", async (c) => {
+  const accountId = c.get("ownerId");
+  const id = c.req.param("id");
+  const [job] = await db
+    .select()
+    .from(processingJobs)
+    .where(
+      and(eq(processingJobs.id, id), eq(processingJobs.accountId, accountId)),
+    )
+    .limit(1);
+
+  if (!job)
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Job not found" } },
+      404,
+    );
+  if (job.status !== "FAILED" && job.status !== "CANCELED") {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_JOB_STATE",
+          message: "Only failed or canceled jobs can be retried",
+        },
+      },
+      400,
+    );
+  }
+
+  let input: SourceProcessingJobInput;
+  try {
+    input = parseSourceProcessingJobInput(job.input);
+  } catch (err) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_JOB_INPUT",
+          message: err instanceof Error ? err.message : String(err),
+        },
+      },
+      400,
+    );
+  }
+  const now = new Date();
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(processingJobs)
+      .set({
+        status: "PENDING",
+        progress: 0,
+        output: null,
+        errorCode: null,
+        errorMessage: null,
+        retryCount: sql<number>`${processingJobs.retryCount} + 1`,
+        cancelRequestedAt: null,
+        startedAt: null,
+        completedAt: null,
+        updatedAt: now,
+      })
+      .where(eq(processingJobs.id, job.id));
+
+    await tx.insert(processingJobLogs).values({
+      jobId: job.id,
+      level: "info",
+      message: "Console retry requested",
+      metadata: { previousStatus: job.status },
+    });
+
+    await tx
+      .update(tilesets)
+      .set({ status: "BUILDING", updatedAt: now })
+      .where(
+        and(eq(tilesets.id, input.tilesetId), eq(tilesets.accountId, accountId)),
+      );
+
+    if (input.uploadId) {
+      await tx
+        .update(uploads)
+        .set({ status: "VALIDATING", linkedTilesetId: input.tilesetId })
+        .where(
+          and(eq(uploads.id, input.uploadId), eq(uploads.accountId, accountId)),
+        );
+    }
+  });
+
+  await enqueueOutboxEvent({
+    eventName: "tileset.build.requested",
+    payload: {
+      accountId,
+      tilesetId: input.tilesetId,
+      jobId: job.id,
+      sourceResourceType: "upload",
+      sourceResourceId: input.uploadId,
+      options: input.options,
+    },
+  });
+
+  await logProcessingJob(job.id, "Tileset build retry queued", {
+    metadata: { requestedBy: "console", previousStatus: job.status },
+  });
+
+  const [updated] = await db
+    .select()
+    .from(processingJobs)
+    .where(eq(processingJobs.id, job.id))
+    .limit(1);
+
+  return c.json({ data: updated });
+});
+
+resourcesRoute.post("/jobs/:id/cancel", async (c) => {
+  const accountId = c.get("ownerId");
+  const id = c.req.param("id");
+  const now = new Date();
+  const [job] = await db
+    .select()
+    .from(processingJobs)
+    .where(
+      and(eq(processingJobs.id, id), eq(processingJobs.accountId, accountId)),
+    )
+    .limit(1);
+
+  if (!job)
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Job not found" } },
+      404,
+    );
+  if (["SUCCEEDED", "FAILED", "CANCELED"].includes(job.status)) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_JOB_STATE",
+          message: "Completed jobs cannot be canceled",
+        },
+      },
+      400,
+    );
+  }
+
+  const [updated] = await db
+    .update(processingJobs)
+    .set({
+      status: job.status === "PENDING" ? "CANCELED" : job.status,
+      cancelRequestedAt: now,
+      completedAt: job.status === "PENDING" ? now : job.completedAt,
+      updatedAt: now,
+    })
+    .where(eq(processingJobs.id, id))
+    .returning();
+
+  await logProcessingJob(
+    id,
+    job.status === "PENDING"
+      ? "Console canceled pending job"
+      : "Console cancellation requested",
+    {
+      level: "warn",
+      metadata: { previousStatus: job.status },
+    },
+  );
+
+  return c.json({ data: updated });
+});
+
 resourcesRoute.get("/tilesets/:id/artifact", async (c) => {
   const accountId = c.get("ownerId");
   const id = c.req.param("id");
@@ -611,5 +775,50 @@ function toConsoleTileset(
       ownerHandle && currentVersion
         ? `/tiles/v1/${ownerHandle}/${tileset.handle}/versions/${currentVersion.version}.json`
         : null,
+  };
+}
+
+type SourceProcessingJobInput = {
+  tilesetId: string;
+  uploadId: string;
+  uploadKey: string;
+  format: UploadFormat;
+  csv?: {
+    latitude?: string;
+    longitude?: string;
+  };
+  options?: Record<string, unknown>;
+};
+
+function parseSourceProcessingJobInput(input: unknown): SourceProcessingJobInput {
+  if (typeof input !== "object" || input === null) {
+    throw new Error("Processing job input is missing");
+  }
+
+  const candidate = input as Partial<SourceProcessingJobInput>;
+  if (
+    !candidate.tilesetId ||
+    !candidate.uploadId ||
+    !candidate.uploadKey ||
+    !candidate.format
+  ) {
+    throw new Error("Processing job input cannot reconstruct a tileset build request");
+  }
+
+  if (
+    !["geojson", "csv", "shapefile", "pmtiles", "mbtiles"].includes(
+      candidate.format,
+    )
+  ) {
+    throw new Error("Processing job input has an unsupported source format");
+  }
+
+  return {
+    tilesetId: candidate.tilesetId,
+    uploadId: candidate.uploadId,
+    uploadKey: candidate.uploadKey,
+    format: candidate.format,
+    csv: candidate.csv,
+    options: candidate.options,
   };
 }

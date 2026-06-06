@@ -35,6 +35,8 @@ import {
   ExternalLink,
   Globe,
   AlertCircle,
+  RotateCcw,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -55,6 +57,7 @@ export default function SourcesPage() {
   const [publishingVersionId, setPublishingVersionId] = useState<string | null>(
     null,
   );
+  const [controllingJobId, setControllingJobId] = useState<string | null>(null);
 
   const fetchTilesets = useCallback(async () => {
     try {
@@ -116,6 +119,36 @@ export default function SourcesPage() {
       );
     } finally {
       setPublishingVersionId(null);
+    }
+  }
+
+  async function handleRetryJob(job: ConsoleProcessingJob) {
+    setControllingJobId(job.id);
+    try {
+      await api.retryJob(job.id);
+      toast.success("Tileset build retry queued");
+      fetchTilesets();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to retry job");
+    } finally {
+      setControllingJobId(null);
+    }
+  }
+
+  async function handleCancelJob(job: ConsoleProcessingJob) {
+    setControllingJobId(job.id);
+    try {
+      await api.cancelJob(job.id);
+      toast.success(
+        job.status === "PENDING"
+          ? "Queued job canceled"
+          : "Cancellation requested",
+      );
+      fetchTilesets();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel job");
+    } finally {
+      setControllingJobId(null);
     }
   }
 
@@ -326,6 +359,9 @@ export default function SourcesPage() {
                       {latestJob && (
                         <div className="mt-1 text-xs text-muted-foreground">
                           {latestJob.status}
+                          {latestJob.cancelRequestedAt
+                            ? " - cancel requested"
+                            : ""}
                           {latestJob.status !== "SUCCEEDED"
                             ? ` - ${latestJob.progress}%`
                             : ""}
@@ -387,6 +423,36 @@ export default function SourcesPage() {
                         >
                           <ExternalLink className="h-4 w-4" />
                         </Button>
+                        {latestJob && canRetryJob(latestJob) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRetryJob(latestJob)}
+                            disabled={controllingJobId === latestJob.id}
+                            title="Retry build"
+                          >
+                            {controllingJobId === latestJob.id ? (
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RotateCcw className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                        {latestJob && canCancelJob(latestJob) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCancelJob(latestJob)}
+                            disabled={controllingJobId === latestJob.id}
+                            title="Cancel build"
+                          >
+                            {controllingJobId === latestJob.id ? (
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Ban className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -447,9 +513,26 @@ function latestJobForTileset(
 
 function jobStatusMessage(job: ConsoleProcessingJob | null) {
   if (!job) return "Upload validation and tile generation are queued.";
+  if (job.cancelRequestedAt) {
+    return "Cancellation has been requested; the worker will stop at the next checkpoint.";
+  }
+  if (job.status === "CANCELED") {
+    return "Tile generation was canceled.";
+  }
   if (job.status === "FAILED") {
     return job.errorMessage ?? "Tile generation failed.";
   }
   const stage = job.output?.stage ? ` (${job.output.stage})` : "";
   return `Upload validation and tile generation are running: ${job.progress}%${stage}`;
+}
+
+function canRetryJob(job: ConsoleProcessingJob) {
+  return job.status === "FAILED" || job.status === "CANCELED";
+}
+
+function canCancelJob(job: ConsoleProcessingJob) {
+  return (
+    (job.status === "PENDING" || job.status === "PROCESSING") &&
+    !job.cancelRequestedAt
+  );
 }

@@ -88,6 +88,8 @@ export interface ConsoleProcessingJob {
   type: string;
   status: string;
   progress: number;
+  retryCount: number;
+  cancelRequestedAt: string | null;
   input: {
     tilesetId?: string;
     uploadId?: string;
@@ -102,6 +104,7 @@ export interface ConsoleProcessingJob {
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
+  startedAt: string | null;
   completedAt: string | null;
 }
 
@@ -389,6 +392,18 @@ class ApiClient {
   publishTilesetVersion(tilesetId: string, version: number) {
     return this.post<ApiEnvelope<ConsoleTileset>>(
       `/tilesets/${tilesetId}/versions/${version}/publish`,
+    );
+  }
+
+  retryJob(jobId: string) {
+    return this.post<ApiEnvelope<ConsoleProcessingJob>>(
+      `/jobs/${jobId}/retry`,
+    );
+  }
+
+  cancelJob(jobId: string) {
+    return this.post<ApiEnvelope<ConsoleProcessingJob>>(
+      `/jobs/${jobId}/cancel`,
     );
   }
 
