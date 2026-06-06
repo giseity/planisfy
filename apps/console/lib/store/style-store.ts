@@ -139,7 +139,10 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
   /** Update with undo support */
   const tracked = (fn: (draft: StyleStore) => void) => {
     pushUndo();
-    update(fn);
+    update((draft) => {
+      fn(draft);
+      if (draft.saveStatus === "saved") draft.saveStatus = "idle";
+    });
   };
 
   return {
@@ -183,7 +186,8 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
           (styleJson as StyleSpecification).layers?.[0]?.id ?? null,
         undoStack: [],
         redoStack: [],
-        saveStatus: "idle",
+        saveStatus: "saved",
+        lastSavedAt: null,
       });
     },
 
