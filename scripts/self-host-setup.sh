@@ -12,12 +12,13 @@ DEMO_PMTILES="$DATA_DIR/pmtiles/stuttgart.pmtiles"
 
 usage() {
   cat <<USAGE
-Usage: scripts/self-host-setup.sh [--up] [--migrate] [--pull]
+Usage: scripts/self-host-setup.sh [--demo-data] [--up] [--migrate] [--pull]
 
 Prepares a local self-host demo environment by creating .env, local storage
 folders, and demo fixtures used by Docker Compose.
 
 Options:
+  --demo-data Download the configured demo PMTiles fixture when missing.
   --up       Start the Docker Compose stack after preparing files.
   --migrate  Run Drizzle migrations after starting dependencies.
   --pull     Pull service images before starting the stack.
@@ -28,9 +29,11 @@ USAGE
 want_up=false
 want_migrate=false
 want_pull=false
+want_demo_data=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --demo-data) want_demo_data=true ;;
     --up) want_up=true ;;
     --migrate) want_migrate=true ;;
     --pull) want_pull=true ;;
@@ -51,6 +54,56 @@ compose() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
+load_env_file() {
+  if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+  fi
+}
+
+download_demo_pmtiles() {
+  local url="${DEMO_PMTILES_URL:-}"
+  local checksum="${DEMO_PMTILES_SHA256:-}"
+  local target="$DEMO_PMTILES"
+  local tmp="${target}.tmp"
+
+  if [[ -z "$url" ]]; then
+    cat <<'NO_URL' >&2
+DEMO_PMTILES_URL is not configured.
+
+Set DEMO_PMTILES_URL in .env, then rerun:
+  scripts/self-host-setup.sh --demo-data
+NO_URL
+    exit 1
+  fi
+
+  require_cmd curl
+  echo "Downloading demo PMTiles fixture"
+  curl -fL --retry 3 --retry-delay 2 --output "$tmp" "$url"
+  validate_pmtiles "$tmp"
+
+  if [[ -n "$checksum" ]]; then
+    require_cmd sha256sum
+    echo "${checksum}  ${tmp}" | sha256sum -c -
+  fi
+
+  mv "$tmp" "$target"
+  echo "Downloaded demo PMTiles fixture: infra/docker/data/pmtiles/stuttgart.pmtiles"
+}
+
+validate_pmtiles() {
+  local path="$1"
+  local magic
+  magic="$(head -c 7 "$path" || true)"
+  if [[ "$magic" != "PMTiles" ]]; then
+    rm -f "$path"
+    echo "Downloaded file is not a PMTiles archive: $path" >&2
+    exit 1
+  fi
+}
+
 require_cmd docker
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -61,6 +114,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   cp "$ENV_EXAMPLE" "$ENV_FILE"
   echo "Created .env from .env.example"
 fi
+load_env_file
 
 mkdir -p \
   "$DATA_DIR/pmtiles" \
@@ -74,7 +128,12 @@ if [[ -f "$STYLE_FIXTURE" ]]; then
   echo "Seeded local storage style fixture: infra/docker/data/storage/styles/planisfy-streets-v1.json"
 fi
 
+if [[ ! -f "$DEMO_PMTILES" && "$want_demo_data" == true ]]; then
+  download_demo_pmtiles
+fi
+
 if [[ -f "$DEMO_PMTILES" ]]; then
+  validate_pmtiles "$DEMO_PMTILES"
   echo "Found demo PMTiles fixture: infra/docker/data/pmtiles/stuttgart.pmtiles"
 else
   cat <<'PMTILES_WARNING'
@@ -130,6 +189,7 @@ Next steps:
 Demo data directories:
   infra/docker/data/pmtiles        Put *.pmtiles files here for Martin.
                                    The default fixture expects stuttgart.pmtiles.
+                                   Use --demo-data with DEMO_PMTILES_URL to fetch it.
   infra/docker/data/valhalla_data  Put Valhalla tiles/config data here.
   infra/docker/data/storage        Local object storage mount.
 NEXT
