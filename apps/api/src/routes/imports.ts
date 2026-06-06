@@ -3,12 +3,15 @@ import type { Context } from "hono";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
+  datasetVersions,
   datasets,
   db,
+  storageObjects,
   savedRegions,
   sourceConnections,
   sourceCredentials,
   sourceImports,
+  tilesets,
 } from "@planisfy/database";
 import type { AuthEnv } from "../middleware/auth";
 import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
@@ -20,6 +23,8 @@ import {
   SourceUrlRejectedError,
   validateRemoteSourceUrl,
 } from "../lib/source-url-policy";
+import { checkResourceLimit } from "../lib/plan-check";
+import { buildDatasetTilesetProcessingInput } from "../lib/tileset-build-input";
 
 export const importsRoute = new Hono<AuthEnv>();
 
@@ -67,6 +72,15 @@ const overtureImportSchema = z.object({
   sourceConnectionId: z.string().uuid().optional(),
   theme: z.string().min(1).max(64),
   type: z.string().min(1).max(64).optional(),
+});
+
+const datasetTilesetSchema = z.object({
+  handle: handleSchema,
+  name: z.string().min(1).max(128),
+  description: z.string().max(1000).optional(),
+  datasetVersionId: z.string().uuid().optional(),
+  minZoom: z.number().int().min(0).max(24).optional(),
+  maxZoom: z.number().int().min(0).max(24).optional(),
 });
 
 importsRoute.get("/regions", async (c) => {
@@ -332,6 +346,197 @@ importsRoute.post("/source-imports/overture", async (c) => {
   });
 
   return c.json({ data: { dataset, sourceImport, processingJob: job } }, 202);
+});
+
+importsRoute.post("/datasets/:id/tilesets", async (c) => {
+  const accountId = c.get("ownerId");
+  const userId = c.get("userId");
+  const datasetId = c.req.param("id");
+  const parsed = datasetTilesetSchema.safeParse(await c.req.json());
+  if (!parsed.success) return validationError(c, parsed.error);
+
+  const [dataset] = await db
+    .select()
+    .from(datasets)
+    .where(
+      and(
+        eq(datasets.id, datasetId),
+        eq(datasets.accountId, accountId),
+        isNull(datasets.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!dataset) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Dataset not found" } },
+      404,
+    );
+  }
+  if (dataset.status !== "READY") {
+    return c.json(
+      {
+        error: {
+          code: "DATASET_NOT_READY",
+          message: "Dataset must be ready before it can be tiled",
+        },
+      },
+      400,
+    );
+  }
+
+  const [existing] = await db
+    .select({ id: tilesets.id })
+    .from(tilesets)
+    .where(
+      and(
+        eq(tilesets.accountId, accountId),
+        eq(tilesets.handle, parsed.data.handle),
+        isNull(tilesets.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    return c.json(
+      { error: { code: "CONFLICT", message: "Tileset handle already exists" } },
+      409,
+    );
+  }
+
+  const planCheck = await checkResourceLimit(userId, accountId, "tilesets");
+  if (!planCheck.allowed) {
+    return c.json(
+      {
+        error: {
+          code: "PLAN_LIMIT",
+          message: `You've reached the maximum of ${planCheck.limit} tilesets on your current plan. Please upgrade to create more.`,
+        },
+      },
+      403,
+    );
+  }
+
+  const targetDatasetVersionId =
+    parsed.data.datasetVersionId ?? dataset.currentVersionId;
+  if (!targetDatasetVersionId) {
+    return c.json(
+      {
+        error: {
+          code: "DATASET_ARTIFACT_NOT_FOUND",
+          message: "Dataset has no current version to tile",
+        },
+      },
+      400,
+    );
+  }
+
+  const [version] = await db
+    .select()
+    .from(datasetVersions)
+    .where(
+      and(
+        eq(datasetVersions.datasetId, dataset.id),
+        eq(datasetVersions.id, targetDatasetVersionId),
+      ),
+    )
+    .limit(1);
+  if (!version?.storageObjectId) {
+    return c.json(
+      {
+        error: {
+          code: "DATASET_ARTIFACT_NOT_FOUND",
+          message: "Dataset version has no stored GeoJSON artifact",
+        },
+      },
+      400,
+    );
+  }
+
+  const [storageObject] = await db
+    .select()
+    .from(storageObjects)
+    .where(eq(storageObjects.id, version.storageObjectId))
+    .limit(1);
+  if (!storageObject) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Dataset artifact not found" } },
+      404,
+    );
+  }
+
+  const minZoom = parsed.data.minZoom ?? 0;
+  const maxZoom = parsed.data.maxZoom ?? 14;
+  const [tileset] = await db
+    .insert(tilesets)
+    .values({
+      accountId,
+      name: parsed.data.name,
+      handle: parsed.data.handle,
+      description: parsed.data.description ?? dataset.description ?? null,
+      status: "BUILDING",
+      minZoom,
+      maxZoom,
+      bounds: version.bounds ?? dataset.bounds,
+      layerMetadata: dataset.schemaSummary,
+    })
+    .returning();
+  if (!tileset) {
+    return c.json(
+      {
+        error: { code: "INTERNAL_ERROR", message: "Failed to create tileset" },
+      },
+      500,
+    );
+  }
+
+  const jobInput = buildDatasetTilesetProcessingInput({
+    tilesetId: tileset.id,
+    datasetId: dataset.id,
+    datasetVersionId: version.id,
+    storageObjectId: storageObject.id,
+    storageKey: storageObject.storageKey,
+    options: { minZoom, maxZoom },
+  });
+  const processingJob = await createProcessingJob({
+    accountId,
+    type: "tileset.process_dataset",
+    input: jobInput,
+  });
+
+  await logProcessingJob(processingJob.id, "Dataset tiling queued", {
+    metadata: {
+      datasetId: dataset.id,
+      datasetVersionId: version.id,
+      storageObjectId: storageObject.id,
+      tilesetId: tileset.id,
+    },
+  });
+  await enqueueOutboxEvent({
+    eventName: "tileset.build.requested",
+    payload: {
+      accountId,
+      tilesetId: tileset.id,
+      jobId: processingJob.id,
+      sourceResourceType: "dataset",
+      sourceResourceId: version.id,
+      options: { minZoom, maxZoom },
+    },
+  });
+  logAudit({
+    profileId: userId,
+    action: "tileset.dataset_build_requested",
+    resourceType: "tileset",
+    resourceId: tileset.id,
+    metadata: {
+      datasetId: dataset.id,
+      datasetVersionId: version.id,
+      processingJobId: processingJob.id,
+    },
+  });
+
+  return c.json(
+    { data: { dataset, datasetVersion: version, tileset, processingJob } },
+    202,
+  );
 });
 
 async function createDataset(

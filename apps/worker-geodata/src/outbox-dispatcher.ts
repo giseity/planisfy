@@ -482,6 +482,8 @@ export function parseSourceProcessingJobInput(
     tilesetId: candidate.tilesetId,
     uploadKey: candidate.uploadKey,
     uploadId: candidate.uploadId,
+    datasetId: candidate.datasetId,
+    datasetVersionId: candidate.datasetVersionId,
     storageObjectId: candidate.storageObjectId,
     processingJobId: context.processingJobId,
     format: candidate.format,

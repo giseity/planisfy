@@ -39,6 +39,8 @@ export interface SourceProcessingJob {
   ownerId: string;
   uploadKey: string;
   uploadId?: string;
+  datasetId?: string;
+  datasetVersionId?: string;
   storageObjectId?: string;
   processingJobId?: string;
   format: SourceFormat;
