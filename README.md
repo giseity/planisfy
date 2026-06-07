@@ -1,12 +1,16 @@
 # Planisfy
 
-Planisfy is a self-hostable geospatial API platform with Mapbox-compatible endpoints, a MapLibre style console, API key management, usage tracking, and admin tooling.
+Planisfy is a geospatial API platform with first-class `self_host` and
+`managed` v1 modes, Mapbox-compatible endpoints, a MapLibre style console, API
+key management, usage tracking, and admin tooling.
 
 The goal is to make open geospatial infrastructure easier to run by putting a TypeScript platform layer in front of engines such as Martin, Valhalla, and Pelias-compatible geocoding services.
 
 ## Current Status
 
-Planisfy is in active development. Several core flows are implemented, but the self-hosted product loop is not yet production-ready end to end.
+Planisfy is in active development. Several core flows are implemented, but the
+self-hosted and managed v1 product loops still need production hardening end to
+end.
 
 Implemented or partially implemented:
 
@@ -32,8 +36,10 @@ Still in progress or externally dependent:
 - Routing requires Valhalla data under `infra/docker/data/valhalla_data`
 - Geocoding prefers Pelias and falls back to Nominatim for basic development use
 - Static maps return a placeholder unless `STATIC_MAP_URL` is configured
-- Billing uses Dodo Payments-oriented surfaces and is disabled unless provider credentials are configured
-- Production email delivery requires external provider credentials
+- Billing uses Dodo Payments-oriented surfaces; it is optional for self-host and
+  required for managed
+- Email delivery is optional/dry-run for self-host and required through Resend
+  for managed
 - Test coverage is intentionally small and currently focused on platform contracts
 
 See [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md) for the canonical roadmap, current reality, and credible v1 gate.
@@ -170,6 +176,11 @@ http://localhost:3001/sign-up
 Local email delivery is optional. When `RESEND_API_KEY` is not configured, the
 Console still lets the signed-in user work with an email verification reminder.
 
+Self-host is the default `DEPLOYMENT_MODE`. Billing, email, the supervisor, and
+S3/R2-style storage are optional there; managed deployments must explicitly set
+`DEPLOYMENT_MODE=managed` and provide Dodo Payments, Resend, and R2-compatible
+storage configuration.
+
 Default service URLs:
 
 - Marketing: <http://localhost:3000>
@@ -237,9 +248,11 @@ Required production hardening:
 - Set a strong `BETTER_AUTH_SECRET`
 - Set `INTERNAL_API_SECRET` for `/internal/*` API routes
 - Replace default database and Redis credentials
-- Configure tile, routing, geocoding, email, storage, and billing providers for the deployment mode you need
+- Configure tile, routing, geocoding, email, storage, and billing providers for
+  the deployment mode you need
 
-More detail is available in [docs/self-hosting.md](./docs/self-hosting.md).
+More detail is available in [docs/self-hosting.md](./docs/self-hosting.md) and
+[docs/deployment-modes.md](./docs/deployment-modes.md).
 
 ## API Surface
 

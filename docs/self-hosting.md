@@ -11,9 +11,10 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
 pnpm -F @planisfy/database db:migrate
 ```
 
-The stack should produce a useful product without cloud credentials, billing,
-email, routing data, or geocoding. Missing map/routing data should degrade to a
-clear fixture state rather than blocking application startup.
+The default mode is `DEPLOYMENT_MODE=self_host`. The stack should produce a
+useful product without cloud credentials, billing, email, routing data, or
+geocoding. Missing map/routing data should degrade to a clear fixture state
+rather than blocking application startup.
 
 ## Current Services
 
@@ -168,6 +169,9 @@ The local demo does not require email delivery. If `RESEND_API_KEY` is unset,
 verification emails are not sent, and the Console shows a reminder banner while
 still allowing the signed-in user to continue.
 
+Managed mode is different: `DEPLOYMENT_MODE=managed` requires Resend, and API
+key creation is blocked until the user email is verified.
+
 ## Optional Billing
 
 Dodo Payments checkout is disabled unless the API container receives
@@ -175,6 +179,9 @@ Dodo Payments checkout is disabled unless the API container receives
 `DODO_PAYMENTS_WEBHOOK_SECRET`. Set `DODO_PAYMENTS_ENVIRONMENT=live_mode` for
 production and configure Dodo to send subscription webhooks to
 `/webhooks/dodo`.
+
+For self-host this is optional. For managed mode, Dodo Payments API credentials,
+webhook secret, and the Pro product ID are required readiness capabilities.
 
 ## Demo Data Layout
 

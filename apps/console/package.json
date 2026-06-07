@@ -22,6 +22,7 @@
     "@planisfy/auth": "workspace:*",
     "@planisfy/database": "workspace:*",
     "@planisfy/env": "workspace:*",
+    "@planisfy/platform-policy": "workspace:*",
     "@planisfy/style-spec": "workspace:*",
     "@planisfy/ui": "workspace:*",
     "@types/geojson": "^7946.0.16",

@@ -5,6 +5,7 @@ import type { AuthEnv } from "../middleware/auth";
 import {
   applyDodoWebhookEvent,
   createCheckoutSession,
+  getAccountBillingStatus,
   getAccountPlan,
   getAccountPlanLimits,
   getPlanDefinition,
@@ -35,6 +36,7 @@ billingRoute.get("/billing", async (c) => {
     getAccountPlan(ownerId),
     getAccountPlanLimits(ownerId),
   ]);
+  const billingStatus = await getAccountBillingStatus(ownerId);
 
   const period = getMonthlyUsagePeriod();
 
@@ -61,6 +63,8 @@ billingRoute.get("/billing", async (c) => {
   const serializedLimits = serializePlanLimits(limits);
 
   return c.json({
+    deploymentMode: env.DEPLOYMENT_MODE,
+    billingStatus,
     plan,
     planName: planInfo.name,
     price: planInfo.price,

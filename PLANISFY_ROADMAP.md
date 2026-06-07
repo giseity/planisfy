@@ -4,12 +4,13 @@ This is the canonical planning document for work still left to prove. Durable
 implementation details belong in `ARCHITECTURE.md` and `docs/`. This roadmap is
 organized around QA gates because Planisfy's next challenge is not discovering a
 product loop; it is proving that loop is dependable across data, UI, publishing,
-operations, docs, and eventually managed/cloud delivery.
+operations, docs, self-host delivery, and managed delivery.
 
 ## Product Thesis
 
-Planisfy should become the open, self-hostable Mapbox alternative, with hosted
-cloud when teams want convenience.
+Planisfy should become the open Mapbox alternative with two first-class v1
+paths: self-host when teams want control, and managed when teams want
+convenience.
 
 The focused promise is:
 
@@ -35,8 +36,9 @@ Current reality:
 - Planisfy is strong enough for development, demos, and guided self-host trials.
 - Planisfy still needs QA hardening before a new team can self-host it from the
   README alone and trust it for production maps without hands-on support.
-- Self-hosted v1 is ready when default map, upload/import, publish, observe,
-  backup, and upgrade paths are proven end to end.
+- V1 is ready when shared API/resource/publishing/usage flows are proven across
+  both `self_host` and `managed`, while billing, email, storage, compute,
+  support, and readiness boundaries stay explicit.
 
 ## Current Invariants
 
@@ -370,10 +372,48 @@ platform-wide docs/CI truth still needs a dedicated sweep.
 - Add worker lifecycle and Studio browser tests.
 - Complete docs/screenshot/example truth pass.
 
-## Managed And Cloud QA Gates
+## Managed V1 QA Gates
 
-Managed/cloud work should stay behind the credible self-hosted v1 loop unless a
-paying deployment requires a narrow slice sooner.
+Managed v1 ships beside self-host v1. It shares the same core resource,
+publishing, usage, and API-key model, but requires Dodo Payments, Resend, and
+R2-compatible storage, and keeps customer-managed compute hidden for v1.
+
+### Managed Mode Boundary QA
+
+- `DEPLOYMENT_MODE` accepts only `self_host` and `managed`, defaulting to
+  `self_host`.
+- `@planisfy/platform-policy` is the source of truth for required, optional,
+  hidden, and unavailable capabilities.
+- `/setup/preflight` returns `deploymentMode` and `capabilities[]` for Console
+  and Admin, without replacing detailed self-host first-run checks.
+- Console Platform, Settings, Billing, Usage, API Keys, Styles, and Sources use
+  the explicit mode/capability response rather than heuristic inference.
+- Managed hides execution targets, worker profiles, supervisor controls, support
+  bundles, and self-host upgrade affordances from customer Console views.
+- Managed API rejects customer execution-target and worker-profile mutations
+  with `CAPABILITY_UNAVAILABLE`.
+
+### Managed Onboarding And Billing QA
+
+- Managed users start on the Free plan and can browse Console.
+- Managed API key creation and rotation require `emailVerified=true`; otherwise
+  routes return `EMAIL_VERIFICATION_REQUIRED` with HTTP 403.
+- Billing endpoints distinguish configured, checkout unavailable, active
+  subscription, trialing, past due, canceled, and free-plan states.
+- Dodo checkout and webhook handling are covered without requiring real network
+  calls in fast tests.
+- Resend is required for managed readiness and remains optional/dry-run for
+  self-host.
+
+### Managed Storage And Runtime QA
+
+- Managed production readiness fails or blocks when R2 bucket, endpoint/account,
+  credentials, or public URL are missing.
+- Self-host preflight still checks local storage, demo styles, Martin aliases,
+  optional PMTiles, backup scripts, and release manifests.
+- Managed compute is platform-operated for v1; cloud adapter code may remain,
+  but customer-created `aws_batch` and `gcp_batch` targets are self-host or
+  internal-only.
 
 ### Cloud Runtime QA
 
@@ -430,4 +470,4 @@ paying deployment requires a narrow slice sooner.
 5. Operations readiness QA for schedules, notifications, backups, health,
    support bundles, and upgrades.
 6. Documentation and CI truth pass.
-7. Managed/cloud QA gates.
+7. Managed v1 QA gates.

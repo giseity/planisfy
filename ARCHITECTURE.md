@@ -37,6 +37,7 @@ Planisfy Console/Admin/Docs/Marketing (Next.js)
 | `packages/auth` | better-auth instance, organization hooks, email hook delegation |
 | `packages/database` | Drizzle client, schema, migrations, relations, and shared server data helpers |
 | `packages/types` | Shared platform types and plan limits |
+| `packages/platform-policy` | Shared deployment-mode capability policy for self-host and managed |
 | `packages/ui` | Shared React UI components |
 | `infra/docker` | Local/self-host Docker Compose stack and engine configs |
 

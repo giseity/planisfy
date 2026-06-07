@@ -1,7 +1,7 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { eq, and, isNull, desc } from "drizzle-orm";
-import { db, apiKeys } from "@planisfy/database";
+import { db, apiKeys, users } from "@planisfy/database";
 import { logAudit } from "../lib/audit";
 import {
   generateApiKey,
@@ -11,6 +11,7 @@ import {
 } from "../lib/api-key";
 import { checkResourceLimit } from "../lib/plan-check";
 import type { AuthEnv } from "../middleware/auth";
+import { env } from "../env";
 
 export const keysRoute = new Hono<AuthEnv>();
 
@@ -42,6 +43,9 @@ const updateKeySchema = z.object({
 keysRoute.post("/keys", async (c) => {
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
+  const verificationError = await requireManagedEmailVerification(c);
+  if (verificationError) return verificationError;
+
   const body = await c.req.json();
 
   const parsed = createKeySchema.safeParse(body);
@@ -207,6 +211,9 @@ keysRoute.put("/keys/:id", async (c) => {
   const keyId = c.req.param("id");
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
+  const verificationError = await requireManagedEmailVerification(c);
+  if (verificationError) return verificationError;
+
   const body = await c.req.json();
 
   const parsed = updateKeySchema.safeParse(body);
@@ -331,6 +338,8 @@ keysRoute.post("/keys/:id/rotate", async (c) => {
   const keyId = c.req.param("id");
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
+  const verificationError = await requireManagedEmailVerification(c);
+  if (verificationError) return verificationError;
 
   // Verify the key exists and belongs to the owner
   const [existing] = await db
@@ -380,3 +389,25 @@ keysRoute.post("/keys/:id/rotate", async (c) => {
     },
   });
 });
+
+async function requireManagedEmailVerification(c: Context<AuthEnv>) {
+  if (env.DEPLOYMENT_MODE !== "managed") return null;
+
+  const [user] = await db
+    .select({ emailVerified: users.emailVerified })
+    .from(users)
+    .where(eq(users.id, c.get("userId")))
+    .limit(1);
+
+  if (user?.emailVerified) return null;
+
+  return c.json(
+    {
+      error: {
+        code: "EMAIL_VERIFICATION_REQUIRED",
+        message: "Verify your email before creating or changing API keys.",
+      },
+    },
+    403,
+  );
+}

@@ -51,6 +51,10 @@ test("setup preflight reports self-host product loop fixture readiness", async (
   const previousPmtiles = process.env.DEMO_PMTILES_PATH;
   const previousManifest = process.env.PLANISFY_RELEASE_MANIFEST;
   const previousSecret = process.env.BETTER_AUTH_SECRET;
+  const previousMode = process.env.DEPLOYMENT_MODE;
+  const previousProvider = process.env.STORAGE_PROVIDER;
+  process.env.DEPLOYMENT_MODE = "self_host";
+  process.env.STORAGE_PROVIDER = "local";
   process.env.LOCAL_STORAGE_PATH = storage;
   process.env.DEMO_PMTILES_PATH = pmtiles;
   process.env.PLANISFY_RELEASE_MANIFEST = manifest;
@@ -61,14 +65,30 @@ test("setup preflight reports self-host product loop fixture readiness", async (
     const body = (await response.json()) as {
       data?: {
         checks?: Array<{ id: string; status: string; group: string }>;
+        deploymentMode?: string;
+        capabilities?: Array<{
+          id: string;
+          status: string;
+          required: boolean;
+          visible: boolean;
+        }>;
         groups?: Array<{ name: string; pass: number; fail: number }>;
       };
     };
 
     assert.equal(response.status, 200);
+    assert.equal(body.data?.deploymentMode, "self_host");
     const checks = new Map(
       body.data?.checks?.map((check) => [check.id, check]),
     );
+    const capabilities = new Map(
+      body.data?.capabilities?.map((capability) => [
+        capability.id,
+        capability,
+      ]),
+    );
+    assert.equal(capabilities.get("customExecutionTargets")?.visible, true);
+    assert.equal(capabilities.get("localStorage")?.visible, true);
     assert.equal(checks.get("upload-storage")?.status, "pass");
     assert.equal(checks.get("demo-style-fixtures")?.status, "pass");
     assert.equal(checks.get("martin-source-aliases")?.status, "pass");
@@ -100,6 +120,75 @@ test("setup preflight reports self-host product loop fixture readiness", async (
       delete process.env.BETTER_AUTH_SECRET;
     } else {
       process.env.BETTER_AUTH_SECRET = previousSecret;
+    }
+    if (previousMode === undefined) {
+      delete process.env.DEPLOYMENT_MODE;
+    } else {
+      process.env.DEPLOYMENT_MODE = previousMode;
+    }
+    if (previousProvider === undefined) {
+      delete process.env.STORAGE_PROVIDER;
+    } else {
+      process.env.STORAGE_PROVIDER = previousProvider;
+    }
+  }
+});
+
+test("setup preflight reports blocking managed readiness without R2, Dodo, or Resend", async () => {
+  const previousMode = process.env.DEPLOYMENT_MODE;
+  const previousProvider = process.env.STORAGE_PROVIDER;
+  process.env.DEPLOYMENT_MODE = "managed";
+  process.env.STORAGE_PROVIDER = "local";
+
+  try {
+    const response = await app.request("/setup/preflight");
+    const body = (await response.json()) as {
+      data?: {
+        deploymentMode?: string;
+        summary?: { blocking: number };
+        checks?: Array<{ id: string; status: string; severity: string }>;
+        capabilities?: Array<{
+          id: string;
+          status: string;
+          required: boolean;
+          visible: boolean;
+        }>;
+      };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.data?.deploymentMode, "managed");
+    assert.ok((body.data?.summary?.blocking ?? 0) >= 3);
+
+    const checks = new Map(
+      body.data?.checks?.map((check) => [check.id, check]),
+    );
+    assert.equal(checks.get("storage")?.status, "fail");
+    assert.equal(checks.get("email")?.severity, "required");
+    assert.equal(checks.get("billing")?.severity, "required");
+
+    const capabilities = new Map(
+      body.data?.capabilities?.map((capability) => [
+        capability.id,
+        capability,
+      ]),
+    );
+    assert.equal(capabilities.get("managedStorage")?.required, true);
+    assert.equal(capabilities.get("managedStorage")?.status, "unavailable");
+    assert.equal(capabilities.get("billing")?.status, "unavailable");
+    assert.equal(capabilities.get("transactionalEmail")?.status, "unavailable");
+    assert.equal(capabilities.get("customExecutionTargets")?.visible, false);
+    assert.equal(capabilities.get("selfHostSupervisor")?.visible, false);
+  } finally {
+    if (previousMode === undefined) {
+      delete process.env.DEPLOYMENT_MODE;
+    } else {
+      process.env.DEPLOYMENT_MODE = previousMode;
+    }
+    if (previousProvider === undefined) {
+      delete process.env.STORAGE_PROVIDER;
+    } else {
+      process.env.STORAGE_PROVIDER = previousProvider;
     }
   }
 });

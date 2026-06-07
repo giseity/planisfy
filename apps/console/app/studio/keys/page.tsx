@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { api } from "@/lib/api"
+import { ApiRequestError, api, type ConsoleProfile, type PlatformPreflight } from "@/lib/api"
 import { Button } from "@planisfy/ui/components/button"
 import { Input } from "@planisfy/ui/components/input"
 import { Badge } from "@planisfy/ui/components/badge"
@@ -87,6 +87,8 @@ export default function ApiKeysPage() {
   const [copiedKey, setCopiedKey] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [rotateId, setRotateId] = useState<string | null>(null)
+  const [profile, setProfile] = useState<ConsoleProfile | null>(null)
+  const [preflight, setPreflight] = useState<PlatformPreflight | null>(null)
 
   const fetchKeys = useCallback(async () => {
     try {
@@ -101,7 +103,24 @@ export default function ApiKeysPage() {
 
   useEffect(() => { fetchKeys() }, [fetchKeys])
 
+  useEffect(() => {
+    Promise.all([api.getProfile(), api.getPlatformPreflight()])
+      .then(([profileRes, preflightRes]) => {
+        setProfile(profileRes.data)
+        setPreflight(preflightRes.data)
+      })
+      .catch(() => {})
+  }, [])
+
+  const managedEmailBlocked =
+    preflight?.deploymentMode === "managed" && profile?.emailVerified === false
+
   const handleCreate = async (formData: FormData) => {
+    if (managedEmailBlocked) {
+      toast.error("Verify your email before creating API keys")
+      return
+    }
+
     const name = formData.get("name") as string
     const scopeValues = ALL_SCOPES.map((s) => s.value).filter(
       (v) => formData.get(`scope_${v}`) === "on"
@@ -131,7 +150,11 @@ export default function ApiKeysPage() {
       setRevealedKey(res.data.key)
       setCreateOpen(false)
       fetchKeys()
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.code === "EMAIL_VERIFICATION_REQUIRED") {
+        toast.error("Verify your email before creating API keys")
+        return
+      }
       toast.error("Failed to create key")
     }
   }
@@ -150,12 +173,21 @@ export default function ApiKeysPage() {
 
   const handleRotate = async () => {
     if (!rotateId) return
+    if (managedEmailBlocked) {
+      toast.error("Verify your email before rotating API keys")
+      return
+    }
+
     try {
       const res = await api.post<{ data: { key: string } }>(`/keys/${rotateId}/rotate`)
       setRotateId(null)
       setRevealedKey(res.data.key)
       fetchKeys()
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.code === "EMAIL_VERIFICATION_REQUIRED") {
+        toast.error("Verify your email before rotating API keys")
+        return
+      }
       toast.error("Failed to rotate key")
     }
   }
@@ -172,7 +204,7 @@ export default function ApiKeysPage() {
         <h1 className="text-2xl font-bold">API Keys</h1>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={managedEmailBlocked}>
               <Plus className="h-4 w-4 mr-2" />
               Create key
             </Button>
@@ -244,6 +276,15 @@ export default function ApiKeysPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {managedEmailBlocked && (
+        <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>Verify your email before creating or rotating managed API keys.</p>
+          </div>
+        </div>
+      )}
 
       {/* Key revealed dialog */}
       <Dialog open={!!revealedKey} onOpenChange={() => setRevealedKey(null)}>
@@ -322,7 +363,10 @@ export default function ApiKeysPage() {
           <p className="text-sm text-muted-foreground mt-1 mb-4">
             Create a key to access the Planisfy API from your applications.
           </p>
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button
+            disabled={managedEmailBlocked}
+            onClick={() => setCreateOpen(true)}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Create key
           </Button>
@@ -382,7 +426,10 @@ export default function ApiKeysPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setRotateId(key.id)}>
+                      <DropdownMenuItem
+                        disabled={managedEmailBlocked}
+                        onClick={() => setRotateId(key.id)}
+                      >
                         <RefreshCw className="h-4 w-4 mr-2" />
                         Rotate key
                       </DropdownMenuItem>

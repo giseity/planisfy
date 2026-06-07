@@ -2,7 +2,14 @@
 
 ## Product Shape
 
-Planisfy is a self-hostable maps platform with optional hosted cloud later. The credible v1 product loop is: self-host, see a default map, upload geodata, process it into tiles, style it, publish a stable MapLibre URL, and roll back safely.
+Planisfy is a maps platform with two official v1 modes: `self_host` and
+`managed`. Both modes share the same API/resource/publishing/usage core; the
+mode boundary lives in `@planisfy/platform-policy` and is exposed through
+`/setup/preflight` capability records.
+
+The credible v1 product loop is: sign up or self-host, see a default map, upload
+geodata, process it into tiles, style it, publish a stable MapLibre URL, observe
+usage, and roll back or recover safely.
 
 ## Current System
 

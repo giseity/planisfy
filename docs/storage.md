@@ -40,7 +40,7 @@ Storage is built from:
 
 ## Cloudflare R2
 
-Hosted deployments should use `STORAGE_PROVIDER=r2` with a Cloudflare R2
+Managed deployments use `STORAGE_PROVIDER=r2` with a Cloudflare R2-compatible
 bucket. Configure:
 
 - `R2_ACCOUNT_ID` or `R2_ENDPOINT`
@@ -49,6 +49,10 @@ bucket. Configure:
 - `R2_SECRET_ACCESS_KEY`
 - `R2_PUBLIC_URL` for the bucket custom domain used in admin/API artifact URLs
 - `MARTIN_SOURCES_PREFIX`, defaulting to `martin-sources`
+
+Managed readiness treats local storage and plain S3 storage as unavailable for
+v1. Self-host deployments may still use local storage by default or opt into S3
+or R2-compatible storage.
 
 R2 writes are signed through the S3-compatible API. When a PMTiles/MBTiles
 tileset version is published, Planisfy copies the immutable artifact to stable

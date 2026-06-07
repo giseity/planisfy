@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import {
   api,
+  type PlatformCapability,
   type PlatformPreflight,
   type PlatformPreflightCheck,
   type PlatformPreflightStatus,
@@ -24,7 +25,6 @@ import {
   Database,
   HardDrive,
   Loader2,
-  Map,
   RefreshCw,
   ShieldCheck,
   ServerCog,
@@ -181,69 +181,28 @@ export default function PlatformPage() {
   );
 }
 
-type CapabilityState = "configured" | "degraded" | "unavailable";
-
-const capabilityDefinitions = [
-  {
-    ids: ["storage"],
-    label: "Storage provider",
-    icon: Database,
-  },
-  {
-    ids: ["martin", "martin-source-aliases", "upgrade-martin-url"],
-    label: "Martin vector tiles",
-    icon: Map,
-  },
-  {
-    ids: ["valhalla"],
-    label: "Valhalla routing",
-    icon: Cloud,
-  },
-  {
-    ids: ["geocoding"],
-    label: "Geocoding",
-    icon: Cloud,
-  },
-  {
-    ids: ["static-maps"],
-    label: "Static maps",
-    icon: Map,
-  },
-  {
-    ids: ["overture"],
-    label: "Overture imports",
-    icon: Database,
-  },
-  {
-    ids: ["email"],
-    label: "Email",
-    icon: Cloud,
-  },
-  {
-    ids: ["billing"],
-    label: "Billing",
-    icon: Cloud,
-  },
-  {
-    ids: ["worker-toolchain", "upgrade-worker-heartbeat"],
-    label: "Worker toolchain",
-    icon: Wrench,
-  },
-  {
-    ids: ["credential-encryption"],
-    label: "Credential encryption",
-    icon: ShieldCheck,
-  },
-] satisfies Array<{
-  ids: string[];
-  label: string;
-  icon: ComponentType<{ className?: string }>;
-}>;
+const capabilityIcons = {
+  billing: Cloud,
+  transactionalEmail: Cloud,
+  managedStorage: Database,
+  localStorage: HardDrive,
+  selfHostSupervisor: ServerCog,
+  customExecutionTargets: Wrench,
+  publicSignup: ShieldCheck,
+  apiKeyCreation: ShieldCheck,
+  usageBilling: ClipboardCheck,
+  supportBundles: ClipboardCheck,
+  releaseUpgrades: ServerCog,
+  platformWorkerRuntime: Wrench,
+} satisfies Record<
+  PlatformCapability["id"],
+  ComponentType<{ className?: string }>
+>;
 
 function CapabilitySurface({ preflight }: { preflight: PlatformPreflight }) {
-  const mode = inferDeploymentMode(preflight);
-  const capabilities = capabilityDefinitions.map((definition) =>
-    capabilityFromChecks(definition, preflight.checks),
+  const mode = deploymentModeDisplay(preflight.deploymentMode);
+  const capabilities = preflight.capabilities.filter(
+    (capability) => capability.visible,
   );
 
   return (
@@ -266,18 +225,8 @@ function CapabilitySurface({ preflight }: { preflight: PlatformPreflight }) {
   );
 }
 
-function CapabilityCard({
-  capability,
-}: {
-  capability: {
-    detail: string;
-    icon: ComponentType<{ className?: string }>;
-    label: string;
-    state: CapabilityState;
-    value: string | null;
-  };
-}) {
-  const Icon = capability.icon;
+function CapabilityCard({ capability }: { capability: PlatformCapability }) {
+  const Icon = capabilityIcons[capability.id];
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
@@ -289,18 +238,18 @@ function CapabilityCard({
             <div className="min-w-0">
               <p className="text-sm font-medium">{capability.label}</p>
               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                {capability.detail}
+                {capability.message}
               </p>
             </div>
           </div>
-          <Badge variant={capabilityVariant(capability.state)}>
-            {capability.state}
+          <Badge variant={capabilityVariant(capability.status)}>
+            {capability.status}
           </Badge>
         </div>
-        {capability.value && (
+        {capability.value !== undefined && capability.value !== null && (
           <div className="flex items-center gap-1 truncate rounded bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground">
             <HardDrive className="h-3 w-3 shrink-0" />
-            <span className="truncate">{capability.value}</span>
+            <span className="truncate">{String(capability.value)}</span>
           </div>
         )}
       </CardContent>
@@ -308,72 +257,19 @@ function CapabilityCard({
   );
 }
 
-function capabilityFromChecks(
-  definition: (typeof capabilityDefinitions)[number],
-  checks: PlatformPreflightCheck[],
-) {
-  const matched = definition.ids
-    .map((id) => checks.find((check) => check.id === id))
-    .filter((check): check is PlatformPreflightCheck => Boolean(check));
-  const primary = matched[0];
-  const requiredFailure = matched.some(
-    (check) => check.status === "fail" && check.severity === "required",
-  );
-  const optionalOnlyMissing =
-    matched.length > 0 &&
-    matched.every(
-      (check) => check.status !== "pass" && check.severity === "optional",
-    );
-  const state: CapabilityState =
-    matched.length === 0 || requiredFailure || optionalOnlyMissing
-      ? "unavailable"
-      : matched.every((check) => check.status === "pass")
-        ? "configured"
-        : "degraded";
-
+function deploymentModeDisplay(mode: PlatformPreflight["deploymentMode"]) {
   return {
-    detail: primary?.message ?? "No platform signal is available.",
-    icon: definition.icon,
-    label: definition.label,
-    state,
-    value:
-      primary?.value === undefined || primary?.value === null
-        ? null
-        : String(primary.value),
-  };
-}
-
-function inferDeploymentMode(preflight: PlatformPreflight) {
-  const selfHost = preflight.groups.some(
-    (group) => group.name === "Self-host product loop",
-  );
-  const managedSignals = ["billing", "email"].map((id) =>
-    preflight.checks.find((check) => check.id === id),
-  );
-  const managedConfigured = managedSignals.some(
-    (check) => check?.status === "pass",
-  );
-
-  if (selfHost) {
-    return {
-      badge: "Self-host",
-      detail: "local storage and self-host product-loop checks are active",
-      label: "Deployment mode",
-      variant: "secondary" as const,
-    };
-  }
-
-  return {
-    badge: managedConfigured ? "Managed-ready" : "Base platform",
-    detail: managedConfigured
-      ? "managed-service integrations are configured"
-      : "managed-service integrations are not configured",
+    badge: mode === "managed" ? "Managed" : "Self-host",
+    detail:
+      mode === "managed"
+        ? "Dodo, Resend, R2, usage, and verification gates are required"
+        : "local storage, supervisor, and custom execution controls remain visible",
     label: "Deployment mode",
-    variant: managedConfigured ? ("success" as const) : ("warning" as const),
+    variant: mode === "managed" ? ("success" as const) : ("secondary" as const),
   };
 }
 
-function capabilityVariant(state: CapabilityState) {
+function capabilityVariant(state: PlatformCapability["status"]) {
   if (state === "configured") return "success";
   if (state === "degraded") return "warning";
   return "secondary";

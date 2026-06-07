@@ -9,6 +9,7 @@ operator references.
 ## Documents
 
 - [Architecture](./architecture.md)
+- [Deployment Modes](./deployment-modes.md)
 - [Resource Model](./resource-model.md)
 - [Events](./events.md)
 - [Storage](./storage.md)

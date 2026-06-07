@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import {
   api,
+  type PlatformPreflight,
   type ConsoleExecutionTarget,
   type ConsoleExecutionTargetEnvVar,
   type ConsoleWorkerProfile,
@@ -78,6 +79,15 @@ interface ProfileData {
 }
 
 interface BillingInfo {
+  deploymentMode: "self_host" | "managed"
+  billingStatus:
+    | "configured"
+    | "checkout_unavailable"
+    | "active_subscription"
+    | "trialing"
+    | "past_due"
+    | "canceled"
+    | "free_plan"
   plan: string
   planName: string
   price: number
@@ -131,6 +141,21 @@ function formatLimit(limit: number | null): string {
 // ---------------------------------------------------------------------------
 
 export default function SettingsPage() {
+  const [preflight, setPreflight] = useState<PlatformPreflight | null>(null)
+
+  useEffect(() => {
+    api
+      .getPlatformPreflight()
+      .then((res) => setPreflight(res.data))
+      .catch(() => setPreflight(null))
+  }, [])
+
+  const showExecution =
+    preflight?.capabilities.some(
+      (capability) =>
+        capability.id === "customExecutionTargets" && capability.visible,
+    ) ?? false
+
   return (
     <div className="container max-w-6xl py-8 px-4">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
@@ -148,10 +173,12 @@ export default function SettingsPage() {
             <CreditCard className="h-4 w-4 mr-1.5" />
             Billing
           </TabsTrigger>
-          <TabsTrigger value="execution">
-            <Cloud className="h-4 w-4 mr-1.5" />
-            Execution
-          </TabsTrigger>
+          {showExecution && (
+            <TabsTrigger value="execution">
+              <Cloud className="h-4 w-4 mr-1.5" />
+              Execution
+            </TabsTrigger>
+          )}
         </TabsList>
         <TabsContent value="profile" className="mt-6">
           <ProfileTab />
@@ -162,9 +189,11 @@ export default function SettingsPage() {
         <TabsContent value="billing" className="mt-6">
           <BillingTab />
         </TabsContent>
-        <TabsContent value="execution" className="mt-6">
-          <ExecutionTab />
-        </TabsContent>
+        {showExecution && (
+          <TabsContent value="execution" className="mt-6">
+            <ExecutionTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )
@@ -1573,6 +1602,19 @@ function BillingTab() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Badge
+              variant={
+                billing.deploymentMode === "managed" ? "success" : "secondary"
+              }
+            >
+              {billing.deploymentMode === "managed" ? "Managed" : "Self-host"}
+            </Badge>
+            <Badge variant={billingStatusVariant(billing.billingStatus)}>
+              {billingStatusLabel(billing.billingStatus)}
+            </Badge>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div>
               <p className="text-sm text-muted-foreground">Monthly Units</p>
@@ -1747,4 +1789,19 @@ function BillingTab() {
       </div>
     </div>
   )
+}
+
+function billingStatusLabel(status: BillingInfo["billingStatus"]) {
+  if (status === "checkout_unavailable") return "Checkout unavailable"
+  if (status === "active_subscription") return "Active subscription"
+  if (status === "free_plan") return "Free plan"
+  if (status === "past_due") return "Past due"
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+function billingStatusVariant(status: BillingInfo["billingStatus"]) {
+  if (status === "active_subscription" || status === "trialing") return "success"
+  if (status === "checkout_unavailable" || status === "past_due") return "warning"
+  if (status === "canceled") return "destructive"
+  return "secondary"
 }

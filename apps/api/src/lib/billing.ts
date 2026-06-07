@@ -20,6 +20,14 @@ export { PLANS };
 export type { PlanLimits, PlanSlug };
 
 type BillablePlanSlug = Exclude<PlanSlug, "free">;
+export type AccountBillingStatus =
+  | "configured"
+  | "checkout_unavailable"
+  | "active_subscription"
+  | "trialing"
+  | "past_due"
+  | "canceled"
+  | "free_plan";
 type SerializedPlanLimits = {
   monthlyUnits: number | null;
   requestsPerMinute: number;
@@ -68,7 +76,11 @@ export function serializePlanLimits(limits: PlanLimits): SerializedPlanLimits {
 }
 
 export function isBillingConfigured(): boolean {
-  return Boolean(env.DODO_PAYMENTS_API_KEY && env.DODO_PRO_PRODUCT_ID);
+  return Boolean(
+    env.DODO_PAYMENTS_API_KEY &&
+      env.DODO_PAYMENTS_WEBHOOK_SECRET &&
+      env.DODO_PRO_PRODUCT_ID,
+  );
 }
 
 export function isCheckoutConfiguredForPlan(planId: PlanSlug): boolean {
@@ -152,6 +164,30 @@ export async function getAccountPlan(accountId: string): Promise<PlanSlug> {
     .limit(1);
 
   return isPlanSlug(subscription?.planId) ? subscription.planId : "free";
+}
+
+export async function getAccountBillingStatus(
+  accountId: string,
+): Promise<AccountBillingStatus> {
+  const [subscription] = await db
+    .select({
+      status: subscriptions.status,
+      planId: subscriptions.planId,
+    })
+    .from(subscriptions)
+    .where(eq(subscriptions.accountId, accountId))
+    .orderBy(desc(subscriptions.updatedAt))
+    .limit(1);
+
+  if (!subscription || subscription.planId === "free") {
+    return isBillingConfigured() ? "free_plan" : "checkout_unavailable";
+  }
+
+  if (subscription.status === "ACTIVE") return "active_subscription";
+  if (subscription.status === "TRIALING") return "trialing";
+  if (subscription.status === "PAST_DUE") return "past_due";
+  if (subscription.status === "CANCELED") return "canceled";
+  return isBillingConfigured() ? "configured" : "checkout_unavailable";
 }
 
 export async function getUserPlan(userId: string): Promise<PlanSlug> {

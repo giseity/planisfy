@@ -6,6 +6,11 @@
  */
 
 import { clientEnv } from "@/env.client";
+import type {
+  CapabilityId,
+  CapabilityRequirement,
+  DeploymentMode,
+} from "@planisfy/platform-policy";
 
 const BASE =
   typeof window !== "undefined"
@@ -348,10 +353,31 @@ export interface PlatformPreflightGroup {
   checks: PlatformPreflightCheck[];
 }
 
+export type PlatformCapabilityStatus =
+  | "configured"
+  | "degraded"
+  | "unavailable"
+  | "hidden";
+
+export interface PlatformCapability {
+  id: CapabilityId;
+  label: string;
+  description: string;
+  policy: CapabilityRequirement;
+  required: boolean;
+  visible: boolean;
+  status: PlatformCapabilityStatus;
+  message: string;
+  action?: string;
+  value?: string | number | boolean | null;
+}
+
 export interface PlatformPreflight {
   generatedAt: string;
   environment: string;
   appVersion: string;
+  deploymentMode: DeploymentMode;
+  capabilities: PlatformCapability[];
   summary: {
     pass: number;
     warn: number;

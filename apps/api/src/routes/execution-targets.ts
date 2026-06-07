@@ -85,6 +85,10 @@ const estimateSchema = z
   );
 
 executionTargetsRoute.get("/execution-targets", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") {
+    return c.json({ data: [] });
+  }
+
   const accountId = c.get("ownerId");
   const rows = await db
     .select()
@@ -101,6 +105,8 @@ executionTargetsRoute.get("/execution-targets", async (c) => {
 });
 
 executionTargetsRoute.post("/execution-targets", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") return managedComputeUnavailable(c);
+
   const accountId = c.get("ownerId");
   const parsed = targetSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
@@ -125,6 +131,8 @@ executionTargetsRoute.post("/execution-targets", async (c) => {
 });
 
 executionTargetsRoute.patch("/execution-targets/:id", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") return managedComputeUnavailable(c);
+
   const accountId = c.get("ownerId");
   const id = c.req.param("id");
   const parsed = targetPatchSchema.safeParse(await c.req.json());
@@ -157,6 +165,8 @@ executionTargetsRoute.patch("/execution-targets/:id", async (c) => {
 });
 
 executionTargetsRoute.delete("/execution-targets/:id", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") return managedComputeUnavailable(c);
+
   const accountId = c.get("ownerId");
   const id = c.req.param("id");
   const existing = await findTarget(accountId, id);
@@ -199,6 +209,8 @@ executionTargetsRoute.get("/execution-targets/:id/env", async (c) => {
 });
 
 executionTargetsRoute.post("/execution-targets/:id/env", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") return managedComputeUnavailable(c);
+
   const accountId = c.get("ownerId");
   const targetId = c.req.param("id");
   const existing = await findTarget(accountId, targetId);
@@ -226,6 +238,8 @@ executionTargetsRoute.post("/execution-targets/:id/env", async (c) => {
 });
 
 executionTargetsRoute.patch("/execution-targets/:id/env/:name", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") return managedComputeUnavailable(c);
+
   const accountId = c.get("ownerId");
   const targetId = c.req.param("id");
   const name = normalizeEnvName(c.req.param("name"));
@@ -261,6 +275,8 @@ executionTargetsRoute.patch("/execution-targets/:id/env/:name", async (c) => {
 });
 
 executionTargetsRoute.delete("/execution-targets/:id/env/:name", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") return managedComputeUnavailable(c);
+
   const accountId = c.get("ownerId");
   const targetId = c.req.param("id");
   const name = normalizeEnvName(c.req.param("name"));
@@ -279,6 +295,10 @@ executionTargetsRoute.delete("/execution-targets/:id/env/:name", async (c) => {
 });
 
 executionTargetsRoute.get("/worker-profiles", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") {
+    return c.json({ data: [] });
+  }
+
   const accountId = c.get("ownerId");
   const rows = await db
     .select()
@@ -290,6 +310,8 @@ executionTargetsRoute.get("/worker-profiles", async (c) => {
 });
 
 executionTargetsRoute.post("/worker-profiles", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") return managedComputeUnavailable(c);
+
   const accountId = c.get("ownerId");
   const parsed = workerProfileSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
@@ -314,6 +336,8 @@ executionTargetsRoute.post("/worker-profiles", async (c) => {
 });
 
 executionTargetsRoute.patch("/worker-profiles/:id", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") return managedComputeUnavailable(c);
+
   const accountId = c.get("ownerId");
   const id = c.req.param("id");
   const parsed = workerProfilePatchSchema.safeParse(await c.req.json());
@@ -349,6 +373,8 @@ executionTargetsRoute.patch("/worker-profiles/:id", async (c) => {
 });
 
 executionTargetsRoute.delete("/worker-profiles/:id", async (c) => {
+  if (env.DEPLOYMENT_MODE === "managed") return managedComputeUnavailable(c);
+
   const accountId = c.get("ownerId");
   const id = c.req.param("id");
   const existing = await findWorkerProfile(accountId, id);
@@ -366,6 +392,12 @@ executionTargetsRoute.post("/processing-jobs/estimate", async (c) => {
   const accountId = c.get("ownerId");
   const parsed = estimateSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
+  if (
+    env.DEPLOYMENT_MODE === "managed" &&
+    (parsed.data.executionTargetId || parsed.data.workerProfileId)
+  ) {
+    return managedComputeUnavailable(c);
+  }
 
   const target = parsed.data.executionTargetId
     ? await findTarget(accountId, parsed.data.executionTargetId)
@@ -523,4 +555,17 @@ function validationError(c: Context, error: z.ZodError) {
 
 function notFound(c: Context, message: string) {
   return c.json({ error: { code: "NOT_FOUND", message } }, 404);
+}
+
+function managedComputeUnavailable(c: Context) {
+  return c.json(
+    {
+      error: {
+        code: "CAPABILITY_UNAVAILABLE",
+        message:
+          "Customer-managed execution targets and worker profiles are unavailable in managed mode.",
+      },
+    },
+    403,
+  );
 }

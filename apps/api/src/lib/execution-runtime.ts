@@ -4,6 +4,7 @@ import {
   executionTargets,
   workerProfiles,
 } from "@planisfy/database";
+import { env } from "../env";
 
 export class ExecutionRuntimeSelectionError extends Error {
   constructor(
@@ -25,6 +26,14 @@ export async function resolveExecutionRuntimeSelection(
 ) {
   const executionTargetId = selection.executionTargetId ?? null;
   const workerProfileId = selection.workerProfileId ?? null;
+
+  if (env.DEPLOYMENT_MODE === "managed" && (executionTargetId || workerProfileId)) {
+    throw new ExecutionRuntimeSelectionError(
+      "CAPABILITY_UNAVAILABLE",
+      "Customer-managed execution targets and worker profiles are unavailable in managed mode.",
+      403,
+    );
+  }
 
   if (executionTargetId) {
     const [target] = await db

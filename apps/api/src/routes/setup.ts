@@ -6,6 +6,13 @@ import {
   missingRequiredEnv,
   safeParseUpgradeReleaseManifest,
 } from "@planisfy/utils/upgrade-manifest";
+import {
+  type CapabilityId,
+  type CapabilityPolicy,
+  type DeploymentMode,
+  getDeploymentPolicy,
+  parseDeploymentMode,
+} from "@planisfy/platform-policy";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 
@@ -13,6 +20,11 @@ export const setupRoute = new Hono<AuthEnv>();
 
 type PreflightStatus = "pass" | "warn" | "fail";
 type PreflightSeverity = "required" | "recommended" | "optional";
+type PlatformCapabilityStatus =
+  | "configured"
+  | "degraded"
+  | "unavailable"
+  | "hidden";
 
 interface PreflightCheck {
   id: string;
@@ -25,6 +37,13 @@ interface PreflightCheck {
   value?: string | number | boolean | null;
 }
 
+interface PlatformCapability extends CapabilityPolicy {
+  status: PlatformCapabilityStatus;
+  message: string;
+  action?: string;
+  value?: string | number | boolean | null;
+}
+
 const LOCAL_DEMO_STYLE_FIXTURES = [
   "styles/planisfy-streets-v1.json",
   "styles/planisfy-streets-light-v1.json",
@@ -32,7 +51,9 @@ const LOCAL_DEMO_STYLE_FIXTURES = [
 ];
 
 setupRoute.get("/setup/preflight", async (c) => {
-  const checks = await buildPreflightChecks();
+  const deploymentMode = activeDeploymentMode();
+  const checks = await buildPreflightChecks(deploymentMode);
+  const capabilities = buildCapabilityStates(deploymentMode, checks);
   const summary = checks.reduce(
     (acc, check) => {
       acc[check.status] += 1;
@@ -49,6 +70,8 @@ setupRoute.get("/setup/preflight", async (c) => {
       generatedAt: new Date().toISOString(),
       environment: env.NODE_ENV,
       appVersion: env.APP_VERSION,
+      deploymentMode,
+      capabilities,
       summary,
       groups: groupChecks(checks),
       checks,
@@ -56,9 +79,12 @@ setupRoute.get("/setup/preflight", async (c) => {
   });
 });
 
-async function buildPreflightChecks(): Promise<PreflightCheck[]> {
-  const storage = await storageCheck();
-  const productLoopChecks = await buildProductLoopChecks();
+async function buildPreflightChecks(
+  deploymentMode = activeDeploymentMode(),
+): Promise<PreflightCheck[]> {
+  const managed = deploymentMode === "managed";
+  const storage = await storageCheck(deploymentMode);
+  const productLoopChecks = await buildProductLoopChecks(deploymentMode);
   const upgradeChecks = await buildUpgradeReadinessChecks(storage);
 
   return [
@@ -225,31 +251,37 @@ async function buildPreflightChecks(): Promise<PreflightCheck[]> {
       id: "email",
       group: "Communications",
       label: "Transactional email",
-      severity: "optional",
+      severity: managed ? "required" : "optional",
       ok: Boolean(env.RESEND_API_KEY),
-      warnWhenMissing: true,
+      warnWhenMissing: !managed,
       message: env.RESEND_API_KEY
         ? "Resend email delivery is configured."
         : "Email delivery is disabled.",
-      action: "Set RESEND_API_KEY for production email delivery.",
+      action: managed
+        ? "Set RESEND_API_KEY before enabling managed mode."
+        : "Set RESEND_API_KEY for production email delivery.",
     }),
     check({
       id: "billing",
       group: "Billing",
       label: "Billing checkout",
-      severity: "optional",
+      severity: managed ? "required" : "optional",
       ok: Boolean(
         env.DODO_PAYMENTS_API_KEY &&
-        env.DODO_PAYMENTS_WEBHOOK_SECRET &&
-        env.DODO_PRO_PRODUCT_ID,
+          env.DODO_PAYMENTS_WEBHOOK_SECRET &&
+          env.DODO_PRO_PRODUCT_ID,
       ),
-      warnWhenMissing: true,
+      warnWhenMissing: !managed,
       message:
-        env.DODO_PAYMENTS_API_KEY && env.DODO_PRO_PRODUCT_ID
-          ? "Dodo Payments checkout is partially or fully configured."
+        env.DODO_PAYMENTS_API_KEY &&
+        env.DODO_PAYMENTS_WEBHOOK_SECRET &&
+        env.DODO_PRO_PRODUCT_ID
+          ? "Dodo Payments checkout and webhooks are configured."
+          : env.DODO_PAYMENTS_API_KEY || env.DODO_PRO_PRODUCT_ID
+            ? "Dodo Payments checkout is partially configured."
           : "Billing checkout is disabled.",
       action:
-        "Set Dodo API, webhook secret, and product IDs to enable managed billing.",
+        "Set Dodo API key, webhook secret, and product IDs to enable managed billing.",
     }),
   ];
 }
@@ -488,7 +520,13 @@ async function findRepoFile(relativePath: string) {
   return null;
 }
 
-async function buildProductLoopChecks(): Promise<PreflightCheck[]> {
+async function buildProductLoopChecks(
+  deploymentMode = activeDeploymentMode(),
+): Promise<PreflightCheck[]> {
+  if (deploymentMode !== "self_host") {
+    return [];
+  }
+
   if ((process.env.STORAGE_PROVIDER ?? "local") !== "local") {
     return [];
   }
@@ -649,9 +687,164 @@ function check(params: {
   };
 }
 
-async function storageCheck(): Promise<PreflightCheck> {
+function buildCapabilityStates(
+  deploymentMode: DeploymentMode,
+  checks: PreflightCheck[],
+): PlatformCapability[] {
+  return getDeploymentPolicy(deploymentMode).capabilities.map((capability) => {
+    const mapped = capabilityChecks(capability.id, checks);
+    if (capability.policy === "hidden") {
+      return {
+        ...capability,
+        status: "hidden",
+        message: `${capability.label} is hidden in ${deploymentModeLabel(deploymentMode)} mode.`,
+      };
+    }
+
+    if (capability.policy === "unavailable") {
+      return {
+        ...capability,
+        status: "unavailable",
+        message: `${capability.label} is unavailable in ${deploymentModeLabel(deploymentMode)} mode.`,
+      };
+    }
+
+    if (mapped.length === 0) {
+      return fallbackCapabilityState(deploymentMode, capability);
+    }
+
+    const primary = mapped[0]!;
+    const requiredFailure = mapped.some(
+      (item) => item.status === "fail" && item.severity === "required",
+    );
+    const anyPass = mapped.some((item) => item.status === "pass");
+    const anyWarnOrFail = mapped.some((item) => item.status !== "pass");
+    const status: PlatformCapabilityStatus = requiredFailure
+      ? "unavailable"
+      : anyWarnOrFail
+        ? "degraded"
+        : anyPass
+          ? "configured"
+          : "degraded";
+
+    return {
+      ...capability,
+      status,
+      message: primary.message,
+      action:
+        status === "configured"
+          ? undefined
+          : primary.action ?? capability.description,
+      value: primary.value,
+    };
+  });
+}
+
+function capabilityChecks(
+  id: CapabilityId,
+  checks: PreflightCheck[],
+): PreflightCheck[] {
+  const ids: Record<CapabilityId, string[]> = {
+    billing: ["billing"],
+    transactionalEmail: ["email"],
+    managedStorage: ["storage"],
+    localStorage: ["storage", "upload-storage", "martin-source-aliases"],
+    selfHostSupervisor: [],
+    customExecutionTargets: [],
+    publicSignup: ["auth-secret", "console-url"],
+    apiKeyCreation: ["auth-secret"],
+    usageBilling: ["billing"],
+    supportBundles: ["upgrade-backup-script"],
+    releaseUpgrades: [
+      "upgrade-current-version",
+      "upgrade-release-manifest",
+      "upgrade-required-env",
+      "upgrade-backup-script",
+      "upgrade-migration-metadata",
+      "upgrade-storage-access",
+    ],
+    platformWorkerRuntime: ["worker-toolchain", "upgrade-worker-heartbeat"],
+  };
+
+  const checkIds = ids[id] ?? [];
+  return checkIds
+    .map((checkId) => checks.find((check) => check.id === checkId))
+    .filter((check): check is PreflightCheck => Boolean(check));
+}
+
+function fallbackCapabilityState(
+  deploymentMode: DeploymentMode,
+  capability: CapabilityPolicy,
+): PlatformCapability {
+  if (capability.id === "selfHostSupervisor") {
+    const configured = Boolean(
+      process.env.SUPERVISOR_URL && process.env.SUPERVISOR_TOKEN,
+    );
+    return {
+      ...capability,
+      status: configured ? "configured" : "degraded",
+      message: configured
+        ? "Self-host supervisor is configured."
+        : "Self-host supervisor is optional and not configured.",
+      action: configured
+        ? undefined
+        : "Start the with-supervisor Compose profile and set SUPERVISOR_URL/SUPERVISOR_TOKEN when upgrade automation is desired.",
+      value: process.env.SUPERVISOR_URL ?? null,
+    };
+  }
+
+  if (capability.id === "customExecutionTargets") {
+    return {
+      ...capability,
+      status: "configured",
+      message:
+        deploymentMode === "self_host"
+          ? "Customer-managed execution targets and worker profiles are available."
+          : "Managed compute is platform-operated for v1.",
+    };
+  }
+
+  if (capability.id === "apiKeyCreation") {
+    return {
+      ...capability,
+      status: "configured",
+      message:
+        deploymentMode === "managed"
+          ? "API key creation is available after the user verifies email."
+          : "API key creation is available in self-host mode.",
+      action:
+        deploymentMode === "managed"
+          ? "Verify account email before creating or rotating API keys."
+          : undefined,
+    };
+  }
+
+  return {
+    ...capability,
+    status: "configured",
+    message: capability.description,
+  };
+}
+
+async function storageCheck(
+  deploymentMode = activeDeploymentMode(),
+): Promise<PreflightCheck> {
   const provider = process.env.STORAGE_PROVIDER ?? "local";
   if (provider === "local") {
+    if (deploymentMode === "managed") {
+      return check({
+        id: "storage",
+        group: "Storage",
+        label: "Managed R2 storage",
+        severity: "required",
+        ok: false,
+        message: "Managed mode cannot use local artifact storage.",
+        action:
+          "Set STORAGE_PROVIDER=r2 with R2 bucket, endpoint/account, credentials, and public URL.",
+        value: provider,
+      });
+    }
+
     const storagePath =
       process.env.LOCAL_STORAGE_PATH ?? join(process.cwd(), ".storage");
     try {
@@ -680,6 +873,20 @@ async function storageCheck(): Promise<PreflightCheck> {
   }
 
   if (provider === "s3") {
+    if (deploymentMode === "managed") {
+      return check({
+        id: "storage",
+        group: "Storage",
+        label: "Managed R2 storage",
+        severity: "required",
+        ok: false,
+        message: "Managed v1 requires R2-compatible storage.",
+        action:
+          "Set STORAGE_PROVIDER=r2 for managed v1; keep S3 customer storage for self-host or later hybrid modes.",
+        value: provider,
+      });
+    }
+
     return check({
       id: "storage",
       group: "Storage",
@@ -728,6 +935,14 @@ function groupChecks(checks: PreflightCheck[]) {
     fail: items.filter((item) => item.status === "fail").length,
     checks: items,
   }));
+}
+
+function activeDeploymentMode(): DeploymentMode {
+  return parseDeploymentMode(process.env.DEPLOYMENT_MODE ?? env.DEPLOYMENT_MODE);
+}
+
+function deploymentModeLabel(mode: DeploymentMode) {
+  return mode === "managed" ? "managed" : "self-host";
 }
 
 function isPublicUrl(value: string) {

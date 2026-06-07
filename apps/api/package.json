@@ -17,6 +17,7 @@
     "@planisfy/database": "workspace:*",
     "@planisfy/env": "workspace:*",
     "@planisfy/events": "workspace:*",
+    "@planisfy/platform-policy": "workspace:*",
     "@planisfy/storage": "workspace:*",
     "@planisfy/storage-paths": "workspace:*",
     "@planisfy/style-spec": "workspace:*",
