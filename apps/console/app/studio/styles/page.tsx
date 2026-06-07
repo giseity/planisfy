@@ -23,25 +23,14 @@ import {
 } from "@planisfy/ui/components/select"
 import { Plus, Map, Search, LayoutGrid, List } from "lucide-react"
 import { api, type ApiEnvelope } from "@/lib/api"
+import type { StudioStyleSummary } from "@/lib/studio/style-workflow"
 import { createStyle } from "./actions"
-
-interface StyleSummary {
-  id: string
-  name: string
-  handle: string
-  description: string | null
-  isPublic: boolean
-  thumbnailUrl: string | null
-  version: number
-  createdAt: string
-  updatedAt: string
-}
 
 type SortMode = "updated" | "name" | "created"
 type ViewMode = "grid" | "list"
 
 export default function StylesPage() {
-  const [styles, setStyles] = useState<StyleSummary[]>([])
+  const [styles, setStyles] = useState<StudioStyleSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<SortMode>("updated")
@@ -49,7 +38,7 @@ export default function StylesPage() {
 
   const loadStyles = async () => {
     try {
-      const res = await api.get<ApiEnvelope<StyleSummary[]>>("/styles")
+      const res = await api.get<ApiEnvelope<StudioStyleSummary[]>>("/styles")
       setStyles(res.data)
     } catch {
       // ignore
@@ -115,7 +104,7 @@ export default function StylesPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="updated">Last modified</SelectItem>
-            <SelectItem value="name">Name A–Z</SelectItem>
+            <SelectItem value="name">Name A-Z</SelectItem>
             <SelectItem value="created">Date created</SelectItem>
           </SelectContent>
         </Select>
