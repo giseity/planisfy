@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { access } from "node:fs/promises";
+import { access, open } from "node:fs/promises";
 import { join } from "node:path";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
@@ -19,6 +19,12 @@ interface PreflightCheck {
   action?: string;
   value?: string | number | boolean | null;
 }
+
+const LOCAL_DEMO_STYLE_FIXTURES = [
+  "styles/planisfy-streets-v1.json",
+  "styles/planisfy-streets-light-v1.json",
+  "styles/planisfy-streets-dark-v1.json",
+];
 
 setupRoute.get("/setup/preflight", async (c) => {
   const checks = await buildPreflightChecks();
@@ -47,6 +53,7 @@ setupRoute.get("/setup/preflight", async (c) => {
 
 async function buildPreflightChecks(): Promise<PreflightCheck[]> {
   const storage = await storageCheck();
+  const productLoopChecks = await buildProductLoopChecks();
 
   return [
     check({
@@ -106,6 +113,7 @@ async function buildPreflightChecks(): Promise<PreflightCheck[]> {
       value: env.CONSOLE_URL,
     }),
     storage,
+    ...productLoopChecks,
     check({
       id: "martin",
       group: "Geospatial engines",
@@ -211,6 +219,144 @@ async function buildPreflightChecks(): Promise<PreflightCheck[]> {
         "Set Dodo API, webhook secret, and product IDs to enable managed billing.",
     }),
   ];
+}
+
+async function buildProductLoopChecks(): Promise<PreflightCheck[]> {
+  if ((process.env.STORAGE_PROVIDER ?? "local") !== "local") {
+    return [];
+  }
+
+  const storagePath =
+    process.env.LOCAL_STORAGE_PATH ?? join(process.cwd(), ".storage");
+  const demoPmtilesPath =
+    process.env.DEMO_PMTILES_PATH ?? "/data/pmtiles/stuttgart.pmtiles";
+  const martinSourcesPath =
+    process.env.MARTIN_SOURCES_PATH ?? join(storagePath, "martin-sources");
+
+  return [
+    await pathAccessCheck({
+      id: "upload-storage",
+      group: "Self-host product loop",
+      label: "Upload artifact storage",
+      severity: "required",
+      path: join(storagePath, "uploads"),
+      okMessage: "Upload artifact storage is ready for local source data.",
+      missingMessage: "Upload artifact storage is missing.",
+      action:
+        "Run scripts/self-host-setup.sh to create local storage directories.",
+    }),
+    await styleFixtureCheck(storagePath),
+    await pathAccessCheck({
+      id: "martin-source-aliases",
+      group: "Self-host product loop",
+      label: "Martin source aliases",
+      severity: "required",
+      path: martinSourcesPath,
+      okMessage: "Martin source alias storage is ready for published tilesets.",
+      missingMessage: "Martin source alias storage is missing.",
+      action:
+        "Run scripts/self-host-setup.sh so published PMTiles/MBTiles aliases have a mounted directory.",
+    }),
+    await pmtilesFixtureCheck(demoPmtilesPath),
+  ];
+}
+
+async function styleFixtureCheck(storagePath: string): Promise<PreflightCheck> {
+  const missing: string[] = [];
+  for (const fixture of LOCAL_DEMO_STYLE_FIXTURES) {
+    const fixturePath = join(storagePath, fixture);
+    if (!(await canAccess(fixturePath))) {
+      missing.push(fixture);
+    }
+  }
+
+  return check({
+    id: "demo-style-fixtures",
+    group: "Self-host product loop",
+    label: "Seeded demo styles",
+    severity: "required",
+    ok: missing.length === 0,
+    message:
+      missing.length === 0
+        ? "Planisfy Streets demo styles are seeded in local storage."
+        : `Missing demo style fixtures: ${missing.join(", ")}.`,
+    action:
+      "Run scripts/self-host-setup.sh to seed the local demo style fixtures.",
+    value: LOCAL_DEMO_STYLE_FIXTURES.length - missing.length,
+  });
+}
+
+async function pmtilesFixtureCheck(path: string): Promise<PreflightCheck> {
+  if (!(await canAccess(path))) {
+    return check({
+      id: "demo-pmtiles",
+      group: "Self-host product loop",
+      label: "Default PMTiles fixture",
+      severity: "recommended",
+      ok: false,
+      warnWhenMissing: true,
+      message: `Default PMTiles fixture is missing: ${path}.`,
+      action:
+        "Place a compatible PMTiles file there or configure DEMO_PMTILES_URL and run scripts/self-host-setup.sh --demo-data.",
+      value: path,
+    });
+  }
+
+  const file = await open(path, "r");
+  const buffer = Buffer.alloc(7);
+  await file.read(buffer, 0, 7, 0);
+  await file.close();
+  const header = buffer.toString("utf8");
+
+  return check({
+    id: "demo-pmtiles",
+    group: "Self-host product loop",
+    label: "Default PMTiles fixture",
+    severity: "recommended",
+    ok: header === "PMTiles",
+    warnWhenMissing: true,
+    message:
+      header === "PMTiles"
+        ? "Default PMTiles fixture is present and has a valid PMTiles header."
+        : `Default fixture does not look like PMTiles: ${path}.`,
+    action:
+      "Replace the file with a compatible PMTiles archive or rerun scripts/self-host-setup.sh --demo-data.",
+    value: path,
+  });
+}
+
+async function pathAccessCheck(params: {
+  id: string;
+  group: string;
+  label: string;
+  severity: PreflightSeverity;
+  path: string;
+  okMessage: string;
+  missingMessage: string;
+  action: string;
+}): Promise<PreflightCheck> {
+  const ok = await canAccess(params.path);
+  return check({
+    id: params.id,
+    group: params.group,
+    label: params.label,
+    severity: params.severity,
+    ok,
+    message: ok
+      ? `${params.okMessage} (${params.path})`
+      : `${params.missingMessage} (${params.path})`,
+    action: params.action,
+    value: params.path,
+  });
+}
+
+async function canAccess(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function check(params: {

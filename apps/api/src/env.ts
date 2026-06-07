@@ -61,6 +61,7 @@ const schema = z.object({
     .preprocess((value) => value === "true" || value === true, z.boolean())
     .default(false),
   OVERTURE_RELEASE: optionalString,
+  DEMO_PMTILES_PATH: optionalString,
 });
 
 export const env = createEnv(schema, process.env, { appName: "api" });

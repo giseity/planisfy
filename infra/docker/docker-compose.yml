@@ -45,6 +45,7 @@ services:
       - SOURCE_CREDENTIAL_ENCRYPTION_KEY=${SOURCE_CREDENTIAL_ENCRYPTION_KEY:-}
       - ALLOW_PRIVATE_SOURCE_URLS=${ALLOW_PRIVATE_SOURCE_URLS:-false}
       - OVERTURE_ALLOW_EXPERIMENTAL_TYPES=${OVERTURE_ALLOW_EXPERIMENTAL_TYPES:-false}
+      - DEMO_PMTILES_PATH=${DEMO_PMTILES_PATH:-/data/pmtiles/stuttgart.pmtiles}
       - CONSOLE_URL=http://localhost:3001
       - MARTIN_URL=http://martin:3000
       - PELIAS_URL=${PELIAS_URL:-http://api:4000/geocoding}
@@ -77,6 +78,7 @@ services:
       - NODE_ENV=production
     volumes:
       - ./data/storage:/data/storage
+      - ./data/pmtiles:/data/pmtiles:ro
     healthcheck:
       test: [ "CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"" ]
       interval: 10s
@@ -130,6 +132,7 @@ services:
       - NODE_ENV=production
     volumes:
       - ./data/storage:/data/storage
+      - ./data/pmtiles:/data/pmtiles:ro
     depends_on:
       postgres:
         condition: service_healthy

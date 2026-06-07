@@ -255,6 +255,7 @@ Next steps:
   visit http://localhost:3001/sign-up
   curl http://localhost:4000/health
   curl http://localhost:4000/health/detailed
+  curl http://localhost:4000/setup/preflight
 
 Demo data directories:
   infra/docker/data/pmtiles        Put *.pmtiles files here for Martin.

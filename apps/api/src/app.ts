@@ -76,6 +76,7 @@ app.on(["GET", "POST"], "/api/auth/**", (c) => {
 // ── Public routes ───────────────────────────────────────────────────────────
 app.route("/", healthRoute);
 app.route("/", storageRoute);
+app.route("/", setupRoute);
 
 // ── Public API routes (require API key or session) ──────────────────────────
 // Pipeline: API key extraction → auth → rate limit → usage log
