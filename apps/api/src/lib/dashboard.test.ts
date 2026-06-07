@@ -69,6 +69,7 @@ test("dashboard payload shapes an empty account with setup gaps", () => {
     "Publish a tileset",
     "Create an API key",
   ]);
+  assert.equal(dashboard.operations.alerts[0]?.id, "all-clear");
 });
 
 test("dashboard payload sorts recent account sections", () => {
@@ -146,6 +147,76 @@ test("dashboard payload sorts recent account sections", () => {
   assert.equal(dashboard.resources.recentAudit[0]?.id, "audit-new");
   assert.equal(dashboard.usage.topApiKeys[0]?.apiKeyId, "pk_new");
   assert.equal(dashboard.summary.errorRate, 5);
+  assert.equal(dashboard.operations.jobSignals.failedJobs, 1);
+  assert.equal(dashboard.operations.alerts.some((alert) => alert.id === "failed-jobs"), true);
+});
+
+test("dashboard payload reports operational alerts", () => {
+  const staleJob: DashboardRecentJob = {
+    ...recentJob("stale-job", "2026-06-05T11:00:00.000Z"),
+    status: "PROCESSING",
+    progress: 20,
+  };
+  const failedJob: DashboardRecentJob = {
+    ...recentJob("failed-job", "2026-06-05T11:55:00.000Z"),
+    status: "FAILED",
+    errorCode: "TIPPECANOE_ERROR",
+    errorMessage: "Tippecanoe exited with code 1",
+  };
+
+  const dashboard = buildDashboardPayload({
+    generatedAt: "2026-06-05T12:00:00.000Z",
+    account,
+    user,
+    plan: "free",
+    monthlyQuotaUsed: 95,
+    monthlyQuotaLimit: 100,
+    totalRequests: 10,
+    errorCount: 0,
+    counts: {
+      activeApiKeys: 1,
+      totalStyles: 1,
+      publishedStyles: 1,
+      totalTilesets: 1,
+      publishedTilesets: 1,
+      runningJobs: 1,
+      failedJobs: 1,
+    },
+    timeseries: [],
+    endpointBreakdown: [],
+    topApiKeys: [],
+    recentStyles: [],
+    recentTilesets: [],
+    recentJobs: [staleJob, failedJob],
+    recentAudit: [],
+    health: [
+      ...baseHealth(),
+      makeHealthEntry({
+        id: "redis",
+        label: "Redis",
+        status: "offline",
+        message: "connection refused",
+        checkedAt: "2026-06-05T12:00:00.000Z",
+      }),
+    ],
+    apiBaseUrl: "https://api.planisfy.localhost",
+  });
+
+  assert.equal(dashboard.operations.unhealthyServices, 1);
+  assert.equal(dashboard.operations.jobSignals.staleRunningJobs, 1);
+  assert.equal(dashboard.operations.jobSignals.failedJobs, 1);
+  assert.equal(
+    dashboard.operations.jobSignals.recentFailures[0]?.errorCode,
+    "TIPPECANOE_ERROR",
+  );
+  assert.equal(
+    dashboard.operations.alerts.some((alert) => alert.id === "quota-critical"),
+    true,
+  );
+  assert.equal(
+    dashboard.operations.alerts.some((alert) => alert.id === "service-health"),
+    true,
+  );
 });
 
 test("optional services can be unavailable without failing readiness", () => {
