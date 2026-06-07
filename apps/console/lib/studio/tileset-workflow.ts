@@ -47,9 +47,9 @@ export function jobStateMessage(
     case "SUCCEEDED":
       return "Succeeded";
     case "FAILED":
-      return "Failed — retry available";
+      return "Failed - retry available";
     case "CANCELED":
-      return "Canceled — retry available";
+      return "Canceled - retry available";
     default:
       return status;
   }

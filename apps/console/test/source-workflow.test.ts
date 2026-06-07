@@ -8,10 +8,13 @@ import { normalizeApiUrl } from "@/lib/api";
 import { useStyleStore } from "@/lib/store/style-store";
 import {
   canRebuildTileset,
+  jobStateMessage,
   tilesetVersionActionLabel,
+  tilesetWorkflowMessage,
 } from "@/lib/studio/tileset-workflow";
 import {
   defaultLayerOptionsForTileset,
+  layerTypesForSource,
   publishabilityMessage,
   styleSourceIdForTileset,
   tilesetToStyleSource,
@@ -44,6 +47,32 @@ describe("Studio source workflow", () => {
       url: "https://api.planisfy.localhost/tilesets/acme.roads/tilejson.json",
     });
     expect(publishabilityMessage(tileset)).toBe("READY");
+  });
+
+  it("maps raster tilesets and unavailable tilesets honestly", () => {
+    const raster = tilesetFixture({
+      type: "RASTER",
+      isPublished: true,
+      tilejsonUrl: "https://api.planisfy.localhost/tiles/v1/acme/satellite.json",
+    });
+    const pending = tilesetFixture({
+      isPublished: false,
+      tilejsonUrl: null,
+      status: "BUILDING",
+    });
+
+    expect(tilesetToStyleSource(raster)).toEqual({
+      type: "raster",
+      url: "https://api.planisfy.localhost/tiles/v1/acme/satellite.json",
+      tileSize: 256,
+    });
+    expect(defaultLayerOptionsForTileset(raster)).toEqual({
+      layerType: "raster",
+    });
+    expect(tilesetToStyleSource(pending)).toBeNull();
+    expect(publishabilityMessage(pending)).toBe(
+      "Publish a processed version first",
+    );
   });
 
   it("derives default layer options from vector layer metadata", () => {
@@ -108,6 +137,21 @@ describe("Studio source workflow", () => {
       "source-layer": "transportation",
     });
   });
+
+  it("offers layer modes based on source type", () => {
+    expect(layerTypesForSource({ type: "vector", url: "https://x.test" })).toEqual([
+      "circle",
+      "line",
+      "fill",
+      "symbol",
+    ]);
+    expect(
+      layerTypesForSource({ type: "raster", tiles: ["https://x.test/{z}/{x}/{y}"] }),
+    ).toEqual(["raster"]);
+    expect(layerTypesForSource({ type: "raster-dem", tiles: [] })).toEqual([
+      "hillshade",
+    ]);
+  });
 });
 
 describe("Console tileset workflow", () => {
@@ -158,6 +202,21 @@ describe("Console tileset workflow", () => {
         }),
       ),
     ).toBe(true);
+  });
+
+  it("summarizes tileset and job states for workflow rows", () => {
+    expect(tilesetWorkflowMessage(tilesetFixture({ status: "BUILDING" }))).toBe(
+      "Tiles are building",
+    );
+    expect(
+      tilesetWorkflowMessage(
+        tilesetFixture({ currentVersionId: null, latestVersion: versionFixture() }),
+      ),
+    ).toBe("Review and publish a processed version");
+    expect(jobStateMessage("PROCESSING", "2026-01-01T00:00:00.000Z")).toBe(
+      "Cancellation requested",
+    );
+    expect(jobStateMessage("FAILED")).toBe("Failed - retry available");
   });
 });
 
