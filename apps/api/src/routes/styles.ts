@@ -133,21 +133,19 @@ stylesRoute.get("/styles/:id", async (c) => {
   const [style] = await db
     .select()
     .from(styles)
-    .where(and(eq(styles.id, styleId), isNull(styles.deletedAt)))
+    .where(
+      and(
+        eq(styles.id, styleId),
+        eq(styles.ownerId, ownerId),
+        isNull(styles.deletedAt),
+      ),
+    )
     .limit(1);
 
   if (!style) {
     return c.json(
       { error: { code: "NOT_FOUND", message: "Style not found" } },
       404,
-    );
-  }
-
-  // Allow access to own styles or public styles
-  if (style.ownerId !== ownerId && !style.isPublic) {
-    return c.json(
-      { error: { code: "FORBIDDEN", message: "Access denied" } },
-      403,
     );
   }
 
