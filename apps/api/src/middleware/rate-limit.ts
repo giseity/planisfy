@@ -6,9 +6,9 @@ import {
   RateLimiterRes,
 } from "rate-limiter-flexible";
 import Redis from "ioredis";
-import { PLANS, type PlanSlug } from "@planisfy/types";
 import { getEndpointCost } from "../lib/api-key";
-import { getAccountPlan } from "../lib/billing";
+import { getAccountPlanLimits } from "../lib/billing";
+import { normalizeRequestsPerMinute } from "../lib/rate-limit-policy";
 import {
   checkMonthlyUsageQuota,
   evaluateMonthlyQuota,
@@ -35,24 +35,7 @@ redis.connect().catch((err) => {
   );
 });
 
-const memoryFallback = new RateLimiterMemory({
-  points: 100,
-  duration: 60,
-});
-
-const planSlugs = Object.keys(PLANS) as PlanSlug[];
-const planLimiters = Object.fromEntries(
-  planSlugs.map((planId) => [
-    planId,
-    new RateLimiterRedis({
-      storeClient: redis,
-      keyPrefix: `rl:${planId}`,
-      points: PLANS[planId].requestsPerMinute,
-      duration: 60,
-      insuranceLimiter: memoryFallback,
-    }),
-  ]),
-) as Record<PlanSlug, RateLimiterRedis>;
+const requestLimiters = new Map<number, RateLimiterRedis>();
 
 const blockLimiter = new RateLimiterMemory({
   points: 10,
@@ -65,12 +48,34 @@ function getMonthlyQuotaKey(ownerId: string, periodKey: string): string {
 }
 
 function setQuotaHeaders(c: Context<AuthEnv>, quota: QuotaEvaluation) {
-  c.header("X-Quota-Limit", quota.limit === Infinity ? "unlimited" : String(quota.limit));
+  c.header(
+    "X-Quota-Limit",
+    quota.limit === Infinity ? "unlimited" : String(quota.limit),
+  );
   c.header("X-Quota-Used", String(quota.projected));
   c.header(
     "X-Quota-Remaining",
     quota.remaining === Infinity ? "unlimited" : String(quota.remaining),
   );
+}
+
+function getRequestLimiter(requestsPerMinute: number) {
+  const points = normalizeRequestsPerMinute(requestsPerMinute);
+  const existing = requestLimiters.get(points);
+  if (existing) return existing;
+
+  const limiter = new RateLimiterRedis({
+    storeClient: redis,
+    keyPrefix: `rl:${points}rpm`,
+    points,
+    duration: 60,
+    insuranceLimiter: new RateLimiterMemory({
+      points,
+      duration: 60,
+    }),
+  });
+  requestLimiters.set(points, limiter);
+  return limiter;
 }
 
 async function reserveMonthlyQuota(params: {
@@ -153,54 +158,61 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
     );
   }
 
-  const planId = await getAccountPlan(ownerId);
-  const plan = PLANS[planId] ?? PLANS.free;
-  const limiter = planLimiters[planId] ?? planLimiters.free;
+  const planLimits = await getAccountPlanLimits(ownerId);
+  const requestsPerMinute = normalizeRequestsPerMinute(
+    planLimits.requestsPerMinute,
+  );
   const cost = getEndpointCost(c.req.path);
 
-  try {
-    const rateLimitRes = await limiter.consume(ownerId, cost);
+  if (requestsPerMinute === Infinity) {
+    c.header("X-RateLimit-Limit", "unlimited");
+    c.header("X-RateLimit-Remaining", "unlimited");
+  } else {
+    const limiter = getRequestLimiter(requestsPerMinute);
+    try {
+      const rateLimitRes = await limiter.consume(ownerId, cost);
 
-    c.header("X-RateLimit-Limit", String(plan.requestsPerMinute));
-    c.header(
-      "X-RateLimit-Remaining",
-      String(Math.max(0, rateLimitRes.remainingPoints)),
-    );
-    c.header(
-      "X-RateLimit-Reset",
-      String(
-        Math.ceil(Date.now() / 1000 + rateLimitRes.msBeforeNext / 1000),
-      ),
-    );
-  } catch (err) {
-    if (err instanceof RateLimiterRes) {
-      try {
-        await blockLimiter.consume(clientIp);
-      } catch {
-        // The block limiter will reject subsequent requests.
-      }
-
-      const retryAfter = Math.ceil(err.msBeforeNext / 1000);
-      c.header("X-RateLimit-Limit", String(plan.requestsPerMinute));
-      c.header("X-RateLimit-Remaining", "0");
-      c.header("Retry-After", String(retryAfter));
-
-      return c.json(
-        {
-          error: {
-            code: "RATE_LIMITED",
-            message: `Rate limit exceeded. Retry after ${retryAfter} seconds.`,
-          },
-        },
-        429,
+      c.header("X-RateLimit-Limit", String(requestsPerMinute));
+      c.header(
+        "X-RateLimit-Remaining",
+        String(Math.max(0, rateLimitRes.remainingPoints)),
       );
+      c.header(
+        "X-RateLimit-Reset",
+        String(
+          Math.ceil(Date.now() / 1000 + rateLimitRes.msBeforeNext / 1000),
+        ),
+      );
+    } catch (err) {
+      if (err instanceof RateLimiterRes) {
+        try {
+          await blockLimiter.consume(clientIp);
+        } catch {
+          // The block limiter will reject subsequent requests.
+        }
+
+        const retryAfter = Math.ceil(err.msBeforeNext / 1000);
+        c.header("X-RateLimit-Limit", String(requestsPerMinute));
+        c.header("X-RateLimit-Remaining", "0");
+        c.header("Retry-After", String(retryAfter));
+
+        return c.json(
+          {
+            error: {
+              code: "RATE_LIMITED",
+              message: `Rate limit exceeded. Retry after ${retryAfter} seconds.`,
+            },
+          },
+          429,
+        );
+      }
     }
   }
 
   const quota = await reserveMonthlyQuota({
     ownerId,
     cost,
-    monthlyLimit: plan.monthlyUnits,
+    monthlyLimit: planLimits.monthlyUnits,
   });
   setQuotaHeaders(c, quota);
 
