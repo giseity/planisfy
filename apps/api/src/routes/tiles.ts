@@ -270,14 +270,13 @@ function toTileJson(
   mode: "stable" | "version" | "dotted-stable" | "dotted-version",
 ) {
   const apiBase = apiBaseFromUrl(url);
-  const tilesBase =
-    mode === "version"
-      ? `${apiBase}/tiles/v1/${resolved.owner}/${resolved.tileset.handle}/versions/${resolved.version!.version}`
-      : mode === "dotted-version"
-        ? `${apiBase}/tiles/v1/${resolved.owner}.${resolved.tileset.handle}@${resolved.version!.version}`
-        : mode === "dotted-stable"
-          ? `${apiBase}/tiles/v1/${resolved.owner}.${resolved.tileset.handle}`
-          : `${apiBase}/tiles/v1/${resolved.owner}/${resolved.tileset.handle}`;
+  const tilesBase = publicTilesetBaseUrl({
+    apiBase,
+    owner: resolved.owner,
+    handle: resolved.tileset.handle,
+    version: resolved.version!.version,
+    mode,
+  });
 
   return {
     tilejson: "3.0.0",
@@ -296,7 +295,7 @@ function toTileJson(
   };
 }
 
-function extractVectorLayers(schema: unknown) {
+export function extractVectorLayers(schema: unknown) {
   if (
     typeof schema === "object" &&
     schema !== null &&
@@ -309,12 +308,12 @@ function extractVectorLayers(schema: unknown) {
   return [{ id: "data", fields: {} }];
 }
 
-function apiBaseFromUrl(url: string) {
+export function apiBaseFromUrl(url: string) {
   const baseUrl = new URL(url);
   return `${baseUrl.protocol}//${baseUrl.host}`;
 }
 
-function parsePublicTilesetSlug(slug: string) {
+export function parsePublicTilesetSlug(slug: string) {
   const match = slug.match(
     /^([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)(?:@([1-9]\d*))?$/,
   );
@@ -325,4 +324,23 @@ function parsePublicTilesetSlug(slug: string) {
     handle: match[2]!,
     version: match[3] ? Number(match[3]) : undefined,
   };
+}
+
+export function publicTilesetBaseUrl(params: {
+  apiBase: string;
+  owner: string;
+  handle: string;
+  version: number;
+  mode: "stable" | "version" | "dotted-stable" | "dotted-version";
+}) {
+  if (params.mode === "version") {
+    return `${params.apiBase}/tiles/v1/${params.owner}/${params.handle}/versions/${params.version}`;
+  }
+  if (params.mode === "dotted-version") {
+    return `${params.apiBase}/tiles/v1/${params.owner}.${params.handle}@${params.version}`;
+  }
+  if (params.mode === "dotted-stable") {
+    return `${params.apiBase}/tiles/v1/${params.owner}.${params.handle}`;
+  }
+  return `${params.apiBase}/tiles/v1/${params.owner}/${params.handle}`;
 }

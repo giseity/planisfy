@@ -52,3 +52,26 @@ test("buildTilesetPublishAuditMetadata records rollback-safe context", () => {
     },
   );
 });
+
+test("buildTilesetPublishAuditMetadata preserves alias registration evidence", () => {
+  const martinRegistration = {
+    provider: "r2",
+    stableStorageKey: "martin-sources/acme.roads.pmtiles",
+    versionedStorageKey: "martin-sources/acme.roads.v4.pmtiles",
+  };
+
+  assert.deepEqual(
+    buildTilesetPublishAuditMetadata({
+      targetVersion: 4,
+      previousVersion: 3,
+      action: "promote",
+      martinRegistration,
+    }),
+    {
+      version: 4,
+      previousVersion: 3,
+      publishAction: "promote",
+      martinRegistration,
+    },
+  );
+});
