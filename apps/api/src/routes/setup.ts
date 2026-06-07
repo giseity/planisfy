@@ -158,13 +158,13 @@ async function buildPreflightChecks(): Promise<PreflightCheck[]> {
       group: "Data imports",
       label: "Overture release",
       severity: "recommended",
-      ok: Boolean(process.env.OVERTURE_RELEASE),
+      ok: Boolean(env.OVERTURE_RELEASE),
       warnWhenMissing: true,
-      message: process.env.OVERTURE_RELEASE
-        ? `Overture release is ${process.env.OVERTURE_RELEASE}.`
+      message: env.OVERTURE_RELEASE
+        ? `Overture release is ${env.OVERTURE_RELEASE}.`
         : "Overture imports will fail until a release is configured.",
       action: "Set OVERTURE_RELEASE for DuckDB-backed Overture imports.",
-      value: process.env.OVERTURE_RELEASE ?? null,
+      value: env.OVERTURE_RELEASE ?? null,
     }),
     check({
       id: "source-egress",
@@ -199,8 +199,8 @@ async function buildPreflightChecks(): Promise<PreflightCheck[]> {
       severity: "optional",
       ok: Boolean(
         env.DODO_PAYMENTS_API_KEY &&
-          env.DODO_PAYMENTS_WEBHOOK_SECRET &&
-          env.DODO_PRO_PRODUCT_ID,
+        env.DODO_PAYMENTS_WEBHOOK_SECRET &&
+        env.DODO_PRO_PRODUCT_ID,
       ),
       warnWhenMissing: true,
       message:
@@ -286,7 +286,7 @@ async function storageCheck(): Promise<PreflightCheck> {
     Boolean(process.env.R2_ENDPOINT || process.env.R2_ACCOUNT_ID) &&
     Boolean(
       (process.env.R2_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) &&
-        (process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY),
+      (process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY),
     );
   return check({
     id: "storage",
