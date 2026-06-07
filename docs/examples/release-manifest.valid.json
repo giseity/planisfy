@@ -1,0 +1,44 @@
+{
+  "version": "1.2.0",
+  "createdAt": "2026-06-07T00:00:00.000Z",
+  "minimumVersion": "1.1.0",
+  "images": [
+    {
+      "service": "api",
+      "image": "ghcr.io/example/planisfy/api",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "service": "console",
+      "image": "ghcr.io/example/planisfy/console",
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "migrations": {
+    "database": ["0005_upgrade.sql"],
+    "storage": []
+  },
+  "storageLayout": {
+    "version": "1",
+    "changes": []
+  },
+  "workerCompatibility": {
+    "minimumWorkerVersion": "1.2.0",
+    "notes": []
+  },
+  "requiredEnv": [
+    {
+      "name": "BETTER_AUTH_SECRET",
+      "required": true,
+      "description": "Required for session signing."
+    },
+    {
+      "name": "INTERNAL_API_SECRET",
+      "required": true,
+      "description": "Required for internal platform routes."
+    }
+  ],
+  "backupRequired": true,
+  "rollbackSupported": true,
+  "notes": ["Example pinned-release manifest for self-host upgrade planning."]
+}
