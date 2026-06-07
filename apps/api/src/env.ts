@@ -32,10 +32,16 @@ const schema = z.object({
 
   MARTIN_URL: z.string().url().default("http://localhost:3005"),
   VALHALLA_URL: z.string().url().default("http://localhost:3007"),
-  PELIAS_URL: z.string().url().default("https://api.planisfy.localhost/geocoding"),
+  PELIAS_URL: z
+    .string()
+    .url()
+    .default("https://api.planisfy.localhost/geocoding"),
   GLYPHS_URL: z.string().url().default("https://demotiles.maplibre.org/font"),
   STATIC_MAP_URL: optionalUrl,
-  ELEVATION_URL: z.string().url().default("https://api.open-elevation.com/api/v1"),
+  ELEVATION_URL: z
+    .string()
+    .url()
+    .default("https://api.open-elevation.com/api/v1"),
 
   RESEND_API_KEY: optionalString,
   FROM_EMAIL: z.string().min(1).default("Planisfy <noreply@planisfy.com>"),
@@ -54,6 +60,7 @@ const schema = z.object({
   OVERTURE_ALLOW_EXPERIMENTAL_TYPES: z
     .preprocess((value) => value === "true" || value === true, z.boolean())
     .default(false),
+  OVERTURE_RELEASE: optionalString,
 });
 
 export const env = createEnv(schema, process.env, { appName: "api" });
