@@ -5,12 +5,15 @@ import {
   api,
   type ConsoleArtifactBackup,
   type ConsoleCustomDomain,
+  type ConsoleExecutionTarget,
   type ConsoleJobTimeline,
   type ConsoleNotificationChannel,
   type ConsoleOperationsOverview,
   type ConsolePreviewLink,
   type ConsoleScheduledOperation,
+  type ConsoleTileset,
   type ConsoleWorkerNode,
+  type ConsoleWorkerProfile,
   type ConsoleWorkflowTemplate,
 } from "@/lib/api";
 import { Badge } from "@planisfy/ui/components/badge";
@@ -72,12 +75,24 @@ const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
 export default function OperationsPage() {
   const [overview, setOverview] = useState<ConsoleOperationsOverview>(EMPTY_OVERVIEW);
   const [timeline, setTimeline] = useState<ConsoleJobTimeline | null>(null);
+  const [tilesets, setTilesets] = useState<ConsoleTileset[]>([]);
+  const [executionTargets, setExecutionTargets] = useState<ConsoleExecutionTarget[]>([]);
+  const [workerProfiles, setWorkerProfiles] = useState<ConsoleWorkerProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const res = await api.getOperations();
-      setOverview(res.data);
+      const [operationsRes, tilesetsRes, targetsRes, profilesRes] =
+        await Promise.all([
+          api.getOperations(),
+          api.listTilesets(),
+          api.listExecutionTargets(),
+          api.listWorkerProfiles(),
+        ]);
+      setOverview(operationsRes.data);
+      setTilesets(tilesetsRes.data);
+      setExecutionTargets(targetsRes.data);
+      setWorkerProfiles(profilesRes.data);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load operations");
     } finally {
@@ -162,7 +177,13 @@ export default function OperationsPage() {
           <JobsTab jobs={overview.recentJobs} timeline={timeline} onTimeline={openTimeline} />
         </TabsContent>
         <TabsContent value="schedules" className="mt-6">
-          <SchedulesTab schedules={overview.scheduledOperations} onChanged={load} />
+          <SchedulesTab
+            executionTargets={executionTargets}
+            schedules={overview.scheduledOperations}
+            tilesets={tilesets}
+            workerProfiles={workerProfiles}
+            onChanged={load}
+          />
         </TabsContent>
         <TabsContent value="notifications" className="mt-6">
           <NotificationsTab channels={overview.notificationChannels} onChanged={load} />
@@ -174,7 +195,12 @@ export default function OperationsPage() {
           <BackupsTab backups={overview.artifactBackups} onChanged={load} />
         </TabsContent>
         <TabsContent value="delivery" className="mt-6">
-          <DeliveryTab previews={overview.previewLinks} domains={overview.customDomains} onChanged={load} />
+          <DeliveryTab
+            domains={overview.customDomains}
+            previews={overview.previewLinks}
+            tilesets={tilesets}
+            onChanged={load}
+          />
         </TabsContent>
         <TabsContent value="templates" className="mt-6">
           <TemplatesTab templates={overview.workflowTemplates} onChanged={load} />
@@ -280,16 +306,25 @@ function JobsTab({
 }
 
 function SchedulesTab({
+  executionTargets,
   schedules,
+  tilesets,
+  workerProfiles,
   onChanged,
 }: {
+  executionTargets: ConsoleExecutionTarget[];
   schedules: ConsoleScheduledOperation[];
+  tilesets: ConsoleTileset[];
+  workerProfiles: ConsoleWorkerProfile[];
   onChanged: () => void;
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<ConsoleScheduledOperation["kind"]>("tileset_rebuild");
   const [cron, setCron] = useState("0 2 * * *");
   const [timezone, setTimezone] = useState("UTC");
+  const [tilesetId, setTilesetId] = useState("");
+  const [executionTargetId, setExecutionTargetId] = useState("");
+  const [workerProfileId, setWorkerProfileId] = useState("");
   const [payload, setPayload] = useState("{}");
   const [saving, setSaving] = useState(false);
 
@@ -301,7 +336,13 @@ function SchedulesTab({
         kind,
         cron,
         timezone,
-        payload: parseJsonObject(payload),
+        payload: schedulePayload({
+          executionTargetId,
+          kind,
+          payload,
+          tilesetId,
+          workerProfileId,
+        }),
       });
       setName("");
       setPayload("{}");
@@ -345,7 +386,48 @@ function SchedulesTab({
             <Field label="Cron"><Input value={cron} onChange={(e) => setCron(e.target.value)} /></Field>
             <Field label="Timezone"><Input value={timezone} onChange={(e) => setTimezone(e.target.value)} /></Field>
           </div>
-          <Field label="Payload JSON"><Textarea rows={5} value={payload} onChange={(e) => setPayload(e.target.value)} /></Field>
+          <Field label="Tileset">
+            <Select value={tilesetId || "none"} onValueChange={(value) => setTilesetId(value === "none" ? "" : value)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No tileset</SelectItem>
+                {tilesets.map((tileset) => (
+                  <SelectItem key={tileset.id} value={tileset.id}>
+                    {tileset.name} ({tileset.handle})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Execution target">
+              <Select value={executionTargetId || "none"} onValueChange={(value) => setExecutionTargetId(value === "none" ? "" : value)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Default target</SelectItem>
+                  {executionTargets.map((target) => (
+                    <SelectItem key={target.id} value={target.id}>
+                      {target.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Worker profile">
+              <Select value={workerProfileId || "none"} onValueChange={(value) => setWorkerProfileId(value === "none" ? "" : value)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Default profile</SelectItem>
+                  {workerProfiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <Field label="Advanced payload JSON"><Textarea rows={5} value={payload} onChange={(e) => setPayload(e.target.value)} /></Field>
           <Button onClick={createSchedule} disabled={!name || saving}>
             <CalendarClock className="mr-1.5 h-4 w-4" />
             Create
@@ -584,6 +666,13 @@ function BackupsTab({
   onChanged: () => void;
 }) {
   const [storageObjectId, setStorageObjectId] = useState("");
+  const backupSources = useMemo(
+    () =>
+      backups.filter(
+        (backup) => backup.storageObjectId && backup.sourceStorageKey,
+      ),
+    [backups],
+  );
 
   async function createBackup() {
     await runAction(
@@ -604,6 +693,21 @@ function BackupsTab({
           <CardDescription>Copy a dataset or tile artifact from its storage key into backup storage.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {backupSources.length > 0 && (
+            <Field label="Recent artifact">
+              <Select value={storageObjectId || "manual"} onValueChange={(value) => setStorageObjectId(value === "manual" ? "" : value)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual ID</SelectItem>
+                  {backupSources.map((backup) => (
+                    <SelectItem key={backup.id} value={backup.storageObjectId ?? ""}>
+                      {backup.sourceStorageKey}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
           <Field label="Storage object ID"><Input value={storageObjectId} onChange={(e) => setStorageObjectId(e.target.value)} /></Field>
           <Button onClick={createBackup} disabled={!storageObjectId}>
             <ArchiveRestore className="mr-1.5 h-4 w-4" />
@@ -652,10 +756,12 @@ function BackupsTab({
 function DeliveryTab({
   previews,
   domains,
+  tilesets,
   onChanged,
 }: {
   previews: ConsolePreviewLink[];
   domains: ConsoleCustomDomain[];
+  tilesets: ConsoleTileset[];
   onChanged: () => void;
 }) {
   const [previewResourceType, setPreviewResourceType] = useState("tileset");
@@ -664,6 +770,11 @@ function DeliveryTab({
   const [domainResourceType, setDomainResourceType] = useState("tileset");
   const [domainResourceId, setDomainResourceId] = useState("");
   const [host, setHost] = useState("");
+
+  function selectResource(value: string, target: "preview" | "domain") {
+    if (target === "preview") setPreviewResourceId(value === "manual" ? "" : value);
+    else setDomainResourceId(value === "manual" ? "" : value);
+  }
 
   async function createPreview() {
     await runAction(
@@ -704,8 +815,26 @@ function DeliveryTab({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Resource type"><Input value={previewResourceType} onChange={(e) => setPreviewResourceType(e.target.value)} /></Field>
-              <Field label="Resource ID"><Input value={previewResourceId} onChange={(e) => setPreviewResourceId(e.target.value)} /></Field>
+              <Field label="Resource type">
+                <Select value={previewResourceType} onValueChange={setPreviewResourceType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tileset">Tileset</SelectItem>
+                    <SelectItem value="style">Style</SelectItem>
+                    <SelectItem value="dataset">Dataset</SelectItem>
+                    <SelectItem value="url">URL</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Resource">
+                <ResourceSelector
+                  resourceId={previewResourceId}
+                  resourceType={previewResourceType}
+                  tilesets={tilesets}
+                  onSelect={(value) => selectResource(value, "preview")}
+                  onManual={setPreviewResourceId}
+                />
+              </Field>
             </div>
             <Field label="Target URL"><Input value={targetUrl} onChange={(e) => setTargetUrl(e.target.value)} /></Field>
             <Button onClick={createPreview} disabled={!previewResourceId || !targetUrl}>
@@ -721,8 +850,25 @@ function DeliveryTab({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Resource type"><Input value={domainResourceType} onChange={(e) => setDomainResourceType(e.target.value)} /></Field>
-              <Field label="Resource ID"><Input value={domainResourceId} onChange={(e) => setDomainResourceId(e.target.value)} /></Field>
+              <Field label="Resource type">
+                <Select value={domainResourceType} onValueChange={setDomainResourceType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tileset">Tileset</SelectItem>
+                    <SelectItem value="style">Style</SelectItem>
+                    <SelectItem value="dataset">Dataset</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Resource">
+                <ResourceSelector
+                  resourceId={domainResourceId}
+                  resourceType={domainResourceType}
+                  tilesets={tilesets}
+                  onSelect={(value) => selectResource(value, "domain")}
+                  onManual={setDomainResourceId}
+                />
+              </Field>
             </div>
             <Field label="Host"><Input value={host} onChange={(e) => setHost(e.target.value)} /></Field>
             <Button onClick={createDomain} disabled={!host}>
@@ -736,6 +882,41 @@ function DeliveryTab({
         <DeliveryList title="Preview Links" rows={previews} onChanged={onChanged} />
         <DomainList domains={domains} onChanged={onChanged} />
       </div>
+    </div>
+  );
+}
+
+function ResourceSelector({
+  onManual,
+  onSelect,
+  resourceId,
+  resourceType,
+  tilesets,
+}: {
+  onManual: (value: string) => void;
+  onSelect: (value: string) => void;
+  resourceId: string;
+  resourceType: string;
+  tilesets: ConsoleTileset[];
+}) {
+  if (resourceType !== "tileset" || tilesets.length === 0) {
+    return <Input value={resourceId} onChange={(e) => onManual(e.target.value)} />;
+  }
+
+  return (
+    <div className="space-y-2">
+      <Select value={resourceId || "manual"} onValueChange={onSelect}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="manual">Manual ID</SelectItem>
+          {tilesets.map((tileset) => (
+            <SelectItem key={tileset.id} value={tileset.id}>
+              {tileset.name} ({tileset.handle})
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Input value={resourceId} onChange={(e) => onManual(e.target.value)} />
     </div>
   );
 }
@@ -971,6 +1152,26 @@ function parseJsonObject(value: string) {
     throw new Error("JSON value must be an object");
   }
   return parsed as Record<string, unknown>;
+}
+
+function schedulePayload(options: {
+  executionTargetId: string;
+  kind: ConsoleScheduledOperation["kind"];
+  payload: string;
+  tilesetId: string;
+  workerProfileId: string;
+}) {
+  const parsed = parseJsonObject(options.payload);
+  const guided: Record<string, unknown> = {};
+  if (options.tilesetId) guided.tilesetId = options.tilesetId;
+  if (options.executionTargetId) {
+    guided.executionTargetId = options.executionTargetId;
+  }
+  if (options.workerProfileId) guided.workerProfileId = options.workerProfileId;
+  if (options.kind === "tileset_rebuild" && options.tilesetId) {
+    guided.resourceType = "tileset";
+  }
+  return { ...guided, ...parsed };
 }
 
 function splitList(value: string) {
