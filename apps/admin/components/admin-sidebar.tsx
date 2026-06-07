@@ -15,6 +15,7 @@ import {
   Boxes,
   BriefcaseBusiness,
   Inbox,
+  PackageCheck,
   TriangleAlert,
 } from "lucide-react"
 
@@ -30,6 +31,7 @@ const navItems = [
   { href: "/failures", label: "Failures", icon: TriangleAlert },
   { href: "/audit", label: "Audit Log", icon: ScrollText },
   { href: "/health", label: "System Health", icon: Activity },
+  { href: "/upgrade", label: "Upgrade", icon: PackageCheck },
 ]
 
 export function AdminSidebar() {

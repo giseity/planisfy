@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -301,6 +301,11 @@ export function createSupervisorApp(config: SupervisorConfig) {
     return c.json({ data: operation });
   });
 
+  app.get("/operations", async (c) => {
+    const operations = await listOperations(config);
+    return c.json({ data: operations });
+  });
+
   return app;
 }
 
@@ -403,6 +408,24 @@ async function readOperation(config: SupervisorConfig, id: string) {
     return JSON.parse(raw) as OperationRecord;
   } catch {
     return null;
+  }
+}
+
+async function listOperations(config: SupervisorConfig) {
+  try {
+    const dir = join(config.stateDir, "operations");
+    const files = await readdir(dir);
+    const operations = await Promise.all(
+      files
+        .filter((file) => file.endsWith(".json"))
+        .map((file) => readOperation(config, file.replace(/\.json$/, ""))),
+    );
+    return operations
+      .filter((operation): operation is OperationRecord => operation !== null)
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+      .slice(0, 20);
+  } catch {
+    return [];
   }
 }
 

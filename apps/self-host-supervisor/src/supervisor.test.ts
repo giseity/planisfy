@@ -40,6 +40,10 @@ describe("self-host supervisor", () => {
 
     const operation = await authed(app, `/operations/${body.data.id}`);
     assert.equal(operation.status, 200);
+
+    const operations = await authed(app, "/operations");
+    const listBody = (await operations.json()) as { data: Array<{ id: string }> };
+    assert.equal(listBody.data[0]?.id, body.data.id);
   });
 
   it("refuses upgrade apply without a successful backup", async () => {
