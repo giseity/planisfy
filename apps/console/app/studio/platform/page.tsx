@@ -20,9 +20,15 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardCheck,
+  Cloud,
+  Database,
+  HardDrive,
   Loader2,
+  Map,
   RefreshCw,
+  ShieldCheck,
   ServerCog,
+  Wrench,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -145,6 +151,8 @@ export default function PlatformPage() {
         />
       </div>
 
+      <CapabilitySurface preflight={preflight} />
+
       <div className="grid gap-5 lg:grid-cols-2">
         {preflight.groups.map((group) => (
           <Card key={group.name}>
@@ -171,6 +179,204 @@ export default function PlatformPage() {
       </div>
     </div>
   );
+}
+
+type CapabilityState = "configured" | "degraded" | "unavailable";
+
+const capabilityDefinitions = [
+  {
+    ids: ["storage"],
+    label: "Storage provider",
+    icon: Database,
+  },
+  {
+    ids: ["martin", "martin-source-aliases", "upgrade-martin-url"],
+    label: "Martin vector tiles",
+    icon: Map,
+  },
+  {
+    ids: ["valhalla"],
+    label: "Valhalla routing",
+    icon: Cloud,
+  },
+  {
+    ids: ["geocoding"],
+    label: "Geocoding",
+    icon: Cloud,
+  },
+  {
+    ids: ["static-maps"],
+    label: "Static maps",
+    icon: Map,
+  },
+  {
+    ids: ["overture"],
+    label: "Overture imports",
+    icon: Database,
+  },
+  {
+    ids: ["email"],
+    label: "Email",
+    icon: Cloud,
+  },
+  {
+    ids: ["billing"],
+    label: "Billing",
+    icon: Cloud,
+  },
+  {
+    ids: ["worker-toolchain", "upgrade-worker-heartbeat"],
+    label: "Worker toolchain",
+    icon: Wrench,
+  },
+  {
+    ids: ["credential-encryption"],
+    label: "Credential encryption",
+    icon: ShieldCheck,
+  },
+] satisfies Array<{
+  ids: string[];
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+}>;
+
+function CapabilitySurface({ preflight }: { preflight: PlatformPreflight }) {
+  const mode = inferDeploymentMode(preflight);
+  const capabilities = capabilityDefinitions.map((definition) =>
+    capabilityFromChecks(definition, preflight.checks),
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold">Capability Surface</h2>
+          <p className="text-sm text-muted-foreground">
+            {mode.label}: {mode.detail}
+          </p>
+        </div>
+        <Badge variant={mode.variant}>{mode.badge}</Badge>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {capabilities.map((capability) => (
+          <CapabilityCard key={capability.label} capability={capability} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CapabilityCard({
+  capability,
+}: {
+  capability: {
+    detail: string;
+    icon: ComponentType<{ className?: string }>;
+    label: string;
+    state: CapabilityState;
+    value: string | null;
+  };
+}) {
+  const Icon = capability.icon;
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
+              <Icon className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{capability.label}</p>
+              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                {capability.detail}
+              </p>
+            </div>
+          </div>
+          <Badge variant={capabilityVariant(capability.state)}>
+            {capability.state}
+          </Badge>
+        </div>
+        {capability.value && (
+          <div className="flex items-center gap-1 truncate rounded bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground">
+            <HardDrive className="h-3 w-3 shrink-0" />
+            <span className="truncate">{capability.value}</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function capabilityFromChecks(
+  definition: (typeof capabilityDefinitions)[number],
+  checks: PlatformPreflightCheck[],
+) {
+  const matched = definition.ids
+    .map((id) => checks.find((check) => check.id === id))
+    .filter((check): check is PlatformPreflightCheck => Boolean(check));
+  const primary = matched[0];
+  const requiredFailure = matched.some(
+    (check) => check.status === "fail" && check.severity === "required",
+  );
+  const optionalOnlyMissing =
+    matched.length > 0 &&
+    matched.every(
+      (check) => check.status !== "pass" && check.severity === "optional",
+    );
+  const state: CapabilityState =
+    matched.length === 0 || requiredFailure || optionalOnlyMissing
+      ? "unavailable"
+      : matched.every((check) => check.status === "pass")
+        ? "configured"
+        : "degraded";
+
+  return {
+    detail: primary?.message ?? "No platform signal is available.",
+    icon: definition.icon,
+    label: definition.label,
+    state,
+    value:
+      primary?.value === undefined || primary?.value === null
+        ? null
+        : String(primary.value),
+  };
+}
+
+function inferDeploymentMode(preflight: PlatformPreflight) {
+  const selfHost = preflight.groups.some(
+    (group) => group.name === "Self-host product loop",
+  );
+  const managedSignals = ["billing", "email"].map((id) =>
+    preflight.checks.find((check) => check.id === id),
+  );
+  const managedConfigured = managedSignals.some(
+    (check) => check?.status === "pass",
+  );
+
+  if (selfHost) {
+    return {
+      badge: "Self-host",
+      detail: "local storage and self-host product-loop checks are active",
+      label: "Deployment mode",
+      variant: "secondary" as const,
+    };
+  }
+
+  return {
+    badge: managedConfigured ? "Managed-ready" : "Base platform",
+    detail: managedConfigured
+      ? "managed-service integrations are configured"
+      : "managed-service integrations are not configured",
+    label: "Deployment mode",
+    variant: managedConfigured ? ("success" as const) : ("warning" as const),
+  };
+}
+
+function capabilityVariant(state: CapabilityState) {
+  if (state === "configured") return "success";
+  if (state === "degraded") return "warning";
+  return "secondary";
 }
 
 function MetricCard({

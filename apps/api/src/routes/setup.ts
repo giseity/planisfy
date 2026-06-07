@@ -182,6 +182,32 @@ async function buildPreflightChecks(): Promise<PreflightCheck[]> {
       value: env.OVERTURE_RELEASE ?? null,
     }),
     check({
+      id: "worker-toolchain",
+      group: "Data imports",
+      label: "Worker toolchain",
+      severity: "recommended",
+      ok: Boolean(
+        process.env.DUCKDB_PATH &&
+          process.env.TIPPECANOE_PATH &&
+          process.env.OGR2OGR_PATH,
+      ),
+      warnWhenMissing: true,
+      message:
+        process.env.DUCKDB_PATH &&
+        process.env.TIPPECANOE_PATH &&
+        process.env.OGR2OGR_PATH
+          ? `Worker toolchain paths are ${process.env.DUCKDB_PATH}, ${process.env.TIPPECANOE_PATH}, and ${process.env.OGR2OGR_PATH}.`
+          : "Worker toolchain path hints are not visible to the API runtime.",
+      action:
+        "Set DUCKDB_PATH, TIPPECANOE_PATH, and OGR2OGR_PATH on worker deployments and confirm /health/detailed workerGeodata before imports.",
+      value:
+        process.env.DUCKDB_PATH &&
+        process.env.TIPPECANOE_PATH &&
+        process.env.OGR2OGR_PATH
+          ? "configured"
+          : null,
+    }),
+    check({
       id: "source-egress",
       group: "Data imports",
       label: "Private source URL policy",
