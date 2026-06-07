@@ -17,6 +17,8 @@ operator references.
 - [Testing](./testing.md)
 - [Basemap Pipeline](./basemap-pipeline.md)
 - [Self Hosting](./self-hosting.md)
+- [Upgrade Path](./upgrade-path.md)
+- [V1 Trust Checklist](./v1-trust-checklist.md)
 
 ## Status Language
 

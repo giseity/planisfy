@@ -29,6 +29,7 @@ clear fixture state rather than blocking application startup.
 - Valhalla
 - local artifact storage bind mount at `infra/docker/data/storage`
 - optional MinIO S3-compatible storage profile
+- optional local-only self-host supervisor profile
 
 ## Setup Script
 
@@ -93,6 +94,38 @@ scripts/self-host-setup.sh --pull      # pull public engine/database images
 scripts/self-host-setup.sh --up        # prepare, then start the full stack
 scripts/self-host-setup.sh --migrate   # start dependencies, then run Drizzle migrations
 ```
+
+## Optional Upgrade Supervisor
+
+The `with-supervisor` Compose profile starts `apps/self-host-supervisor`. It is
+disabled by default and should stay local-only:
+
+```bash
+SUPERVISOR_TOKEN="generate-a-random-supervisor-token"
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-supervisor up -d self-host-supervisor admin
+```
+
+The supervisor exposes:
+
+- `GET /health`
+- `GET /version`
+- `POST /preflight`
+- `POST /backup`
+- `POST /upgrade/apply`
+- `POST /upgrade/rollback`
+- `GET /operations`
+- `GET /operations/:id`
+
+All routes except `/health` require `SUPERVISOR_TOKEN` through
+`Authorization: Bearer ...` or `x-supervisor-token`. Compose publishes the
+service only on `127.0.0.1:4010`; Admin reaches it server-side through
+`SUPERVISOR_URL=http://self-host-supervisor:4010`. The Admin Upgrade Center can
+run preflight, backup, pinned apply, and guarded rollback without exposing the
+token to the browser.
+
+Automated apply requires a valid release manifest and a successful backup
+operation ID. Floating `:latest` image targets are refused. Rollback requires a
+manifest with `rollbackSupported: true`.
 
 ## Optional MinIO Storage
 
@@ -316,7 +349,7 @@ Expected notes:
 ## Target Additions
 
 - PostGIS-enabled database image.
-- optional MinIO profile.
+- broader demo-data smoke coverage with real PMTiles fixtures.
 
 ## Acceptance
 

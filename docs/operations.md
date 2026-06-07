@@ -96,16 +96,40 @@ changes.
 
 ## Upgrade
 
-Recommended self-host upgrade flow:
+Recommended manual self-host upgrade flow:
 
 1. Run `scripts/self-host-backup.sh`.
-2. Pull or checkout the target Planisfy release.
-3. Review `.env.example` for new required variables.
-4. Rebuild or pull containers.
-5. Run `pnpm -F @planisfy/database db:migrate`.
-6. Start the stack and check `/health/detailed`.
-7. Verify at least one published style URL and one TileJSON URL.
+2. Set `PLANISFY_RELEASE_MANIFEST` and check `/setup/preflight`.
+3. Pull or checkout the target Planisfy release.
+4. Review `.env.example` for new required variables.
+5. Rebuild or pull containers.
+6. Run `pnpm -F @planisfy/database db:migrate`.
+7. Start the stack and check `/health/detailed`.
+8. Verify at least one published style URL and one TileJSON URL.
+
+For guarded self-host upgrades, enable the `with-supervisor` Compose profile
+and use Admin -> Upgrade. The Admin server calls the supervisor with
+`SUPERVISOR_URL` and `SUPERVISOR_TOKEN`; the browser never receives the token.
+The supervisor stores operation records under its local state directory and
+requires:
+
+- a valid pinned release manifest;
+- a successful backup operation before apply;
+- no `:latest` release image targets;
+- `rollbackSupported: true` before rollback.
+
+Rollback calls `scripts/self-host-restore.sh --confirm`, restarts services, and
+checks `/health/detailed`.
 
 ## Admin Surface
 
-Admin should eventually inspect jobs, job logs, storage objects, usage rollups, audit events, tenants/accounts, and service health.
+Admin currently inspects jobs, job logs, storage objects, usage rollups, audit
+events, tenants/accounts, service health, and the local Upgrade Center when the
+supervisor is configured.
+
+Console currently exposes Platform readiness and Operations workflows. Platform
+distinguishes configured, degraded, and unavailable capabilities for storage,
+Martin, Valhalla, geocoding, static maps, Overture, email, billing, worker
+toolchain, and credential encryption. Operations includes guided selectors for
+common schedule, backup, delivery, execution target, and worker profile inputs
+while keeping advanced JSON fields where the backend accepts arbitrary payloads.

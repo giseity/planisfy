@@ -84,3 +84,15 @@ AWS_SECRET_ACCESS_KEY=planisfy-local-minio-password
 
 MinIO is useful for validating upload processing, artifact backups, and Martin
 source alias copies before moving to managed S3 or R2.
+
+## Backups And Restore
+
+Self-host backups copy durable local data from the Compose mounts rather than
+only database rows. `scripts/self-host-backup.sh` captures PostgreSQL, Redis
+when reachable, local object storage, PMTiles, Valhalla data, and backup
+metadata. `scripts/self-host-restore.sh --confirm` restores those artifacts and
+is used by the local-only supervisor rollback flow.
+
+Artifact backups created from the Console Operations page are narrower: they
+copy a selected storage object into backup storage for workflow-level recovery.
+They do not replace the full self-host backup required before release upgrades.

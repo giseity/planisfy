@@ -54,8 +54,23 @@ The local-only self-host supervisor is responsible for the automated apply flow:
 3. pull pinned image digests;
 4. run database and storage migrations;
 5. restart services in dependency order;
-6. verify `/health/detailed`, setup preflight, worker heartbeat, Martin, a
-   published style URL, and a TileJSON URL.
+6. verify `/health/detailed` after services restart.
+
+The current supervisor endpoints are:
+
+- `GET /health`
+- `GET /version`
+- `POST /preflight`
+- `POST /backup`
+- `POST /upgrade/apply`
+- `POST /upgrade/rollback`
+- `GET /operations`
+- `GET /operations/:id`
+
+`POST /upgrade/apply` requires `manifestPath` and `backupOperationId`. It
+refuses missing backups, invalid manifests, unpinned digests, and `:latest`
+image targets. Operation records are written under the supervisor state
+directory.
 
 Do not upgrade from floating `latest` images in production.
 
@@ -63,8 +78,8 @@ Do not upgrade from floating `latest` images in production.
 
 Rollback is allowed only when the target manifest sets
 `rollbackSupported: true` and a backup exists. The supervisor restores the
-previous image/config state and uses `scripts/self-host-restore.sh` to restore
-the selected backup, then reruns post-restore health checks.
+selected backup with `scripts/self-host-restore.sh --confirm`, restarts
+services, then reruns `/health/detailed`.
 
 If a release includes irreversible migrations, set `rollbackSupported: false`
 and document the forward recovery path in the manifest notes.

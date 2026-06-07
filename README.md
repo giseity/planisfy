@@ -65,6 +65,7 @@ See [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md) for the canonical roadmap, curr
 | Docs        | `apps/docs`        | <https://docs.planisfy.localhost>    | Product and API documentation       |
 | Admin       | `apps/admin`       | <https://admin.planisfy.localhost>   | Internal/super-admin views          |
 | API         | `apps/api`         | <https://api.planisfy.localhost>     | Hono API gateway                    |
+| Supervisor  | `apps/self-host-supervisor` | N/A by default              | Optional local-only self-host upgrades |
 | Tile worker | `apps/tile-worker` | N/A                                  | Planned Cloudflare tile delivery    |
 
 ## Packages
@@ -212,6 +213,18 @@ profile:
 ```bash
 docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
 ```
+
+Optional pinned-release self-host upgrades are available through the local-only
+supervisor profile. Set `SUPERVISOR_TOKEN` in `.env`, then start:
+
+```bash
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-supervisor up -d self-host-supervisor admin
+```
+
+The supervisor listens inside the Compose network and, when exposed, only on
+`127.0.0.1:4010`. Admin talks to it server-side through `SUPERVISOR_URL` and
+`SUPERVISOR_TOKEN`; browsers should never call it directly. See
+[docs/upgrade-path.md](./docs/upgrade-path.md).
 
 Create a redacted support bundle for self-host troubleshooting:
 

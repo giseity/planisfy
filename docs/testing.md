@@ -41,3 +41,20 @@ The smoke script validates Compose, starts Postgres, Redis, and the API, polls
 `/health`, checks `/health/detailed` for Postgres, Redis, storage,
 worker-geodata, Martin, and Valhalla entries, optionally reports a reachable
 Martin catalog, and then cleans up containers and volumes.
+
+CI runs the same non-binary smoke script after lint, typecheck, tests, builds,
+and Docker image builds. Real PMTiles rendering remains manual/opt-in through
+the `Demo Data Smoke` workflow because the repository does not commit binary map
+fixtures. Trigger that workflow with a PMTiles URL and optional SHA-256 checksum
+when validating a release candidate with rendered fixture TileJSON.
+
+The trust gate now includes:
+
+- `pnpm lint`
+- `pnpm check-types`
+- `pnpm test`
+- `pnpm build`
+- Docker image builds for API, Console, Admin, Docs, Marketing,
+  worker-geodata, and self-host supervisor
+- non-binary Compose smoke
+- optional/manual PMTiles demo-data smoke
