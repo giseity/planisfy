@@ -30,6 +30,7 @@ import {
   sourceImportStatusVariant,
   sourceImportSummary,
 } from "@/lib/studio/import-workflow";
+import { buildSourceWorkflowGuide } from "@/lib/studio/source-workflow-guide";
 
 describe("Studio source workflow", () => {
   it("creates stable source IDs and vector sources from published tilesets", () => {
@@ -321,6 +322,59 @@ describe("Console import workflow", () => {
         }),
       ),
     ).toBe("OVERTURE places/place - 1,250 features");
+  });
+});
+
+describe("Console source workflow guide", () => {
+  it("points empty workspaces at source creation", () => {
+    const guide = buildSourceWorkflowGuide({
+      tilesets: [],
+      sourceImports: [],
+      styles: [],
+    });
+
+    expect(guide.nextAction.kind).toBe("add-source");
+    expect(guide.steps.map((step) => step.state)).toEqual([
+      "current",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ]);
+  });
+
+  it("prioritizes creating tilesets from completed imports", () => {
+    const sourceImport = sourceImportFixture({
+      status: "SUCCEEDED",
+      datasetId: "dataset-1",
+      output: { datasetVersionId: "dataset-version-1" },
+    });
+    const guide = buildSourceWorkflowGuide({
+      tilesets: [],
+      sourceImports: [sourceImport],
+      styles: [],
+    });
+
+    expect(guide.nextAction).toMatchObject({
+      kind: "create-tileset",
+      sourceImport,
+    });
+  });
+
+  it("points published tilesets without styles at style creation", () => {
+    const guide = buildSourceWorkflowGuide({
+      tilesets: [
+        tilesetFixture({
+          isPublished: true,
+          tilejsonUrl:
+            "https://api.planisfy.localhost/tilesets/acme.roads/tilejson.json",
+        }),
+      ],
+      sourceImports: [],
+      styles: [],
+    });
+
+    expect(guide.nextAction.kind).toBe("create-style");
   });
 });
 
