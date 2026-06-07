@@ -1,34 +1,20 @@
-import { Geist, Geist_Mono } from "next/font/google"
-
-import "@planisfy/ui/globals.css"
-import { Providers } from "@/components/providers"
-import { Toaster } from "@planisfy/ui/components/sonner"
-
-const fontSans = Geist({
-  subsets: ["latin"],
-  variable: "--font-sans",
-})
-
-const fontMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-})
+import "@planisfy/ui/globals.css";
+import { Providers } from "@/components/providers";
+import { Toaster } from "@planisfy/ui/components/sonner";
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${fontSans.variable} ${fontMono.variable} font-sans antialiased `}
-      >
+      <body className="font-sans antialiased">
         <Providers>
           {children}
           <Toaster />
         </Providers>
       </body>
     </html>
-  )
+  );
 }
