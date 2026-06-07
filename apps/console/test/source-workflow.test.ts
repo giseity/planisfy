@@ -8,7 +8,9 @@ import { normalizeApiUrl } from "@/lib/api";
 import { useStyleStore } from "@/lib/store/style-store";
 import {
   canRebuildTileset,
+  jobStateMessage,
   tilesetVersionActionLabel,
+  tilesetWorkflowMessage,
 } from "@/lib/studio/tileset-workflow";
 import {
   defaultLayerOptionsForTileset,
@@ -34,7 +36,8 @@ describe("Studio source workflow", () => {
       ownerHandle: "acme.maps",
       handle: "roads/main",
       isPublished: true,
-      tilejsonUrl: "https://api.planisfy.localhost/tilesets/acme.roads/tilejson.json",
+      tilejsonUrl:
+        "https://api.planisfy.localhost/tilesets/acme.roads/tilejson.json",
     });
 
     expect(styleSourceIdForTileset(tileset)).toBe("acme-maps-roads-main");
@@ -91,12 +94,10 @@ describe("Studio source workflow", () => {
       ],
     });
 
-    useStyleStore
-      .getState()
-      .addLayerFromSource("roads", {
-        layerType: "line",
-        sourceLayer: "transportation",
-      });
+    useStyleStore.getState().addLayerFromSource("roads", {
+      layerType: "line",
+      sourceLayer: "transportation",
+    });
 
     const layers = useStyleStore.getState().style?.layers ?? [];
     expect(layers.map((layer) => layer.id)).toEqual([
@@ -137,7 +138,9 @@ describe("Console tileset workflow", () => {
   });
 
   it("requires an original upload before rebuild", () => {
-    expect(canRebuildTileset(tilesetFixture({ latestUpload: null }))).toBe(false);
+    expect(canRebuildTileset(tilesetFixture({ latestUpload: null }))).toBe(
+      false,
+    );
     expect(
       canRebuildTileset(
         tilesetFixture({
@@ -278,7 +281,9 @@ describe("publish URL normalization", () => {
   });
 });
 
-function tilesetFixture(overrides: Partial<ConsoleTileset> = {}): ConsoleTileset {
+function tilesetFixture(
+  overrides: Partial<ConsoleTileset> = {},
+): ConsoleTileset {
   const latestVersion = overrides.latestVersion ?? versionFixture();
   return {
     id: "tileset-1",
