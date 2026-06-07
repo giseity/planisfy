@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { encryptCredentialPayload } from "@planisfy/credentials";
 import {
   db,
   executionTargetEnvVars,
@@ -11,7 +12,6 @@ import {
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 import { customerComputeMutationGate } from "../lib/platform-gates";
-import { encryptCredentialPayload } from "../lib/source-credentials";
 import {
   encryptExecutionSecret,
   estimateProcessingDuration,

@@ -33,11 +33,15 @@ Planisfy Console/Admin/Docs/Marketing (Next.js)
 | `apps/admin` | Internal admin dashboard |
 | `apps/marketing` | Public website |
 | `apps/docs` | Fumadocs/Next documentation app |
-| `apps/tile-worker` | Planned Cloudflare tile delivery worker |
+| `apps/tile-worker` | Placeholder for planned Cloudflare/R2 edge tile delivery worker |
+| `apps/worker-geodata` | Local geodata worker for upload tiling, source imports, and artifact processing |
 | `packages/auth` | better-auth instance, organization hooks, email hook delegation |
+| `packages/credentials` | Shared encrypted credential envelope helpers |
 | `packages/database` | Drizzle client, schema, migrations, relations, and shared server data helpers |
+| `packages/geodata-contracts` | Shared geodata queue names, heartbeat keys, and source-processing job contracts |
 | `packages/types` | Shared platform types and plan limits |
 | `packages/platform-policy` | Shared deployment-mode capability policy for self-host and managed |
+| `packages/upgrade-manifest` | Self-host upgrade release manifest schema and policy helpers |
 | `packages/ui` | Shared React UI components |
 | `infra/docker` | Local/self-host Docker Compose stack and engine configs |
 
@@ -64,6 +68,8 @@ Public route categories:
 Console routes under `/console/*` require a session cookie.
 
 Internal routes under `/internal/*` are for platform-to-platform calls such as email delivery. They require `X-Internal-Secret` when `INTERNAL_API_SECRET` is configured, and production deployments must configure it.
+
+Geodata job contracts are shared through `@planisfy/geodata-contracts` so API, Admin, and worker retry paths agree on source-processing inputs, source-resource mapping, queue names, and worker heartbeat keys.
 
 ## Data Model
 

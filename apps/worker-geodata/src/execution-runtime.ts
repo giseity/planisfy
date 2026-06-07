@@ -1,5 +1,8 @@
-import { createDecipheriv, createHash } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
+import {
+  decryptCredentialPayload,
+  type EncryptedCredentialEnvelope,
+} from "@planisfy/credentials";
 import {
   db,
   executionTargetEnvVars,
@@ -27,14 +30,6 @@ export interface LocalExecutionRuntime {
     config: Record<string, unknown>;
   } | null;
   env: Record<string, string>;
-}
-
-interface EncryptedEnvelope {
-  v: 1;
-  alg: "AES-256-GCM";
-  iv: string;
-  tag: string;
-  ciphertext: string;
 }
 
 type DatabaseClient = typeof db;
@@ -128,7 +123,11 @@ export function decryptExecutionValue(
   envelope: unknown,
   secret: string | undefined,
 ): string {
-  const payload = decryptEnvelope(envelope as EncryptedEnvelope, secret);
+  const payload = decryptCredentialPayload(
+    envelope as EncryptedCredentialEnvelope,
+    secret,
+    { label: "execution secret" },
+  );
   return typeof payload.value === "string" ? payload.value : "";
 }
 
@@ -168,43 +167,6 @@ async function fetchWorkerProfile(
     )
     .limit(1);
   return profile ?? null;
-}
-
-function decryptEnvelope(
-  envelope: EncryptedEnvelope,
-  secret: string | undefined,
-): Record<string, unknown> {
-  if (envelope.v !== 1 || envelope.alg !== "AES-256-GCM") {
-    throw new Error("Unsupported execution secret envelope");
-  }
-
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    credentialEncryptionKey(secret),
-    Buffer.from(envelope.iv, "base64url"),
-  );
-  decipher.setAuthTag(Buffer.from(envelope.tag, "base64url"));
-  const plaintext = Buffer.concat([
-    decipher.update(Buffer.from(envelope.ciphertext, "base64url")),
-    decipher.final(),
-  ]);
-  return JSON.parse(plaintext.toString("utf-8")) as Record<string, unknown>;
-}
-
-function credentialEncryptionKey(secret: string | undefined): Buffer {
-  if (!secret) {
-    throw new Error(
-      "SOURCE_CREDENTIAL_ENCRYPTION_KEY or BETTER_AUTH_SECRET is required",
-    );
-  }
-  if (secret.startsWith("base64:")) {
-    const decoded = Buffer.from(secret.slice("base64:".length), "base64");
-    if (decoded.length !== 32) {
-      throw new Error("SOURCE_CREDENTIAL_ENCRYPTION_KEY must decode to 32 bytes");
-    }
-    return decoded;
-  }
-  return createHash("sha256").update(secret).digest();
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

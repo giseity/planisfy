@@ -12,21 +12,12 @@ import {
   uploads,
 } from "@planisfy/database"
 import { parseEventPayload } from "@planisfy/events"
+import {
+  buildRetrySourceResource,
+  parseSourceProcessingJobInput,
+} from "@planisfy/geodata-contracts"
 import { requireAdmin } from "@/lib/admin-auth"
 import { isStaleProcessing, staleOutboxCutoff } from "@/lib/ops"
-
-type SourceProcessingJobInput = {
-  tilesetId: string
-  uploadId?: string
-  storageObjectId?: string
-  uploadKey: string
-  format: "geojson" | "csv" | "shapefile" | "pmtiles" | "mbtiles"
-  csv?: {
-    latitude?: string
-    longitude?: string
-  }
-  options?: Record<string, unknown>
-}
 
 function requireString(formData: FormData, key: string) {
   const value = formData.get(key)
@@ -117,12 +108,13 @@ export async function retryProcessingJobAction(formData: FormData) {
   }
 
   const input = parseSourceProcessingJobInput(job.input)
+  const retrySource = buildRetrySourceResource(input)
   const payload = parseEventPayload("tileset.build.requested", {
     accountId: job.accountId,
     tilesetId: input.tilesetId,
     jobId: job.id,
-    sourceResourceType: "upload",
-    sourceResourceId: input.uploadId,
+    sourceResourceType: retrySource.sourceResourceType,
+    sourceResourceId: retrySource.sourceResourceId,
     options: input.options,
   })
 
@@ -238,36 +230,4 @@ export async function restoreArtifactAction(formData: FormData) {
     .where(eq(storageObjects.id, id))
 
   revalidateOpsPaths("/artifacts")
-}
-
-function parseSourceProcessingJobInput(input: unknown): SourceProcessingJobInput {
-  if (typeof input !== "object" || input === null) {
-    throw new Error("Processing job input is missing")
-  }
-
-  const candidate = input as Partial<SourceProcessingJobInput>
-  if (
-    !candidate.tilesetId ||
-    !candidate.uploadId ||
-    !candidate.uploadKey ||
-    !candidate.format
-  ) {
-    throw new Error("Processing job input cannot reconstruct a tileset build request")
-  }
-
-  if (
-    !["geojson", "csv", "shapefile", "pmtiles", "mbtiles"].includes(candidate.format)
-  ) {
-    throw new Error("Processing job input has an unsupported source format")
-  }
-
-  return {
-    tilesetId: candidate.tilesetId,
-    uploadId: candidate.uploadId,
-    storageObjectId: candidate.storageObjectId,
-    uploadKey: candidate.uploadKey,
-    format: candidate.format,
-    csv: candidate.csv,
-    options: candidate.options,
-  }
 }

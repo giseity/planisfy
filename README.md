@@ -79,9 +79,12 @@ See [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md) for the canonical roadmap, curr
 | Package                       | Purpose                                                                                |
 | ----------------------------- | -------------------------------------------------------------------------------------- |
 | `@planisfy/auth`              | better-auth setup and helpers                                                          |
+| `@planisfy/credentials`       | shared encrypted credential envelope helpers                                           |
 | `@planisfy/database`          | Drizzle database client, schema, relations, migrations, and shared server data helpers |
+| `@planisfy/geodata-contracts` | shared geodata queue names, heartbeat keys, and worker job input contracts             |
 | `@planisfy/types`             | shared TypeScript types and plan limits                                                |
 | `@planisfy/utils`             | shared utilities                                                                       |
+| `@planisfy/upgrade-manifest`  | self-host upgrade release manifest schema and policy helpers                           |
 | `@planisfy/ui`                | shared UI components                                                                   |
 | `@planisfy/eslint-config`     | shared ESLint flat configs                                                             |
 | `@planisfy/typescript-config` | shared TypeScript configs                                                              |

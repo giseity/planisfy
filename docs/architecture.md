@@ -18,11 +18,14 @@ usage, and roll back or recover safely.
 - `apps/admin`: internal operations UI.
 - `apps/docs`: public and self-host documentation.
 - `apps/marketing`: public website.
-- `apps/tile-worker`: planned edge tile delivery.
+- `apps/tile-worker`: placeholder for planned edge tile delivery.
 - `apps/worker-geodata`: tileset upload and geodata artifact processing.
 - `packages/auth`: Better Auth setup.
+- `packages/credentials`: shared encrypted credential envelope helpers.
 - `packages/database`: Drizzle schema and shared DB helpers.
+- `packages/geodata-contracts`: geodata queue names, heartbeat keys, and worker job input contracts.
 - `packages/types`: broad shared types.
+- `packages/upgrade-manifest`: self-host upgrade release manifest schema and policy helpers.
 - `packages/utils`: pure utilities.
 - `packages/ui`: shared UI components.
 - `packages/map-styles`: default style assets.
@@ -34,6 +37,9 @@ usage, and roll back or recover safely.
 - Heavy geodata work moves to `apps/worker-geodata`.
 - Durable async work flows through `event_outbox` and user-visible `processing_jobs`.
 - API code produces source-processing jobs; `apps/worker-geodata` consumes and executes them.
+- Source-processing job inputs, retry source mapping, queue names, and heartbeat keys live in `@planisfy/geodata-contracts`.
+- Encrypted operational credential envelopes live in `@planisfy/credentials`.
+- Self-host upgrade release manifests live in `@planisfy/upgrade-manifest`.
 - Storage keys are generated through `@planisfy/storage-paths`.
 - Server storage providers live in `@planisfy/storage`.
 - Async event payloads are validated through `@planisfy/events`.

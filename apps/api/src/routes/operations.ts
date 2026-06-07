@@ -17,6 +17,10 @@ import {
   workerNodes,
   workflowTemplates,
 } from "@planisfy/database";
+import {
+  WORKER_GEODATA_HEARTBEAT_KEY,
+  WORKER_GEODATA_HEARTBEAT_STALE_MS,
+} from "@planisfy/geodata-contracts";
 import { getStorage } from "@planisfy/storage";
 import type { AuthEnv } from "../middleware/auth";
 import { redisConnection } from "../env";
@@ -27,8 +31,6 @@ import {
 } from "../lib/notification-adapters";
 
 export const operationsRoute = new Hono<AuthEnv>();
-
-const WORKER_GEODATA_HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
 
 const notificationSchema = z.object({
   name: z.string().min(1).max(128),
@@ -679,7 +681,10 @@ async function fetchWorkerHealth() {
     const timestamp = parsed.timestamp ? Date.parse(parsed.timestamp) : NaN;
     const ageMs = Number.isFinite(timestamp) ? Date.now() - timestamp : null;
     return {
-      status: ageMs !== null && ageMs <= 60_000 ? "healthy" : "degraded",
+      status:
+        ageMs !== null && ageMs <= WORKER_GEODATA_HEARTBEAT_STALE_MS
+          ? "healthy"
+          : "degraded",
       message:
         ageMs === null
           ? "Invalid heartbeat"

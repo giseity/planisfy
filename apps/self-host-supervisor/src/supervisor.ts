@@ -10,7 +10,7 @@ import {
   hasPinnedImageDigests,
   parseUpgradeReleaseManifest,
   type UpgradeReleaseManifest,
-} from "@planisfy/utils/upgrade-manifest";
+} from "@planisfy/upgrade-manifest";
 
 const execFileAsync = promisify(execFile);
 

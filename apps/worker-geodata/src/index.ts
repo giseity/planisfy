@@ -1,5 +1,9 @@
 import { Worker } from "bullmq";
 import Redis from "ioredis";
+import {
+  SOURCE_PROCESSING_QUEUE_NAME,
+  WORKER_GEODATA_HEARTBEAT_KEY,
+} from "@planisfy/geodata-contracts";
 import { env, redisConnection } from "./env";
 import { startOutboxDispatcher } from "./outbox-dispatcher";
 import { processSourceJob, type SourceProcessingJob } from "./source-worker";
@@ -11,8 +15,6 @@ import {
 
 const REDIS_CONNECTION = redisConnection;
 
-const SOURCE_PROCESSING_QUEUE_NAME = "source-processing";
-const HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
 const HEARTBEAT_INTERVAL_MS = env.GEODATA_WORKER_HEARTBEAT_INTERVAL_MS;
 const HEARTBEAT_TTL_MS = env.GEODATA_WORKER_HEARTBEAT_TTL_MS;
 let toolchainCapabilities: ToolchainCapabilities | undefined;
@@ -71,7 +73,7 @@ process.on("SIGTERM", () => {
 
 async function writeHeartbeat() {
   await heartbeatRedis.set(
-    HEARTBEAT_KEY,
+    WORKER_GEODATA_HEARTBEAT_KEY,
     JSON.stringify({
       status: "ok",
       pid: process.pid,

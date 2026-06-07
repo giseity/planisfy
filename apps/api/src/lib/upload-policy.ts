@@ -1,4 +1,4 @@
-import type { TilesetBuildFormat } from "./tileset-build-input";
+import type { TilesetBuildFormat } from "@planisfy/geodata-contracts";
 
 export type UploadFormat = TilesetBuildFormat;
 

@@ -2,7 +2,7 @@ import {
   decryptCredentialPayload,
   encryptCredentialPayload,
   type EncryptedCredentialEnvelope,
-} from "./source-credentials";
+} from "@planisfy/credentials";
 
 export type ExecutionTargetProvider = "local" | "aws_batch" | "gcp_batch";
 export type ExecutionTargetAuthMode = "federated" | "static" | "external";

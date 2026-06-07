@@ -1,6 +1,10 @@
 import { Queue } from "bullmq";
 import { and, asc, eq, inArray, lte, max, sql } from "drizzle-orm";
 import {
+  SOURCE_PROCESSING_QUEUE_NAME,
+  parseSourceProcessingJobInput as parseSharedSourceProcessingJobInput,
+} from "@planisfy/geodata-contracts";
+import {
   db,
   datasets,
   datasetVersions,
@@ -22,12 +26,10 @@ import {
 import { resolveLocalExecutionRuntime } from "./execution-runtime";
 import type { SourceProcessingJob } from "./source-worker";
 
-const SOURCE_PROCESSING_QUEUE_NAME = "source-processing";
 const DISPATCHABLE_EVENTS = [
   "tileset.build.requested",
   "source.import.requested",
 ] as const;
-const SOURCE_FORMATS = ["geojson", "csv", "shapefile", "pmtiles", "mbtiles"];
 const MAX_ATTEMPTS = 5;
 
 type DispatchableEventName = (typeof DISPATCHABLE_EVENTS)[number];
@@ -473,32 +475,20 @@ export function parseSourceProcessingJobInput(
     processingJobId: string;
   },
 ): SourceProcessingJob {
-  if (typeof input !== "object" || input === null) {
-    throw new Error("Processing job input is missing");
-  }
-
-  const candidate = input as Partial<SourceProcessingJob>;
-  if (
-    !candidate.tilesetId ||
-    !candidate.uploadKey ||
-    !candidate.format ||
-    !SOURCE_FORMATS.includes(candidate.format)
-  ) {
-    throw new Error("Processing job input is incomplete");
-  }
+  const parsed = parseSharedSourceProcessingJobInput(input);
 
   return {
     ownerId: context.ownerId,
-    tilesetId: candidate.tilesetId,
-    uploadKey: candidate.uploadKey,
-    uploadId: candidate.uploadId,
-    datasetId: candidate.datasetId,
-    datasetVersionId: candidate.datasetVersionId,
-    storageObjectId: candidate.storageObjectId,
+    tilesetId: parsed.tilesetId,
+    uploadKey: parsed.uploadKey,
+    uploadId: parsed.uploadId,
+    datasetId: parsed.datasetId,
+    datasetVersionId: parsed.datasetVersionId,
+    storageObjectId: parsed.storageObjectId,
     processingJobId: context.processingJobId,
-    format: candidate.format,
-    csv: candidate.csv,
-    options: candidate.options,
+    format: parsed.format,
+    csv: parsed.csv,
+    options: parsed.options,
   };
 }
 

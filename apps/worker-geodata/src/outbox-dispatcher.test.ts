@@ -46,7 +46,7 @@ test("parseSourceProcessingJobInput rejects incomplete source details", () => {
           processingJobId: "job-1",
         },
       ),
-    /Processing job input is incomplete/,
+    /cannot reconstruct a tileset build request/,
   );
 });
 

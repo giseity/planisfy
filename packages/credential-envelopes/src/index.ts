@@ -36,9 +36,10 @@ export function encryptCredentialPayload(
 export function decryptCredentialPayload(
   envelope: EncryptedCredentialEnvelope,
   secret: string | undefined,
+  options: { label?: string } = {},
 ): Record<string, unknown> {
   if (envelope.v !== 1 || envelope.alg !== "AES-256-GCM") {
-    throw new Error("Unsupported source credential envelope");
+    throw new Error(`Unsupported ${options.label ?? "credential"} envelope`);
   }
 
   const key = credentialEncryptionKey(secret);

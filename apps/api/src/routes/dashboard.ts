@@ -15,6 +15,10 @@ import {
   usageLogs,
   users,
 } from "@planisfy/database";
+import {
+  WORKER_GEODATA_HEARTBEAT_KEY,
+  WORKER_GEODATA_HEARTBEAT_STALE_MS,
+} from "@planisfy/geodata-contracts";
 import { getStorage } from "@planisfy/storage";
 import {
   buildDashboardPayload,
@@ -42,8 +46,6 @@ import type { AuthEnv } from "../middleware/auth";
 import { env, redisConnection } from "../env";
 
 export const dashboardRoute = new Hono<AuthEnv>();
-
-const WORKER_GEODATA_HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
 
 dashboardRoute.get("/dashboard", async (c) => {
   const accountId = c.get("ownerId");
@@ -531,7 +533,10 @@ async function probeWorker(checkedAt: string) {
     return makeHealthEntry({
       id: "worker-geodata",
       label: "worker-geodata",
-      status: ageMs !== null && ageMs <= 60_000 ? "healthy" : "degraded",
+      status:
+        ageMs !== null && ageMs <= WORKER_GEODATA_HEARTBEAT_STALE_MS
+          ? "healthy"
+          : "degraded",
       latencyMs: ageMs,
       message: ageMs === null ? "Invalid heartbeat" : `Heartbeat ${Math.round(ageMs / 1000)}s ago`,
       checkedAt,

@@ -13,19 +13,18 @@ import {
   sourceImports,
   tilesets,
 } from "@planisfy/database";
+import { encryptCredentialPayload } from "@planisfy/credentials";
 import type { AuthEnv } from "../middleware/auth";
 import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
 import { enqueueOutboxEvent } from "../lib/outbox";
 import { logAudit } from "../lib/audit";
 import { env } from "../env";
-import { encryptCredentialPayload } from "../lib/source-credentials";
 import {
   SourceUrlRejectedError,
   validateRemoteSourceUrl,
 } from "../lib/source-url-policy";
 import { checkResourceLimit } from "../lib/plan-check";
 import { buildOvertureImportEstimate } from "../lib/import-estimates";
-import { buildDatasetTilesetProcessingInput } from "../lib/tileset-build-input";
 import {
   UnsupportedOvertureTypeError,
   overtureCatalogResponse,
@@ -35,6 +34,7 @@ import {
   sourceImportHandleSchema,
   type OvertureImportRequest,
 } from "../lib/source-import-requests";
+import { buildDatasetTilesetProcessingInput } from "@planisfy/geodata-contracts";
 import {
   ExecutionRuntimeSelectionError,
   resolveExecutionRuntimeSelection,

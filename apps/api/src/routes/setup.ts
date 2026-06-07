@@ -5,7 +5,7 @@ import {
   type UpgradeReleaseManifest,
   missingRequiredEnv,
   safeParseUpgradeReleaseManifest,
-} from "@planisfy/utils/upgrade-manifest";
+} from "@planisfy/upgrade-manifest";
 import {
   type CapabilityId,
   type CapabilityPolicy,

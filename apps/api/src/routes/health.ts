@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { db } from "@planisfy/database";
+import { WORKER_GEODATA_HEARTBEAT_KEY } from "@planisfy/geodata-contracts";
 import { sql } from "drizzle-orm";
 import { access } from "node:fs/promises";
 import { join } from "node:path";
@@ -7,7 +8,6 @@ import { env, redisConnection } from "../env";
 import { renderPrometheusMetrics } from "../lib/metrics";
 
 export const healthRoute = new Hono();
-const WORKER_GEODATA_HEARTBEAT_KEY = "planisfy:worker-geodata:heartbeat";
 type HealthCheck = {
   status: string;
   latency?: number;

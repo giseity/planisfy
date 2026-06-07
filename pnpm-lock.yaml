@@ -47,6 +47,9 @@ importers:
       '@planisfy/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@planisfy/geodata-contracts':
+        specifier: workspace:*
+        version: link:../../packages/geodata-contracts
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -105,6 +108,9 @@ importers:
       '@planisfy/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@planisfy/credentials':
+        specifier: workspace:*
+        version: link:../../packages/credential-envelopes
       '@planisfy/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -114,6 +120,9 @@ importers:
       '@planisfy/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@planisfy/geodata-contracts':
+        specifier: workspace:*
+        version: link:../../packages/geodata-contracts
       '@planisfy/platform-policy':
         specifier: workspace:*
         version: link:../../packages/platform-policy
@@ -129,6 +138,9 @@ importers:
       '@planisfy/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@planisfy/upgrade-manifest':
+        specifier: workspace:*
+        version: link:../../packages/upgrade-manifest
       '@planisfy/utils':
         specifier: workspace:*
         version: link:../../packages/utils
@@ -391,9 +403,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.14.1
         version: 1.19.11(hono@4.12.7)
-      '@planisfy/utils':
+      '@planisfy/upgrade-manifest':
         specifier: workspace:*
-        version: link:../../packages/utils
+        version: link:../../packages/upgrade-manifest
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
@@ -428,6 +440,9 @@ importers:
 
   apps/worker-geodata:
     dependencies:
+      '@planisfy/credentials':
+        specifier: workspace:*
+        version: link:../../packages/credential-envelopes
       '@planisfy/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -437,6 +452,9 @@ importers:
       '@planisfy/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@planisfy/geodata-contracts':
+        specifier: workspace:*
+        version: link:../../packages/geodata-contracts
       '@planisfy/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -517,6 +535,24 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
+
+  packages/credential-envelopes:
+    devDependencies:
+      '@planisfy/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@planisfy/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.15.3
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: 4.0.18
+        version: 4.0.18(@types/node@22.15.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)
 
   packages/database:
     dependencies:
@@ -625,6 +661,21 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
+      vitest:
+        specifier: 4.0.18
+        version: 4.0.18(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)
+
+  packages/geodata-contracts:
+    devDependencies:
+      '@planisfy/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@planisfy/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
       vitest:
         specifier: 4.0.18
         version: 4.0.18(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)
@@ -817,11 +868,26 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/utils:
+  packages/upgrade-manifest:
     dependencies:
       zod:
-        specifier: ^3.24.1
-        version: 3.25.76
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@planisfy/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@planisfy/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: 4.0.18
+        version: 4.0.18(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)
+
+  packages/utils:
     devDependencies:
       '@planisfy/eslint-config':
         specifier: workspace:*
@@ -8262,7 +8328,6 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       vite: 7.3.1(@types/node@22.15.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)
-    optional: true
 
   '@vitest/mocker@4.0.18(vite@7.3.1(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0))':
     dependencies:
@@ -11600,7 +11665,6 @@ snapshots:
       sass: 1.97.3
       terser: 5.46.0
       tsx: 4.21.0
-    optional: true
 
   vite@7.3.1(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0):
     dependencies:
@@ -11655,7 +11719,6 @@ snapshots:
       - terser
       - tsx
       - yaml
-    optional: true
 
   vitest@4.0.18(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0):
     dependencies:
