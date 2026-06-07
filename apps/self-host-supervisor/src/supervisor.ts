@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
+  canRollbackRelease,
   hasPinnedImageDigests,
   parseUpgradeReleaseManifest,
   type UpgradeReleaseManifest,
@@ -50,6 +51,11 @@ type ManifestLoadResult =
 const applySchema = z.object({
   manifestPath: z.string().min(1),
   backupOperationId: z.string().min(1),
+});
+
+const rollbackSchema = z.object({
+  manifestPath: z.string().min(1),
+  backupDir: z.string().min(1),
 });
 
 export function createSupervisorApp(config: SupervisorConfig) {
@@ -185,6 +191,76 @@ export function createSupervisorApp(config: SupervisorConfig) {
         execute,
         "pnpm",
         ["-F", "@planisfy/database", "db:migrate"],
+        { cwd: config.rootDir },
+      );
+      await runCommand(
+        record,
+        execute,
+        "docker",
+        [
+          "compose",
+          "--env-file",
+          config.envFile,
+          "-f",
+          config.composeFile,
+          "up",
+          "-d",
+        ],
+        { cwd: config.rootDir },
+      );
+      await runCommand(
+        record,
+        execute,
+        "curl",
+        ["-fsS", "http://localhost:4000/health/detailed"],
+        { cwd: config.rootDir },
+      );
+    });
+
+    return c.json({ data: operation }, operation.status === "FAILED" ? 500 : 200);
+  });
+
+  app.post("/upgrade/rollback", async (c) => {
+    const parsed = rollbackSchema.safeParse(await c.req.json());
+    if (!parsed.success) return validationError(c, parsed.error);
+
+    const manifestResult = await loadManifest(parsed.data.manifestPath);
+    if (!manifestResult.ok) {
+      return c.json(
+        {
+          error: {
+            code: "INVALID_MANIFEST",
+            message: manifestResult.message,
+            details: manifestResult.details,
+          },
+        },
+        400,
+      );
+    }
+
+    const manifest = manifestResult.manifest;
+    if (!canRollbackRelease(manifest)) {
+      return c.json(
+        {
+          error: {
+            code: "ROLLBACK_UNSUPPORTED",
+            message: "Target release manifest does not allow rollback.",
+          },
+        },
+        400,
+      );
+    }
+
+    const operation = await createOperation(config, "upgrade.rollback");
+    operation.targetVersion = manifest.version;
+    operation.backupDir = parsed.data.backupDir;
+
+    await runOperation(config, operation, async (record) => {
+      await runCommand(
+        record,
+        execute,
+        "bash",
+        ["scripts/self-host-restore.sh", "--backup", parsed.data.backupDir, "--confirm"],
         { cwd: config.rootDir },
       );
       await runCommand(

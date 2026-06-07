@@ -106,6 +106,55 @@ describe("self-host supervisor", () => {
     const body = (await response.json()) as { error: { code: string } };
     assert.equal(body.error.code, "UNPINNED_RELEASE");
   });
+
+  it("guards rollback eligibility", async () => {
+    const { app, manifestPath } = await testApp({
+      manifest: releaseManifest({ rollbackSupported: false }),
+    });
+
+    const response = await authed(app, "/upgrade/rollback", {
+      body: JSON.stringify({
+        manifestPath,
+        backupDir: "/backups/example",
+      }),
+      method: "POST",
+    });
+
+    assert.equal(response.status, 400);
+    const body = (await response.json()) as { error: { code: string } };
+    assert.equal(body.error.code, "ROLLBACK_UNSUPPORTED");
+  });
+
+  it("runs guarded rollback operations", async () => {
+    const commands: string[] = [];
+    const { app, manifestPath } = await testApp({
+      execute: async (command, args) => {
+        commands.push(`${command} ${args.join(" ")}`);
+        return { stdout: "ok", stderr: "" };
+      },
+    });
+
+    const response = await authed(app, "/upgrade/rollback", {
+      body: JSON.stringify({
+        manifestPath,
+        backupDir: "/backups/example",
+      }),
+      method: "POST",
+    });
+
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as {
+      data: { backupDir: string; status: string; targetVersion: string };
+    };
+    assert.equal(body.data.status, "SUCCEEDED");
+    assert.equal(body.data.backupDir, "/backups/example");
+    assert.equal(body.data.targetVersion, "1.2.3");
+    assert.ok(
+      commands.some((command) => command.includes("self-host-restore.sh")),
+    );
+    assert.ok(commands.some((command) => command.includes("docker compose")));
+    assert.ok(commands.some((command) => command.includes("/health/detailed")));
+  });
 });
 
 async function testApp(options: {
