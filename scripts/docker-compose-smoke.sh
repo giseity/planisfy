@@ -31,6 +31,30 @@ trap cleanup EXIT
 echo "Validating Docker Compose configuration"
 compose config >/dev/null
 
+echo "Checking seeded style fixtures"
+for style in \
+  planisfy-streets-v1.json \
+  planisfy-streets-light-v1.json \
+  planisfy-streets-dark-v1.json
+do
+  if [[ ! -f "$ROOT_DIR/infra/docker/data/storage/styles/$style" ]]; then
+    echo "Missing seeded style fixture: $style" >&2
+    exit 1
+  fi
+done
+
+echo "Checking Martin fixture aliases"
+for expected in \
+  'stuttgart-base: "/data/stuttgart.pmtiles"' \
+  'id: "planisfy.basic"' \
+  'id: "planisfy.basic.v1"'
+do
+  if ! grep -Fq "$expected" "$ROOT_DIR/infra/docker/configs/martin.yaml"; then
+    echo "Martin config is missing expected alias: $expected" >&2
+    exit 1
+  fi
+done
+
 echo "Starting smoke-test services"
 compose up -d postgres redis api
 
@@ -97,6 +121,20 @@ if curl -fsS http://localhost:3005/catalog >/dev/null 2>&1; then
   echo "Martin catalog is reachable"
 else
   echo "Martin catalog is not running in this smoke subset; skipping direct catalog check"
+fi
+
+if [[ -f "$ROOT_DIR/infra/docker/data/pmtiles/stuttgart.pmtiles" ]]; then
+  echo "Starting Martin for optional fixture TileJSON check"
+  compose up -d martin
+  if curl -fsS http://localhost:3005/planisfy.basic.json >/dev/null 2>&1; then
+    echo "Fixture TileJSON is reachable"
+  else
+    echo "Fixture PMTiles exists, but Martin TileJSON was not reachable" >&2
+    compose logs martin >&2
+    exit 1
+  fi
+else
+  echo "Demo PMTiles fixture is missing; skipping optional TileJSON check"
 fi
 
 echo "Docker Compose smoke test passed"
