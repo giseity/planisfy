@@ -8,9 +8,7 @@ import { normalizeApiUrl } from "@/lib/api";
 import { useStyleStore } from "@/lib/store/style-store";
 import {
   canRebuildTileset,
-  jobStateMessage,
   tilesetVersionActionLabel,
-  tilesetWorkflowMessage,
 } from "@/lib/studio/tileset-workflow";
 import {
   defaultLayerOptionsForTileset,

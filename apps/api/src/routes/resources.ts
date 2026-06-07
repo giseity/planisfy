@@ -33,7 +33,6 @@ import {
   buildRetrySourceResource,
   parseSourceProcessingJobInput,
   type SourceProcessingJobInput,
-  type TilesetBuildFormat,
 } from "../lib/tileset-build-input";
 import {
   ExecutionRuntimeSelectionError,
@@ -43,7 +42,6 @@ import {
 export const resourcesRoute = new Hono<AuthEnv>();
 
 const MAX_UPLOAD_SIZE = 250 * 1024 * 1024;
-type UploadFormat = TilesetBuildFormat;
 
 const createTilesetSchema = z.object({
   name: z.string().min(1).max(128),
@@ -632,7 +630,7 @@ resourcesRoute.post("/tilesets/:id/rebuild", async (c) => {
     );
   }
 
-  const format = detectFormat(
+  const format = detectUploadFormat(
     storageObject.fileName ?? upload.originalFileName,
     upload.contentType ?? storageObject.contentType ?? "",
   );
