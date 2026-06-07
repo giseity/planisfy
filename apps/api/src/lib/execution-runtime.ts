@@ -5,6 +5,7 @@ import {
   workerProfiles,
 } from "@planisfy/database";
 import { env } from "../env";
+import { customerComputeMutationGate } from "./platform-gates";
 
 export class ExecutionRuntimeSelectionError extends Error {
   constructor(
@@ -27,11 +28,15 @@ export async function resolveExecutionRuntimeSelection(
   const executionTargetId = selection.executionTargetId ?? null;
   const workerProfileId = selection.workerProfileId ?? null;
 
-  if (env.DEPLOYMENT_MODE === "managed" && (executionTargetId || workerProfileId)) {
+  const managedSelectionDenial =
+    executionTargetId || workerProfileId
+      ? customerComputeMutationGate(env.DEPLOYMENT_MODE)
+      : null;
+  if (managedSelectionDenial) {
     throw new ExecutionRuntimeSelectionError(
-      "CAPABILITY_UNAVAILABLE",
-      "Customer-managed execution targets and worker profiles are unavailable in managed mode.",
-      403,
+      managedSelectionDenial.code,
+      managedSelectionDenial.message,
+      managedSelectionDenial.status,
     );
   }
 

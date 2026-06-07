@@ -10,6 +10,7 @@ import {
 } from "@planisfy/database";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
+import { customerComputeMutationGate } from "../lib/platform-gates";
 import { encryptCredentialPayload } from "../lib/source-credentials";
 import {
   encryptExecutionSecret,
@@ -558,14 +559,18 @@ function notFound(c: Context, message: string) {
 }
 
 function managedComputeUnavailable(c: Context) {
+  const denial = customerComputeMutationGate(env.DEPLOYMENT_MODE);
+  if (!denial) {
+    throw new Error("managedComputeUnavailable called outside managed mode");
+  }
+
   return c.json(
     {
       error: {
-        code: "CAPABILITY_UNAVAILABLE",
-        message:
-          "Customer-managed execution targets and worker profiles are unavailable in managed mode.",
+        code: denial.code,
+        message: denial.message,
       },
     },
-    403,
+    denial.status,
   );
 }

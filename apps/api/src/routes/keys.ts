@@ -12,6 +12,7 @@ import {
 import { checkResourceLimit } from "../lib/plan-check";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
+import { apiKeyMutationGate } from "../lib/platform-gates";
 
 export const keysRoute = new Hono<AuthEnv>();
 
@@ -399,15 +400,19 @@ async function requireManagedEmailVerification(c: Context<AuthEnv>) {
     .where(eq(users.id, c.get("userId")))
     .limit(1);
 
-  if (user?.emailVerified) return null;
+  const denial = apiKeyMutationGate({
+    deploymentMode: env.DEPLOYMENT_MODE,
+    emailVerified: Boolean(user?.emailVerified),
+  });
+  if (!denial) return null;
 
   return c.json(
     {
       error: {
-        code: "EMAIL_VERIFICATION_REQUIRED",
-        message: "Verify your email before creating or changing API keys.",
+        code: denial.code,
+        message: denial.message,
       },
     },
-    403,
+    denial.status,
   );
 }
