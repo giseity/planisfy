@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { resolveTxt } from "node:dns/promises";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { and, desc, eq, isNull } from "drizzle-orm";
@@ -19,6 +20,7 @@ import {
 import { getStorage } from "@planisfy/storage";
 import type { AuthEnv } from "../middleware/auth";
 import { redisConnection } from "../env";
+import { enqueueOutboxEvent } from "../lib/outbox";
 
 export const operationsRoute = new Hono<AuthEnv>();
 
@@ -60,7 +62,11 @@ const previewLinkSchema = z.object({
 const customDomainSchema = z.object({
   resourceType: z.string().min(1).max(64),
   resourceId: z.string().uuid().optional(),
-  host: z.string().min(1).max(255),
+  host: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^[a-z0-9.-]+$/i, "Host must be a domain name without protocol or path"),
   path: z.string().min(1).max(255).default("/"),
   tlsEnabled: z.boolean().default(true),
   metadata: z.record(z.string(), z.unknown()).default({}),
@@ -231,7 +237,17 @@ operationsRoute.post("/operations/schedules/:id/run", async (c) => {
     .set({ lastRunAt: new Date(), nextRunAt: roughNextRunAt(schedule.status), updatedAt: new Date() })
     .where(eq(scheduledOperations.id, id))
     .returning();
-  return c.json({ data: { schedule: updated, queued: false } });
+  await enqueueOutboxEvent({
+    eventName: "scheduled_operation.run_requested",
+    payload: {
+      accountId,
+      scheduleId: schedule.id,
+      kind: schedule.kind,
+      payload: isObjectRecord(schedule.payload) ? schedule.payload : {},
+      requestedAt: new Date().toISOString(),
+    },
+  });
+  return c.json({ data: { schedule: updated, queued: true } });
 });
 
 operationsRoute.delete("/operations/schedules/:id", async (c) => {
@@ -394,9 +410,17 @@ operationsRoute.post("/operations/custom-domains/:id/verify", async (c) => {
     .where(and(eq(customDomains.id, id), eq(customDomains.accountId, accountId), isNull(customDomains.deletedAt)))
     .limit(1);
   if (!domain) return notFound(c, "Custom domain not found");
+  const verification = await verifyDomainDns(domain.host, domain.verificationToken);
   const [updated] = await db
     .update(customDomains)
-    .set({ status: "verified", updatedAt: new Date() })
+    .set({
+      status: verification.verified ? "verified" : "failed",
+      metadata: {
+        ...(isObjectRecord(domain.metadata) ? domain.metadata : {}),
+        verification,
+      },
+      updatedAt: new Date(),
+    })
     .where(eq(customDomains.id, id))
     .returning();
   return c.json({ data: updated });
@@ -438,6 +462,42 @@ async function listTemplates(accountId: string) {
 function builtInTemplates() {
   const now = new Date();
   return [
+    {
+      id: "builtin-minio-storage",
+      accountId: null,
+      name: "Local MinIO storage",
+      category: "storage",
+      description: "S3-compatible local storage settings for the with-minio Compose profile.",
+      template: {
+        STORAGE_PROVIDER: "s3",
+        S3_BUCKET: "planisfy-artifacts",
+        S3_REGION: "auto",
+        S3_ENDPOINT: "http://minio:9000",
+        S3_PUBLIC_URL: "http://localhost:9000/planisfy-artifacts",
+      },
+      builtIn: true,
+      createdAt: now,
+      deletedAt: null,
+    },
+    {
+      id: "builtin-aws-batch-target",
+      accountId: null,
+      name: "AWS Batch geodata target",
+      category: "execution-target",
+      description: "Execution target defaults for AWS Batch geodata workers.",
+      template: {
+        provider: "aws_batch",
+        authMode: "federated",
+        region: "us-east-1",
+        config: {
+          jobQueue: "planisfy-geodata",
+          jobDefinition: "planisfy-geodata-worker",
+        },
+      },
+      builtIn: true,
+      createdAt: now,
+      deletedAt: null,
+    },
     {
       id: "builtin-local-worker",
       accountId: null,
@@ -552,25 +612,70 @@ async function validateWorkerNode(kind: "local" | "remote" | "cloud", endpoint?:
 }
 
 async function sendTestNotification(channel: typeof notificationChannels.$inferSelect) {
-  if (channel.provider !== "webhook") {
+  if (channel.provider === "email") {
     return {
       delivered: false,
-      message: `${channel.provider} delivery is configured but not sent by this API process yet`,
+      message: "Email delivery is configured but not sent by this API process yet",
     };
   }
+
+  const body =
+    channel.provider === "slack"
+      ? { text: "Planisfy test notification" }
+      : channel.provider === "discord"
+        ? { content: "Planisfy test notification" }
+        : {
+            event: "notification.test",
+            message: "Planisfy test notification",
+            timestamp: new Date().toISOString(),
+          };
+
   const response = await fetch(channel.target, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      event: "notification.test",
-      message: "Planisfy test notification",
-      timestamp: new Date().toISOString(),
-    }),
+    body: JSON.stringify(body),
   });
   return {
     delivered: response.ok,
     status: response.status,
     message: response.ok ? "Webhook accepted test notification" : response.statusText,
+  };
+}
+
+async function verifyDomainDns(host: string, token: string) {
+  const checkedAt = new Date().toISOString();
+  const candidates = [`_planisfy.${host}`, host];
+  const checks = [];
+
+  for (const candidate of candidates) {
+    try {
+      const records = (await resolveTxt(candidate)).map((parts) => parts.join(""));
+      const matched = records.some((record) => record.includes(token));
+      checks.push({ host: candidate, status: matched ? "matched" : "missing", records });
+      if (matched) {
+        return {
+          verified: true,
+          checkedAt,
+          method: "TXT",
+          expected: token,
+          checks,
+        };
+      }
+    } catch (err) {
+      checks.push({
+        host: candidate,
+        status: "error",
+        error: errorMessage(err),
+      });
+    }
+  }
+
+  return {
+    verified: false,
+    checkedAt,
+    method: "TXT",
+    expected: token,
+    checks,
   };
 }
 
@@ -731,4 +836,8 @@ function missingRouteParam(c: Context, param: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

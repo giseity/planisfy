@@ -112,6 +112,16 @@ export const usageRollupRequestedPayloadSchema = z
   })
   .strict();
 
+export const scheduledOperationRunRequestedPayloadSchema = z
+  .object({
+    scheduleId: uuid,
+    accountId: uuid,
+    kind: z.enum(["tileset_rebuild", "source_import", "custom_command"]),
+    payload: jsonRecord,
+    requestedAt: z.string().datetime(),
+  })
+  .strict();
+
 export const artifactCleanupRequestedPayloadSchema = z
   .object({
     storageObjectId: uuid.optional(),
@@ -137,6 +147,7 @@ export const eventPayloadSchemas = {
   "basemap.release.requested": basemapReleaseRequestedPayloadSchema,
   "basemap.release.completed": basemapReleaseCompletedPayloadSchema,
   "usage.rollup.requested": usageRollupRequestedPayloadSchema,
+  "scheduled_operation.run_requested": scheduledOperationRunRequestedPayloadSchema,
   "artifact.cleanup.requested": artifactCleanupRequestedPayloadSchema,
 } as const;
 
