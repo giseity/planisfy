@@ -1,6 +1,11 @@
 import { Hono } from "hono";
-import { access, open } from "node:fs/promises";
+import { access, open, readFile, statfs } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  type UpgradeReleaseManifest,
+  missingRequiredEnv,
+  safeParseUpgradeReleaseManifest,
+} from "@planisfy/utils/upgrade-manifest";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 
@@ -54,6 +59,7 @@ setupRoute.get("/setup/preflight", async (c) => {
 async function buildPreflightChecks(): Promise<PreflightCheck[]> {
   const storage = await storageCheck();
   const productLoopChecks = await buildProductLoopChecks();
+  const upgradeChecks = await buildUpgradeReadinessChecks(storage);
 
   return [
     check({
@@ -114,6 +120,7 @@ async function buildPreflightChecks(): Promise<PreflightCheck[]> {
     }),
     storage,
     ...productLoopChecks,
+    ...upgradeChecks,
     check({
       id: "martin",
       group: "Geospatial engines",
@@ -219,6 +226,240 @@ async function buildPreflightChecks(): Promise<PreflightCheck[]> {
         "Set Dodo API, webhook secret, and product IDs to enable managed billing.",
     }),
   ];
+}
+
+async function buildUpgradeReadinessChecks(
+  storage: PreflightCheck,
+): Promise<PreflightCheck[]> {
+  const manifestPath = process.env.PLANISFY_RELEASE_MANIFEST;
+  const manifestCheck = await upgradeManifestCheck(manifestPath);
+  const manifest =
+    manifestCheck.manifest && manifestCheck.status === "pass"
+      ? manifestCheck.manifest
+      : null;
+  const missingEnv = manifest ? missingRequiredEnv(manifest, process.env) : [];
+
+  return [
+    check({
+      id: "upgrade-current-version",
+      group: "Upgrade readiness",
+      label: "Current version",
+      severity: "required",
+      ok: Boolean(env.APP_VERSION),
+      message: `Current app version is ${env.APP_VERSION}.`,
+      action: "Set APP_VERSION to a release version before managed upgrades.",
+      value: env.APP_VERSION,
+    }),
+    manifestCheck.check,
+    check({
+      id: "upgrade-required-env",
+      group: "Upgrade readiness",
+      label: "Target release environment",
+      severity: manifest ? "required" : "recommended",
+      ok: missingEnv.length === 0,
+      warnWhenMissing: !manifest,
+      message: manifest
+        ? missingEnv.length === 0
+          ? "Required target release environment variables are present."
+          : `Missing target release env vars: ${missingEnv.join(", ")}.`
+        : "No release manifest configured; target release env requirements are unavailable.",
+      action:
+        "Set PLANISFY_RELEASE_MANIFEST to a pinned release manifest before upgrading.",
+      value: missingEnv.length,
+    }),
+    await backupScriptCheck(),
+    await migrationMetadataCheck(),
+    check({
+      id: "upgrade-storage-access",
+      group: "Upgrade readiness",
+      label: "Storage access",
+      severity: "required",
+      ok: storage.status !== "fail",
+      message:
+        storage.status !== "fail"
+          ? "Storage is reachable for backup and post-upgrade verification."
+          : "Storage is not reachable.",
+      action: storage.action,
+      value: storage.value,
+    }),
+    check({
+      id: "upgrade-worker-heartbeat",
+      group: "Upgrade readiness",
+      label: "Worker heartbeat",
+      severity: "recommended",
+      ok: false,
+      warnWhenMissing: true,
+      message:
+        "Worker heartbeat is verified by /health/detailed when Redis is reachable.",
+      action:
+        "Check /health/detailed before upgrade and confirm workerGeodata is ok or intentionally unavailable.",
+    }),
+    check({
+      id: "upgrade-martin-url",
+      group: "Upgrade readiness",
+      label: "Martin URL",
+      severity: "required",
+      ok: Boolean(env.MARTIN_URL),
+      message: env.MARTIN_URL
+        ? `Martin URL is configured: ${env.MARTIN_URL}.`
+        : "MARTIN_URL is missing.",
+      action: "Configure MARTIN_URL before upgrading map delivery services.",
+      value: env.MARTIN_URL,
+    }),
+    await freeDiskCheck(),
+  ];
+}
+
+async function upgradeManifestCheck(path: string | undefined): Promise<{
+  check: PreflightCheck;
+  status: PreflightStatus;
+  manifest?: UpgradeReleaseManifest;
+}> {
+  if (!path) {
+    return {
+      status: "warn",
+      check: check({
+        id: "upgrade-release-manifest",
+        group: "Upgrade readiness",
+        label: "Target release manifest",
+        severity: "recommended",
+        ok: false,
+        warnWhenMissing: true,
+        message: "No target release manifest is configured.",
+        action:
+          "Set PLANISFY_RELEASE_MANIFEST to a pinned release manifest before upgrade.",
+      }),
+    };
+  }
+
+  try {
+    const raw = await readFile(path, "utf8");
+    const parsed = safeParseUpgradeReleaseManifest(JSON.parse(raw));
+    if (!parsed.success) {
+      return {
+        status: "fail",
+        check: check({
+          id: "upgrade-release-manifest",
+          group: "Upgrade readiness",
+          label: "Target release manifest",
+          severity: "required",
+          ok: false,
+          message: "Target release manifest is invalid.",
+          action: parsed.error.issues
+            .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+            .join("; "),
+          value: path,
+        }),
+      };
+    }
+
+    return {
+      status: "pass",
+      manifest: parsed.data,
+      check: check({
+        id: "upgrade-release-manifest",
+        group: "Upgrade readiness",
+        label: "Target release manifest",
+        severity: "required",
+        ok: true,
+        message: `Target release manifest ${parsed.data.version} is valid.`,
+        value: path,
+      }),
+    };
+  } catch (err) {
+    return {
+      status: "fail",
+      check: check({
+        id: "upgrade-release-manifest",
+        group: "Upgrade readiness",
+        label: "Target release manifest",
+        severity: "required",
+        ok: false,
+        message: `Target release manifest cannot be read: ${errorMessage(err)}.`,
+        action: "Check PLANISFY_RELEASE_MANIFEST and file permissions.",
+        value: path,
+      }),
+    };
+  }
+}
+
+async function backupScriptCheck() {
+  const backupScript = await findRepoFile("scripts/self-host-backup.sh");
+  return check({
+    id: "upgrade-backup-script",
+    group: "Upgrade readiness",
+    label: "Backup script",
+    severity: "required",
+    ok: Boolean(backupScript),
+    message: backupScript
+      ? `Backup script is available: ${backupScript}.`
+      : "Backup script is not available to this runtime.",
+    action:
+      "Mount scripts/self-host-backup.sh or run upgrades through the self-host supervisor.",
+    value: backupScript,
+  });
+}
+
+async function migrationMetadataCheck() {
+  const journal = await findRepoFile("packages/database/drizzle/meta/_journal.json");
+  return check({
+    id: "upgrade-migration-metadata",
+    group: "Upgrade readiness",
+    label: "Migration metadata",
+    severity: "recommended",
+    ok: Boolean(journal),
+    warnWhenMissing: true,
+    message: journal
+      ? `Drizzle migration metadata is available: ${journal}.`
+      : "Drizzle migration metadata is not available to this runtime.",
+    action: "Ensure migrations are bundled or available to the supervisor.",
+    value: journal,
+  });
+}
+
+async function freeDiskCheck(): Promise<PreflightCheck> {
+  const storagePath =
+    process.env.LOCAL_STORAGE_PATH ?? join(process.cwd(), ".storage");
+  try {
+    const stats = await statfs(storagePath);
+    const freeBytes = Number(stats.bavail) * Number(stats.bsize);
+    const minimum = 1024 * 1024 * 1024;
+    return check({
+      id: "upgrade-free-disk",
+      group: "Upgrade readiness",
+      label: "Free disk",
+      severity: "recommended",
+      ok: freeBytes >= minimum,
+      warnWhenMissing: true,
+      message: `${Math.round(freeBytes / 1024 / 1024)} MB free at ${storagePath}.`,
+      action: "Keep at least 1 GB free before backup and upgrade.",
+      value: freeBytes,
+    });
+  } catch (err) {
+    return check({
+      id: "upgrade-free-disk",
+      group: "Upgrade readiness",
+      label: "Free disk",
+      severity: "optional",
+      ok: false,
+      warnWhenMissing: true,
+      message: `Free disk could not be checked: ${errorMessage(err)}.`,
+      action: "Check disk space manually before upgrade.",
+    });
+  }
+}
+
+async function findRepoFile(relativePath: string) {
+  const roots = [
+    process.cwd(),
+    join(process.cwd(), ".."),
+    join(process.cwd(), "..", ".."),
+  ];
+  for (const root of roots) {
+    const candidate = join(root, relativePath);
+    if (await canAccess(candidate)) return candidate;
+  }
+  return null;
 }
 
 async function buildProductLoopChecks(): Promise<PreflightCheck[]> {
@@ -470,4 +711,8 @@ function isPublicUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
