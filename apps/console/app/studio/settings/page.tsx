@@ -57,6 +57,7 @@ import {
   Shield,
   Trash2,
   User,
+  Wand2,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -726,6 +727,81 @@ function DangerZone() {
 // Execution Tab
 // ---------------------------------------------------------------------------
 
+type JsonValue = string | number | boolean | Record<string, unknown> | unknown[]
+
+const EXECUTION_PROVIDER_PRESETS: Record<
+  ExecutionTargetProvider,
+  {
+    authMode: ExecutionTargetAuthMode
+    region: string
+    config: Record<string, JsonValue>
+    credentials: Record<string, JsonValue>
+    profile: {
+      image: string
+      cpu: string
+      memory: string
+      timeout: string
+      concurrency: string
+    }
+  }
+> = {
+  local: {
+    authMode: "federated",
+    region: "local",
+    config: {
+      queue: "geodata",
+      maxConcurrentJobs: 2,
+      workingDirectory: "/data/storage",
+    },
+    credentials: {},
+    profile: {
+      image: "",
+      cpu: "2",
+      memory: "4096",
+      timeout: "900",
+      concurrency: "2",
+    },
+  },
+  aws_batch: {
+    authMode: "federated",
+    region: "us-east-1",
+    config: {
+      jobQueue: "planisfy-geodata",
+      jobDefinition: "planisfy-geodata-worker",
+      retryAttempts: 1,
+    },
+    credentials: {
+      roleArn: "",
+    },
+    profile: {
+      image: "ghcr.io/planisfy/worker-geodata:latest",
+      cpu: "4",
+      memory: "8192",
+      timeout: "3600",
+      concurrency: "4",
+    },
+  },
+  gcp_batch: {
+    authMode: "federated",
+    region: "us-central1",
+    config: {
+      projectId: "",
+      location: "us-central1",
+      jobNamePrefix: "planisfy-geodata",
+    },
+    credentials: {
+      serviceAccountEmail: "",
+    },
+    profile: {
+      image: "ghcr.io/planisfy/worker-geodata:latest",
+      cpu: "4",
+      memory: "8192",
+      timeout: "3600",
+      concurrency: "4",
+    },
+  },
+}
+
 function ExecutionTab() {
   const [targets, setTargets] = useState<ConsoleExecutionTarget[]>([])
   const [profiles, setProfiles] = useState<ConsoleWorkerProfile[]>([])
@@ -755,6 +831,46 @@ function ExecutionTab() {
   const [profileMemory, setProfileMemory] = useState("")
   const [profileTimeout, setProfileTimeout] = useState("")
   const [profileConcurrency, setProfileConcurrency] = useState("")
+
+  function applyTargetPreset(provider = targetProvider) {
+    const preset = EXECUTION_PROVIDER_PRESETS[provider]
+    setTargetAuthMode(preset.authMode)
+    setTargetRegion(preset.region)
+    setTargetConfig(formatJson(preset.config))
+    setTargetCredentials(formatJson(preset.credentials))
+    if (!profileImage) setProfileImage(preset.profile.image)
+    if (!profileCpu) setProfileCpu(preset.profile.cpu)
+    if (!profileMemory) setProfileMemory(preset.profile.memory)
+    if (!profileTimeout) setProfileTimeout(preset.profile.timeout)
+    if (!profileConcurrency) setProfileConcurrency(preset.profile.concurrency)
+  }
+
+  function handleTargetProviderChange(value: ExecutionTargetProvider) {
+    setTargetProvider(value)
+    const preset = EXECUTION_PROVIDER_PRESETS[value]
+    setTargetAuthMode(preset.authMode)
+    setTargetRegion(preset.region)
+    setTargetConfig(formatJson(preset.config))
+    setTargetCredentials(formatJson(preset.credentials))
+  }
+
+  function updateTargetConfigField(key: string, value: string) {
+    setTargetConfig((current) => {
+      const parsed = parseLooseJsonObject(current)
+      if (value.trim()) parsed[key] = coerceProviderValue(value)
+      else delete parsed[key]
+      return formatJson(parsed)
+    })
+  }
+
+  function updateTargetCredentialField(key: string, value: string) {
+    setTargetCredentials((current) => {
+      const parsed = parseLooseJsonObject(current)
+      if (value.trim()) parsed[key] = value
+      else delete parsed[key]
+      return formatJson(parsed)
+    })
+  }
 
   const fetchExecutionSettings = useCallback(async () => {
     try {
@@ -946,7 +1062,9 @@ function ExecutionTab() {
               <Label>Provider</Label>
               <Select
                 value={targetProvider}
-                onValueChange={(value) => setTargetProvider(value as ExecutionTargetProvider)}
+                onValueChange={(value) =>
+                  handleTargetProviderChange(value as ExecutionTargetProvider)
+                }
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -977,6 +1095,16 @@ function ExecutionTab() {
             <div className="space-y-2">
               <Label>Region</Label>
               <Input value={targetRegion} onChange={(e) => setTargetRegion(e.target.value)} />
+            </div>
+            <div className="md:col-span-2">
+              <ProviderConfigFields
+                provider={targetProvider}
+                config={parseLooseJsonObject(targetConfig)}
+                credentials={parseLooseJsonObject(targetCredentials)}
+                onConfigChange={updateTargetConfigField}
+                onCredentialChange={updateTargetCredentialField}
+                onApplyPreset={() => applyTargetPreset()}
+              />
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label>Config JSON</Label>
@@ -1200,12 +1328,181 @@ function targetLabel(provider: ExecutionTargetProvider) {
   return "Local"
 }
 
+function ProviderConfigFields({
+  provider,
+  config,
+  credentials,
+  onConfigChange,
+  onCredentialChange,
+  onApplyPreset,
+}: {
+  provider: ExecutionTargetProvider
+  config: Record<string, unknown>
+  credentials: Record<string, unknown>
+  onConfigChange: (key: string, value: string) => void
+  onCredentialChange: (key: string, value: string) => void
+  onApplyPreset: () => void
+}) {
+  const text = (source: Record<string, unknown>, key: string) =>
+    source[key] === undefined || source[key] === null ? "" : String(source[key])
+
+  return (
+    <div className="rounded-md border bg-muted/20 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">{targetLabel(provider)} preset</p>
+          <p className="text-xs text-muted-foreground">
+            Fill the common provider fields, then use JSON for advanced options.
+          </p>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={onApplyPreset}>
+          <Wand2 className="mr-1.5 h-4 w-4" />
+          Preset
+        </Button>
+      </div>
+
+      {provider === "local" && (
+        <div className="grid gap-3 md:grid-cols-3">
+          <Field label="Queue">
+            <Input
+              value={text(config, "queue")}
+              onChange={(e) => onConfigChange("queue", e.target.value)}
+              placeholder="geodata"
+            />
+          </Field>
+          <Field label="Max concurrent jobs">
+            <Input
+              type="number"
+              min={1}
+              value={text(config, "maxConcurrentJobs")}
+              onChange={(e) => onConfigChange("maxConcurrentJobs", e.target.value)}
+            />
+          </Field>
+          <Field label="Working directory">
+            <Input
+              value={text(config, "workingDirectory")}
+              onChange={(e) => onConfigChange("workingDirectory", e.target.value)}
+              placeholder="/data/storage"
+            />
+          </Field>
+        </div>
+      )}
+
+      {provider === "aws_batch" && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Job queue">
+            <Input
+              value={text(config, "jobQueue")}
+              onChange={(e) => onConfigChange("jobQueue", e.target.value)}
+              placeholder="planisfy-geodata"
+            />
+          </Field>
+          <Field label="Job definition">
+            <Input
+              value={text(config, "jobDefinition")}
+              onChange={(e) => onConfigChange("jobDefinition", e.target.value)}
+              placeholder="planisfy-geodata-worker"
+            />
+          </Field>
+          <Field label="Retry attempts">
+            <Input
+              type="number"
+              min={0}
+              value={text(config, "retryAttempts")}
+              onChange={(e) => onConfigChange("retryAttempts", e.target.value)}
+            />
+          </Field>
+          <Field label="Role ARN">
+            <Input
+              value={text(credentials, "roleArn")}
+              onChange={(e) => onCredentialChange("roleArn", e.target.value)}
+              placeholder="arn:aws:iam::...:role/..."
+            />
+          </Field>
+        </div>
+      )}
+
+      {provider === "gcp_batch" && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Project ID">
+            <Input
+              value={text(config, "projectId")}
+              onChange={(e) => onConfigChange("projectId", e.target.value)}
+              placeholder="my-gcp-project"
+            />
+          </Field>
+          <Field label="Location">
+            <Input
+              value={text(config, "location")}
+              onChange={(e) => onConfigChange("location", e.target.value)}
+              placeholder="us-central1"
+            />
+          </Field>
+          <Field label="Job name prefix">
+            <Input
+              value={text(config, "jobNamePrefix")}
+              onChange={(e) => onConfigChange("jobNamePrefix", e.target.value)}
+              placeholder="planisfy-geodata"
+            />
+          </Field>
+          <Field label="Service account email">
+            <Input
+              value={text(credentials, "serviceAccountEmail")}
+              onChange={(e) =>
+                onCredentialChange("serviceAccountEmail", e.target.value)
+              }
+              placeholder="worker@project.iam.gserviceaccount.com"
+            />
+          </Field>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      {children}
+    </div>
+  )
+}
+
 function parseJsonObject(value: string, label: string) {
   const parsed = JSON.parse(value || "{}") as unknown
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error(`${label} must be a JSON object`)
   }
   return parsed as Record<string, unknown>
+}
+
+function parseLooseJsonObject(value: string) {
+  try {
+    const parsed = JSON.parse(value || "{}") as unknown
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
+    return parsed as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
+function formatJson(value: Record<string, unknown>) {
+  return JSON.stringify(value, null, 2)
+}
+
+function coerceProviderValue(value: string) {
+  const trimmed = value.trim()
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed)
+  if (trimmed === "true") return true
+  if (trimmed === "false") return false
+  return value
 }
 
 function splitShellList(value: string) {
