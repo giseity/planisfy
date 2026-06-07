@@ -43,7 +43,14 @@ type SourceLayerContract = {
 
 type StyleJson = {
   version: number;
-  sources?: Record<string, unknown>;
+  metadata?: Record<string, string>;
+  sources?: Record<
+    string,
+    {
+      type?: string;
+      url?: string;
+    }
+  >;
   layers?: Array<{
     id: string;
     source?: string;
@@ -82,9 +89,14 @@ describe("Planisfy Streets fixture release", () => {
       const style = await readJson<StyleJson>(styleEntry.style);
 
       expect(style.version).toBe(8);
-      expect(style.sources?.[contract.sourceId]).toBeTruthy();
+      expect(style.metadata?.["planisfy:styleId"]).toBe(styleEntry.id);
+      expect(style.sources?.[contract.sourceId]).toEqual({
+        type: "vector",
+        url: "http://localhost:3005/planisfy.basic",
+      });
       for (const layer of style.layers ?? []) {
         if (layer["source-layer"]) {
+          expect(layer.source).toBe(contract.sourceId);
           expect(sourceLayers.has(layer["source-layer"])).toBe(true);
         }
       }

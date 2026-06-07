@@ -125,13 +125,13 @@ Prepare local self-host demo directories and validate Compose:
 scripts/self-host-setup.sh
 ```
 
-The setup script seeds the fixture style and checks whether
+The setup script seeds the fixture styles and checks whether
 `infra/docker/data/pmtiles/stuttgart.pmtiles` exists. Planisfy does not commit
 binary map data; when that PMTiles file is missing, the stack can still boot,
 but the default Planisfy Streets map will show a clear fixture-data-missing
 state until compatible local PMTiles are supplied.
 
-The setup script also validates that the fixture style, source-layer contract,
+The setup script also validates that the fixture styles, source-layer contract,
 and Martin source aliases agree, creates the local storage mount points,
 including `infra/docker/data/storage/martin-sources`, and prints the first
 account sign-up URL.
@@ -179,7 +179,10 @@ Default service URLs:
 
 Local demo assets:
 
-- Planisfy Streets fixture style: `packages/map-styles/styles/planisfy-streets-v1.json`
+- Planisfy Streets fixture styles:
+  `packages/map-styles/styles/planisfy-streets-v1.json`,
+  `packages/map-styles/styles/planisfy-streets-light-v1.json`, and
+  `packages/map-styles/styles/planisfy-streets-dark-v1.json`
 - Style release manifest: `packages/map-styles/release-manifest.json`
 - Martin PMTiles mount: `infra/docker/data/pmtiles`; the default fixture expects `stuttgart.pmtiles`
 - Optional PMTiles download controls: `DEMO_PMTILES_URL` and `DEMO_PMTILES_SHA256`

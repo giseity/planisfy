@@ -7,7 +7,13 @@ MARTIN_CONFIG="$ROOT_DIR/infra/docker/configs/martin.yaml"
 ENV_FILE="$ROOT_DIR/.env"
 ENV_EXAMPLE="$ROOT_DIR/.env.example"
 DATA_DIR="$ROOT_DIR/infra/docker/data"
-STYLE_FIXTURE="$ROOT_DIR/packages/map-styles/styles/planisfy-streets-v1.json"
+MAP_STYLES_DIR="$ROOT_DIR/packages/map-styles"
+STYLE_FIXTURE_DIR="$MAP_STYLES_DIR/styles"
+STYLE_FIXTURES=(
+  "planisfy-streets-v1.json"
+  "planisfy-streets-light-v1.json"
+  "planisfy-streets-dark-v1.json"
+)
 SOURCE_LAYER_CONTRACT="$ROOT_DIR/packages/map-styles/source-layer-contract.json"
 STORAGE_DIR="$DATA_DIR/storage"
 STORAGE_STYLE_DIR="$DATA_DIR/storage/styles"
@@ -79,12 +85,16 @@ CHECK_ERROR
 }
 
 check_demo_wiring() {
-  require_file "$STYLE_FIXTURE"
+  for style_fixture in "${STYLE_FIXTURES[@]}"; do
+    local style_path="$STYLE_FIXTURE_DIR/$style_fixture"
+    require_file "$style_path"
+    require_text "$style_path" "\"url\": \"$FIXTURE_TILEJSON_URL\"" \
+      "Planisfy Streets style $style_fixture must point at the local Martin fixture TileJSON URL."
+  done
+
   require_file "$SOURCE_LAYER_CONTRACT"
   require_file "$MARTIN_CONFIG"
 
-  require_text "$STYLE_FIXTURE" "\"url\": \"$FIXTURE_TILEJSON_URL\"" \
-    "Planisfy Streets fixture style must point at the local Martin fixture TileJSON URL."
   require_text "$SOURCE_LAYER_CONTRACT" "\"tileset\": \"$FIXTURE_COMPOSER_ID\"" \
     "Source-layer contract must name the same fixture tileset that Martin composes."
   require_text "$SOURCE_LAYER_CONTRACT" "\"sourceId\": \"planisfy-streets\"" \
@@ -95,6 +105,13 @@ check_demo_wiring() {
     "Martin config must expose the stable Planisfy fixture tileset."
   require_text "$MARTIN_CONFIG" "id: \"$FIXTURE_COMPOSER_ID.v1\"" \
     "Martin config must expose the immutable Planisfy fixture tileset alias."
+}
+
+seed_style_fixtures() {
+  for style_fixture in "${STYLE_FIXTURES[@]}"; do
+    cp "$STYLE_FIXTURE_DIR/$style_fixture" "$STORAGE_STYLE_DIR/$style_fixture"
+  done
+  echo "Seeded local storage style fixtures: infra/docker/data/storage/styles/"
 }
 
 compose() {
@@ -178,10 +195,7 @@ fi
 
 check_demo_wiring
 
-if [[ -f "$STYLE_FIXTURE" ]]; then
-  cp "$STYLE_FIXTURE" "$STORAGE_STYLE_DIR/planisfy-streets-v1.json"
-  echo "Seeded local storage style fixture: infra/docker/data/storage/styles/planisfy-streets-v1.json"
-fi
+seed_style_fixtures
 
 if [[ ! -f "$DEMO_PMTILES" && "$want_demo_data" == true ]]; then
   download_demo_pmtiles

@@ -147,7 +147,7 @@ production and configure Dodo to send subscription webhooks to
 | `infra/docker/data/pmtiles/` | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `stuttgart-base` source used by Planisfy Streets. |
 | `infra/docker/data/valhalla_data/` | Valhalla graph/runtime data mounted at `/custom_files`. |
 | `infra/docker/data/storage/uploads/` | Local upload/object storage area. |
-| `infra/docker/data/storage/styles/` | Demo and published style JSON. The setup script seeds `planisfy-streets-v1.json`. |
+| `infra/docker/data/storage/styles/` | Demo and published style JSON. The setup script seeds the legacy, light, and dark Planisfy Streets fixture styles. |
 | `infra/docker/data/storage/martin-sources/` | Local aliases for published PMTiles/MBTiles artifacts. Martin mounts this at `/storage/martin-sources`. |
 | `packages/map-styles/` | Versioned Planisfy Streets fixture style, source-layer contract, schema, and release manifest. |
 
