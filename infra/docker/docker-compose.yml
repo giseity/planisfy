@@ -13,6 +13,7 @@
 #   - docs:       Documentation (port 3002)
 #   - marketing:  Landing page (port 3000)
 #   - worker:     Geodata processing worker
+#   - supervisor: Local-only self-host upgrade supervisor (optional)
 #   - postgres:   PostgreSQL database (port 5432)
 #   - redis:      Redis for rate limiting (port 6379)
 #   - martin:     Vector tile server (port 3005)
@@ -188,10 +189,39 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
       - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
+      - SUPERVISOR_URL=${SUPERVISOR_URL:-http://self-host-supervisor:4010}
+      - SUPERVISOR_TOKEN=${SUPERVISOR_TOKEN:-}
       - NODE_ENV=production
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  self-host-supervisor:
+    build:
+      context: ../../
+      dockerfile: apps/self-host-supervisor/Dockerfile
+    container_name: planisfy-self-host-supervisor
+    profiles:
+      - with-supervisor
+    ports:
+      - "127.0.0.1:4010:4010"
+    environment:
+      - PORT=4010
+      - HOST=0.0.0.0
+      - APP_VERSION=${APP_VERSION:-self-host}
+      - PLANISFY_ROOT_DIR=/app
+      - SUPERVISOR_STATE_DIR=/data/supervisor
+      - SUPERVISOR_COMPOSE_FILE=/app/infra/docker/docker-compose.yml
+      - SUPERVISOR_ENV_FILE=/app/.env
+      - SUPERVISOR_TOKEN=${SUPERVISOR_TOKEN:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../../.env:/app/.env:ro
+      - ./data:/app/infra/docker/data
+      - ./data/supervisor:/data/supervisor
     restart: unless-stopped
     networks:
       - planisfy-network
