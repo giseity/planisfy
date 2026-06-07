@@ -18,8 +18,17 @@ import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
 import { recordStorageObject } from "../lib/storage-ledger";
 import { logAudit } from "../lib/audit";
 import { registerPublishedMartinSources } from "../lib/martin-sources";
+import {
+  buildTilesetPublishAuditMetadata,
+  classifyVersionPublish,
+} from "../lib/publish-safety";
 import { enqueueOutboxEvent } from "../lib/outbox";
 import { checkResourceLimit } from "../lib/plan-check";
+import {
+  detectUploadFormat,
+  toStorageFileName,
+  unsupportedUploadFormatMessage,
+} from "../lib/upload-policy";
 import {
   buildRetrySourceResource,
   parseSourceProcessingJobInput,
@@ -106,14 +115,13 @@ resourcesRoute.post("/uploads", async (c) => {
     );
   }
 
-  const format = detectFormat(file.name, file.type);
+  const format = detectUploadFormat(file.name, file.type);
   if (!format) {
     return c.json(
       {
         error: {
           code: "VALIDATION_ERROR",
-          message:
-            "Unsupported file format. Accepted: GeoJSON, CSV, zipped Shapefile, PMTiles, MBTiles.",
+          message: unsupportedUploadFormatMessage(),
         },
       },
       400,
@@ -161,10 +169,7 @@ resourcesRoute.post("/uploads", async (c) => {
     });
   } catch (err) {
     if (err instanceof ExecutionRuntimeSelectionError) {
-      return c.json(
-        { error: { code: err.code, message: err.message } },
-        404,
-      );
+      return c.json({ error: { code: err.code, message: err.message } }, 404);
     }
     throw err;
   }
@@ -323,7 +328,12 @@ resourcesRoute.get("/tilesets", async (c) => {
       ? await db
           .select()
           .from(tilesetVersions)
-          .where(inArray(tilesetVersions.tilesetId, rows.map((row) => row.id)))
+          .where(
+            inArray(
+              tilesetVersions.tilesetId,
+              rows.map((row) => row.id),
+            ),
+          )
           .orderBy(desc(tilesetVersions.version))
       : [];
   const linkedUploads =
@@ -334,7 +344,10 @@ resourcesRoute.get("/tilesets", async (c) => {
           .where(
             and(
               eq(uploads.accountId, accountId),
-              inArray(uploads.linkedTilesetId, rows.map((row) => row.id)),
+              inArray(
+                uploads.linkedTilesetId,
+                rows.map((row) => row.id),
+              ),
               isNull(uploads.deletedAt),
             ),
           )
@@ -473,6 +486,20 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
       400,
     );
 
+  const previousVersion = tileset.currentVersionId
+    ? await db
+        .select({ version: tilesetVersions.version })
+        .from(tilesetVersions)
+        .where(eq(tilesetVersions.id, tileset.currentVersionId))
+        .limit(1)
+        .then((rows) => rows[0]?.version ?? null)
+    : null;
+  const publishAction = classifyVersionPublish({
+    currentVersionNumber: previousVersion,
+    targetVersionNumber: targetVersion.version,
+    isCurrentVersion: tileset.currentVersionId === targetVersion.id,
+  });
+
   const [artifact] = await db
     .select({
       provider: storageObjects.provider,
@@ -532,7 +559,12 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
     action: "tileset.published",
     resourceType: "tileset",
     resourceId: id,
-    metadata: { version, martinRegistration },
+    metadata: buildTilesetPublishAuditMetadata({
+      targetVersion: version,
+      previousVersion,
+      action: publishAction,
+      martinRegistration,
+    }),
   });
 
   return c.json({ data: { ...updated, martinRegistration } });
@@ -783,7 +815,10 @@ resourcesRoute.post("/jobs/:id/retry", async (c) => {
       .update(tilesets)
       .set({ status: "BUILDING", updatedAt: now })
       .where(
-        and(eq(tilesets.id, input.tilesetId), eq(tilesets.accountId, accountId)),
+        and(
+          eq(tilesets.id, input.tilesetId),
+          eq(tilesets.accountId, accountId),
+        ),
       );
 
     if (input.uploadId) {
@@ -921,30 +956,6 @@ resourcesRoute.get("/tilesets/:id/artifact", async (c) => {
   });
 });
 
-function detectFormat(filename: string, mimeType: string): UploadFormat | null {
-  const ext = filename.split(".").pop()?.toLowerCase();
-  if (ext === "geojson" || ext === "json") return "geojson";
-  if (ext === "csv") return "csv";
-  if (ext === "zip") return "shapefile";
-  if (ext === "pmtiles") return "pmtiles";
-  if (ext === "mbtiles") return "mbtiles";
-  if (mimeType.includes("geo+json") || mimeType.includes("json"))
-    return "geojson";
-  if (mimeType.includes("csv")) return "csv";
-  if (mimeType.includes("zip")) return "shapefile";
-  return null;
-}
-
-function toStorageFileName(filename: string): string {
-  const normalized = filename
-    .trim()
-    .replace(/[^A-Za-z0-9._-]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return normalized && normalized !== "." && normalized !== ".."
-    ? normalized
-    : "upload";
-}
-
 async function getOwnerHandle(accountId: string) {
   const [owner] = await db
     .select({ handle: accounts.handle })
@@ -1014,8 +1025,9 @@ function toConsoleTileset(
     toConsoleTilesetVersion(version, params.artifactById),
   );
   const currentConsoleVersion =
-    consoleVersions.find((version) => version.id === tileset.currentVersionId) ??
-    null;
+    consoleVersions.find(
+      (version) => version.id === tileset.currentVersionId,
+    ) ?? null;
   const latestConsoleVersion = consoleVersions[0] ?? null;
   const tilejsonUrl =
     ownerHandle && currentVersion
@@ -1061,4 +1073,3 @@ type ConsoleArtifact = {
   size: number | null;
   url: string;
 };
-

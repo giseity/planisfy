@@ -21,6 +21,10 @@ import { getStorage } from "@planisfy/storage";
 import type { AuthEnv } from "../middleware/auth";
 import { redisConnection } from "../env";
 import { enqueueOutboxEvent } from "../lib/outbox";
+import {
+  buildNotificationPayload,
+  notificationDeliveryMode,
+} from "../lib/notification-adapters";
 
 export const operationsRoute = new Hono<AuthEnv>();
 
@@ -66,7 +70,10 @@ const customDomainSchema = z.object({
     .string()
     .min(1)
     .max(255)
-    .regex(/^[a-z0-9.-]+$/i, "Host must be a domain name without protocol or path"),
+    .regex(
+      /^[a-z0-9.-]+$/i,
+      "Host must be a domain name without protocol or path",
+    ),
   path: z.string().min(1).max(255).default("/"),
   tlsEnabled: z.boolean().default(true),
   metadata: z.record(z.string(), z.unknown()).default({}),
@@ -101,12 +108,22 @@ operationsRoute.get("/operations", async (c) => {
     db
       .select()
       .from(notificationChannels)
-      .where(and(eq(notificationChannels.accountId, accountId), isNull(notificationChannels.deletedAt)))
+      .where(
+        and(
+          eq(notificationChannels.accountId, accountId),
+          isNull(notificationChannels.deletedAt),
+        ),
+      )
       .orderBy(desc(notificationChannels.createdAt)),
     db
       .select()
       .from(scheduledOperations)
-      .where(and(eq(scheduledOperations.accountId, accountId), isNull(scheduledOperations.deletedAt)))
+      .where(
+        and(
+          eq(scheduledOperations.accountId, accountId),
+          isNull(scheduledOperations.deletedAt),
+        ),
+      )
       .orderBy(desc(scheduledOperations.createdAt)),
     db
       .select()
@@ -117,17 +134,32 @@ operationsRoute.get("/operations", async (c) => {
     db
       .select()
       .from(workerNodes)
-      .where(and(eq(workerNodes.accountId, accountId), isNull(workerNodes.deletedAt)))
+      .where(
+        and(
+          eq(workerNodes.accountId, accountId),
+          isNull(workerNodes.deletedAt),
+        ),
+      )
       .orderBy(desc(workerNodes.updatedAt)),
     db
       .select()
       .from(previewLinks)
-      .where(and(eq(previewLinks.accountId, accountId), isNull(previewLinks.deletedAt)))
+      .where(
+        and(
+          eq(previewLinks.accountId, accountId),
+          isNull(previewLinks.deletedAt),
+        ),
+      )
       .orderBy(desc(previewLinks.createdAt)),
     db
       .select()
       .from(customDomains)
-      .where(and(eq(customDomains.accountId, accountId), isNull(customDomains.deletedAt)))
+      .where(
+        and(
+          eq(customDomains.accountId, accountId),
+          isNull(customDomains.deletedAt),
+        ),
+      )
       .orderBy(desc(customDomains.createdAt)),
     listTemplates(accountId),
     fetchWorkerHealth(),
@@ -154,7 +186,9 @@ operationsRoute.get("/operations/jobs/:id/timeline", async (c) => {
   const [job] = await db
     .select()
     .from(processingJobs)
-    .where(and(eq(processingJobs.id, id), eq(processingJobs.accountId, accountId)))
+    .where(
+      and(eq(processingJobs.id, id), eq(processingJobs.accountId, accountId)),
+    )
     .limit(1);
   if (!job) return notFound(c, "Job not found");
 
@@ -170,7 +204,13 @@ operationsRoute.get("/operations/jobs/:id/timeline", async (c) => {
       timeline: [
         timelineEvent("queued", "Job queued", job.createdAt, "info", {}),
         ...logs.map((log) =>
-          timelineEvent(log.id, log.message, log.createdAt, log.level, log.metadata),
+          timelineEvent(
+            log.id,
+            log.message,
+            log.createdAt,
+            log.level,
+            log.metadata,
+          ),
         ),
         terminalJobEvent(job),
       ].filter(Boolean),
@@ -194,19 +234,28 @@ operationsRoute.delete("/operations/notification-channels/:id", async (c) => {
   return softDeleteNotificationChannel(c);
 });
 
-operationsRoute.post("/operations/notification-channels/:id/test", async (c) => {
-  const accountId = c.get("ownerId");
-  const id = c.req.param("id");
-  const [channel] = await db
-    .select()
-    .from(notificationChannels)
-    .where(and(eq(notificationChannels.id, id), eq(notificationChannels.accountId, accountId), isNull(notificationChannels.deletedAt)))
-    .limit(1);
-  if (!channel) return notFound(c, "Notification channel not found");
+operationsRoute.post(
+  "/operations/notification-channels/:id/test",
+  async (c) => {
+    const accountId = c.get("ownerId");
+    const id = c.req.param("id");
+    const [channel] = await db
+      .select()
+      .from(notificationChannels)
+      .where(
+        and(
+          eq(notificationChannels.id, id),
+          eq(notificationChannels.accountId, accountId),
+          isNull(notificationChannels.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!channel) return notFound(c, "Notification channel not found");
 
-  const result = await sendTestNotification(channel);
-  return c.json({ data: result });
-});
+    const result = await sendTestNotification(channel);
+    return c.json({ data: result });
+  },
+);
 
 operationsRoute.post("/operations/schedules", async (c) => {
   const accountId = c.get("ownerId");
@@ -229,12 +278,22 @@ operationsRoute.post("/operations/schedules/:id/run", async (c) => {
   const [schedule] = await db
     .select()
     .from(scheduledOperations)
-    .where(and(eq(scheduledOperations.id, id), eq(scheduledOperations.accountId, accountId), isNull(scheduledOperations.deletedAt)))
+    .where(
+      and(
+        eq(scheduledOperations.id, id),
+        eq(scheduledOperations.accountId, accountId),
+        isNull(scheduledOperations.deletedAt),
+      ),
+    )
     .limit(1);
   if (!schedule) return notFound(c, "Schedule not found");
   const [updated] = await db
     .update(scheduledOperations)
-    .set({ lastRunAt: new Date(), nextRunAt: roughNextRunAt(schedule.status), updatedAt: new Date() })
+    .set({
+      lastRunAt: new Date(),
+      nextRunAt: roughNextRunAt(schedule.status),
+      updatedAt: new Date(),
+    })
     .where(eq(scheduledOperations.id, id))
     .returning();
   await enqueueOutboxEvent({
@@ -256,13 +315,21 @@ operationsRoute.delete("/operations/schedules/:id", async (c) => {
 
 operationsRoute.post("/operations/artifact-backups", async (c) => {
   const accountId = c.get("ownerId");
-  const parsed = z.object({ storageObjectId: z.string().uuid() }).safeParse(await c.req.json());
+  const parsed = z
+    .object({ storageObjectId: z.string().uuid() })
+    .safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
 
   const [object] = await db
     .select()
     .from(storageObjects)
-    .where(and(eq(storageObjects.id, parsed.data.storageObjectId), eq(storageObjects.accountId, accountId), isNull(storageObjects.deletedAt)))
+    .where(
+      and(
+        eq(storageObjects.id, parsed.data.storageObjectId),
+        eq(storageObjects.accountId, accountId),
+        isNull(storageObjects.deletedAt),
+      ),
+    )
     .limit(1);
   if (!object) return notFound(c, "Storage object not found");
 
@@ -279,7 +346,10 @@ operationsRoute.post("/operations/artifact-backups", async (c) => {
       sourceStorageKey: object.storageKey,
       backupStorageKey: backupKey,
       size: object.size,
-      metadata: { resourceType: object.resourceType, resourceId: object.resourceId },
+      metadata: {
+        resourceType: object.resourceType,
+        resourceId: object.resourceId,
+      },
     })
     .returning();
   try {
@@ -293,7 +363,11 @@ operationsRoute.post("/operations/artifact-backups", async (c) => {
   } catch (err) {
     const [failed] = await db
       .update(artifactBackups)
-      .set({ status: "failed", errorMessage: errorMessage(err), completedAt: new Date() })
+      .set({
+        status: "failed",
+        errorMessage: errorMessage(err),
+        completedAt: new Date(),
+      })
       .where(eq(artifactBackups.id, backup!.id))
       .returning();
     return c.json({ data: failed }, 500);
@@ -306,11 +380,21 @@ operationsRoute.post("/operations/artifact-backups/:id/restore", async (c) => {
   const [backup] = await db
     .select()
     .from(artifactBackups)
-    .where(and(eq(artifactBackups.id, id), eq(artifactBackups.accountId, accountId)))
+    .where(
+      and(eq(artifactBackups.id, id), eq(artifactBackups.accountId, accountId)),
+    )
     .limit(1);
   if (!backup) return notFound(c, "Backup not found");
   if (backup.status !== "completed" && backup.status !== "restored") {
-    return c.json({ error: { code: "INVALID_BACKUP_STATE", message: "Backup is not restorable" } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "INVALID_BACKUP_STATE",
+          message: "Backup is not restorable",
+        },
+      },
+      400,
+    );
   }
   await getStorage().copy(backup.backupStorageKey, backup.sourceStorageKey);
   const [updated] = await db
@@ -325,7 +409,10 @@ operationsRoute.post("/operations/worker-nodes", async (c) => {
   const accountId = c.get("ownerId");
   const parsed = workerNodeSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
-  const validation = await validateWorkerNode(parsed.data.kind, parsed.data.endpoint);
+  const validation = await validateWorkerNode(
+    parsed.data.kind,
+    parsed.data.endpoint,
+  );
   const [created] = await db
     .insert(workerNodes)
     .values({
@@ -345,10 +432,19 @@ operationsRoute.post("/operations/worker-nodes/:id/validate", async (c) => {
   const [node] = await db
     .select()
     .from(workerNodes)
-    .where(and(eq(workerNodes.id, id), eq(workerNodes.accountId, accountId), isNull(workerNodes.deletedAt)))
+    .where(
+      and(
+        eq(workerNodes.id, id),
+        eq(workerNodes.accountId, accountId),
+        isNull(workerNodes.deletedAt),
+      ),
+    )
     .limit(1);
   if (!node) return notFound(c, "Worker node not found");
-  const validation = await validateWorkerNode(node.kind, node.endpoint ?? undefined);
+  const validation = await validateWorkerNode(
+    node.kind,
+    node.endpoint ?? undefined,
+  );
   const [updated] = await db
     .update(workerNodes)
     .set({
@@ -407,10 +503,19 @@ operationsRoute.post("/operations/custom-domains/:id/verify", async (c) => {
   const [domain] = await db
     .select()
     .from(customDomains)
-    .where(and(eq(customDomains.id, id), eq(customDomains.accountId, accountId), isNull(customDomains.deletedAt)))
+    .where(
+      and(
+        eq(customDomains.id, id),
+        eq(customDomains.accountId, accountId),
+        isNull(customDomains.deletedAt),
+      ),
+    )
     .limit(1);
   if (!domain) return notFound(c, "Custom domain not found");
-  const verification = await verifyDomainDns(domain.host, domain.verificationToken);
+  const verification = await verifyDomainDns(
+    domain.host,
+    domain.verificationToken,
+  );
   const [updated] = await db
     .update(customDomains)
     .set({
@@ -467,7 +572,8 @@ function builtInTemplates() {
       accountId: null,
       name: "Local MinIO storage",
       category: "storage",
-      description: "S3-compatible local storage settings for the with-minio Compose profile.",
+      description:
+        "S3-compatible local storage settings for the with-minio Compose profile.",
       template: {
         STORAGE_PROVIDER: "s3",
         S3_BUCKET: "planisfy-artifacts",
@@ -503,7 +609,8 @@ function builtInTemplates() {
       accountId: null,
       name: "Local Docker worker",
       category: "execution-target",
-      description: "Self-hosted tiling worker profile with common GDAL, DuckDB, and Tippecanoe defaults.",
+      description:
+        "Self-hosted tiling worker profile with common GDAL, DuckDB, and Tippecanoe defaults.",
       template: {
         provider: "local",
         workerProfile: { cpu: 2, memoryMb: 4096, timeoutSeconds: 900 },
@@ -532,7 +639,8 @@ function builtInTemplates() {
       accountId: null,
       name: "Preview tileset link",
       category: "preview",
-      description: "Temporary TileJSON preview URL for review before publishing.",
+      description:
+        "Temporary TileJSON preview URL for review before publishing.",
       template: {
         resourceType: "tileset",
         ttlHours: 72,
@@ -558,23 +666,40 @@ async function fetchWorkerHealth() {
     const heartbeat = await redis.get(WORKER_GEODATA_HEARTBEAT_KEY);
     await redis.quit();
     if (!heartbeat) {
-      return { status: "offline", message: "No geodata worker heartbeat", latencyMs: Date.now() - startedAt };
+      return {
+        status: "offline",
+        message: "No geodata worker heartbeat",
+        latencyMs: Date.now() - startedAt,
+      };
     }
-    const parsed = JSON.parse(heartbeat) as { timestamp?: string; toolchain?: unknown };
+    const parsed = JSON.parse(heartbeat) as {
+      timestamp?: string;
+      toolchain?: unknown;
+    };
     const timestamp = parsed.timestamp ? Date.parse(parsed.timestamp) : NaN;
     const ageMs = Number.isFinite(timestamp) ? Date.now() - timestamp : null;
     return {
       status: ageMs !== null && ageMs <= 60_000 ? "healthy" : "degraded",
-      message: ageMs === null ? "Invalid heartbeat" : `Heartbeat ${Math.round(ageMs / 1000)}s ago`,
+      message:
+        ageMs === null
+          ? "Invalid heartbeat"
+          : `Heartbeat ${Math.round(ageMs / 1000)}s ago`,
       latencyMs: ageMs,
       toolchain: parsed.toolchain,
     };
   } catch (err) {
-    return { status: "offline", message: errorMessage(err), latencyMs: Date.now() - startedAt };
+    return {
+      status: "offline",
+      message: errorMessage(err),
+      latencyMs: Date.now() - startedAt,
+    };
   }
 }
 
-async function validateWorkerNode(kind: "local" | "remote" | "cloud", endpoint?: string) {
+async function validateWorkerNode(
+  kind: "local" | "remote" | "cloud",
+  endpoint?: string,
+) {
   if (kind === "local") {
     const health = await fetchWorkerHealth();
     return {
@@ -585,7 +710,9 @@ async function validateWorkerNode(kind: "local" | "remote" | "cloud", endpoint?:
   if (!endpoint) {
     return {
       ok: false,
-      checks: [{ id: "endpoint", status: "failed", message: "Endpoint is required" }],
+      checks: [
+        { id: "endpoint", status: "failed", message: "Endpoint is required" },
+      ],
     };
   }
   try {
@@ -606,29 +733,32 @@ async function validateWorkerNode(kind: "local" | "remote" | "cloud", endpoint?:
   } catch (err) {
     return {
       ok: false,
-      checks: [{ id: "endpoint", status: "failed", message: errorMessage(err) }],
+      checks: [
+        { id: "endpoint", status: "failed", message: errorMessage(err) },
+      ],
     };
   }
 }
 
-async function sendTestNotification(channel: typeof notificationChannels.$inferSelect) {
-  if (channel.provider === "email") {
+async function sendTestNotification(
+  channel: typeof notificationChannels.$inferSelect,
+) {
+  const event = {
+    event: "notification.test",
+    message: "Planisfy test notification",
+    timestamp: new Date().toISOString(),
+  };
+  const body = buildNotificationPayload(channel.provider, event);
+
+  if (notificationDeliveryMode(channel.provider) === "email-adapter") {
     return {
       delivered: false,
-      message: "Email delivery is configured but not sent by this API process yet",
+      adapter: "email",
+      payload: body,
+      message:
+        "Email adapter payload prepared; configure an email worker to send it.",
     };
   }
-
-  const body =
-    channel.provider === "slack"
-      ? { text: "Planisfy test notification" }
-      : channel.provider === "discord"
-        ? { content: "Planisfy test notification" }
-        : {
-            event: "notification.test",
-            message: "Planisfy test notification",
-            timestamp: new Date().toISOString(),
-          };
 
   const response = await fetch(channel.target, {
     method: "POST",
@@ -638,7 +768,9 @@ async function sendTestNotification(channel: typeof notificationChannels.$inferS
   return {
     delivered: response.ok,
     status: response.status,
-    message: response.ok ? "Webhook accepted test notification" : response.statusText,
+    message: response.ok
+      ? "Notification endpoint accepted test payload"
+      : response.statusText,
   };
 }
 
@@ -649,9 +781,15 @@ async function verifyDomainDns(host: string, token: string) {
 
   for (const candidate of candidates) {
     try {
-      const records = (await resolveTxt(candidate)).map((parts) => parts.join(""));
+      const records = (await resolveTxt(candidate)).map((parts) =>
+        parts.join(""),
+      );
       const matched = records.some((record) => record.includes(token));
-      checks.push({ host: candidate, status: matched ? "matched" : "missing", records });
+      checks.push({
+        host: candidate,
+        status: matched ? "matched" : "missing",
+        records,
+      });
       if (matched) {
         return {
           verified: true,
@@ -679,14 +817,16 @@ async function verifyDomainDns(host: string, token: string) {
   };
 }
 
-function stripNotificationSecrets(channel: typeof notificationChannels.$inferSelect) {
+function stripNotificationSecrets(
+  channel: typeof notificationChannels.$inferSelect,
+) {
   return {
     ...channel,
     encryptedConfig: undefined,
     hasConfig: Boolean(
       channel.encryptedConfig &&
-        typeof channel.encryptedConfig === "object" &&
-        Object.keys(channel.encryptedConfig).length > 0,
+      typeof channel.encryptedConfig === "object" &&
+      Object.keys(channel.encryptedConfig).length > 0,
     ),
   };
 }
@@ -725,10 +865,19 @@ async function softDeleteNotificationChannel(c: Context) {
   const [row] = await db
     .select({ id: notificationChannels.id })
     .from(notificationChannels)
-    .where(and(eq(notificationChannels.id, id), eq(notificationChannels.accountId, accountId), isNull(notificationChannels.deletedAt)))
+    .where(
+      and(
+        eq(notificationChannels.id, id),
+        eq(notificationChannels.accountId, accountId),
+        isNull(notificationChannels.deletedAt),
+      ),
+    )
     .limit(1);
   if (!row) return notFound(c, "Notification channel not found");
-  await db.update(notificationChannels).set({ deletedAt: new Date() }).where(eq(notificationChannels.id, id));
+  await db
+    .update(notificationChannels)
+    .set({ deletedAt: new Date() })
+    .where(eq(notificationChannels.id, id));
   return c.json({ data: { id, deleted: true } });
 }
 
@@ -739,10 +888,19 @@ async function softDeleteSchedule(c: Context) {
   const [row] = await db
     .select({ id: scheduledOperations.id })
     .from(scheduledOperations)
-    .where(and(eq(scheduledOperations.id, id), eq(scheduledOperations.accountId, accountId), isNull(scheduledOperations.deletedAt)))
+    .where(
+      and(
+        eq(scheduledOperations.id, id),
+        eq(scheduledOperations.accountId, accountId),
+        isNull(scheduledOperations.deletedAt),
+      ),
+    )
     .limit(1);
   if (!row) return notFound(c, "Schedule not found");
-  await db.update(scheduledOperations).set({ deletedAt: new Date() }).where(eq(scheduledOperations.id, id));
+  await db
+    .update(scheduledOperations)
+    .set({ deletedAt: new Date() })
+    .where(eq(scheduledOperations.id, id));
   return c.json({ data: { id, deleted: true } });
 }
 
@@ -753,10 +911,19 @@ async function softDeleteWorkerNode(c: Context) {
   const [row] = await db
     .select({ id: workerNodes.id })
     .from(workerNodes)
-    .where(and(eq(workerNodes.id, id), eq(workerNodes.accountId, accountId), isNull(workerNodes.deletedAt)))
+    .where(
+      and(
+        eq(workerNodes.id, id),
+        eq(workerNodes.accountId, accountId),
+        isNull(workerNodes.deletedAt),
+      ),
+    )
     .limit(1);
   if (!row) return notFound(c, "Worker node not found");
-  await db.update(workerNodes).set({ deletedAt: new Date() }).where(eq(workerNodes.id, id));
+  await db
+    .update(workerNodes)
+    .set({ deletedAt: new Date() })
+    .where(eq(workerNodes.id, id));
   return c.json({ data: { id, deleted: true } });
 }
 
@@ -767,10 +934,19 @@ async function softDeletePreviewLink(c: Context) {
   const [row] = await db
     .select({ id: previewLinks.id })
     .from(previewLinks)
-    .where(and(eq(previewLinks.id, id), eq(previewLinks.accountId, accountId), isNull(previewLinks.deletedAt)))
+    .where(
+      and(
+        eq(previewLinks.id, id),
+        eq(previewLinks.accountId, accountId),
+        isNull(previewLinks.deletedAt),
+      ),
+    )
     .limit(1);
   if (!row) return notFound(c, "Preview link not found");
-  await db.update(previewLinks).set({ deletedAt: new Date() }).where(eq(previewLinks.id, id));
+  await db
+    .update(previewLinks)
+    .set({ deletedAt: new Date() })
+    .where(eq(previewLinks.id, id));
   return c.json({ data: { id, deleted: true } });
 }
 
@@ -781,10 +957,19 @@ async function softDeleteCustomDomain(c: Context) {
   const [row] = await db
     .select({ id: customDomains.id })
     .from(customDomains)
-    .where(and(eq(customDomains.id, id), eq(customDomains.accountId, accountId), isNull(customDomains.deletedAt)))
+    .where(
+      and(
+        eq(customDomains.id, id),
+        eq(customDomains.accountId, accountId),
+        isNull(customDomains.deletedAt),
+      ),
+    )
     .limit(1);
   if (!row) return notFound(c, "Custom domain not found");
-  await db.update(customDomains).set({ deletedAt: new Date() }).where(eq(customDomains.id, id));
+  await db
+    .update(customDomains)
+    .set({ deletedAt: new Date() })
+    .where(eq(customDomains.id, id));
   return c.json({ data: { id, deleted: true } });
 }
 
@@ -795,10 +980,19 @@ async function softDeleteWorkflowTemplate(c: Context) {
   const [row] = await db
     .select({ id: workflowTemplates.id })
     .from(workflowTemplates)
-    .where(and(eq(workflowTemplates.id, id), eq(workflowTemplates.accountId, accountId), isNull(workflowTemplates.deletedAt)))
+    .where(
+      and(
+        eq(workflowTemplates.id, id),
+        eq(workflowTemplates.accountId, accountId),
+        isNull(workflowTemplates.deletedAt),
+      ),
+    )
     .limit(1);
   if (!row) return notFound(c, "Workflow template not found");
-  await db.update(workflowTemplates).set({ deletedAt: new Date() }).where(eq(workflowTemplates.id, id));
+  await db
+    .update(workflowTemplates)
+    .set({ deletedAt: new Date() })
+    .where(eq(workflowTemplates.id, id));
   return c.json({ data: { id, deleted: true } });
 }
 
@@ -829,7 +1023,12 @@ function notFound(c: Context, message: string) {
 
 function missingRouteParam(c: Context, param: string) {
   return c.json(
-    { error: { code: "BAD_REQUEST", message: `Missing route parameter: ${param}` } },
+    {
+      error: {
+        code: "BAD_REQUEST",
+        message: `Missing route parameter: ${param}`,
+      },
+    },
     400,
   );
 }

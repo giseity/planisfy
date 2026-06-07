@@ -24,6 +24,7 @@ import {
   validateRemoteSourceUrl,
 } from "../lib/source-url-policy";
 import { checkResourceLimit } from "../lib/plan-check";
+import { buildOvertureImportEstimate } from "../lib/import-estimates";
 import { buildDatasetTilesetProcessingInput } from "../lib/tileset-build-input";
 import {
   UnsupportedOvertureTypeError,
@@ -89,7 +90,12 @@ importsRoute.get("/regions", async (c) => {
   const rows = await db
     .select()
     .from(savedRegions)
-    .where(and(eq(savedRegions.accountId, accountId), isNull(savedRegions.deletedAt)))
+    .where(
+      and(
+        eq(savedRegions.accountId, accountId),
+        isNull(savedRegions.deletedAt),
+      ),
+    )
     .orderBy(desc(savedRegions.createdAt));
 
   return c.json({ data: rows });
@@ -311,6 +317,25 @@ importsRoute.post("/source-imports/overture", async (c) => {
     );
   }
 
+  let importEstimate;
+  try {
+    importEstimate = buildOvertureImportEstimate({
+      bbox: region.bbox,
+      maxFeatures: Number(process.env.SOURCE_IMPORT_MAX_FEATURES ?? 50_000),
+      timeoutMs: Number(process.env.SOURCE_IMPORT_TIMEOUT_MS ?? 900_000),
+    });
+  } catch (err) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_REGION_BOUNDS",
+          message: err instanceof Error ? err.message : String(err),
+        },
+      },
+      400,
+    );
+  }
+
   const dataset = await createDataset(accountId, parsed.data);
   const job = await createProcessingJob({
     accountId,
@@ -320,6 +345,7 @@ importsRoute.post("/source-imports/overture", async (c) => {
       datasetId: dataset.id,
       regionId: region.id,
       bbox: region.bbox,
+      estimate: importEstimate,
       sourceConnectionId: parsed.data.sourceConnectionId,
       theme: parsed.data.theme,
       type: parsed.data.type,
@@ -354,6 +380,7 @@ importsRoute.post("/source-imports/overture", async (c) => {
       theme: parsed.data.theme,
       type: parsed.data.type,
       catalog: catalogEntry,
+      estimate: importEstimate,
     },
   });
   await enqueueOutboxEvent({
@@ -371,10 +398,17 @@ importsRoute.post("/source-imports/overture", async (c) => {
     action: "source.import_requested",
     resourceType: "dataset",
     resourceId: dataset.id,
-    metadata: { importId: sourceImport?.id, jobId: job.id },
+    metadata: {
+      importId: sourceImport?.id,
+      jobId: job.id,
+      estimate: importEstimate,
+    },
   });
 
-  return c.json({ data: { dataset, sourceImport, processingJob: job } }, 202);
+  return c.json(
+    { data: { dataset, sourceImport, processingJob: job, importEstimate } },
+    202,
+  );
 });
 
 importsRoute.post("/datasets/:id/tilesets", async (c) => {
@@ -504,10 +538,7 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
     });
   } catch (err) {
     if (err instanceof ExecutionRuntimeSelectionError) {
-      return c.json(
-        { error: { code: err.code, message: err.message } },
-        404,
-      );
+      return c.json({ error: { code: err.code, message: err.message } }, 404);
     }
     throw err;
   }
@@ -590,10 +621,7 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
   );
 });
 
-async function createDataset(
-  accountId: string,
-  data: OvertureImportRequest,
-) {
+async function createDataset(accountId: string, data: OvertureImportRequest) {
   const [dataset] = await db
     .insert(datasets)
     .values({
