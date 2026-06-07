@@ -38,6 +38,7 @@ Operators need documented paths for:
 - restore
 - upgrades
 - basemap release verification
+- support bundle export
 
 ## Backup
 
@@ -72,6 +73,26 @@ The restore script starts Postgres and Redis, restores `postgres.dump`, restores
 `redis.dump.rdb` when present, and replaces local `storage`, `pmtiles`, and
 `valhalla_data` directories when their archives are present. Restart the full
 stack after restore.
+
+## Support Bundle
+
+Use the support bundle script when diagnosing a failed setup, upgrade, or
+runtime incident:
+
+```bash
+scripts/self-host-support-bundle.sh
+```
+
+The script creates `support-bundles/planisfy-support-<timestamp>/` by default
+and captures:
+
+- `manifest.json` with timestamp, git SHA, and branch.
+- `env.redacted.txt` with only environment key presence and secrets redacted.
+- `compose.config.txt`, `compose.ps.txt`, and recent Compose logs.
+- API `/health`, `/health/detailed`, and `/metrics` responses when reachable.
+
+Attach the bundle to issue reports or keep it with incident notes before making
+changes.
 
 ## Upgrade
 
