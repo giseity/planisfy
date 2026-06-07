@@ -94,3 +94,83 @@ export function requiredScopeForPath(path: string): ApiKeyScope | null {
   const category = getEndpointCategory(path);
   return SCOPE_MAP[category] ?? null;
 }
+
+export function normalizeAllowedDomains(values: string[]): {
+  domains: string[];
+  errors: string[];
+} {
+  const domains = new Set<string>();
+  const errors: string[] = [];
+
+  for (const value of values) {
+    const normalized = normalizeAllowedDomain(value);
+    if (normalized) {
+      domains.add(normalized);
+    } else {
+      errors.push(value);
+    }
+  }
+
+  return { domains: [...domains], errors };
+}
+
+export function isRequestOriginAllowed(
+  originOrReferer: string | undefined,
+  allowedDomains: string[],
+) {
+  if (allowedDomains.length === 0) return true;
+  const requestHost = hostFromOrigin(originOrReferer);
+  if (!requestHost) return false;
+
+  return allowedDomains.some((pattern) => {
+    if (pattern.startsWith("*.")) {
+      const suffix = pattern.slice(2);
+      return requestHost === suffix || requestHost.endsWith(`.${suffix}`);
+    }
+    return requestHost === pattern;
+  });
+}
+
+function normalizeAllowedDomain(value: string): string | null {
+  const trimmed = value.trim().toLowerCase().replace(/\.$/, "");
+  if (!trimmed) return null;
+
+  const host = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+    ? hostFromUrl(trimmed)
+    : trimmed;
+  if (!host) return null;
+
+  if (host.startsWith("*.")) {
+    const suffix = host.slice(2);
+    return isValidHostname(suffix) ? `*.${suffix}` : null;
+  }
+
+  return isValidHostname(host) ? host : null;
+}
+
+function hostFromOrigin(value: string | undefined) {
+  if (!value) return null;
+  return hostFromUrl(value.trim()) ?? normalizeAllowedDomain(value);
+}
+
+function hostFromUrl(value: string) {
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function isValidHostname(host: string) {
+  if (host === "localhost") return true;
+  if (host.length > 253 || host.includes("*")) return false;
+  return host.split(".").every((label) => {
+    return (
+      label.length > 0 &&
+      label.length <= 63 &&
+      /^[a-z0-9-]+$/.test(label) &&
+      !label.startsWith("-") &&
+      !label.endsWith("-")
+    );
+  });
+}

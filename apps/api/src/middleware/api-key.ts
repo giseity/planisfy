@@ -1,7 +1,11 @@
 import { createMiddleware } from "hono/factory";
 import { db, apiKeys } from "@planisfy/database";
 import { eq, and, isNull } from "drizzle-orm";
-import { hashKey, requiredScopeForPath } from "../lib/api-key";
+import {
+  hashKey,
+  isRequestOriginAllowed,
+  requiredScopeForPath,
+} from "../lib/api-key";
 
 export type ApiKeyEnv = {
   Variables: {
@@ -70,28 +74,18 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
   const domains = key.allowedDomains as string[] | null;
   if (domains && domains.length > 0) {
     const origin = c.req.header("origin") || c.req.header("referer");
-    if (origin) {
-      const requestHost = new URL(origin).hostname;
-      const allowed = domains.some((pattern) => {
-        if (pattern.startsWith("*.")) {
-          return (
-            requestHost.endsWith(pattern.slice(1)) ||
-            requestHost === pattern.slice(2)
-          );
-        }
-        return requestHost === pattern;
-      });
-      if (!allowed) {
-        return c.json(
-          {
-            error: {
-              code: "DOMAIN_NOT_ALLOWED",
-              message: "Request origin not in allowed domains",
-            },
+    if (!isRequestOriginAllowed(origin, domains)) {
+      return c.json(
+        {
+          error: {
+            code: "DOMAIN_NOT_ALLOWED",
+            message: origin
+              ? "Request origin not in allowed domains"
+              : "API key is restricted to browser origins",
           },
-          403,
-        );
-      }
+        },
+        403,
+      );
     }
   }
 

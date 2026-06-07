@@ -15,6 +15,8 @@ storageRoute.get("/storage/*", async (c) => {
   const [object] = await db
     .select({
       contentType: storageObjects.contentType,
+      resourceType: storageObjects.resourceType,
+      artifactKind: storageObjects.artifactKind,
     })
     .from(storageObjects)
     .where(
@@ -25,6 +27,10 @@ storageRoute.get("/storage/*", async (c) => {
       )
     )
     .limit(1);
+
+  if (!object || !isPublicStorageObject(object)) {
+    return c.json({ error: { code: "NOT_FOUND" } }, 404);
+  }
 
   try {
     const data = await getStorage().download(key);
@@ -38,6 +44,13 @@ storageRoute.get("/storage/*", async (c) => {
     return c.json({ error: { code: "NOT_FOUND" } }, 404);
   }
 });
+
+function isPublicStorageObject(object: {
+  resourceType: string | null;
+  artifactKind: string | null;
+}) {
+  return object.resourceType === "tileset" && object.artifactKind === "processed";
+}
 
 function isSafeStorageKey(key: string): boolean {
   if (!key || key.startsWith("/") || key.includes("\\")) {

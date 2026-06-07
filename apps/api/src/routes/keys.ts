@@ -3,7 +3,12 @@ import { z } from "zod";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { db, apiKeys } from "@planisfy/database";
 import { logAudit } from "../lib/audit";
-import { generateApiKey, hashKey, ALL_SCOPES } from "../lib/api-key";
+import {
+  generateApiKey,
+  hashKey,
+  ALL_SCOPES,
+  normalizeAllowedDomains,
+} from "../lib/api-key";
 import { checkResourceLimit } from "../lib/plan-check";
 import type { AuthEnv } from "../middleware/auth";
 
@@ -66,7 +71,20 @@ keysRoute.post("/keys", async (c) => {
     );
   }
 
-  const { name, scopes, allowedDomains, expiresAt } = parsed.data;
+  const { name, scopes, expiresAt } = parsed.data;
+  const normalizedDomains = normalizeAllowedDomains(parsed.data.allowedDomains);
+  if (normalizedDomains.errors.length > 0) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid allowed domains",
+          details: { allowedDomains: normalizedDomains.errors },
+        },
+      },
+      400,
+    );
+  }
   const { id, fullKey, keyHash } = generateApiKey();
 
   await db.insert(apiKeys).values({
@@ -75,7 +93,8 @@ keysRoute.post("/keys", async (c) => {
     ownerId,
     name,
     scopes: scopes as string[],
-    allowedDomains: allowedDomains.length > 0 ? allowedDomains : null,
+    allowedDomains:
+      normalizedDomains.domains.length > 0 ? normalizedDomains.domains : null,
     expiresAt: expiresAt ? new Date(expiresAt) : null,
   });
 
@@ -96,7 +115,7 @@ keysRoute.post("/keys", async (c) => {
         key: fullKey,
         name,
         scopes,
-        allowedDomains,
+        allowedDomains: normalizedDomains.domains,
         expiresAt: expiresAt ?? null,
         createdAt: new Date().toISOString(),
       },
@@ -208,8 +227,21 @@ keysRoute.put("/keys/:id", async (c) => {
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.scopes !== undefined) updates.scopes = parsed.data.scopes;
   if (parsed.data.allowedDomains !== undefined) {
+    const normalizedDomains = normalizeAllowedDomains(parsed.data.allowedDomains);
+    if (normalizedDomains.errors.length > 0) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid allowed domains",
+            details: { allowedDomains: normalizedDomains.errors },
+          },
+        },
+        400,
+      );
+    }
     updates.allowedDomains =
-      parsed.data.allowedDomains.length > 0 ? parsed.data.allowedDomains : null;
+      normalizedDomains.domains.length > 0 ? normalizedDomains.domains : null;
   }
 
   if (Object.keys(updates).length === 0) {
