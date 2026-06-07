@@ -7,6 +7,12 @@ import {
   styles,
   styleVersions,
 } from "@planisfy/database";
+import {
+  canReadPublishedStyle,
+  parseStyleHandleVersion,
+  styleCacheControl,
+  styleEtag,
+} from "../lib/public-style-contract";
 import type { AuthEnv } from "../middleware/auth";
 
 export const publicStylesRoute = new Hono<AuthEnv>();
@@ -18,7 +24,7 @@ export const publicStylesRoute = new Hono<AuthEnv>();
 
 publicStylesRoute.get("/styles/v1/:owner/:handle", async (c) => {
   const { owner } = c.req.param();
-  const { handle, version, invalidVersion } = parseHandleVersion(
+  const { handle, version, invalidVersion } = parseStyleHandleVersion(
     c.req.param("handle"),
   );
 
@@ -75,7 +81,13 @@ publicStylesRoute.get("/styles/v1/:owner/:handle", async (c) => {
   }
 
   const requestOwnerId = c.get("ownerId");
-  if (!style.isPublic && style.ownerId !== requestOwnerId) {
+  if (
+    !canReadPublishedStyle({
+      isPublic: style.isPublic,
+      styleOwnerId: style.ownerId,
+      requestOwnerId,
+    })
+  ) {
     return c.json(
       { error: { code: "FORBIDDEN", message: "Style is private" } },
       403,
@@ -98,11 +110,8 @@ publicStylesRoute.get("/styles/v1/:owner/:handle", async (c) => {
     );
   }
 
-  c.header(
-    "Cache-Control",
-    style.isPublic ? "public, max-age=300" : "private, no-cache",
-  );
-  c.header("ETag", `"style-${style.id}-v${snapshot.version}"`);
+  c.header("Cache-Control", styleCacheControl(style.isPublic));
+  c.header("ETag", styleEtag(style.id, snapshot.version));
 
   return c.json(snapshot.styleJson);
 });
@@ -113,23 +122,6 @@ publicStylesRoute.get("/styles/v1/:owner/:handle/sprite*", async (c) => {
     404,
   );
 });
-
-function parseHandleVersion(value: string): {
-  handle: string;
-  version?: number;
-  invalidVersion: boolean;
-} {
-  const [handle, rawVersion] = value.split("@");
-  const parsed = rawVersion ? Number(rawVersion) : undefined;
-  return {
-    handle: handle ?? value,
-    version:
-      parsed && Number.isInteger(parsed) && parsed > 0 ? parsed : undefined,
-    invalidVersion:
-      rawVersion !== undefined &&
-      (!Number.isInteger(parsed) || Number(parsed) <= 0),
-  };
-}
 
 async function resolvePublishedVersion(styleId: string) {
   const [publication] = await db

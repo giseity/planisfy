@@ -1,0 +1,63 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  canReadPublishedStyle,
+  parseStyleHandleVersion,
+  styleCacheControl,
+  styleEtag,
+} from "./public-style-contract";
+
+test("parseStyleHandleVersion accepts latest and explicit immutable versions", () => {
+  assert.deepEqual(parseStyleHandleVersion("streets"), {
+    handle: "streets",
+    version: undefined,
+    invalidVersion: false,
+  });
+  assert.deepEqual(parseStyleHandleVersion("streets@12"), {
+    handle: "streets",
+    version: 12,
+    invalidVersion: false,
+  });
+});
+
+test("parseStyleHandleVersion rejects invalid version aliases", () => {
+  assert.deepEqual(parseStyleHandleVersion("streets@0"), {
+    handle: "streets",
+    version: undefined,
+    invalidVersion: true,
+  });
+  assert.deepEqual(parseStyleHandleVersion("streets@latest"), {
+    handle: "streets",
+    version: undefined,
+    invalidVersion: true,
+  });
+});
+
+test("published style access allows public readers and private owners only", () => {
+  assert.equal(
+    canReadPublishedStyle({ isPublic: true, styleOwnerId: "owner-a" }),
+    true,
+  );
+  assert.equal(
+    canReadPublishedStyle({
+      isPublic: false,
+      styleOwnerId: "owner-a",
+      requestOwnerId: "owner-a",
+    }),
+    true,
+  );
+  assert.equal(
+    canReadPublishedStyle({
+      isPublic: false,
+      styleOwnerId: "owner-a",
+      requestOwnerId: "owner-b",
+    }),
+    false,
+  );
+});
+
+test("style cache headers encode public and immutable snapshot identity", () => {
+  assert.equal(styleCacheControl(true), "public, max-age=300");
+  assert.equal(styleCacheControl(false), "private, no-cache");
+  assert.equal(styleEtag("style-1", 3), '"style-style-1-v3"');
+});
