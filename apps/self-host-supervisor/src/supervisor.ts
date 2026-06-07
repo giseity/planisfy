@@ -3,7 +3,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import { z } from "zod";
+import {
+  hasPinnedImageDigests,
+  parseUpgradeReleaseManifest,
+  type UpgradeReleaseManifest,
+} from "@planisfy/utils/upgrade-manifest";
 
 const execFileAsync = promisify(execFile);
 
@@ -36,6 +42,15 @@ type OperationRecord = {
   backupDir?: string;
   targetVersion?: string;
 };
+
+type ManifestLoadResult =
+  | { ok: true; manifest: UpgradeReleaseManifest }
+  | { ok: false; message: string; details?: unknown };
+
+const applySchema = z.object({
+  manifestPath: z.string().min(1),
+  backupOperationId: z.string().min(1),
+});
 
 export function createSupervisorApp(config: SupervisorConfig) {
   const app = new Hono();
@@ -105,6 +120,100 @@ export function createSupervisorApp(config: SupervisorConfig) {
     return c.json({ data: operation }, operation.status === "FAILED" ? 500 : 200);
   });
 
+  app.post("/upgrade/apply", async (c) => {
+    const parsed = applySchema.safeParse(await c.req.json());
+    if (!parsed.success) return validationError(c, parsed.error);
+
+    const backup = await readOperation(config, parsed.data.backupOperationId);
+    if (!backup || backup.type !== "backup" || backup.status !== "SUCCEEDED") {
+      return c.json(
+        {
+          error: {
+            code: "BACKUP_REQUIRED",
+            message: "A successful backup operation is required before upgrade.",
+          },
+        },
+        400,
+      );
+    }
+
+    const manifestResult = await loadManifest(parsed.data.manifestPath);
+    if (!manifestResult.ok) {
+      return c.json(
+        {
+          error: {
+            code: "INVALID_MANIFEST",
+            message: manifestResult.message,
+            details: manifestResult.details,
+          },
+        },
+        400,
+      );
+    }
+
+    const manifest = manifestResult.manifest;
+    if (!hasPinnedImageDigests(manifest) || usesLatestTag(manifest)) {
+      return c.json(
+        {
+          error: {
+            code: "UNPINNED_RELEASE",
+            message: "Upgrade targets must use pinned image digests.",
+          },
+        },
+        400,
+      );
+    }
+
+    const operation = await createOperation(config, "upgrade.apply");
+    operation.targetVersion = manifest.version;
+    operation.backupDir = backup.backupDir;
+
+    await runOperation(config, operation, async (record) => {
+      record.logs.push(`Validated pinned release ${manifest.version}.`);
+      for (const image of manifest.images) {
+        record.logs.push(`${image.service}: ${image.image}@${image.digest}`);
+      }
+      await runCommand(
+        record,
+        execute,
+        "docker",
+        ["compose", "--env-file", config.envFile, "-f", config.composeFile, "pull"],
+        { cwd: config.rootDir },
+      );
+      await runCommand(
+        record,
+        execute,
+        "pnpm",
+        ["-F", "@planisfy/database", "db:migrate"],
+        { cwd: config.rootDir },
+      );
+      await runCommand(
+        record,
+        execute,
+        "docker",
+        [
+          "compose",
+          "--env-file",
+          config.envFile,
+          "-f",
+          config.composeFile,
+          "up",
+          "-d",
+        ],
+        { cwd: config.rootDir },
+      );
+      await runCommand(
+        record,
+        execute,
+        "curl",
+        ["-fsS", "http://localhost:4000/health/detailed"],
+        { cwd: config.rootDir },
+      );
+    });
+
+    return c.json({ data: operation }, operation.status === "FAILED" ? 500 : 200);
+  });
+
   app.get("/operations/:id", async (c) => {
     const operation = await readOperation(config, c.req.param("id"));
     if (!operation) {
@@ -131,6 +240,26 @@ export function supervisorConfigFromEnv(): SupervisorConfig {
       join(rootDir, "infra/docker/docker-compose.yml"),
     envFile: process.env.SUPERVISOR_ENV_FILE ?? join(rootDir, ".env"),
   };
+}
+
+async function loadManifest(path: string): Promise<ManifestLoadResult> {
+  try {
+    const raw = await readFile(path, "utf8");
+    return { ok: true, manifest: parseUpgradeReleaseManifest(JSON.parse(raw)) };
+  } catch (error) {
+    if (isZodLikeError(error)) {
+      return {
+        ok: false,
+        message: "Release manifest failed validation.",
+        details: error.flatten(),
+      };
+    }
+    return { ok: false, message: errorMessage(error) };
+  }
+}
+
+function usesLatestTag(manifest: UpgradeReleaseManifest) {
+  return manifest.images.some((image) => image.image.endsWith(":latest"));
 }
 
 async function createOperation(
@@ -219,4 +348,27 @@ async function defaultExecute(
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function validationError(c: Context, error: z.ZodError) {
+  return c.json(
+    {
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Invalid request data",
+        details: error.flatten(),
+      },
+    },
+    400,
+  );
+}
+
+function isZodLikeError(error: unknown): error is { flatten: () => unknown } {
+  return (
+    error instanceof z.ZodError ||
+    (typeof error === "object" &&
+      error !== null &&
+      "flatten" in error &&
+      typeof error.flatten === "function")
+  );
 }
