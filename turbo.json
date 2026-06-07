@@ -27,6 +27,7 @@
         "LOG_LEVEL",
         "MARTIN_SOURCES_PATH",
         "MARTIN_SOURCES_PREFIX",
+        "OVERTURE_RELEASE",
         "STORAGE_PROVIDER",
         "S3_BUCKET",
         "R2_BUCKET",

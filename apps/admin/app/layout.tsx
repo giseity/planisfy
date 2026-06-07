@@ -1,29 +1,15 @@
-import { Geist, Geist_Mono } from "next/font/google"
-
-import "@planisfy/ui/globals.css"
-import { Providers } from "@/components/providers"
-import { AdminSidebar } from "@/components/admin-sidebar"
-
-const fontSans = Geist({
-  subsets: ["latin"],
-  variable: "--font-sans",
-})
-
-const fontMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-})
+import "@planisfy/ui/globals.css";
+import { Providers } from "@/components/providers";
+import { AdminSidebar } from "@/components/admin-sidebar";
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${fontSans.variable} ${fontMono.variable} font-sans antialiased`}
-      >
+      <body className="font-sans antialiased">
         <Providers>
           <div className="flex min-h-screen">
             <AdminSidebar />
@@ -32,5 +18,5 @@ export default function RootLayout({
         </Providers>
       </body>
     </html>
-  )
+  );
 }
