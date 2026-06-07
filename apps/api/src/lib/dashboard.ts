@@ -123,6 +123,30 @@ export interface DashboardRecentAuditEvent {
   timestamp: string;
 }
 
+export type DashboardAlertSeverity = "info" | "warning" | "critical";
+
+export interface DashboardOperationalAlert {
+  id: string;
+  severity: DashboardAlertSeverity;
+  title: string;
+  message: string;
+  actionLabel?: string;
+  actionHref?: string;
+}
+
+export interface DashboardJobSignal {
+  staleRunningJobs: number;
+  failedJobs: number;
+  recentFailures: Array<{
+    id: string;
+    type: string;
+    errorCode: string | null;
+    errorMessage: string | null;
+    updatedAt: string;
+    tilesetId: string | null;
+  }>;
+}
+
 export interface ConsoleDashboard {
   generatedAt: string;
   account: {
@@ -171,6 +195,11 @@ export interface ConsoleDashboard {
     recentAudit: DashboardRecentAuditEvent[];
   };
   health: DashboardHealthEntry[];
+  operations: {
+    alerts: DashboardOperationalAlert[];
+    jobSignals: DashboardJobSignal;
+    unhealthyServices: number;
+  };
   readiness: DashboardReadinessItem[];
   integration: {
     apiBaseUrl: string;
@@ -334,6 +363,12 @@ export function buildDashboardPayload(
       recentAudit: sortRecent(input.recentAudit, (event) => event.timestamp).slice(0, 10),
     },
     health: input.health,
+    operations: buildOperationalSignals({
+      generatedAt: input.generatedAt,
+      quotaPercent,
+      recentJobs: input.recentJobs,
+      health: input.health,
+    }),
     readiness: buildReadiness({
       activeApiKeys: input.counts.activeApiKeys,
       publishedStyles: input.counts.publishedStyles,
@@ -341,6 +376,105 @@ export function buildDashboardPayload(
       health: input.health,
     }),
     integration,
+  };
+}
+
+export function buildOperationalSignals(params: {
+  generatedAt?: DateLike;
+  quotaPercent: number;
+  recentJobs: DashboardRecentJob[];
+  health: DashboardHealthEntry[];
+}): ConsoleDashboard["operations"] {
+  const now = dateFrom(params.generatedAt) ?? new Date();
+  const staleRunningJobs = params.recentJobs.filter((job) =>
+    isStaleRunningJob(job, now),
+  );
+  const failedJobs = params.recentJobs.filter((job) => job.status === "FAILED");
+  const unhealthyServices = params.health.filter((entry) =>
+    entry.status === "offline" || entry.status === "degraded",
+  );
+  const alerts: DashboardOperationalAlert[] = [];
+
+  if (unhealthyServices.length > 0) {
+    const critical = unhealthyServices.some((entry) => entry.status === "offline");
+    alerts.push({
+      id: "service-health",
+      severity: critical ? "critical" : "warning",
+      title: critical ? "Service outage detected" : "Service degradation detected",
+      message: unhealthyServices
+        .map((entry) => `${entry.label}: ${entry.message ?? entry.status}`)
+        .join("; "),
+      actionLabel: "Open operations",
+      actionHref: "/studio/operations",
+    });
+  }
+
+  if (staleRunningJobs.length > 0) {
+    alerts.push({
+      id: "stale-jobs",
+      severity: "warning",
+      title: "Processing jobs may be stuck",
+      message: `${staleRunningJobs.length} job${staleRunningJobs.length === 1 ? "" : "s"} have not updated in over 30 minutes.`,
+      actionLabel: "Open sources",
+      actionHref: "/studio/sources",
+    });
+  }
+
+  if (failedJobs.length > 0) {
+    alerts.push({
+      id: "failed-jobs",
+      severity: "warning",
+      title: "Recent processing failures",
+      message: `${failedJobs.length} recent job${failedJobs.length === 1 ? "" : "s"} failed. Review logs before retrying.`,
+      actionLabel: "Open sources",
+      actionHref: "/studio/sources",
+    });
+  }
+
+  if (params.quotaPercent >= 90) {
+    alerts.push({
+      id: "quota-critical",
+      severity: "critical",
+      title: "Quota nearly exhausted",
+      message: `${params.quotaPercent}% of monthly quota has been used.`,
+      actionLabel: "Review billing",
+      actionHref: "/studio/settings",
+    });
+  } else if (params.quotaPercent >= 75) {
+    alerts.push({
+      id: "quota-warning",
+      severity: "warning",
+      title: "Quota usage is elevated",
+      message: `${params.quotaPercent}% of monthly quota has been used.`,
+      actionLabel: "Review usage",
+      actionHref: "/studio/usage",
+    });
+  }
+
+  if (alerts.length === 0) {
+    alerts.push({
+      id: "all-clear",
+      severity: "info",
+      title: "No operational alerts",
+      message: "Core service health, recent jobs, and quota usage look normal.",
+    });
+  }
+
+  return {
+    alerts: alerts.slice(0, 6),
+    unhealthyServices: unhealthyServices.length,
+    jobSignals: {
+      staleRunningJobs: staleRunningJobs.length,
+      failedJobs: failedJobs.length,
+      recentFailures: failedJobs.slice(0, 3).map((job) => ({
+        id: job.id,
+        type: job.type,
+        errorCode: job.errorCode,
+        errorMessage: job.errorMessage,
+        updatedAt: job.updatedAt,
+        tilesetId: job.tilesetId,
+      })),
+    },
   };
 }
 
@@ -537,6 +671,19 @@ function sortRecent<T>(
     const right = Date.parse(String(getDate(b) ?? ""));
     return (Number.isFinite(right) ? right : 0) - (Number.isFinite(left) ? left : 0);
   });
+}
+
+function isStaleRunningJob(job: DashboardRecentJob, now: Date) {
+  if (job.status !== "PENDING" && job.status !== "PROCESSING") return false;
+  const updatedAt = dateFrom(job.updatedAt);
+  if (!updatedAt) return false;
+  return now.getTime() - updatedAt.getTime() > 30 * 60 * 1000;
+}
+
+function dateFrom(value: DateLike): Date | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function toIso(value: DateLike): string | null {

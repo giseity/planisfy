@@ -204,6 +204,7 @@ export default function StudioDashboardPage() {
         </div>
 
         <div className="space-y-5">
+          <OperationsAlerts dashboard={dashboard} />
           <HealthRail dashboard={dashboard} />
           <QuickActions />
           <SetupReadiness dashboard={dashboard} />
@@ -273,6 +274,91 @@ function StatusStrip({ dashboard }: { dashboard: ConsoleDashboard }) {
           </CardContent>
         </Card>
       ))}
+    </div>
+  )
+}
+
+function OperationsAlerts({ dashboard }: { dashboard: ConsoleDashboard }) {
+  return (
+    <Card>
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <AlertTriangle className="h-4 w-4" />
+          Operations
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 p-4 pt-0">
+        <div className="grid grid-cols-3 gap-2">
+          <SignalTile
+            label="Services"
+            value={dashboard.operations.unhealthyServices}
+          />
+          <SignalTile
+            label="Stale jobs"
+            value={dashboard.operations.jobSignals.staleRunningJobs}
+          />
+          <SignalTile
+            label="Failures"
+            value={dashboard.operations.jobSignals.failedJobs}
+          />
+        </div>
+        {dashboard.operations.alerts.map((alert) => (
+          <div
+            key={alert.id}
+            className={cn(
+              "rounded-md border p-3",
+              alert.severity === "critical" &&
+                "border-destructive/30 bg-destructive/5",
+              alert.severity === "warning" &&
+                "border-amber-500/30 bg-amber-500/5",
+            )}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{alert.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {alert.message}
+                </p>
+              </div>
+              <Badge variant={alertVariant(alert.severity)}>
+                {alert.severity}
+              </Badge>
+            </div>
+            {alert.actionHref && alert.actionLabel && (
+              <Button asChild className="mt-3" size="sm" variant="outline">
+                <Link href={alert.actionHref}>{alert.actionLabel}</Link>
+              </Button>
+            )}
+          </div>
+        ))}
+        {dashboard.operations.jobSignals.recentFailures.length > 0 && (
+          <div className="rounded-md border p-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              Recent failures
+            </p>
+            <div className="mt-2 space-y-2">
+              {dashboard.operations.jobSignals.recentFailures.map((failure) => (
+                <div key={failure.id} className="min-w-0">
+                  <p className="truncate text-xs font-medium">{failure.type}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {failure.errorCode ?? "FAILED"} /{" "}
+                    {failure.errorMessage ?? "No message"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function SignalTile({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border bg-muted/20 p-2 text-center">
+      <p className="text-lg font-semibold">{formatNumber(value)}</p>
+      <p className="truncate text-xs text-muted-foreground">{label}</p>
     </div>
   )
 }
@@ -460,6 +546,11 @@ function RecentJobs({ dashboard }: { dashboard: ConsoleDashboard }) {
               <p className="mt-2 truncate text-xs text-muted-foreground">
                 {job.progress}% / {formatDateTime(job.updatedAt)}
               </p>
+              {job.errorMessage && (
+                <p className="mt-1 truncate text-xs text-destructive">
+                  {job.errorMessage}
+                </p>
+              )}
             </div>
           ))
         ) : (
@@ -781,6 +872,12 @@ function statusVariant(status: DashboardHealthStatus) {
   if (status === "degraded") return "warning"
   if (status === "offline") return "destructive"
   return "secondary"
+}
+
+function alertVariant(severity: "info" | "warning" | "critical") {
+  if (severity === "critical") return "destructive" as const
+  if (severity === "warning") return "warning" as const
+  return "secondary" as const
 }
 
 function jobVariant(status: string) {

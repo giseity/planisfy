@@ -649,6 +649,29 @@ export interface ConsoleDashboard {
     latencyMs?: number | null;
     checkedAt: string;
   }>;
+  operations: {
+    alerts: Array<{
+      id: string;
+      severity: "info" | "warning" | "critical";
+      title: string;
+      message: string;
+      actionLabel?: string;
+      actionHref?: string;
+    }>;
+    unhealthyServices: number;
+    jobSignals: {
+      staleRunningJobs: number;
+      failedJobs: number;
+      recentFailures: Array<{
+        id: string;
+        type: string;
+        errorCode: string | null;
+        errorMessage: string | null;
+        updatedAt: string;
+        tilesetId: string | null;
+      }>;
+    };
+  };
   readiness: Array<{
     id: string;
     label: string;
