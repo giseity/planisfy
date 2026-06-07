@@ -2,7 +2,7 @@
 
 ## Current
 
-Planisfy now uses `accounts` as the canonical owner anchor for both users and organizations. A temporary `profiles` export remains in the database package for alpha API compatibility, but new code should use account naming.
+Planisfy now uses `accounts` as the canonical owner anchor for both users and organizations. A temporary `profiles` export remains in the database package for legacy API compatibility, but new code should use account naming.
 
 ## Target Identity
 

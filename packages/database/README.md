@@ -8,7 +8,7 @@ Drizzle schema, relations, migrations, database client, and shared server-side d
 - Drizzle relations.
 - Migrations under `drizzle/`.
 - Shared database helpers such as style creation and duplication.
-- The identity, resource, usage, audit, and alpha source models.
+- The identity, resource, usage, audit, and source models.
 
 ## Current Tables
 
@@ -50,7 +50,7 @@ The restructuring reset moved the schema around:
 - `accounts` as the canonical user/org owner anchor.
 - `oauth_accounts` for Better Auth provider credentials.
 - `uploads`, `datasets`, `tilesets`, `tileset_versions`, `processing_jobs`, `event_outbox`, `storage_objects`, and explicit publication tables.
-- A temporary `profiles` export still points at `accounts` so alpha API callers can be renamed incrementally.
+- A temporary `profiles` export still points at `accounts` so legacy API callers can be renamed incrementally.
 
 ## Important Commands
 

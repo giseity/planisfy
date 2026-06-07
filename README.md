@@ -1,12 +1,12 @@
 # Planisfy
 
-Planisfy is an alpha-stage, self-hostable geospatial API platform with Mapbox-compatible endpoints, a MapLibre style console, API key management, usage tracking, and admin tooling.
+Planisfy is a self-hostable geospatial API platform with Mapbox-compatible endpoints, a MapLibre style console, API key management, usage tracking, and admin tooling.
 
 The goal is to make open geospatial infrastructure easier to run by putting a TypeScript platform layer in front of engines such as Martin, Valhalla, and Pelias-compatible geocoding services.
 
 ## Current Status
 
-Planisfy is in alpha. Several core flows are implemented, but the self-hosted product loop is not yet production-ready end to end.
+Planisfy is in active development. Several core flows are implemented, but the self-hosted product loop is not yet production-ready end to end.
 
 Implemented or partially implemented:
 
@@ -22,11 +22,11 @@ Implemented or partially implemented:
 - Console, admin, marketing, and docs Next.js apps
 - Docker Compose wiring for local Postgres, Redis, Martin, Valhalla, worker-geodata, local storage, and app containers
 
-Still alpha or externally dependent:
+Still in progress or externally dependent:
 
 - Tiles require Martin and configured PMTiles data
 - Overture imports require DuckDB, `OVERTURE_RELEASE`, and compatible public
-  GeoParquet access; larger import UX and managed data releases are still alpha
+  GeoParquet access; larger import UX and managed data releases are still in progress
 - Basemap generation now has a Planetiler regional harness, but global basemap
   releases and managed data packages remain later work
 - Routing requires Valhalla data under `infra/docker/data/valhalla_data`
@@ -40,45 +40,45 @@ See [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md) for the canonical roadmap, curr
 
 ## Tech Stack
 
-| Area | Technology |
-| --- | --- |
-| Monorepo | pnpm workspaces + Turborepo |
-| API gateway | Hono on Node.js |
-| Web apps | Next.js 16 + React 19 |
-| Auth | better-auth |
-| Database | PostgreSQL + Drizzle ORM |
-| Rate limiting and queues | Redis, BullMQ, rate-limiter-flexible |
-| Tiles | Martin |
-| Routing | Valhalla |
-| Upload tiling | Tippecanoe + GDAL/ogr2ogr in `worker-geodata` |
-| Source imports | DuckDB in `worker-geodata` |
-| Basemap release builds | Planetiler under `@planisfy/map-styles` |
-| Maps | MapLibre GL JS |
-| UI | shared `@planisfy/ui` components |
+| Area                     | Technology                                    |
+| ------------------------ | --------------------------------------------- |
+| Monorepo                 | pnpm workspaces + Turborepo                   |
+| API gateway              | Hono on Node.js                               |
+| Web apps                 | Next.js 16 + React 19                         |
+| Auth                     | better-auth                                   |
+| Database                 | PostgreSQL + Drizzle ORM                      |
+| Rate limiting and queues | Redis, BullMQ, rate-limiter-flexible          |
+| Tiles                    | Martin                                        |
+| Routing                  | Valhalla                                      |
+| Upload tiling            | Tippecanoe + GDAL/ogr2ogr in `worker-geodata` |
+| Source imports           | DuckDB in `worker-geodata`                    |
+| Basemap release builds   | Planetiler under `@planisfy/map-styles`       |
+| Maps                     | MapLibre GL JS                                |
+| UI                       | shared `@planisfy/ui` components              |
 
 ## Apps
 
-| App | Package | Local URL | Purpose |
-| --- | --- | --- | --- |
-| Marketing | `apps/marketing` | <https://planisfy.localhost> | Public website |
-| Console | `apps/console` | <https://console.planisfy.localhost> | Customer dashboard and style studio |
-| Docs | `apps/docs` | <https://docs.planisfy.localhost> | Product and API documentation |
-| Admin | `apps/admin` | <https://admin.planisfy.localhost> | Internal/super-admin views |
-| API | `apps/api` | <https://api.planisfy.localhost> | Hono API gateway |
-| Tile worker | `apps/tile-worker` | N/A | Planned Cloudflare tile delivery |
+| App         | Package            | Local URL                            | Purpose                             |
+| ----------- | ------------------ | ------------------------------------ | ----------------------------------- |
+| Marketing   | `apps/marketing`   | <https://planisfy.localhost>         | Public website                      |
+| Console     | `apps/console`     | <https://console.planisfy.localhost> | Customer dashboard and style studio |
+| Docs        | `apps/docs`        | <https://docs.planisfy.localhost>    | Product and API documentation       |
+| Admin       | `apps/admin`       | <https://admin.planisfy.localhost>   | Internal/super-admin views          |
+| API         | `apps/api`         | <https://api.planisfy.localhost>     | Hono API gateway                    |
+| Tile worker | `apps/tile-worker` | N/A                                  | Planned Cloudflare tile delivery    |
 
 ## Packages
 
-| Package | Purpose |
-| --- | --- |
-| `@planisfy/auth` | better-auth setup and helpers |
-| `@planisfy/database` | Drizzle database client, schema, relations, migrations, and shared server data helpers |
-| `@planisfy/types` | shared TypeScript types and plan limits |
-| `@planisfy/utils` | shared utilities |
-| `@planisfy/ui` | shared UI components |
-| `@planisfy/eslint-config` | shared ESLint flat configs |
-| `@planisfy/typescript-config` | shared TypeScript configs |
-| `@planisfy/prettier-config` | shared Prettier config |
+| Package                       | Purpose                                                                                |
+| ----------------------------- | -------------------------------------------------------------------------------------- |
+| `@planisfy/auth`              | better-auth setup and helpers                                                          |
+| `@planisfy/database`          | Drizzle database client, schema, relations, migrations, and shared server data helpers |
+| `@planisfy/types`             | shared TypeScript types and plan limits                                                |
+| `@planisfy/utils`             | shared utilities                                                                       |
+| `@planisfy/ui`                | shared UI components                                                                   |
+| `@planisfy/eslint-config`     | shared ESLint flat configs                                                             |
+| `@planisfy/typescript-config` | shared TypeScript configs                                                              |
+| `@planisfy/prettier-config`   | shared Prettier config                                                                 |
 
 ## Development
 
@@ -134,7 +134,9 @@ state until compatible local PMTiles are supplied.
 The setup script also validates that the fixture styles, source-layer contract,
 and Martin source aliases agree, creates the local storage mount points,
 including `infra/docker/data/storage/martin-sources`, and prints the first
-account sign-up URL.
+account sign-up URL. The API also exposes a public read-only setup preflight at
+`http://localhost:4000/setup/preflight` so first-run operators can verify the
+self-host product-loop prerequisites before signing in.
 
 To make the demo map render from a reproducible local artifact, set
 `DEMO_PMTILES_URL` in `.env` and optionally `DEMO_PMTILES_SHA256`, then run:
@@ -185,7 +187,7 @@ Local demo assets:
   `packages/map-styles/styles/planisfy-streets-dark-v1.json`
 - Style release manifest: `packages/map-styles/release-manifest.json`
 - Martin PMTiles mount: `infra/docker/data/pmtiles`; the default fixture expects `stuttgart.pmtiles`
-- Optional PMTiles download controls: `DEMO_PMTILES_URL` and `DEMO_PMTILES_SHA256`
+- Optional PMTiles preflight/download controls: `DEMO_PMTILES_PATH`, `DEMO_PMTILES_URL`, and `DEMO_PMTILES_SHA256`
 - Regional basemap build harness: `pnpm -F @planisfy/map-styles build:planetiler-regional`
 - Local object storage mount: `infra/docker/data/storage`
 
@@ -194,6 +196,7 @@ Health checks:
 ```bash
 curl http://localhost:4000/health
 curl http://localhost:4000/health/detailed
+curl http://localhost:4000/setup/preflight
 curl http://localhost:3005/catalog
 ```
 

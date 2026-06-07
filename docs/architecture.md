@@ -41,4 +41,4 @@ Planisfy is a self-hostable maps platform with optional hosted cloud later. The 
 
 ## Identity
 
-Planisfy uses `accounts` as the shared owner anchor, with `users.id = accounts.id` and `organizations.id = accounts.id`, following the proven Geobble pattern. Better Auth provider credentials live in `oauth_accounts`. The database package temporarily exports `profiles` as an alias for existing alpha API callers.
+Planisfy uses `accounts` as the shared owner anchor, with `users.id = accounts.id` and `organizations.id = accounts.id`, following the proven Geobble pattern. Better Auth provider credentials live in `oauth_accounts`. The database package temporarily exports `profiles` as an alias for existing legacy API callers.

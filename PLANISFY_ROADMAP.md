@@ -1,7 +1,10 @@
-# Planisfy Roadmap
+# Planisfy QA Roadmap
 
-This is the canonical planning document for work still left to do. Durable
-implementation details belong in `ARCHITECTURE.md` and `docs/`.
+This is the canonical planning document for work still left to prove. Durable
+implementation details belong in `ARCHITECTURE.md` and `docs/`. This roadmap is
+organized around QA gates because Planisfy's next challenge is not discovering a
+product loop; it is proving that loop is dependable across data, UI, publishing,
+operations, docs, and eventually managed/cloud delivery.
 
 ## Product Thesis
 
@@ -18,22 +21,22 @@ The core product loop remains:
 Source data -> Dataset/import -> Tileset build -> Style -> Publish -> Observe
 ```
 
-## Current Alpha Assessment
+## Readiness Model
 
-Planisfy is still alpha, but no longer "paper alpha." The platform foundation,
-Console workflows, processing jobs, storage ledger, execution-target model, and
-operations surface are real. The remaining alpha risk is mostly about
-production confidence: first-run setup, default map quality, restart-safe
-processing, larger imports, operational docs, and end-to-end browser coverage.
+Use this roadmap to track product readiness by evidence, not labels. A gate is
+complete only when the acceptance criteria are backed by repeatable checks,
+docs, and known limitations.
 
-Call it an early product alpha:
+Current reality:
 
-- Strong enough for development, demos, and guided self-host trials.
-- Not yet strong enough for a new team to self-host independently and trust it
-  for production maps without hands-on support.
-- Not yet a beta until the self-hosted loop is repeatable from README alone and
-  the default basemap, upload/import, publish, observe, backup, and upgrade
-  paths are proven end to end.
+- The guided self-host product loop is implemented: setup creates local mounts,
+  seeded demo styles, Martin source aliases, and preflight checks needed to move
+  from local data fixtures toward a published map flow.
+- Planisfy is strong enough for development, demos, and guided self-host trials.
+- Planisfy still needs QA hardening before a new team can self-host it from the
+  README alone and trust it for production maps without hands-on support.
+- Self-hosted v1 is ready when default map, upload/import, publish, observe,
+  backup, and upgrade paths are proven end to end.
 
 ## Current Invariants
 
@@ -47,170 +50,351 @@ Call it an early product alpha:
 - Keep the toolchain split: Tippecanoe/GDAL for user uploads, DuckDB for source
   imports, and Planetiler for basemap/regional release builds.
 - Prefer small logical commits with focused checks after each task group.
+- Every QA gate should name the evidence that proves it: automated tests, smoke
+  scripts, browser specs, screenshots, docs, or explicit manual checks.
 
-## Self-Hosted v1 Remaining
+## QA Gate 0 — Self-Host Product Loop
 
-These are the blockers between the current alpha and a credible self-hosted v1.
+### User promise
 
-### 1. First-Run Self-Host Demo
+A local operator can prepare a self-host environment, see what is missing, and
+start the product loop without manual data hunting or hidden setup steps.
 
-Goal: `docker compose up` plus documented setup commands should produce a useful
-first-run product without manual data hunting.
+### Status
 
-Remaining work:
+Complete enough to mark as implemented. Remaining work belongs to later gates:
+default map quality, upload/import durability, browser proof, publishing safety,
+operations, and docs truth.
 
-- Make `scripts/self-host-setup.sh` and README commands produce a visible demo
-  map with aligned seeded styles, source metadata, Martin PMTiles aliases,
-  layer IDs, and Console URLs.
-- Make missing demo data, missing writable storage directories, or missing
-  optional runtime inputs fail with clear setup guidance.
-- Confirm bootstrap account creation, migrations, health checks, and demo data
-  setup work from README alone.
-- Add or update Docker Compose smoke coverage for the complete first-run path.
+### Acceptance criteria
 
-### 2. Default Basemap v1
+- Setup creates local storage, PMTiles, Valhalla, style, fixture, and Martin
+  source-alias directories.
+- Setup seeds Planisfy Streets fixture styles into local storage.
+- Setup validates style source URLs, source-layer contract, and Martin aliases.
+- Setup reports whether the default PMTiles fixture is present and valid.
+- A public read-only preflight exposes actionable first-run checks before sign-in.
+- Compose smoke runs setup, starts core API dependencies, and asserts preflight
+  and detailed health entries.
+- README and self-hosting docs describe setup, health, preflight, PMTiles
+  fixture handling, and first-account flow from the repository root.
 
-Goal: ship one attractive, reliable Planisfy basemap release.
+### Evidence
 
-Remaining work:
+- `scripts/self-host-setup.sh`
+- `scripts/docker-compose-smoke.sh`
+- `GET /setup/preflight`
+- `apps/api/src/routes/setup.test.ts`
+- `README.md`
+- `docs/self-hosting.md`
 
-- Produce a small but polished `planisfy-streets-v1` regional release using the
-  Planetiler harness under `@planisfy/map-styles`.
-- Keep the source-layer contract explicit and tested for roads, places,
-  boundaries, water, landuse, buildings, and every rendered layer.
-- Generate or validate light and dark styles against the same release manifest.
-- Document how self-host users obtain or build the PMTiles artifact without
-  committing binaries to the repository.
-- Add visual/browser checks that the default map renders non-empty tiles.
+## QA Gate 1 — Default Map And Basemap Artifact
 
-### 3. Upload Processing Hardening
+### User promise
 
-Goal: user uploads should produce reliable, served tilesets across normal
-failure and restart scenarios.
+A first-run self-host deployment can show a real default map, and the basemap
+artifact/style contract is explicit, reproducible, and testable without
+committing binary map data.
 
-Remaining work:
+### Status
 
-- Prove GeoJSON, CSV, zipped Shapefile, PMTiles, and MBTiles upload paths serve
-  tilesets after API, Redis, and worker restarts.
-- Tighten validation for size, extension, MIME hints, filename safety, geometry
-  detection, bounds, schema summaries, and user-facing failure messages.
-- Ensure retry, cancel, rebuild, and version promotion state remains consistent
-  in Console, Admin, jobs, logs, storage objects, and outbox events.
-- Add smoke or integration coverage for uploaded tiles resolving through
-  Martin/TileJSON after publication.
+In progress. The fixture style and regional build harness exist, but the default
+map still needs visual/browser proof and a polished regional artifact flow.
 
-### 4. Overture And Source Imports
+### Acceptance criteria
 
-Goal: users should import Overture data for a saved region without hand-written
-scripts and review the cost/risk before expensive work starts.
+- A small, polished `planisfy-streets-v1` regional release can be produced using
+  the Planetiler harness under `@planisfy/map-styles`.
+- The release manifest records source data versions, artifact metadata, SHA-256,
+  attribution, style URL, and source-layer contract.
+- Light and dark styles validate against the same release manifest.
+- The source-layer contract covers roads, places, boundaries, water, landuse,
+  buildings, and every rendered layer.
+- Self-host docs explain how to obtain or build the PMTiles artifact while
+  keeping binaries out of git.
+- A visual/browser check proves the default map renders non-empty tiles.
 
-Remaining work:
+### Required automated checks
 
-- Add region sizing previews and clearer duration/cost estimates before large
-  imports.
-- Harden remote import SSRF/egress controls and credential audit behavior.
-- Add larger-import safeguards: timeouts, row/feature limits, temp-space checks,
+- Manifest/schema tests for release metadata.
+- Source-layer/style contract tests.
+- Regional artifact builder tests that do not commit PMTiles.
+- Browser or screenshot test for non-empty default map rendering.
+
+### Remaining gaps
+
+- Add visual/browser proof for non-empty default tiles.
+- Finalize the polished regional artifact flow and docs for artifact sourcing.
+
+## QA Gate 2 — Upload To Published Tileset
+
+### User promise
+
+A user can upload supported data, get clear validation feedback, build a
+served tileset, publish it, and keep it available across normal restart and
+failure scenarios.
+
+### Status
+
+In progress. Upload format policy, filename safety, worker validation, retry,
+cancel, rebuild, promotion, and Martin alias primitives exist. Restart and
+end-to-end served-tile proof still need broader smoke/integration coverage.
+
+### Acceptance criteria
+
+- GeoJSON, CSV, zipped Shapefile, PMTiles, and MBTiles uploads are accepted only
+  when validation passes.
+- Validation covers size, extension, MIME hints, filename safety, geometry,
+  WGS84 bounds, schema summaries, and user-facing failure messages.
+- Upload jobs remain coherent across API, Redis, and worker restarts.
+- Retry, cancel, rebuild, and version promotion state remains consistent in
+  Console, Admin, processing jobs, logs, storage objects, audit records, and
+  outbox events.
+- Published upload tiles resolve through Martin TileJSON and tile URLs.
+
+### Required automated checks
+
+- Unit tests for upload format policy and worker validation.
+- Worker tests for success, failure, retry, cancellation, and restart recovery.
+- API integration tests for job state transitions and audit/log output.
+- Smoke or integration tests for Martin TileJSON/tile resolution after publish.
+
+### Remaining gaps
+
+- Prove all supported upload formats serve tiles after API/Redis/worker restarts.
+- Add Martin/TileJSON smoke coverage for published upload artifacts.
+- Expand restart/failure lifecycle coverage beyond fast unit tests.
+
+## QA Gate 3 — Overture And Source Imports
+
+### User promise
+
+A user can choose a saved region, review import size/risk, run a source import,
+get a dataset artifact with provenance, and tile it without hand-written scripts
+or hidden cost surprises.
+
+### Status
+
+In progress. Catalog validation, SSRF-oriented source URL policy, DuckDB worker
+path, and Overture sizing estimates exist. Larger-import safeguards and broader
+failure cleanup evidence still need work.
+
+### Acceptance criteria
+
+- Overture requests require cataloged theme/type pairs unless experimental mode
+  is explicitly enabled.
+- Region sizing preview includes bbox validation, approximate area, duration
+  estimate, risk level, warnings, and configured safeguards.
+- Remote source URLs reject localhost, private ranges, metadata hosts,
+  unsupported protocols, and credentialed URLs by default.
+- Large imports enforce timeouts, row/feature limits, temp-space checks,
   cancellation checkpoints, and cleanup after failed jobs.
-- Expand DuckDB execution beyond the current configured Overture path only after
-  logs, artifacts, provenance, bounds/count metadata, and failure modes remain
-  reliable.
-- Add missing Overture theme/type pairs only when the worker can process them
+- Import artifacts record provenance, bounds, feature counts, schema summaries,
+  warnings, and failure modes.
+- New Overture theme/type pairs are added only when the worker can process them
   honestly.
 
-### 5. Console And Studio Workflow Confidence
+### Required automated checks
 
-Goal: the Console path from data to published map should be obvious without
-depending on Admin pages.
+- Catalog validation tests.
+- Source URL policy tests.
+- Import estimate tests.
+- Worker tests for success, failure, timeout, cancellation, cleanup, and
+  provenance output.
+- Integration test for import -> dataset -> tileset -> publish.
 
-Remaining work:
+### Remaining gaps
 
-- Make upload/import -> tileset build -> artifact review -> Studio add-source
-  -> publish feel like a single guided workflow.
-- Keep Studio source IDs, layer IDs, source-layer selection, duplicate
-  protection, and generated layer defaults stable and tested.
-- Improve empty, loading, failed, retrying, cancelled, and succeeded states for
-  jobs, imports, tilesets, previews, and artifacts.
-- Add browser-level coverage for adding an uploaded/imported tileset, publishing
-  a style, copying URLs, and loading the published style in a MapLibre example.
+- Add temp-space checks and cancellation checkpoints inside long-running imports.
+- Expand failure cleanup and provenance assertions.
+- Add end-to-end import-to-published-tileset coverage.
 
-### 6. Publishing, Rollback, And Rebuild Safety
+## QA Gate 4 — Console And Studio Browser Workflow
 
-Goal: production maps should be safe to change.
+### User promise
 
-Remaining work:
+A non-admin user can complete the product loop in Console/Studio: upload or
+import data, review artifacts, add a source, create layers, publish a style,
+copy URLs, and load the published style in a MapLibre example.
 
-- Verify draft edits cannot mutate already published style artifacts.
-- Make style version restore and tileset version promotion visible in both
-  Console and Admin.
-- Record rebuild/promote inputs, outputs, actor, warnings, artifacts, and alias
-  registration results in job/audit structures.
-- Add regression tests around published URL stability after draft edits,
-  rollback, rebuild, and alias re-registration.
+### Status
 
-### 7. Operations Productization
+In progress. Console helper tests cover source IDs, layer defaults, duplicate
+layer IDs, publishability messaging, tileset state labels, and import gating.
+Browser-level workflow proof is still missing.
 
-Goal: jobs, schedules, notifications, workers, backups, previews, domains, and
-templates should become dependable operations features rather than only Console
-primitives.
+### Acceptance criteria
 
-Remaining work:
+- Upload/import -> tileset build -> artifact review -> Studio add-source ->
+  publish feels like a single guided workflow.
+- Studio source IDs, layer IDs, source-layer selection, duplicate protection,
+  generated layer defaults, and publish URL normalization stay stable.
+- Empty, loading, failed, retrying, cancelled, succeeded, and cancellation
+  requested states are visible and actionable.
+- Browser tests cover adding an uploaded/imported tileset, creating a layer,
+  publishing a style, copying stable/versioned URLs, and loading the published
+  style in a MapLibre example.
 
-- Dispatch scheduled operations automatically through the queue/outbox path.
-- Deliver job and schedule notifications from worker/API events, not only manual
-  test sends.
-- Add notification adapters for email, Slack, and Discord.
-- Add backup/restore docs and tests for Postgres, local storage, PMTiles
-  artifacts, and any Redis/job-state assumptions.
-- Add upgrade guidance for migrations, storage layout, worker compatibility, and
+### Required automated checks
+
+- Existing Console unit tests for source/import/tileset helpers.
+- Browser tests for Studio add-source, create-layer, publish, rollback, and
+  preview/load flows.
+- Screenshot or visual checks for default map/source rendering where useful.
+
+### Remaining gaps
+
+- Add browser-level Console/Studio publish workflow tests.
+- Add explicit browser coverage for MapLibre loading of published style URLs.
+
+## QA Gate 5 — Publishing, Rollback, Rebuild, And URL Stability
+
+### User promise
+
+Production map URLs are safe to change: draft edits do not mutate published
+artifacts, rollbacks and promotions are visible, and stable/versioned URLs keep
+working after rebuilds and alias re-registration.
+
+### Status
+
+In progress. Style versions, restore/publish actions, tileset promotion, Martin
+alias registration, and publish audit metadata exist. URL stability and draft
+immutability need explicit regression coverage.
+
+### Acceptance criteria
+
+- Draft edits cannot mutate already published style artifacts.
+- Style version restore and tileset version promotion are visible in Console and
+  Admin.
+- Rebuild/promote records inputs, outputs, actor, warnings, artifacts, previous
+  version, target version, publish action, and alias registration results.
+- Stable style and TileJSON URLs point to the promoted current version.
+- Versioned style and TileJSON URLs remain immutable.
+- Rollback, rebuild, and alias re-registration preserve URL stability.
+
+### Required automated checks
+
+- API regression tests for published style immutability after draft edits.
+- API regression tests for tileset promote/rollback/republish audit metadata.
+- Martin alias registration tests for stable and versioned aliases.
+- Browser or integration tests for copying/loading stable and versioned URLs.
+
+### Remaining gaps
+
+- Add explicit style immutability and published URL stability tests.
+- Add rebuild/rollback/alias re-registration integration coverage.
+
+## QA Gate 6 — Operations Readiness
+
+### User promise
+
+Operators can observe, schedule, notify, back up, restore, upgrade, diagnose,
+and support a self-hosted deployment without reverse-engineering internal tables
+or logs.
+
+### Status
+
+In progress. Operations surfaces, schedules, notifications, backups, restore,
+health, support bundle scripts, worker heartbeat, and notification adapter
+payloads exist. Automatic dispatch/delivery and deeper restore/upgrade proof
+remain.
+
+### Acceptance criteria
+
+- Scheduled operations dispatch automatically through queue/outbox paths.
+- Job and schedule notifications are delivered from worker/API events, not only
+  manual test sends.
+- Email, Slack, Discord, and webhook notification adapters have clear payloads,
+  delivery modes, and failure handling.
+- Backup/restore docs and tests cover Postgres, local storage, PMTiles
+  artifacts, and Redis/job-state assumptions.
+- Upgrade docs cover migrations, storage layout, worker compatibility, and
   basemap release changes.
-- Improve Admin and Console health pages for storage, Martin, Valhalla,
+- Admin and Console health pages cover storage, Martin, Valhalla,
   worker-geodata, queues, outbox lag, execution targets, worker profiles, and
   toolchain capabilities.
-- Replace raw usage-log dashboard queries with rollups or retention-aware
-  summaries where scale matters.
-- Add support-bundle style exports for logs, health, configuration, and recent
-  job state.
+- Usage dashboards rely on rollups or retention-aware summaries where scale
+  matters.
+- Support bundles export redacted logs, health, config, and recent job state.
 
-### 8. Documentation And Test Truth Pass
+### Required automated checks
 
-Goal: docs and tests should match the implemented product, not the intended one.
+- Schedule dispatch tests.
+- Notification payload and delivery-mode tests.
+- Backup/restore smoke tests.
+- Health endpoint and support-bundle tests.
+- Usage rollup tests.
 
-Remaining work:
+### Remaining gaps
 
-- Keep README, self-hosting docs, API docs, security docs, storage docs,
-  operations docs, and architecture docs aligned with current behavior.
-- Remove stale placeholder screenshots/examples from docs or mark them clearly
-  as examples.
-- Add CI coverage for lint, typecheck, tests, builds, Docker image matrix builds,
-  and Compose smoke checks.
-- Add worker tests for success, failure, retry, cancellation, and restart
-  behavior.
-- Add Studio tests for add-source, create-layer, publish, rollback, and preview.
+- Wire automatic schedule dispatch beyond manual run requests.
+- Deliver event-driven job/schedule notifications.
+- Add restore and upgrade smoke coverage.
+- Replace scale-sensitive raw usage dashboard queries with rollups.
 
-## Managed And Cloud Remaining
+## QA Gate 7 — Documentation And CI Truth
 
-These should stay behind the credible self-hosted v1 loop unless a paying
-deployment requires a narrow slice sooner.
+### User promise
 
-### 1. Hosted Runtime Platform
+Docs, examples, screenshots, scripts, and CI describe the product that exists,
+not the product we intend to have later.
+
+### Status
+
+In progress. README and self-hosting docs track the current self-host loop, but
+platform-wide docs/CI truth still needs a dedicated sweep.
+
+### Acceptance criteria
+
+- README, self-hosting docs, API docs, security docs, storage docs, operations
+  docs, and architecture docs match current behavior.
+- Stale placeholder screenshots/examples are removed or clearly marked as
+  examples.
+- CI covers lint, typecheck, fast tests, builds, Docker image matrix builds, and
+  Compose smoke checks.
+- Worker lifecycle tests cover success, failure, retry, cancellation, and
+  restart behavior.
+- Studio tests cover add-source, create-layer, publish, rollback, and preview.
+
+### Required automated checks
+
+- CI workflow for lint, typecheck, tests, and builds.
+- Docker/Compose smoke in CI or an explicitly documented opt-in lane.
+- Worker lifecycle test suite.
+- Studio browser test suite.
+- Link/docs checks where practical.
+
+### Remaining gaps
+
+- Add missing CI lanes.
+- Add worker lifecycle and Studio browser tests.
+- Complete docs/screenshot/example truth pass.
+
+## Managed And Cloud QA Gates
+
+Managed/cloud work should stay behind the credible self-hosted v1 loop unless a
+paying deployment requires a narrow slice sooner.
+
+### Cloud Runtime QA
 
 - Define deployable environments for API, Console, Admin, workers, Postgres,
   Redis, object storage, Martin/tile serving, CDN, observability, secrets, and
   migrations.
-- Add release promotion, preview deployment, rollback, and environment
-  configuration practices for Planisfy Cloud.
+- Prove release promotion, preview deployment, rollback, and environment config
+  practices.
 - Add abuse controls for signups, API keys, tile requests, uploads, imports,
   storage growth, and worker CPU/runtime.
 
-### 2. Managed Tile Delivery
+### Managed Tile Delivery QA
 
-- Implement the planned Cloudflare/R2 tile worker or equivalent CDN edge layer.
+- Implement and prove the planned Cloudflare/R2 tile worker or equivalent CDN
+  edge layer.
 - Add cache purge, immutable artifact caching, edge usage metering, and clear
   behavior for private/public tilesets.
 - Keep MapLibre-compatible style, TileJSON, glyph, sprite, and tile URLs stable
   across managed and self-hosted deployments.
 
-### 3. Managed Data Products
+### Managed Data Products QA
 
 - Automate managed basemap releases from Planetiler with provenance,
   attribution, QA checks, changelogs, and versioned manifests.
@@ -219,7 +403,7 @@ deployment requires a narrow slice sooner.
 - Decide which premium data packages are open-core compatible, hosted-only, or
   commercial-license-only.
 
-### 4. Billing And Metering Productionization
+### Billing And Metering QA
 
 - Wire the Dodo Payments-oriented schema/UI to real subscription lifecycle,
   webhook verification, invoices, plan changes, cancellations, trials, and
@@ -228,20 +412,22 @@ deployment requires a narrow slice sooner.
   imports, storage, and worker runtime.
 - Add customer-visible usage breakdowns that match billable units.
 
-### 5. Enterprise, Hybrid, And Governance
+### Enterprise And Governance QA
 
-- Add SSO, SCIM, advanced RBAC, approval workflows, audit export, long-retention
-  logs, and private-cloud/Helm packaging.
+- Add SSO, SCIM, advanced RBAC, approval workflows, audit export,
+  long-retention logs, and private-cloud/Helm packaging.
 - Add advanced Studio collaboration only after the single-user/org workflow is
   reliable.
 - Define commercial-license and proprietary module boundaries for enterprise and
   cloud-only work.
 
-## Suggested Execution Order
+## Suggested QA Execution Order
 
-1. Finish the first-run self-host demo and visible default map.
-2. Ship the regional basemap v1 artifact flow.
-3. Harden upload/import processing through restart and failure scenarios.
-4. Add browser-level Console/Studio publish workflow tests.
-5. Productize schedules, notifications, backups, health, and upgrade docs.
-6. Start managed CDN, billing enforcement, and managed data release automation.
+1. Default map and regional basemap artifact QA.
+2. Upload/import restart, failure, validation, and served-tile QA.
+3. Console/Studio browser workflow QA.
+4. Publishing, rollback, rebuild, and URL-stability QA.
+5. Operations readiness QA for schedules, notifications, backups, health,
+   support bundles, and upgrades.
+6. Documentation and CI truth pass.
+7. Managed/cloud QA gates.

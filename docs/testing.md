@@ -2,7 +2,7 @@
 
 ## Current
 
-Test coverage is intentionally small and focused on alpha platform contracts.
+Test coverage is intentionally focused on current platform contracts.
 `vitest.workspace.ts` exists for workspace package tests, while API and worker
 tests currently run through package-level Node test scripts. `pnpm test` runs
 the fast infrastructure-free suite through Turbo and currently passes.

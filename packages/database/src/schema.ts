@@ -187,7 +187,7 @@ export const accounts = pgTable(
   ]
 );
 
-// Transitional export for alpha callers. New code should import `accounts`.
+// Transitional export for legacy callers. New code should import `accounts`.
 export const profiles = accounts;
 
 // ============================================================================

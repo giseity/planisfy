@@ -24,7 +24,7 @@ The current schema uses `accounts` as the shared owner anchor:
 - `accounts.id = users.id`
 - `accounts.id = organizations.id`
 
-The database package still exports `profiles` as a temporary alpha compatibility alias for existing callers. New code should use `accounts` terminology. Better Auth provider credentials live in `oauth_accounts`.
+The database package still exports `profiles` as a temporary compatibility alias for existing callers. New code should use `accounts` terminology. Better Auth provider credentials live in `oauth_accounts`.
 
 ## Important Commands
 

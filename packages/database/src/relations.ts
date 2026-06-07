@@ -89,7 +89,7 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   billingTransactions: many(billingTransactions),
 }));
 
-// Transitional export for alpha callers. New code should use accountsRelations.
+// Transitional export for legacy callers. New code should use accountsRelations.
 export const profilesRelations = accountsRelations;
 
 // ============================================================================

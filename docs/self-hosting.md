@@ -47,7 +47,8 @@ The script:
 5. validates that the fixture style, source-layer contract, and Martin aliases agree;
 6. reports whether the default `stuttgart.pmtiles` fixture is present;
 7. validates the Compose file with `docker compose config`;
-8. prints the first-account sign-up URL.
+8. makes the read-only `/setup/preflight` checks actionable after the API starts;
+9. prints the first-account sign-up URL.
 
 Planisfy does not commit binary map data, so a first boot without
 `infra/docker/data/pmtiles/stuttgart.pmtiles` is expected. The applications and
@@ -57,6 +58,7 @@ fixture-data-missing state until compatible PMTiles are supplied.
 To fetch a known fixture as part of setup, configure `.env`:
 
 ```bash
+DEMO_PMTILES_PATH="infra/docker/data/pmtiles/stuttgart.pmtiles"
 DEMO_PMTILES_URL="https://example.com/path/to/stuttgart.pmtiles"
 DEMO_PMTILES_SHA256="optional-lowercase-sha256"
 ```
@@ -77,8 +79,9 @@ Run the smoke test when Docker is available:
 scripts/docker-compose-smoke.sh
 ```
 
-The smoke test validates Compose, starts Postgres, Redis, and the API, waits for
-`/health`, checks `/health/detailed` for core runtime dependency entries,
+The smoke test validates Compose, runs setup, starts Postgres, Redis, and the
+API, waits for `/health`, checks the public `/setup/preflight` product-loop
+prerequisites, checks `/health/detailed` for core runtime dependency entries,
 optionally reports Martin catalog reachability, and removes the smoke-test
 containers and volumes on exit.
 
@@ -142,14 +145,14 @@ production and configure Dodo to send subscription webhooks to
 
 ## Demo Data Layout
 
-| Path | Purpose |
-| --- | --- |
-| `infra/docker/data/pmtiles/` | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `stuttgart-base` source used by Planisfy Streets. |
-| `infra/docker/data/valhalla_data/` | Valhalla graph/runtime data mounted at `/custom_files`. |
-| `infra/docker/data/storage/uploads/` | Local upload/object storage area. |
-| `infra/docker/data/storage/styles/` | Demo and published style JSON. The setup script seeds the legacy, light, and dark Planisfy Streets fixture styles. |
-| `infra/docker/data/storage/martin-sources/` | Local aliases for published PMTiles/MBTiles artifacts. Martin mounts this at `/storage/martin-sources`. |
-| `packages/map-styles/` | Versioned Planisfy Streets fixture style, source-layer contract, schema, and release manifest. |
+| Path                                        | Purpose                                                                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `infra/docker/data/pmtiles/`                | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `stuttgart-base` source used by Planisfy Streets.    |
+| `infra/docker/data/valhalla_data/`          | Valhalla graph/runtime data mounted at `/custom_files`.                                                            |
+| `infra/docker/data/storage/uploads/`        | Local upload/object storage area.                                                                                  |
+| `infra/docker/data/storage/styles/`         | Demo and published style JSON. The setup script seeds the legacy, light, and dark Planisfy Streets fixture styles. |
+| `infra/docker/data/storage/martin-sources/` | Local aliases for published PMTiles/MBTiles artifacts. Martin mounts this at `/storage/martin-sources`.            |
+| `packages/map-styles/`                      | Versioned Planisfy Streets fixture style, source-layer contract, schema, and release manifest.                     |
 
 The repository intentionally does not store binary map data. Keep downloaded
 PMTiles and Valhalla graph data outside Git while preserving these mount points.
@@ -214,9 +217,9 @@ explicitly isolated deployments that need internal source endpoints.
 
 The API proxies public tileset URLs to Martin source names:
 
-| API URL | Martin source |
-| --- | --- |
-| `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}` | `{owner}.{tileset}` |
+| API URL                                             | Martin source                  |
+| --------------------------------------------------- | ------------------------------ |
+| `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}`           | `{owner}.{tileset}`            |
 | `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | `{owner}.{tileset}.v{version}` |
 
 The default config includes `planisfy.basic` and `planisfy.basic.v1` aliases for
@@ -275,6 +278,7 @@ Basic checks after startup:
 ```bash
 curl http://localhost:4000/health
 curl http://localhost:4000/health/detailed
+curl http://localhost:4000/setup/preflight
 curl http://localhost:4000/metrics
 curl http://localhost:3005/catalog
 curl http://localhost:3007/status
@@ -285,6 +289,8 @@ Expected notes:
 - `/health` should return quickly once the API container is ready.
 - `/health/detailed` is the best single endpoint for database, Redis, engine,
   worker heartbeat, and storage configuration status.
+- `/setup/preflight` is a public read-only first-run checklist for identity,
+  storage, seeded demo styles, Martin aliases, and the optional PMTiles fixture.
 - `/health/detailed` reports local storage as `ok` when the configured path is
   reachable. S3 and R2 storage are reported as configured or degraded based on
   environment variables without making remote bucket calls.
@@ -297,25 +303,25 @@ Expected notes:
 
 ## Default Service URLs
 
-| Service | URL |
-| --- | --- |
+| Service   | URL                     |
+| --------- | ----------------------- |
 | Marketing | <http://localhost:3000> |
-| Console | <http://localhost:3001> |
-| Docs | <http://localhost:3002> |
-| Admin | <http://localhost:3003> |
-| API | <http://localhost:4000> |
-| Martin | <http://localhost:3005> |
-| Valhalla | <http://localhost:3007> |
+| Console   | <http://localhost:3001> |
+| Docs      | <http://localhost:3002> |
+| Admin     | <http://localhost:3003> |
+| API       | <http://localhost:4000> |
+| Martin    | <http://localhost:3005> |
+| Valhalla  | <http://localhost:3007> |
 
 ## Target Additions
 
 - PostGIS-enabled database image.
 - optional MinIO profile.
-- Seeded bootstrap account flow.
 
 ## Acceptance
 
 - Setup reports whether the default PMTiles fixture is present.
+- Public setup preflight reports seeded style fixtures, upload storage, Martin aliases, and PMTiles readiness.
 - Console shows a real map when compatible PMTiles are supplied.
 - Demo style, source metadata, and sample tiles agree.
 - Health reports API, database, Redis, Martin, Valhalla, and worker-geodata heartbeat state.

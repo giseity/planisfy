@@ -18,9 +18,9 @@ import type {
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 
-/** @deprecated Use Account. `profiles` is an alpha compatibility alias for `accounts`. */
+/** @deprecated Use Account. `profiles` is a compatibility alias for `accounts`. */
 export type Profile = typeof profiles.$inferSelect;
-/** @deprecated Use NewAccount. `profiles` is an alpha compatibility alias for `accounts`. */
+/** @deprecated Use NewAccount. `profiles` is a compatibility alias for `accounts`. */
 export type NewProfile = typeof profiles.$inferInsert;
 
 export type User = typeof users.$inferSelect;

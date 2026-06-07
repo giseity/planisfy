@@ -3,9 +3,9 @@
 ## Current Concerns
 
 - Internal API routes must require `X-Internal-Secret` in production-like deployments.
-- Upload validation is early.
+- Upload validation is still being hardened.
 - Remote imports are not yet a durable product feature.
-- Billing and storage provider configuration are alpha.
+- Billing and storage provider configuration are still being productized.
 
 ## Target Requirements
 
