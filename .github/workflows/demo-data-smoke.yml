@@ -1,0 +1,44 @@
+name: Demo Data Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      demo_pmtiles_url:
+        description: "PMTiles fixture URL"
+        required: true
+        type: string
+      demo_pmtiles_sha256:
+        description: "Optional PMTiles SHA-256 checksum"
+        required: false
+        type: string
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.4.1"
+
+jobs:
+  demo-data-smoke:
+    name: PMTiles Compose Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Prepare demo data
+        env:
+          DEMO_PMTILES_SHA256: ${{ inputs.demo_pmtiles_sha256 }}
+          DEMO_PMTILES_URL: ${{ inputs.demo_pmtiles_url }}
+        run: scripts/self-host-setup.sh --demo-data
+
+      - name: Compose smoke with PMTiles
+        run: scripts/docker-compose-smoke.sh
