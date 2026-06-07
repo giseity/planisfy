@@ -13,6 +13,7 @@ Storage is built from:
 - `storage_objects` as the durable artifact ledger.
 - A local filesystem provider for simple self-hosting.
 - An S3/R2-compatible provider for cloud and advanced self-hosting.
+- An optional MinIO Docker profile for local S3-compatible testing.
 
 ## Storage Object Fields
 
@@ -60,3 +61,26 @@ Martin should be configured to scan that prefix from the R2 bucket so the API
 tile proxy can continue using the stable `owner.tileset` and immutable
 `owner.tileset.v{version}` source names. Use an R2 custom domain for production
 artifact URLs; avoid `r2.dev` for production traffic.
+
+## Local MinIO
+
+Use the Docker Compose `with-minio` profile to test S3-style storage locally:
+
+```bash
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
+```
+
+Recommended local values:
+
+```bash
+STORAGE_PROVIDER=s3
+S3_BUCKET=planisfy-artifacts
+S3_REGION=auto
+S3_ENDPOINT=http://minio:9000
+S3_PUBLIC_URL=http://localhost:9000/planisfy-artifacts
+AWS_ACCESS_KEY_ID=planisfy
+AWS_SECRET_ACCESS_KEY=planisfy-local-minio-password
+```
+
+MinIO is useful for validating upload processing, artifact backups, and Martin
+source alias copies before moving to managed S3 or R2.

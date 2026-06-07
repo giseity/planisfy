@@ -260,6 +260,47 @@ services:
     networks:
       - planisfy-network
 
+  minio:
+    image: minio/minio:latest
+    container_name: planisfy-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-planisfy}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-planisfy-local-minio-password}
+    volumes:
+      - ./data/minio:/data
+    command: [ "server", "/data", "--console-address", ":9001" ]
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+    profiles:
+      - with-minio
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: planisfy-minio-init
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-planisfy}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-planisfy-local-minio-password}
+      - S3_BUCKET=${S3_BUCKET:-planisfy-artifacts}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do
+          sleep 2
+        done
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+        mc anonymous set download "local/$$S3_BUCKET"
+    depends_on:
+      - minio
+    networks:
+      - planisfy-network
+    profiles:
+      - with-minio
+
   # ============================================
   # Geospatial Engines
   # ============================================

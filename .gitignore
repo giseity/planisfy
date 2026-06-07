@@ -17,6 +17,10 @@ coverage
 
 # Self-host backups
 backups/
+support-bundles/
+infra/docker/data/minio/*
+!infra/docker/data/minio/
+!infra/docker/data/minio/README.md
 
 # Turbo
 .turbo

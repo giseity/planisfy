@@ -28,6 +28,7 @@ clear fixture state rather than blocking application startup.
 - Martin
 - Valhalla
 - local artifact storage bind mount at `infra/docker/data/storage`
+- optional MinIO S3-compatible storage profile
 
 ## Setup Script
 
@@ -89,6 +90,34 @@ scripts/self-host-setup.sh --pull      # pull public engine/database images
 scripts/self-host-setup.sh --up        # prepare, then start the full stack
 scripts/self-host-setup.sh --migrate   # start dependencies, then run Drizzle migrations
 ```
+
+## Optional MinIO Storage
+
+The default self-host profile uses local filesystem storage. To test the same
+S3-compatible storage path used by S3/R2 deployments, enable the optional MinIO
+profile:
+
+```bash
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
+```
+
+Use these `.env` values for the local MinIO profile:
+
+```bash
+STORAGE_PROVIDER=s3
+S3_BUCKET=planisfy-artifacts
+S3_REGION=auto
+S3_ENDPOINT=http://minio:9000
+S3_PUBLIC_URL=http://localhost:9000/planisfy-artifacts
+AWS_ACCESS_KEY_ID=planisfy
+AWS_SECRET_ACCESS_KEY=planisfy-local-minio-password
+MINIO_ROOT_USER=planisfy
+MINIO_ROOT_PASSWORD=planisfy-local-minio-password
+```
+
+The MinIO console is available at `http://localhost:9001`. The `minio-init`
+container creates the bucket and enables anonymous download for local artifact
+URLs. Use stronger credentials outside local development.
 
 ## First Account
 
@@ -222,6 +251,15 @@ scripts/self-host-restore.sh --backup backups/planisfy-YYYYMMDDTHHMMSSZ --confir
 Backups include PostgreSQL, Redis when reachable, local storage, PMTiles, and
 Valhalla data. See [docs/operations.md](./operations.md) for the full recovery
 and upgrade flow.
+
+Create a diagnostic support bundle when troubleshooting a self-host install:
+
+```bash
+scripts/self-host-support-bundle.sh
+```
+
+The bundle includes redacted environment key presence, rendered Compose config,
+container status, recent logs, and API health/metrics responses.
 
 For a full demo boot:
 

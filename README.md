@@ -200,6 +200,19 @@ Run the Docker Compose smoke test:
 scripts/docker-compose-smoke.sh
 ```
 
+Optional local S3-compatible storage is available through the MinIO Compose
+profile:
+
+```bash
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
+```
+
+Create a redacted support bundle for self-host troubleshooting:
+
+```bash
+scripts/self-host-support-bundle.sh
+```
+
 Required production hardening:
 
 - Set a strong `BETTER_AUTH_SECRET`
