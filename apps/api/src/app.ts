@@ -35,6 +35,7 @@ import { importsRoute } from "./routes/imports";
 import { executionTargetsRoute } from "./routes/execution-targets";
 import { operationsRoute } from "./routes/operations";
 import { dashboardRoute } from "./routes/dashboard";
+import { setupRoute } from "./routes/setup";
 import { auth } from "@planisfy/auth/auth";
 import { env } from "./env";
 
@@ -128,6 +129,7 @@ app.route("/console", resourcesRoute);
 app.route("/console", importsRoute);
 app.route("/console", executionTargetsRoute);
 app.route("/console", operationsRoute);
+app.route("/console", setupRoute);
 
 // ── Centralized error handler ─────────────────────────────────────────────
 app.onError((err, c) => {

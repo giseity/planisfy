@@ -28,6 +28,14 @@ type SerializedPlanLimits = {
   maxApiKeys: number | null;
 };
 
+export interface RuntimePlanDefinition {
+  id: PlanSlug;
+  productId: string;
+  name: string;
+  price: number;
+  limits: PlanLimits;
+}
+
 interface DodoCheckoutResponse {
   checkout_url?: string;
   checkoutUrl?: string;
@@ -88,6 +96,39 @@ export async function ensureBillingPlans() {
     });
 }
 
+export async function listPlanDefinitions(): Promise<RuntimePlanDefinition[]> {
+  const rows = await db
+    .select()
+    .from(plans)
+    .where(eq(plans.active, true));
+
+  return Object.values(PLANS).map((fallback) => {
+    const row = rows.find((candidate) => candidate.id === fallback.id);
+    return {
+      id: fallback.id,
+      productId: fallback.productId,
+      name: row?.name ?? fallback.name,
+      price: fallback.price,
+      limits: row ? parseStoredPlanLimits(row.limits, fallback) : fallback,
+    };
+  });
+}
+
+export async function getPlanDefinition(
+  planId: PlanSlug,
+): Promise<RuntimePlanDefinition> {
+  const definitions = await listPlanDefinitions();
+  return (
+    definitions.find((definition) => definition.id === planId) ?? {
+      id: PLANS.free.id,
+      productId: PLANS.free.productId,
+      name: PLANS.free.name,
+      price: PLANS.free.price,
+      limits: PLANS.free,
+    }
+  );
+}
+
 export async function getAccountPlan(accountId: string): Promise<PlanSlug> {
   const [subscription] = await db
     .select({
@@ -121,7 +162,7 @@ export async function getAccountPlanLimits(
   accountId: string,
 ): Promise<PlanLimits> {
   const plan = await getAccountPlan(accountId);
-  return PLANS[plan] ?? PLANS.free;
+  return (await getPlanDefinition(plan)).limits;
 }
 
 export async function getPlanLimits(accountId: string): Promise<PlanLimits> {
@@ -384,6 +425,38 @@ async function dodoFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
 function isPlanSlug(value: unknown): value is PlanSlug {
   return value === "free" || value === "pro" || value === "enterprise";
+}
+
+function parseStoredPlanLimits(
+  value: unknown,
+  fallback: PlanDefinition,
+): PlanLimits {
+  if (!isRecord(value)) return fallback;
+
+  return {
+    monthlyUnits: numericLimit(value.monthlyUnits, fallback.monthlyUnits),
+    requestsPerMinute: numericLimit(
+      value.requestsPerMinute,
+      fallback.requestsPerMinute,
+    ),
+    maxStyles: numericLimit(value.maxStyles, fallback.maxStyles),
+    maxSources: numericLimit(value.maxSources, fallback.maxSources),
+    maxApiKeys: numericLimit(value.maxApiKeys, fallback.maxApiKeys),
+  };
+}
+
+function numericLimit(value: unknown, fallback: number): number {
+  if (value === null || value === "Unlimited" || value === "unlimited") {
+    return Infinity;
+  }
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return fallback;
 }
 
 function readPlanId(

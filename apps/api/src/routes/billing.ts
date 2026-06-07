@@ -7,10 +7,11 @@ import {
   createCheckoutSession,
   getAccountPlan,
   getAccountPlanLimits,
+  getPlanDefinition,
   getCustomerPortalUrl,
   isBillingConfigured,
   isCheckoutConfiguredForPlan,
-  PLANS,
+  listPlanDefinitions,
   serializePlanLimits,
 } from "../lib/billing";
 import { getMonthlyUsagePeriod, getMonthlyUsageUnits } from "../lib/usage-quota";
@@ -56,7 +57,7 @@ billingRoute.get("/billing", async (c) => {
       getMonthlyUsageUnits(ownerId, period.start),
     ]);
 
-  const planInfo = PLANS[plan] ?? PLANS.free;
+  const planInfo = await getPlanDefinition(plan);
   const serializedLimits = serializePlanLimits(limits);
 
   return c.json({
@@ -85,18 +86,29 @@ billingRoute.get("/billing", async (c) => {
 // ── GET /billing/plans — Available plans ────────────────────────────────────
 
 billingRoute.get("/billing/plans", async (c) => {
-  const plans = Object.values(PLANS).map((plan) => ({
+  const plans = (await listPlanDefinitions()).map((plan) => ({
     id: plan.id,
     productId: plan.productId,
     name: plan.name,
     price: plan.price,
     checkoutAvailable: isCheckoutConfiguredForPlan(plan.id),
-    requestsPerMinute: plan.requestsPerMinute,
+    requestsPerMinute: plan.limits.requestsPerMinute,
     monthlyUnits:
-      plan.monthlyUnits === Infinity ? "Unlimited" : plan.monthlyUnits,
-    maxStyles: plan.maxStyles === Infinity ? "Unlimited" : plan.maxStyles,
-    maxSources: plan.maxSources === Infinity ? "Unlimited" : plan.maxSources,
-    maxApiKeys: plan.maxApiKeys === Infinity ? "Unlimited" : plan.maxApiKeys,
+      plan.limits.monthlyUnits === Infinity
+        ? "Unlimited"
+        : plan.limits.monthlyUnits,
+    maxStyles:
+      plan.limits.maxStyles === Infinity
+        ? "Unlimited"
+        : plan.limits.maxStyles,
+    maxSources:
+      plan.limits.maxSources === Infinity
+        ? "Unlimited"
+        : plan.limits.maxSources,
+    maxApiKeys:
+      plan.limits.maxApiKeys === Infinity
+        ? "Unlimited"
+        : plan.limits.maxApiKeys,
   }));
 
   return c.json(plans);

@@ -323,6 +323,45 @@ export interface ConsoleWorkflowTemplate {
   createdAt: string;
 }
 
+export type PlatformPreflightStatus = "pass" | "warn" | "fail";
+export type PlatformPreflightSeverity =
+  | "required"
+  | "recommended"
+  | "optional";
+
+export interface PlatformPreflightCheck {
+  id: string;
+  label: string;
+  group: string;
+  status: PlatformPreflightStatus;
+  severity: PlatformPreflightSeverity;
+  message: string;
+  action?: string;
+  value?: string | number | boolean | null;
+}
+
+export interface PlatformPreflightGroup {
+  name: string;
+  pass: number;
+  warn: number;
+  fail: number;
+  checks: PlatformPreflightCheck[];
+}
+
+export interface PlatformPreflight {
+  generatedAt: string;
+  environment: string;
+  appVersion: string;
+  summary: {
+    pass: number;
+    warn: number;
+    fail: number;
+    blocking: number;
+  };
+  groups: PlatformPreflightGroup[];
+  checks: PlatformPreflightCheck[];
+}
+
 export interface ConsoleWorkerHealth {
   status: "healthy" | "degraded" | "offline" | string;
   message: string;
@@ -867,6 +906,10 @@ class ApiClient {
 
   getOperations() {
     return this.get<ApiEnvelope<ConsoleOperationsOverview>>("/operations");
+  }
+
+  getPlatformPreflight() {
+    return this.get<ApiEnvelope<PlatformPreflight>>("/setup/preflight");
   }
 
   getJobTimeline(jobId: string) {
