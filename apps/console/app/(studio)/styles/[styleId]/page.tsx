@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useState } from "react";
+import NextLink from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { clientEnv } from "@/env.client";
@@ -14,6 +15,13 @@ import { StyleSettingsPanel } from "@/components/studio/style-settings-panel";
 import { JsonEditor } from "@/components/studio/json-editor";
 import { Separator } from "@planisfy/ui/components/separator";
 import { Button } from "@planisfy/ui/components/button";
+import { LoadingState } from "@planisfy/ui/components/loading-state";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@planisfy/ui/components/resizable";
+import { StatusAlert } from "@planisfy/ui/components/status-alert";
 import {
   Tabs,
   TabsContent,
@@ -44,6 +52,7 @@ import {
   Save,
   Loader2,
   AlertCircle,
+  ChevronLeft,
   Globe,
   GlobeLock,
 } from "lucide-react";
@@ -275,19 +284,22 @@ export default function StyleEditorPage() {
   if (loadError) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-destructive flex items-center gap-2">
-          <AlertCircle className="h-4 w-4" />
-          {loadError}
-        </div>
+        <StatusAlert
+          variant="destructive"
+          icon={<AlertCircle className="h-4 w-4" />}
+          title="Style failed to load"
+          description={loadError}
+        />
       </div>
     );
   }
 
   if (!style) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-muted-foreground">Loading style editor...</div>
-      </div>
+      <LoadingState
+        className="h-screen rounded-none border-0"
+        label="Loading style editor..."
+      />
     );
   }
 
@@ -295,6 +307,21 @@ export default function StyleEditorPage() {
     <div className="flex h-screen flex-col overflow-hidden">
       {/* Toolbar */}
       <header className="flex h-10 items-center gap-2 border-b bg-background px-3">
+        <Button
+          asChild
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          title="Back to styles"
+        >
+          <NextLink href="/styles" aria-label="Back to styles">
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </NextLink>
+        </Button>
+        <span className="hidden text-xs text-muted-foreground sm:inline">
+          Studio / Styles
+        </span>
+        <Separator orientation="vertical" className="h-5" />
         <input
           value={styleName ?? ""}
           onChange={(e) => updateStyleName(e.target.value)}
@@ -566,69 +593,105 @@ export default function StyleEditorPage() {
       </header>
 
       {/* Main editor area */}
-      <div className="flex flex-1 overflow-hidden">
+      <ResizablePanelGroup
+        id="style-editor-panels"
+        orientation="horizontal"
+        defaultLayout={{
+          "style-editor-left": 18,
+          "style-editor-map": 60,
+          "style-editor-properties": 22,
+        }}
+        className="flex-1 overflow-hidden"
+      >
         {/* Left panel — Layers + Sources + Settings */}
-        <aside className="flex w-60 flex-col border-r bg-background">
-          <Tabs defaultValue="layers" className="flex flex-1 flex-col">
-            <TabsList className="mx-2 mt-1 h-7">
-              <TabsTrigger value="layers" className="text-xs h-6">
-                Layers ({style.layers.length})
-              </TabsTrigger>
-              <TabsTrigger value="sources" className="text-xs h-6">
-                Sources ({Object.keys(style.sources).length})
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="text-xs h-6">
-                <Settings className="h-3 w-3" />
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="layers" className="flex-1 overflow-hidden mt-0">
-              <LayerList />
-            </TabsContent>
-            <TabsContent
-              value="sources"
-              className="flex-1 overflow-hidden mt-0"
-            >
-              <SourcePanel />
-            </TabsContent>
-            <TabsContent
-              value="settings"
-              className="flex-1 overflow-hidden mt-0"
-            >
-              <StyleSettingsPanel />
-            </TabsContent>
-          </Tabs>
-        </aside>
+        <ResizablePanel
+          id="style-editor-left"
+          defaultSize="18%"
+          minSize="14rem"
+          maxSize="24rem"
+          className="flex min-w-0 flex-col border-r bg-background"
+        >
+          <aside className="flex h-full min-w-0 flex-col">
+            <Tabs defaultValue="layers" className="flex flex-1 flex-col">
+              <TabsList className="mx-2 mt-1 h-7">
+                <TabsTrigger value="layers" className="text-xs h-6">
+                  Layers ({style.layers.length})
+                </TabsTrigger>
+                <TabsTrigger value="sources" className="text-xs h-6">
+                  Sources ({Object.keys(style.sources).length})
+                </TabsTrigger>
+                <TabsTrigger value="settings" className="text-xs h-6">
+                  <Settings className="h-3 w-3" />
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="layers" className="flex-1 overflow-hidden mt-0">
+                <LayerList />
+              </TabsContent>
+              <TabsContent
+                value="sources"
+                className="flex-1 overflow-hidden mt-0"
+              >
+                <SourcePanel />
+              </TabsContent>
+              <TabsContent
+                value="settings"
+                className="flex-1 overflow-hidden mt-0"
+              >
+                <StyleSettingsPanel />
+              </TabsContent>
+            </Tabs>
+          </aside>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
 
         {/* Map + optional JSON/Validation panel */}
-        <main className="flex flex-1 flex-col">
-          <div
-            className={
-              showJson || showValidation ? "flex-1 basis-1/2" : "flex-1"
-            }
-          >
-            <MapPreview inspectMode={inspectMode} />
-          </div>
-          {(showJson || showValidation) && (
-            <div className="basis-1/2 border-t flex">
-              {showJson && (
-                <div className={showValidation ? "flex-1 border-r" : "flex-1"}>
-                  <JsonEditor />
-                </div>
-              )}
-              {showValidation && (
-                <div className={showJson ? "w-72" : "flex-1"}>
-                  <ValidationPanel />
-                </div>
-              )}
+        <ResizablePanel
+          id="style-editor-map"
+          defaultSize="60%"
+          minSize="28rem"
+          className="min-w-0"
+        >
+          <main className="flex h-full min-w-0 flex-col">
+            <div
+              className={
+                showJson || showValidation ? "flex-1 basis-1/2" : "flex-1"
+              }
+            >
+              <MapPreview inspectMode={inspectMode} />
             </div>
-          )}
-        </main>
+            {(showJson || showValidation) && (
+              <div className="basis-1/2 border-t flex">
+                {showJson && (
+                  <div
+                    className={showValidation ? "flex-1 border-r" : "flex-1"}
+                  >
+                    <JsonEditor />
+                  </div>
+                )}
+                {showValidation && (
+                  <div className={showJson ? "w-72" : "flex-1"}>
+                    <ValidationPanel />
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
 
         {/* Right panel — Properties */}
-        <aside className="w-72 border-l bg-background">
-          <PropertyPanel />
-        </aside>
-      </div>
+        <ResizablePanel
+          id="style-editor-properties"
+          defaultSize="22%"
+          minSize="18rem"
+          maxSize="32rem"
+          className="min-w-0 border-l bg-background"
+        >
+          <aside className="h-full min-w-0">
+            <PropertyPanel />
+          </aside>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

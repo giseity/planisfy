@@ -16,6 +16,16 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@planisfy/ui/components/alert-dialog"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -38,6 +48,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@planisfy/ui/components/select"
+import { Skeleton } from "@planisfy/ui/components/skeleton"
+import { StatusAlert } from "@planisfy/ui/components/status-alert"
 import { Plus, Copy, MoreHorizontal, Key, AlertTriangle, RefreshCw, Trash2, Check } from "lucide-react"
 import { toast } from "sonner"
 
@@ -278,11 +290,13 @@ export default function ApiKeysPage() {
       </div>
 
       {managedEmailBlocked && (
-        <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>Verify your email before creating or rotating managed API keys.</p>
-          </div>
+        <div className="mb-6">
+          <StatusAlert
+            variant="warning"
+            icon={<AlertTriangle className="h-4 w-4" />}
+            title="Email verification required"
+            description="Verify your email before creating or rotating managed API keys."
+          />
         </div>
       )}
 
@@ -318,42 +332,47 @@ export default function ApiKeysPage() {
       </Dialog>
 
       {/* Revoke confirmation */}
-      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Revoke API key?</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke API key?</AlertDialogTitle>
+            <AlertDialogDescription>
               Any applications using this key will lose access immediately. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete}>Revoke</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Revoke
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Rotate confirmation */}
-      <Dialog open={!!rotateId} onOpenChange={() => setRotateId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rotate API key?</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={!!rotateId} onOpenChange={() => setRotateId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rotate API key?</AlertDialogTitle>
+            <AlertDialogDescription>
               The current key will stop working immediately. A new key will be generated.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRotateId(null)}>Cancel</Button>
-            <Button onClick={handleRotate}>Rotate</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRotate}>Rotate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Keys table */}
       {loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-16 rounded-lg border bg-muted animate-pulse" />
+            <Skeleton key={i} className="h-16 rounded-lg" />
           ))}
         </div>
       ) : keys.length === 0 ? (
