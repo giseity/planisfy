@@ -2,6 +2,10 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { Button } from "@planisfy/ui/components/button"
+import { Input } from "@planisfy/ui/components/input"
+import { Label } from "@planisfy/ui/components/label"
+import { StatusAlert } from "@planisfy/ui/components/status-alert"
 
 export default function AdminSignInPage() {
   const router = useRouter()
@@ -48,47 +52,43 @@ export default function AdminSignInPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 px-4 py-3 text-sm text-red-600 dark:text-red-400">
-              {error}
-            </div>
+            <StatusAlert
+              variant="destructive"
+              title="Sign-in failed"
+              description={error}
+            />
           )}
 
           <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
-              Email
-            </label>
-            <input
+            <Label htmlFor="email">Email</Label>
+            <Input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
               placeholder="admin@planisfy.com"
             />
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium">
-              Password
-            </label>
-            <input
+            <Label htmlFor="password">Password</Label>
+            <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
             />
           </div>
 
-          <button
+          <Button
             type="submit"
             disabled={loading}
-            className="w-full h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+            className="w-full"
           >
             {loading ? "Signing in..." : "Sign In"}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

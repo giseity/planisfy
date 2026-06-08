@@ -7,6 +7,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@planisfy/ui/components/card";
+import { MetricCard } from "@planisfy/ui/components/metric-card";
+import {
+  PageActions,
+  PageDescription,
+  PageHeader,
+  PageHeaderText,
+  PageTitle,
+} from "@planisfy/ui/components/page-header";
+import { StatusAlert } from "@planisfy/ui/components/status-alert";
 import { Input } from "@planisfy/ui/components/input";
 import { Label } from "@planisfy/ui/components/label";
 import {
@@ -46,46 +55,46 @@ export default async function UpgradePage() {
   const data = await getUpgradeCenterData();
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Upgrade Center</h1>
-          <p className="text-sm text-muted-foreground">
+    <div className="space-y-6">
+      <PageHeader>
+        <PageHeaderText>
+          <PageTitle>Upgrade Center</PageTitle>
+          <PageDescription>
             Pinned self-host releases, backups, and guarded rollback.
-          </p>
-        </div>
-        <Badge variant={data.configured && !data.error ? "success" : "warning"}>
-          {data.configured ? "Supervisor configured" : "Supervisor disabled"}
-        </Badge>
-      </div>
+          </PageDescription>
+        </PageHeaderText>
+        <PageActions>
+          <Badge variant={data.configured && !data.error ? "success" : "warning"}>
+            {data.configured ? "Supervisor configured" : "Supervisor disabled"}
+          </Badge>
+        </PageActions>
+      </PageHeader>
 
       {data.error && (
-        <Card className="border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20">
-          <CardContent className="flex items-start gap-3 p-4">
-            <ShieldAlert className="mt-0.5 h-4 w-4 text-amber-700" />
-            <p className="text-sm text-amber-950 dark:text-amber-100">
-              {data.error}
-            </p>
-          </CardContent>
-        </Card>
+        <StatusAlert
+          variant="warning"
+          icon={<ShieldAlert className="h-4 w-4" />}
+          title="Supervisor unavailable"
+          description={data.error}
+        />
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <StatusCard
-          icon={<CheckCircle2 className="h-4 w-4 text-muted-foreground" />}
-          label="Current version"
+        <MetricCard
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          label="Current Version"
           value={data.version?.version ?? "-"}
           detail={data.version?.composeFile ?? "Supervisor unavailable"}
         />
-        <StatusCard
-          icon={<ArchiveRestore className="h-4 w-4 text-muted-foreground" />}
-          label="Latest backup"
+        <MetricCard
+          icon={<ArchiveRestore className="h-4 w-4" />}
+          label="Latest Backup"
           value={data.latestBackup?.status ?? "None"}
           detail={data.latestBackup?.backupDir ?? "Run backup before apply"}
         />
-        <StatusCard
-          icon={<ClipboardList className="h-4 w-4 text-muted-foreground" />}
-          label="Active operation"
+        <MetricCard
+          icon={<ClipboardList className="h-4 w-4" />}
+          label="Active Operation"
           value={data.activeOperation?.status ?? "Idle"}
           detail={data.activeOperation?.type ?? "No recent operation"}
         />
@@ -207,31 +216,6 @@ export default async function UpgradePage() {
         </Card>
       </div>
     </div>
-  );
-}
-
-function StatusCard({
-  detail,
-  icon,
-  label,
-  value,
-}: {
-  detail: string;
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{label}</CardTitle>
-        {icon}
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-semibold">{value}</p>
-        <p className="truncate text-xs text-muted-foreground">{detail}</p>
-      </CardContent>
-    </Card>
   );
 }
 
