@@ -5,13 +5,7 @@ import type {
   ConsoleWorkerProfile,
 } from "@/lib/api";
 import { Label } from "@planisfy/ui/components/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@planisfy/ui/components/select";
+import { ResourceCombobox } from "@planisfy/ui/components/resource-combobox";
 
 export function SourceRuntimeSelectors({
   executionTargets,
@@ -30,48 +24,84 @@ export function SourceRuntimeSelectors({
   onWorkerProfileChange: (value: string) => void;
   compact?: boolean;
 }) {
+  const executionTargetResources = [
+    {
+      value: "default",
+      label: "Local default",
+      description: "Use the console default execution target.",
+    },
+    ...executionTargets.map((target) => ({
+      value: target.id,
+      label: target.name,
+      description: [
+        formatExecutionProvider(target.provider),
+        target.region,
+        target.hasCredentials ? null : "credentials missing",
+      ]
+        .filter(Boolean)
+        .join(" - "),
+    })),
+  ];
+
+  const workerProfileResources = [
+    {
+      value: "default",
+      label: "Default worker",
+      description: "Use the default worker image and limits.",
+    },
+    ...workerProfiles.map((profile) => ({
+      value: profile.id,
+      label: profile.name,
+      description: [
+        profile.image,
+        profile.cpu ? `${profile.cpu} CPU` : null,
+        profile.memoryMb ? `${profile.memoryMb} MB` : null,
+        profile.concurrency ? `${profile.concurrency} concurrent` : null,
+      ]
+        .filter(Boolean)
+        .join(" - "),
+    })),
+  ];
+
   return (
     <div
       className={compact ? "flex flex-wrap gap-2" : "grid grid-cols-2 gap-3"}
     >
       <div className={compact ? "min-w-40" : "space-y-2"}>
         {!compact && <Label>Execution target</Label>}
-        <Select
+        <ResourceCombobox
           value={selectedExecutionTargetId}
           onValueChange={onExecutionTargetChange}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="default">Local default</SelectItem>
-            {executionTargets.map((target) => (
-              <SelectItem key={target.id} value={target.id}>
-                {target.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          resources={executionTargetResources}
+          placeholder="Select target"
+          searchPlaceholder="Search targets..."
+          emptyText="No execution targets found."
+          className={compact ? "h-8" : undefined}
+        />
       </div>
       <div className={compact ? "min-w-40" : "space-y-2"}>
         {!compact && <Label>Worker profile</Label>}
-        <Select
+        <ResourceCombobox
           value={selectedWorkerProfileId}
           onValueChange={onWorkerProfileChange}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="default">Default worker</SelectItem>
-            {workerProfiles.map((profile) => (
-              <SelectItem key={profile.id} value={profile.id}>
-                {profile.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          resources={workerProfileResources}
+          placeholder="Select profile"
+          searchPlaceholder="Search profiles..."
+          emptyText="No worker profiles found."
+          className={compact ? "h-8" : undefined}
+        />
       </div>
     </div>
   );
+}
+
+function formatExecutionProvider(provider: ConsoleExecutionTarget["provider"]) {
+  switch (provider) {
+    case "aws_batch":
+      return "AWS Batch";
+    case "gcp_batch":
+      return "GCP Batch";
+    case "local":
+      return "Local";
+  }
 }

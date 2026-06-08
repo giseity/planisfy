@@ -11,6 +11,8 @@ import {
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table"
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
+import { Button } from "@planisfy/ui/components/button"
 import { Input } from "@planisfy/ui/components/input"
 import {
   Table,
@@ -69,9 +71,28 @@ function DataTable<TData, TValue>({
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
+                    {header.isPlaceholder ? null : (
+                      header.column.getCanSort() ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="-ml-2 h-8 px-2"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getIsSorted() === "asc" ? (
+                            <ArrowUp className="ml-2 h-3.5 w-3.5" />
+                          ) : header.column.getIsSorted() === "desc" ? (
+                            <ArrowDown className="ml-2 h-3.5 w-3.5" />
+                          ) : (
+                            <ArrowUpDown className="ml-2 h-3.5 w-3.5 opacity-50" />
+                          )}
+                        </Button>
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
+                      )
+                    )}
                   </TableHead>
                 ))}
               </TableRow>

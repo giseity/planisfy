@@ -1,20 +1,15 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { ApiRequestError, api, type ConsoleProfile, type PlatformPreflight } from "@/lib/api"
 import { Button } from "@planisfy/ui/components/button"
 import { Input } from "@planisfy/ui/components/input"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Label } from "@planisfy/ui/components/label"
 import { Checkbox } from "@planisfy/ui/components/checkbox"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@planisfy/ui/components/table"
+import { DataTable } from "@planisfy/ui/components/data-table"
+import { EmptyState } from "@planisfy/ui/components/empty-state"
+import { LoadingState } from "@planisfy/ui/components/loading-state"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,7 +43,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@planisfy/ui/components/select"
-import { Skeleton } from "@planisfy/ui/components/skeleton"
 import { StatusAlert } from "@planisfy/ui/components/status-alert"
 import { Plus, Copy, MoreHorizontal, Key, AlertTriangle, RefreshCw, Trash2, Check } from "lucide-react"
 import { toast } from "sonner"
@@ -76,6 +70,12 @@ interface ApiKeyData {
   createdAt: string
   status: string
   prefix: string
+}
+
+type ApiKeyTableCell = {
+  row: {
+    original: ApiKeyData
+  }
 }
 
 function timeAgo(date: string | null): string {
@@ -126,6 +126,109 @@ export default function ApiKeysPage() {
 
   const managedEmailBlocked =
     preflight?.deploymentMode === "managed" && profile?.emailVerified === false
+
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: ({ row }: ApiKeyTableCell) => (
+          <span className="font-medium">{row.original.name}</span>
+        ),
+      },
+      {
+        accessorKey: "id",
+        header: "Key",
+        cell: ({ row }: ApiKeyTableCell) => (
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+            {row.original.id.slice(0, 12)}...
+          </code>
+        ),
+      },
+      {
+        accessorFn: (row: ApiKeyData) => row.scopes.join(", "),
+        id: "scopes",
+        header: "Scopes",
+        cell: ({ row }: ApiKeyTableCell) => (
+          <div className="flex flex-wrap gap-1">
+            {row.original.scopes.slice(0, 3).map((scope) => (
+              <Badge key={scope} variant="secondary" className="text-[10px]">
+                {scope}
+              </Badge>
+            ))}
+            {row.original.scopes.length > 3 && (
+              <Badge variant="secondary" className="text-[10px]">
+                +{row.original.scopes.length - 3}
+              </Badge>
+            )}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "lastUsedAt",
+        header: "Last used",
+        cell: ({ row }: ApiKeyTableCell) => (
+          <span className="text-sm text-muted-foreground">
+            {timeAgo(row.original.lastUsedAt)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "createdAt",
+        header: "Created",
+        cell: ({ row }: ApiKeyTableCell) => (
+          <span className="text-sm text-muted-foreground">
+            {new Date(row.original.createdAt).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }: ApiKeyTableCell) => (
+          <Badge
+            variant={
+              row.original.status === "active" ? "success" : "destructive"
+            }
+          >
+            {row.original.status}
+          </Badge>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        enableSorting: false,
+        cell: ({ row }: ApiKeyTableCell) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={managedEmailBlocked}
+                onClick={() => setRotateId(row.original.id)}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Rotate key
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={() => setDeleteId(row.original.id)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Revoke
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      },
+    ],
+    [managedEmailBlocked],
+  )
 
   const handleCreate = async (formData: FormData) => {
     if (managedEmailBlocked) {
@@ -370,103 +473,30 @@ export default function ApiKeysPage() {
 
       {/* Keys table */}
       {loading ? (
-        <div className="space-y-3">
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-16 rounded-lg" />
-          ))}
-        </div>
+        <LoadingState label="Loading API keys..." />
       ) : keys.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <Key className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-medium">No API keys</h3>
-          <p className="text-sm text-muted-foreground mt-1 mb-4">
-            Create a key to access the Planisfy API from your applications.
-          </p>
-          <Button
-            disabled={managedEmailBlocked}
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create key
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Key className="h-12 w-12" />}
+          title="No API keys"
+          description="Create a key to access the Planisfy API from your applications."
+          action={
+            <Button
+              disabled={managedEmailBlocked}
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Create key
+            </Button>
+          }
+        />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Key</TableHead>
-              <TableHead>Scopes</TableHead>
-              <TableHead>Last used</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {keys.map((key) => (
-              <TableRow key={key.id}>
-                <TableCell className="font-medium">{key.name}</TableCell>
-                <TableCell>
-                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                    {key.id.slice(0, 12)}...
-                  </code>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {(key.scopes as string[]).slice(0, 3).map((scope) => (
-                      <Badge key={scope} variant="secondary" className="text-[10px]">
-                        {scope}
-                      </Badge>
-                    ))}
-                    {(key.scopes as string[]).length > 3 && (
-                      <Badge variant="secondary" className="text-[10px]">
-                        +{(key.scopes as string[]).length - 3}
-                      </Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {timeAgo(key.lastUsedAt)}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {new Date(key.createdAt).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={key.status === "active" ? "success" : "destructive"}>
-                    {key.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        disabled={managedEmailBlocked}
-                        onClick={() => setRotateId(key.id)}
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Rotate key
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => setDeleteId(key.id)}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Revoke
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <DataTable
+          columns={columns}
+          data={keys}
+          filterColumn="name"
+          filterPlaceholder="Filter keys..."
+          emptyText="No API keys match your filter."
+        />
       )}
     </div>
   )
