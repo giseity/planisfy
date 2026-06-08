@@ -14,10 +14,10 @@ usage, and roll back or recover safely.
 ## Current System
 
 - `apps/api`: Hono API gateway.
-- `apps/console`: customer console and Studio.
-- `apps/admin`: internal operations UI.
+- `apps/console`: customer console, route-backed operations pages, and Studio.
+- `apps/admin`: internal operations UI with its own navigation tree.
 - `apps/docs`: public and self-host documentation.
-- `apps/marketing`: public website.
+- `apps/marketing`: public website and managed auth entry surface.
 - `apps/tile-worker`: placeholder for planned edge tile delivery.
 - `apps/worker-geodata`: tileset upload and geodata artifact processing.
 - `packages/auth`: Better Auth setup.
@@ -51,6 +51,24 @@ usage, and roll back or recover safely.
 - API and workers can import database and contract packages.
 - Next.js apps should not own backend business rules.
 - Worker containers can depend on GDAL, Tippecanoe, DuckDB, and other heavy tools; the API image should stay lighter.
+
+## Web App Boundaries
+
+Marketing/public, Console, and Admin are separate surfaces. Managed deployments
+mount sign-in, sign-up, and reset-password on Marketing through shared auth UI.
+Self-host and local development keep Console-local auth pages as the default
+fallback. `BETTER_AUTH_URL` identifies the server auth handler; client redirects
+use `NEXT_PUBLIC_AUTH_ORIGIN`.
+
+Console navigation is driven by a route manifest. The old `/studio` URL segment
+is now a route group, so canonical Studio URLs are `/styles`,
+`/styles/[styleId]`, and `/tilesets`. Legacy `/studio/*` URLs redirect to the
+new canonical routes.
+
+Shared UI primitives live in `@planisfy/ui`. App shells, breadcrumbs, sidebars,
+alerts, alert dialogs, loading/empty states, metrics, comboboxes, tables, and
+charts should be built from the shared primitives first; app-specific components
+should compose them rather than reimplement them.
 
 ## Identity
 

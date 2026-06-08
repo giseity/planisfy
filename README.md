@@ -23,7 +23,7 @@ Implemented or partially implemented:
   and version promotion controls
 - Saved regions and source import records, with DuckDB-backed Overture extract
   execution when `OVERTURE_RELEASE` is configured
-- Console, admin, marketing, and docs Next.js apps
+- Marketing/public, Console, Admin, and Docs Next.js apps
 - Docker Compose wiring for local Postgres, Redis, Martin, Valhalla, worker-geodata, local storage, and app containers
 
 Still in progress or externally dependent:
@@ -66,8 +66,8 @@ See [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md) for the canonical roadmap, curr
 
 | App         | Package            | Local URL                            | Purpose                             |
 | ----------- | ------------------ | ------------------------------------ | ----------------------------------- |
-| Marketing   | `apps/marketing`   | <https://planisfy.localhost>         | Public website                      |
-| Console     | `apps/console`     | <https://console.planisfy.localhost> | Customer dashboard and style studio |
+| Marketing   | `apps/marketing`   | <https://planisfy.localhost>         | Public website and managed auth     |
+| Console     | `apps/console`     | <https://console.planisfy.localhost> | Customer dashboard, operations, and style studio |
 | Docs        | `apps/docs`        | <https://docs.planisfy.localhost>    | Product and API documentation       |
 | Admin       | `apps/admin`       | <https://admin.planisfy.localhost>   | Internal/super-admin views          |
 | API         | `apps/api`         | <https://api.planisfy.localhost>     | Hono API gateway                    |
@@ -106,6 +106,13 @@ pnpm dev
 
 Local app dev uses `portless`, so browser-facing services are available on
 the `.localhost` hostnames above rather than fixed `localhost:PORT` URLs.
+
+The web surfaces are intentionally separate. Marketing/public owns managed auth
+entry pages. Console owns authenticated customer workflows and keeps
+self-host/local auth fallback pages. Admin remains an internal operations app.
+`BETTER_AUTH_URL` identifies the server auth handler, while
+`NEXT_PUBLIC_AUTH_ORIGIN` controls where protected Console routes send
+unauthenticated users.
 
 Run verification:
 

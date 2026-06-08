@@ -17,7 +17,7 @@ Planisfy API (Hono)
         +-- Pelias-compatible geocoder: forward/reverse/autocomplete geocoding
         +-- Static map renderer: optional external render service
 
-Planisfy Console/Admin/Docs/Marketing (Next.js)
+Planisfy Marketing/Console/Admin/Docs (Next.js)
         |
         +-- better-auth session cookies
         +-- direct server-side database reads where appropriate
@@ -29,9 +29,9 @@ Planisfy Console/Admin/Docs/Marketing (Next.js)
 | Path | Responsibility |
 | --- | --- |
 | `apps/api` | Hono API gateway for public map APIs, auth handler, internal platform routes, and console API routes |
-| `apps/console` | Customer console and MapLibre style studio |
+| `apps/console` | Customer console, operations pages, and route-grouped MapLibre style studio |
 | `apps/admin` | Internal admin dashboard |
-| `apps/marketing` | Public website |
+| `apps/marketing` | Public website and managed-mode auth entry surface |
 | `apps/docs` | Fumadocs/Next documentation app |
 | `apps/tile-worker` | Placeholder for planned Cloudflare/R2 edge tile delivery worker |
 | `apps/worker-geodata` | Local geodata worker for upload tiling, source imports, and artifact processing |
@@ -101,6 +101,26 @@ Important tables:
 Planisfy uses better-auth for email/password sessions and organization membership. The auth package owns the better-auth instance and hooks.
 
 The API gateway validates better-auth session cookies directly against the sessions table for cross-origin console/API development ergonomics. API keys use SHA-256 hashes of the full key and can be scoped by API category.
+
+`BETTER_AUTH_URL` is the canonical server auth handler URL. Frontend redirects
+use `NEXT_PUBLIC_AUTH_ORIGIN`: self-host and local installs default it to the
+Console origin, while managed deployments point it at the public Marketing
+origin. The same auth UI components are shared by Marketing managed auth pages
+and Console self-host fallback auth pages.
+
+## Web Navigation
+
+The web apps are split into three primary surfaces:
+
+- Marketing/public owns public entry pages and managed-mode sign-in/sign-up/reset.
+- Console owns authenticated customer workflows: dashboard, styles, tilesets,
+  keys, usage, operations, organization/team/billing, settings, and platform
+  readiness.
+- Admin remains a separate internal operations app with its own navigation tree.
+
+Studio is implemented as a Next.js route group in Console. Canonical Studio URLs
+are `/styles`, `/styles/[styleId]`, and `/tilesets`; legacy `/studio/*` URLs are
+redirected to the matching canonical routes.
 
 ## Console Data Access
 

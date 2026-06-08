@@ -9,6 +9,20 @@ Both modes share the same API/resource/publishing/usage core. The boundary is
 defined by `@planisfy/platform-policy` and exposed through `/setup/preflight` as
 `deploymentMode` plus `capabilities[]`.
 
+## App Surfaces And Auth Origin
+
+Planisfy v1 keeps three web surfaces distinct:
+
+- Marketing/public: public entry pages and managed-mode auth pages.
+- Console: authenticated customer dashboard, operational pages, and Studio.
+- Admin: internal/super-admin operations UI.
+
+`BETTER_AUTH_URL` remains the canonical server auth handler URL. Frontend apps
+use `NEXT_PUBLIC_AUTH_ORIGIN` to decide where unauthenticated users should sign
+in. In managed mode this should point at the Marketing/public origin. In
+self-host and local development it defaults to the Console origin, so a simple
+single-console auth workflow keeps working.
+
 ## Self-Host
 
 Self-host is the default mode. It keeps local storage, the self-host supervisor,
@@ -30,6 +44,8 @@ Optional env:
 - Dodo Payments env; without it, checkout is unavailable.
 - `SUPERVISOR_URL` and `SUPERVISOR_TOKEN`; without them, local upgrade
   automation is unavailable but the app still runs.
+- `NEXT_PUBLIC_AUTH_ORIGIN`; defaults to the Console origin for local/self-host
+  installs.
 
 ## Managed
 
@@ -53,6 +69,8 @@ Required managed production env:
 - `R2_ACCESS_KEY_ID`
 - `R2_SECRET_ACCESS_KEY`
 - `R2_PUBLIC_URL`
+- `NEXT_PUBLIC_AUTH_ORIGIN`, set to the public/Marketing origin that mounts
+  `/sign-in`, `/sign-up`, and `/reset-password`
 
 Managed readiness reports billing, transactional email, R2-compatible storage,
 usage/quota, public signup, API key creation, and the platform worker runtime as

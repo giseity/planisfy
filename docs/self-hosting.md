@@ -169,6 +169,12 @@ The local demo does not require email delivery. If `RESEND_API_KEY` is unset,
 verification emails are not sent, and the Console shows a reminder banner while
 still allowing the signed-in user to continue.
 
+Self-host auth is console-local by default. `BETTER_AUTH_URL` points at the auth
+handler URL used by the server, while `NEXT_PUBLIC_AUTH_ORIGIN` can be omitted
+or set to `http://localhost:3001` so protected Console routes redirect to
+`/sign-in?callbackUrl=...` on the Console origin. Managed deployments set
+`NEXT_PUBLIC_AUTH_ORIGIN` to the public Marketing origin instead.
+
 Managed mode is different: `DEPLOYMENT_MODE=managed` requires Resend, and API
 key creation is blocked until the user email is verified.
 
@@ -366,3 +372,18 @@ Expected notes:
 - Demo style, source metadata, and sample tiles agree.
 - Health reports API, database, Redis, Martin, Valhalla, and worker-geodata heartbeat state.
 - New developers can complete setup from the README and docs.
+
+## Console Navigation Notes
+
+The Console URL tree is organized by customer workflows rather than by the
+historical `/studio` segment:
+
+- Studio resources live at `/styles`, `/styles/[styleId]`, and `/tilesets`.
+- Developer pages live at `/keys`, `/usage`, and `/integration`.
+- Operational pages live under `/operations/*`.
+- Account pages live at `/organization`, `/team`, `/billing`, and
+  `/settings/*`.
+
+Old `/studio/*` links redirect to the canonical routes. The style editor remains
+full-screen, but it is now a route-group page rather than a URL segment. Admin
+stays a separate app and has its own sidebar/navigation manifest.
