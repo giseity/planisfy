@@ -60,7 +60,7 @@ export const consoleNavGroups: ConsoleNavGroup[] = [
       { href: "/organization", label: "Organization", icon: Building2 },
       { href: "/team", label: "Team", icon: Users },
       { href: "/billing", label: "Billing", icon: CreditCard },
-      { href: "/settings", label: "Settings", icon: Settings, match: (pathname) => pathname.startsWith("/settings") },
+      { href: "/settings/profile", label: "Profile", icon: Settings },
       { href: "/settings/security", label: "Security", icon: Shield },
     ],
   },
