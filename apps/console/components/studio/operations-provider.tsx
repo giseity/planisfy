@@ -1,0 +1,211 @@
+"use client"
+
+import * as React from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import {
+  Activity,
+  ArchiveRestore,
+  Bell,
+  CalendarClock,
+  ClipboardList,
+  Globe,
+  RefreshCw,
+  ServerCog,
+} from "lucide-react"
+import { toast } from "sonner"
+import { Button } from "@planisfy/ui/components/button"
+import { MetricCard } from "@planisfy/ui/components/metric-card"
+import { LoadingState } from "@planisfy/ui/components/loading-state"
+import { PageActions, PageDescription, PageHeader, PageHeaderText, PageTitle } from "@planisfy/ui/components/page-header"
+import { cn } from "@planisfy/ui/lib/utils"
+import {
+  api,
+  type ConsoleExecutionTarget,
+  type ConsoleJobTimeline,
+  type ConsoleOperationsOverview,
+  type ConsoleTileset,
+  type ConsoleWorkerProfile,
+} from "@/lib/api"
+
+const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
+  recentJobs: [],
+  notificationChannels: [],
+  scheduledOperations: [],
+  artifactBackups: [],
+  workerNodes: [],
+  previewLinks: [],
+  customDomains: [],
+  workflowTemplates: [],
+  workerHealth: { status: "offline", message: "Not checked", latencyMs: null },
+}
+
+const operationRoutes = [
+  { href: "/operations/jobs", label: "Jobs", icon: Activity },
+  { href: "/operations/schedules", label: "Schedules", icon: CalendarClock },
+  { href: "/operations/notifications", label: "Notifications", icon: Bell },
+  { href: "/operations/workers", label: "Workers", icon: ServerCog },
+  { href: "/operations/backups", label: "Backups", icon: ArchiveRestore },
+  { href: "/operations/delivery", label: "Delivery", icon: Globe },
+  { href: "/operations/templates", label: "Templates", icon: ClipboardList },
+]
+
+interface OperationsContextValue {
+  overview: ConsoleOperationsOverview
+  timeline: ConsoleJobTimeline | null
+  tilesets: ConsoleTileset[]
+  executionTargets: ConsoleExecutionTarget[]
+  workerProfiles: ConsoleWorkerProfile[]
+  loading: boolean
+  load: () => void
+  openTimeline: (jobId: string) => void
+}
+
+const OperationsContext = React.createContext<OperationsContextValue | null>(null)
+
+export function OperationsProvider({ children }: { children: React.ReactNode }) {
+  const [overview, setOverview] = React.useState<ConsoleOperationsOverview>(EMPTY_OVERVIEW)
+  const [timeline, setTimeline] = React.useState<ConsoleJobTimeline | null>(null)
+  const [tilesets, setTilesets] = React.useState<ConsoleTileset[]>([])
+  const [executionTargets, setExecutionTargets] = React.useState<ConsoleExecutionTarget[]>([])
+  const [workerProfiles, setWorkerProfiles] = React.useState<ConsoleWorkerProfile[]>([])
+  const [loading, setLoading] = React.useState(true)
+
+  const load = React.useCallback(async () => {
+    try {
+      const [operationsRes, tilesetsRes, targetsRes, profilesRes] = await Promise.all([
+        api.getOperations(),
+        api.listTilesets(),
+        api.listExecutionTargets(),
+        api.listWorkerProfiles(),
+      ])
+      setOverview(operationsRes.data)
+      setTilesets(tilesetsRes.data)
+      setExecutionTargets(targetsRes.data)
+      setWorkerProfiles(profilesRes.data)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load operations")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    load()
+    const timer = window.setInterval(load, 10_000)
+    return () => window.clearInterval(timer)
+  }, [load])
+
+  const openTimeline = React.useCallback(async (jobId: string) => {
+    try {
+      const res = await api.getJobTimeline(jobId)
+      setTimeline(res.data)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load job timeline")
+    }
+  }, [])
+
+  const value = React.useMemo(
+    () => ({
+      overview,
+      timeline,
+      tilesets,
+      executionTargets,
+      workerProfiles,
+      loading,
+      load,
+      openTimeline,
+    }),
+    [executionTargets, load, loading, openTimeline, overview, tilesets, timeline, workerProfiles],
+  )
+
+  return (
+    <OperationsContext.Provider value={value}>
+      <OperationsShell>{children}</OperationsShell>
+    </OperationsContext.Provider>
+  )
+}
+
+export function useOperations() {
+  const value = React.useContext(OperationsContext)
+  if (!value) throw new Error("useOperations must be used within OperationsProvider")
+  return value
+}
+
+function OperationsShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const { overview, loading, load } = useOperations()
+  const activeSchedules = overview.scheduledOperations.filter(
+    (schedule) => schedule.status === "active",
+  ).length
+
+  if (loading) return <LoadingState label="Loading operations..." />
+
+  return (
+    <div className="space-y-5">
+      <PageHeader>
+        <PageHeaderText>
+          <PageTitle>Operations</PageTitle>
+          <PageDescription>
+            Monitor processing, automate rebuilds, validate workers, and manage delivery controls.
+          </PageDescription>
+        </PageHeaderText>
+        <PageActions>
+          <Button variant="outline" onClick={load}>
+            <RefreshCw className="mr-1.5 h-4 w-4" />
+            Refresh
+          </Button>
+        </PageActions>
+      </PageHeader>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Worker"
+          value={overview.workerHealth.status}
+          detail={overview.workerHealth.message}
+          icon={<Activity className="h-4 w-4" />}
+        />
+        <MetricCard
+          label="Active schedules"
+          value={activeSchedules.toString()}
+          detail={`${overview.scheduledOperations.length} configured`}
+          icon={<CalendarClock className="h-4 w-4" />}
+        />
+        <MetricCard
+          label="Backups"
+          value={overview.artifactBackups.length.toString()}
+          detail="Recent artifact backups"
+          icon={<ArchiveRestore className="h-4 w-4" />}
+        />
+        <MetricCard
+          label="Delivery"
+          value={overview.customDomains.length.toString()}
+          detail={`${overview.previewLinks.length} preview links`}
+          icon={<Globe className="h-4 w-4" />}
+        />
+      </div>
+
+      <nav className="flex flex-wrap gap-1 rounded-md border bg-muted/20 p-1">
+        {operationRoutes.map((route) => {
+          const active = pathname === route.href
+          return (
+            <Button
+              key={route.href}
+              asChild
+              size="sm"
+              variant={active ? "secondary" : "ghost"}
+              className={cn("justify-start", active && "font-medium")}
+            >
+              <Link href={route.href}>
+                <route.icon className="h-4 w-4" />
+                {route.label}
+              </Link>
+            </Button>
+          )
+        })}
+      </nav>
+
+      {children}
+    </div>
+  )
+}
