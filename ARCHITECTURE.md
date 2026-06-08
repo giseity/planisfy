@@ -118,9 +118,8 @@ The web apps are split into three primary surfaces:
   readiness.
 - Admin remains a separate internal operations app with its own navigation tree.
 
-Studio is implemented as a Next.js route group in Console. Canonical Studio URLs
-are `/styles`, `/styles/[styleId]`, and `/tilesets`; legacy `/studio/*` URLs are
-redirected to the matching canonical routes.
+Studio is implemented as a Next.js route group in Console. Studio URLs are
+`/styles`, `/styles/[styleId]`, and `/tilesets`.
 
 ## Console Data Access
 

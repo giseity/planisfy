@@ -39,6 +39,5 @@ export const config = {
     "/billing/:path*",
     "/team/:path*",
     "/integration/:path*",
-    "/studio/:path*",
   ],
 };

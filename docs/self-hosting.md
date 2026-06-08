@@ -375,8 +375,7 @@ Expected notes:
 
 ## Console Navigation Notes
 
-The Console URL tree is organized by customer workflows rather than by the
-historical `/studio` segment:
+The Console URL tree is organized by customer workflows:
 
 - Studio resources live at `/styles`, `/styles/[styleId]`, and `/tilesets`.
 - Developer pages live at `/keys`, `/usage`, and `/integration`.
@@ -384,6 +383,5 @@ historical `/studio` segment:
 - Account pages live at `/organization`, `/team`, `/billing`, and
   `/settings/*`.
 
-Old `/studio/*` links redirect to the canonical routes. The style editor remains
-full-screen, but it is now a route-group page rather than a URL segment. Admin
-stays a separate app and has its own sidebar/navigation manifest.
+The style editor remains full-screen. Admin stays a separate app and has its
+own sidebar/navigation manifest.

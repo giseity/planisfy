@@ -66,18 +66,6 @@ export const consoleNavGroups: ConsoleNavGroup[] = [
   },
 ]
 
-export const legacyStudioRedirects: Record<string, string> = {
-  "": "/",
-  styles: "/styles",
-  sources: "/tilesets",
-  keys: "/keys",
-  usage: "/usage",
-  operations: "/operations",
-  platform: "/platform",
-  org: "/organization",
-  settings: "/settings",
-}
-
 export function isConsoleNavActive(item: ConsoleNavItem, pathname: string) {
   if (item.match) return item.match(pathname)
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
@@ -106,13 +94,6 @@ export function consoleBreadcrumbs(pathname: string) {
     }
   }
   return crumbs
-}
-
-export function legacyStudioPathToCanonical(segments: string[] = []) {
-  const [first = "", ...rest] = segments
-  const base = legacyStudioRedirects[first] ?? `/${first}`
-  if (rest.length === 0) return base
-  return `${base}/${rest.join("/")}`
 }
 
 function titleCase(value: string) {

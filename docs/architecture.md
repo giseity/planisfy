@@ -60,10 +60,8 @@ Self-host and local development keep Console-local auth pages as the default
 fallback. `BETTER_AUTH_URL` identifies the server auth handler; client redirects
 use `NEXT_PUBLIC_AUTH_ORIGIN`.
 
-Console navigation is driven by a route manifest. The old `/studio` URL segment
-is now a route group, so canonical Studio URLs are `/styles`,
-`/styles/[styleId]`, and `/tilesets`. Legacy `/studio/*` URLs redirect to the
-new canonical routes.
+Console navigation is driven by a route manifest. Studio is implemented as a
+route group, so Studio URLs are `/styles`, `/styles/[styleId]`, and `/tilesets`.
 
 Shared UI primitives live in `@planisfy/ui`. App shells, breadcrumbs, sidebars,
 alerts, alert dialogs, loading/empty states, metrics, comboboxes, tables, and
