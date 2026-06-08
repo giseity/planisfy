@@ -11,7 +11,7 @@ export interface StudioStyleSummary {
 }
 
 export function styleEditorHref(style: Pick<StudioStyleSummary, "id">) {
-  return `/studio/styles/${style.id}`;
+  return `/styles/${style.id}`;
 }
 
 export function formatStyleUpdatedAt(date: string | Date): string {

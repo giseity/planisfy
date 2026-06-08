@@ -20,7 +20,7 @@ export function EmailVerificationBanner() {
     try {
       await authClient.sendVerificationEmail({
         email: session.user.email,
-        callbackURL: "/studio/styles",
+        callbackURL: "/styles",
       })
       setSent(true)
     } catch {

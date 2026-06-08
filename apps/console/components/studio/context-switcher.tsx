@@ -83,7 +83,7 @@ export function ContextSwitcher() {
         setOrgs((prev) => [...prev, newOrg])
         await switchContext(newOrg.id)
         setCreateOpen(false)
-        router.push("/studio/org")
+        router.push("/organization")
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create organization")

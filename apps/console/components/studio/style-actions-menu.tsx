@@ -30,7 +30,7 @@ import {
   deleteStyle,
   duplicateStyle,
   togglePublish,
-} from "@/app/studio/styles/actions";
+} from "@/app/(studio)/styles/actions";
 import { api, type ApiEnvelope } from "@/lib/api";
 import {
   styleEditorHref,

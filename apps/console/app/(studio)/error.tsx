@@ -19,7 +19,7 @@ export default function StudioError({
           {error.message || "An unexpected error occurred."}
         </p>
         <div className="flex gap-3 justify-center">
-          <Button variant="outline" onClick={() => window.location.href = "/studio/styles"}>
+          <Button variant="outline" onClick={() => window.location.href = "/styles"}>
             Back to styles
           </Button>
           <Button onClick={reset}>Try again</Button>

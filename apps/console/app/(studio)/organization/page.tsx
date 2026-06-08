@@ -695,7 +695,7 @@ function SettingsTab({
     setDeleting(true)
     try {
       await organization.delete({ organizationId: org.id })
-      router.push("/studio/styles")
+      router.push("/styles")
       router.refresh()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete organization")

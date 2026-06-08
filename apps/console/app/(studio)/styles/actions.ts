@@ -50,7 +50,7 @@ export async function createStyle(formData: FormData) {
 
   const created = await createStyleRecord({ ownerId, name })
 
-  redirect(`/studio/styles/${created.id}`)
+  redirect(`/styles/${created.id}`)
 }
 
 export async function deleteStyle(styleId: string) {
@@ -58,7 +58,7 @@ export async function deleteStyle(styleId: string) {
 
   await softDeleteStyleRecord(ownerId, styleId)
 
-  revalidatePath("/studio/styles")
+  revalidatePath("/styles")
 }
 
 export async function duplicateStyle(styleId: string) {
@@ -67,7 +67,7 @@ export async function duplicateStyle(styleId: string) {
   const created = await duplicateStyleRecord(ownerId, styleId)
   if (!created) throw new Error("Style not found")
 
-  revalidatePath("/studio/styles")
+  revalidatePath("/styles")
   return created.id
 }
 
@@ -76,5 +76,5 @@ export async function togglePublish(styleId: string) {
 
   await toggleStylePublishRecord(ownerId, styleId)
 
-  revalidatePath("/studio/styles")
+  revalidatePath("/styles")
 }

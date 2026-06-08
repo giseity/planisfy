@@ -85,7 +85,7 @@ function VersionList({
 
   const handleCopyVersionUrl = async (version: number) => {
     await navigator.clipboard.writeText(
-      `${window.location.origin}/studio/styles/${styleId}?version=${version}`,
+      `${window.location.origin}/styles/${styleId}?version=${version}`,
     );
   };
 

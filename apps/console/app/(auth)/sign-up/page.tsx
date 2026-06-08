@@ -19,10 +19,10 @@ export default function SignUpPage() {
       email,
       password,
       name,
-      callbackURL: "/studio/styles",
+      callbackURL: "/styles",
       fetchOptions: {
         onSuccess: () => {
-          router.push("/studio/styles");
+          router.push("/styles");
         },
         onError: (ctx: { error: { message: string } }) => {
           toast.error(ctx.error.message);

@@ -169,7 +169,7 @@ function WorkflowAction({
     case "create-style":
       return (
         <Button className="shrink-0" asChild>
-          <Link href="/studio/styles">
+          <Link href="/styles">
             <Palette className="mr-2 h-4 w-4" />
             Create style
           </Link>
@@ -178,7 +178,7 @@ function WorkflowAction({
     case "publish-style":
       return (
         <Button className="shrink-0" variant="outline" asChild>
-          <Link href="/studio/styles">
+          <Link href="/styles">
             <Palette className="mr-2 h-4 w-4" />
             Open styles
           </Link>
@@ -187,7 +187,7 @@ function WorkflowAction({
     case "open-dashboard":
       return (
         <Button className="shrink-0" variant="outline" asChild>
-          <Link href="/studio">
+          <Link href="/">
             View integration
             <ArrowRight className="ml-2 h-4 w-4" />
           </Link>

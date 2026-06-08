@@ -17,10 +17,10 @@ export default function SignInPage() {
     await signIn.email({
       email,
       password,
-      callbackURL: "/studio",
+      callbackURL: "/",
       fetchOptions: {
         onSuccess: () => {
-          router.push("/studio");
+          router.push("/");
         },
         onError: (ctx: { error: { message: string } }) => {
           toast.error(ctx.error.message);

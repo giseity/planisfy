@@ -1,0 +1,119 @@
+"use client"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { cn } from "@planisfy/ui/lib/utils"
+import { ContextSwitcher } from "@/components/studio/context-switcher"
+import { ThemeToggle } from "@/components/studio/theme-toggle"
+import { EmailVerificationBanner } from "@/components/studio/email-verification-banner"
+import {
+  AppShellContent,
+  AppShellHeader,
+} from "@planisfy/ui/components/app-shell"
+import {
+  RouteBreadcrumbs,
+} from "@planisfy/ui/components/route-breadcrumbs"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMobile,
+  SidebarProvider,
+} from "@planisfy/ui/components/sidebar"
+import {
+  consoleBreadcrumbs,
+  consoleNavGroups,
+  isConsoleNavActive,
+} from "@/lib/console-navigation"
+
+export default function StudioLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const pathname = usePathname()
+
+  // Hide nav on the style editor page (full-screen)
+  const isEditor = /^\/styles\/[^/]+$/.test(pathname)
+  if (isEditor) return <>{children}</>
+
+  return (
+    <SidebarProvider>
+      <ConsoleSidebar pathname={pathname} />
+      <SidebarInset>
+        <AppShellHeader>
+          <SidebarMobile title="Console navigation">
+            <ConsoleSidebarContent pathname={pathname} />
+          </SidebarMobile>
+          <RouteBreadcrumbs
+            items={consoleBreadcrumbs(pathname)}
+            LinkComponent={Link}
+          />
+          <div className="ml-auto flex items-center gap-2">
+            <ContextSwitcher />
+            <ThemeToggle />
+          </div>
+        </AppShellHeader>
+        <EmailVerificationBanner />
+        <AppShellContent>{children}</AppShellContent>
+      </SidebarInset>
+    </SidebarProvider>
+  )
+}
+
+function ConsoleSidebar({ pathname }: { pathname: string }) {
+  return (
+    <Sidebar>
+      <ConsoleSidebarContent pathname={pathname} />
+    </Sidebar>
+  )
+}
+
+function ConsoleSidebarContent({ pathname }: { pathname: string }) {
+  return (
+    <>
+      <SidebarHeader>
+        <Link href="/" className="font-semibold text-lg tracking-tight">
+          Planisfy
+        </Link>
+      </SidebarHeader>
+      <SidebarContent>
+        {consoleNavGroups.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarMenu>
+              {group.items.map((item) => {
+                const isActive = isConsoleNavActive(item, pathname)
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        "flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0",
+                        isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                      )}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {item.label}
+                    </Link>
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+          </SidebarGroup>
+        ))}
+      </SidebarContent>
+      <SidebarFooter>
+        <p className="px-2 text-xs text-muted-foreground">
+          Customer console
+        </p>
+      </SidebarFooter>
+    </>
+  )
+}

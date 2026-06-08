@@ -20,5 +20,19 @@ export default async function authMiddleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/settings/:path*", "/studio/:path*"],
+  matcher: [
+    "/",
+    "/styles/:path*",
+    "/tilesets/:path*",
+    "/keys/:path*",
+    "/usage/:path*",
+    "/operations/:path*",
+    "/platform/:path*",
+    "/organization/:path*",
+    "/settings/:path*",
+    "/billing/:path*",
+    "/team/:path*",
+    "/integration/:path*",
+    "/studio/:path*",
+  ],
 };

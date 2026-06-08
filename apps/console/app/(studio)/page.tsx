@@ -66,12 +66,12 @@ const endpointLabels: Record<string, string> = {
 }
 
 const quickActions = [
-  { label: "Create style", href: "/studio/styles", icon: Palette },
-  { label: "Upload tileset", href: "/studio/sources", icon: Upload },
-  { label: "Create API key", href: "/studio/keys", icon: Key },
-  { label: "View usage", href: "/studio/usage", icon: BarChart3 },
+  { label: "Create style", href: "/styles", icon: Palette },
+  { label: "Upload tileset", href: "/tilesets", icon: Upload },
+  { label: "Create API key", href: "/keys", icon: Key },
+  { label: "View usage", href: "/usage", icon: BarChart3 },
   { label: "Open docs", href: "https://docs.planisfy.localhost", icon: FileCode2 },
-  { label: "Settings", href: "/studio/settings", icon: Settings },
+  { label: "Settings", href: "/settings", icon: Settings },
 ]
 
 export default function StudioDashboardPage() {
@@ -159,7 +159,7 @@ export default function StudioDashboardPage() {
               </div>
             </div>
             <Button asChild size="sm" variant="outline">
-              <Link href={blockingReadiness[0]?.actionHref ?? "/studio/settings"}>
+              <Link href={blockingReadiness[0]?.actionHref ?? "/settings"}>
                 Continue setup
               </Link>
             </Button>
@@ -437,7 +437,7 @@ function UsageChart({
           </div>
         ) : (
           <EmptyState
-            actionHref="/studio/keys"
+            actionHref="/keys"
             actionLabel="Create key"
             icon={Code2}
             text="No usage has been recorded yet. Create an API key and publish a style or tileset to generate integration traffic."
@@ -478,7 +478,7 @@ function EndpointBreakdown({ dashboard }: { dashboard: ConsoleDashboard }) {
           </div>
         ) : (
           <EmptyState
-            actionHref="/studio/usage"
+            actionHref="/usage"
             actionLabel="Open usage"
             icon={BarChart3}
             text="Endpoint activity will appear here after requests reach the API."
@@ -512,7 +512,7 @@ function TopApiKeys({ dashboard }: { dashboard: ConsoleDashboard }) {
           ))
         ) : (
           <EmptyState
-            actionHref="/studio/keys"
+            actionHref="/keys"
             actionLabel="Create key"
             icon={Key}
             text="API key ranking appears once authenticated traffic starts."
@@ -555,7 +555,7 @@ function RecentJobs({ dashboard }: { dashboard: ConsoleDashboard }) {
           ))
         ) : (
           <EmptyState
-            actionHref="/studio/sources"
+            actionHref="/tilesets"
             actionLabel="Upload tileset"
             icon={Database}
             text="Upload processing jobs will appear here with progress and failure details."
@@ -587,7 +587,7 @@ function RecentActivity({ dashboard }: { dashboard: ConsoleDashboard }) {
           ))
         ) : (
           <EmptyState
-            actionHref="/studio/styles"
+            actionHref="/styles"
             actionLabel="Create style"
             icon={Activity}
             text="Resource changes and publishing events will be logged here."
@@ -624,7 +624,7 @@ function RecentStyles({ dashboard }: { dashboard: ConsoleDashboard }) {
                   </IconButton>
                 )}
                 <Button asChild size="icon-sm" variant="ghost">
-                  <Link href={`/studio/styles/${style.id}`} aria-label="Edit style">
+                  <Link href={`/styles/${style.id}`} aria-label="Edit style">
                     <ExternalLink className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -633,7 +633,7 @@ function RecentStyles({ dashboard }: { dashboard: ConsoleDashboard }) {
           ))
         ) : (
           <EmptyState
-            actionHref="/studio/styles"
+            actionHref="/styles"
             actionLabel="Create style"
             icon={Palette}
             text="No styles yet. Start with a style, then publish it for client maps."
@@ -670,7 +670,7 @@ function RecentTilesets({ dashboard }: { dashboard: ConsoleDashboard }) {
                   </IconButton>
                 )}
                 <Button asChild size="icon-sm" variant="ghost">
-                  <Link href="/studio/sources" aria-label="Open tilesets">
+                  <Link href="/tilesets" aria-label="Open tilesets">
                     <ExternalLink className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -679,7 +679,7 @@ function RecentTilesets({ dashboard }: { dashboard: ConsoleDashboard }) {
           ))
         ) : (
           <EmptyState
-            actionHref="/studio/sources"
+            actionHref="/tilesets"
             actionLabel="Upload tileset"
             icon={Database}
             text="No tilesets yet. Upload GeoJSON, CSV, shapefile, PMTiles, or MBTiles data."

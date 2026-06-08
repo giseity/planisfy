@@ -200,7 +200,7 @@ export default function StyleEditorPage() {
   };
 
   const draftUrl = () =>
-    `${window.location.origin}/studio/styles/${styleId ?? params.styleId}`;
+    `${window.location.origin}/styles/${styleId ?? params.styleId}`;
   const publicApiRoot = () =>
     `${window.location.origin}${clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH.replace(/\/console\/?$/, "")}`;
   const publicUrl = (version?: number | null) => {
