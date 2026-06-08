@@ -31,8 +31,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts"
@@ -45,6 +43,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@planisfy/ui/components/card"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@planisfy/ui/components/chart"
 import { cn } from "@planisfy/ui/lib/utils"
 import { api, type ConsoleDashboard, type DashboardHealthStatus } from "@/lib/api"
 
@@ -64,6 +68,11 @@ const endpointLabels: Record<string, string> = {
   static: "Static maps",
   other: "Other",
 }
+
+const dashboardChartConfig = {
+  total: { label: "Total", color: "hsl(var(--primary))" },
+  units: { label: "Units", color: "hsl(var(--primary))" },
+} satisfies ChartConfig
 
 const quickActions = [
   { label: "Create style", href: "/styles", icon: Palette },
@@ -413,27 +422,30 @@ function UsageChart({
       <CardContent className="p-4 pt-0">
         {hasUsage ? (
           <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer
+              config={dashboardChartConfig}
+              className="h-full aspect-auto"
+            >
               <AreaChart data={dashboard.usage.timeseries}>
                 <defs>
                   <linearGradient id="dashboardUsage" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+                    <stop offset="5%" stopColor="var(--color-total)" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="var(--color-total)" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="date" minTickGap={28} tickLine={false} />
                 <YAxis tickLine={false} width={42} />
-                <Tooltip />
+                <ChartTooltip content={<ChartTooltipContent />} />
                 <Area
                   dataKey="total"
                   fill="url(#dashboardUsage)"
-                  stroke="hsl(var(--primary))"
+                  stroke="var(--color-total)"
                   strokeWidth={2}
                   type="monotone"
                 />
               </AreaChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </div>
         ) : (
           <EmptyState
@@ -460,7 +472,10 @@ function EndpointBreakdown({ dashboard }: { dashboard: ConsoleDashboard }) {
       <CardContent className="p-4 pt-0">
         {rows.length > 0 ? (
           <div className="h-[230px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer
+              config={dashboardChartConfig}
+              className="h-full aspect-auto"
+            >
               <BarChart data={rows}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis
@@ -469,12 +484,13 @@ function EndpointBreakdown({ dashboard }: { dashboard: ConsoleDashboard }) {
                   tickLine={false}
                 />
                 <YAxis tickLine={false} width={42} />
-                <Tooltip
+                <ChartTooltip
+                  content={<ChartTooltipContent />}
                   labelFormatter={(value) => endpointLabels[String(value)] ?? value}
                 />
-                <Bar dataKey="units" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="units" fill="var(--color-units)" radius={[4, 4, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </div>
         ) : (
           <EmptyState

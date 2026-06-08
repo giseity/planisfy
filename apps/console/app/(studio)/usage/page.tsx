@@ -20,6 +20,14 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table"
 import { Button } from "@planisfy/ui/components/button"
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@planisfy/ui/components/chart"
 import { Skeleton } from "@planisfy/ui/components/skeleton"
 import { Activity, Zap, Key, TrendingUp, TrendingDown, ChevronLeft, ChevronRight } from "lucide-react"
 import {
@@ -33,9 +41,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
 } from "recharts"
 
 interface UsageSummary {
@@ -108,6 +113,16 @@ const SERVICE_COLORS: Record<string, string> = {
 }
 
 const PIE_COLORS = ["#3b82f6", "#8b5cf6", "#22c55e", "#f97316", "#f59e0b", "#06b6d4", "#6b7280"]
+
+const usageChartConfig = {
+  tiles: { label: "Tiles", color: SERVICE_COLORS.tiles },
+  styles: { label: "Styles", color: SERVICE_COLORS.styles },
+  geocoding: { label: "Geocoding", color: SERVICE_COLORS.geocoding },
+  directions: { label: "Directions", color: SERVICE_COLORS.directions },
+  elevation: { label: "Elevation", color: SERVICE_COLORS.elevation },
+  requests: { label: "Requests", color: SERVICE_COLORS.tiles },
+  value: { label: "Requests", color: SERVICE_COLORS.tiles },
+} satisfies ChartConfig
 
 function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
@@ -288,7 +303,10 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             {timeseries.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <ChartContainer
+                config={usageChartConfig}
+                className="h-[280px] aspect-auto"
+              >
                 <AreaChart data={timeseries}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis
@@ -298,22 +316,15 @@ export default function UsagePage() {
                     className="text-muted-foreground"
                   />
                   <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--background))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                  />
-                  <Area type="monotone" dataKey="tiles" stackId="1" stroke={SERVICE_COLORS.tiles} fill={SERVICE_COLORS.tiles} fillOpacity={0.6} name="Tiles" />
-                  <Area type="monotone" dataKey="styles" stackId="1" stroke={SERVICE_COLORS.styles} fill={SERVICE_COLORS.styles} fillOpacity={0.6} name="Styles" />
-                  <Area type="monotone" dataKey="geocoding" stackId="1" stroke={SERVICE_COLORS.geocoding} fill={SERVICE_COLORS.geocoding} fillOpacity={0.6} name="Geocoding" />
-                  <Area type="monotone" dataKey="directions" stackId="1" stroke={SERVICE_COLORS.directions} fill={SERVICE_COLORS.directions} fillOpacity={0.6} name="Directions" />
-                  <Area type="monotone" dataKey="elevation" stackId="1" stroke={SERVICE_COLORS.elevation} fill={SERVICE_COLORS.elevation} fillOpacity={0.6} name="Elevation" />
-                  <Legend />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Area type="monotone" dataKey="tiles" stackId="1" stroke="var(--color-tiles)" fill="var(--color-tiles)" fillOpacity={0.6} name="Tiles" />
+                  <Area type="monotone" dataKey="styles" stackId="1" stroke="var(--color-styles)" fill="var(--color-styles)" fillOpacity={0.6} name="Styles" />
+                  <Area type="monotone" dataKey="geocoding" stackId="1" stroke="var(--color-geocoding)" fill="var(--color-geocoding)" fillOpacity={0.6} name="Geocoding" />
+                  <Area type="monotone" dataKey="directions" stackId="1" stroke="var(--color-directions)" fill="var(--color-directions)" fillOpacity={0.6} name="Directions" />
+                  <Area type="monotone" dataKey="elevation" stackId="1" stroke="var(--color-elevation)" fill="var(--color-elevation)" fillOpacity={0.6} name="Elevation" />
+                  <ChartLegend content={<ChartLegendContent />} />
                 </AreaChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
                 No data for this period
@@ -329,7 +340,10 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             {pieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <ChartContainer
+                config={usageChartConfig}
+                className="h-[280px] aspect-auto"
+              >
                 <PieChart>
                   <Pie
                     data={pieData}
@@ -345,9 +359,9 @@ export default function UsagePage() {
                       <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <ChartTooltip content={<ChartTooltipContent />} />
                 </PieChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
                 No data
@@ -364,7 +378,11 @@ export default function UsagePage() {
             <CardTitle className="text-sm font-medium">Requests by API Key</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={Math.max(150, byKey.length * 40)}>
+            <ChartContainer
+              config={usageChartConfig}
+              className="aspect-auto"
+              style={{ height: Math.max(150, byKey.length * 40) }}
+            >
               <BarChart data={byKey} layout="vertical" margin={{ left: 100 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 12 }} />
@@ -374,17 +392,10 @@ export default function UsagePage() {
                   tick={{ fontSize: 12 }}
                   width={90}
                 />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--background))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                  }}
-                />
-                <Bar dataKey="requests" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Requests" />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="requests" fill="var(--color-requests)" radius={[0, 4, 4, 0]} name="Requests" />
               </BarChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </CardContent>
         </Card>
       )}

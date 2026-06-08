@@ -2,6 +2,12 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
 import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@planisfy/ui/components/chart"
+import {
   AreaChart,
   Area,
   BarChart,
@@ -12,8 +18,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
 } from "recharts"
 
 const COLORS = [
@@ -23,6 +27,13 @@ const COLORS = [
   "hsl(0, 84%, 60%)",
   "hsl(262, 83%, 58%)",
 ]
+
+const adminUsageChartConfig = {
+  requests: { label: "Requests", color: COLORS[2] },
+  errors: { label: "Errors", color: COLORS[3] },
+  count: { label: "Count", color: COLORS[0] },
+  cost: { label: "Units", color: COLORS[4] },
+} satisfies ChartConfig
 
 interface UsageChartsProps {
   timeseries: { date: string; requests: number; errors: number; cost: number }[]
@@ -40,30 +51,33 @@ export function UsageCharts({ timeseries, byEndpoint, byStatus }: UsageChartsPro
           </CardHeader>
           <CardContent>
             {timeseries.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <ChartContainer
+                config={adminUsageChartConfig}
+                className="h-[280px] aspect-auto"
+              >
                 <AreaChart data={timeseries}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
+                  <ChartTooltip content={<ChartTooltipContent />} />
                   <Area
                     type="monotone"
                     dataKey="requests"
-                    stroke={COLORS[2]}
-                    fill={COLORS[2]}
+                    stroke="var(--color-requests)"
+                    fill="var(--color-requests)"
                     fillOpacity={0.15}
                     name="Requests"
                   />
                   <Area
                     type="monotone"
                     dataKey="errors"
-                    stroke={COLORS[3]}
-                    fill={COLORS[3]}
+                    stroke="var(--color-errors)"
+                    fill="var(--color-errors)"
                     fillOpacity={0.15}
                     name="Errors"
                   />
                 </AreaChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <p className="text-muted-foreground text-sm py-8 text-center">No data</p>
             )}
@@ -76,7 +90,10 @@ export function UsageCharts({ timeseries, byEndpoint, byStatus }: UsageChartsPro
           </CardHeader>
           <CardContent>
             {byStatus.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <ChartContainer
+                config={adminUsageChartConfig}
+                className="h-[280px] aspect-auto"
+              >
                 <PieChart>
                   <Pie
                     data={byStatus}
@@ -92,9 +109,9 @@ export function UsageCharts({ timeseries, byEndpoint, byStatus }: UsageChartsPro
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <ChartTooltip content={<ChartTooltipContent />} />
                 </PieChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <p className="text-muted-foreground text-sm py-8 text-center">No data</p>
             )}
@@ -109,15 +126,18 @@ export function UsageCharts({ timeseries, byEndpoint, byStatus }: UsageChartsPro
           </CardHeader>
           <CardContent>
             {byEndpoint.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <ChartContainer
+                config={adminUsageChartConfig}
+                className="h-[280px] aspect-auto"
+              >
                 <BarChart data={byEndpoint} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis type="number" tick={{ fontSize: 11 }} />
                   <YAxis dataKey="endpoint" type="category" width={120} tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="requests" fill={COLORS[2]} name="Requests" radius={[0, 4, 4, 0]} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="requests" fill="var(--color-requests)" name="Requests" radius={[0, 4, 4, 0]} />
                 </BarChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <p className="text-muted-foreground text-sm py-8 text-center">No data</p>
             )}
@@ -130,15 +150,18 @@ export function UsageCharts({ timeseries, byEndpoint, byStatus }: UsageChartsPro
           </CardHeader>
           <CardContent>
             {byEndpoint.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <ChartContainer
+                config={adminUsageChartConfig}
+                className="h-[280px] aspect-auto"
+              >
                 <BarChart data={byEndpoint}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="endpoint" tick={{ fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="cost" fill={COLORS[4]} name="Units" radius={[4, 4, 0, 0]} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="cost" fill="var(--color-cost)" name="Units" radius={[4, 4, 0, 0]} />
                 </BarChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             ) : (
               <p className="text-muted-foreground text-sm py-8 text-center">No data</p>
             )}
