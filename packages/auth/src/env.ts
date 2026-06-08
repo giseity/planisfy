@@ -23,6 +23,7 @@ export function getAuthBaseURL() {
   return (
     process.env.BETTER_AUTH_URL ||
     process.env.BETTER_AUTH_BASE_URL ||
+    authUrlFromAppUrl(process.env.NEXT_PUBLIC_AUTH_ORIGIN) ||
     authUrlFromAppUrl(process.env.NEXT_PUBLIC_APP_URL) ||
     authUrlFromAppUrl(process.env.CONSOLE_URL) ||
     "https://console.planisfy.localhost/api/auth"

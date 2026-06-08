@@ -354,9 +354,15 @@ importers:
 
   apps/marketing:
     dependencies:
+      '@planisfy/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      better-auth:
+        specifier: ^1.4.18
+        version: 1.4.18(drizzle-kit@0.31.9)(drizzle-orm@0.45.1(kysely@0.28.11)(postgres@3.4.8))(next@16.1.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0))
       lucide-react:
         specifier: ^0.563.0
         version: 0.563.0(react@19.2.4)
@@ -504,6 +510,9 @@ importers:
       '@planisfy/env':
         specifier: workspace:*
         version: link:../env
+      '@planisfy/ui':
+        specifier: workspace:*
+        version: link:../ui
       bcrypt:
         specifier: ^5.1.1
         version: 5.1.1
@@ -516,6 +525,15 @@ importers:
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(kysely@0.28.11)(postgres@3.4.8)
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
+      sonner:
+        specifier: ^2.0.7
+        version: 2.0.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
     devDependencies:
       '@planisfy/eslint-config':
         specifier: workspace:*

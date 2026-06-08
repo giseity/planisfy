@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
-  transpilePackages: ["@planisfy/ui"],
+  transpilePackages: ["@planisfy/ui", "@planisfy/auth"],
 }
 
 export default nextConfig

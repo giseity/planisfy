@@ -14,7 +14,13 @@ export default async function authMiddleware(request: NextRequest) {
   );
 
   if (!session) {
-    return NextResponse.redirect(new URL("/sign-in", request.url));
+    const authOrigin =
+      process.env.NEXT_PUBLIC_AUTH_ORIGIN ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      request.nextUrl.origin;
+    const signInUrl = new URL("/sign-in", authOrigin);
+    signInUrl.searchParams.set("callbackUrl", request.nextUrl.href);
+    return NextResponse.redirect(signInUrl);
   }
   return NextResponse.next();
 }

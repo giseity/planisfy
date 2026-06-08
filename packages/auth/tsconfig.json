@@ -2,6 +2,7 @@
   "extends": "@planisfy/typescript-config/base.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"],
       "@planisfy/database": ["../database/src/index.ts"]
