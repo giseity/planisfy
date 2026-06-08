@@ -405,7 +405,7 @@ export function buildOperationalSignals(params: {
         .map((entry) => `${entry.label}: ${entry.message ?? entry.status}`)
         .join("; "),
       actionLabel: "Open operations",
-      actionHref: "/studio/operations",
+      actionHref: "/operations/jobs",
     });
   }
 
@@ -416,7 +416,7 @@ export function buildOperationalSignals(params: {
       title: "Processing jobs may be stuck",
       message: `${staleRunningJobs.length} job${staleRunningJobs.length === 1 ? "" : "s"} have not updated in over 30 minutes.`,
       actionLabel: "Open sources",
-      actionHref: "/studio/sources",
+      actionHref: "/tilesets",
     });
   }
 
@@ -427,7 +427,7 @@ export function buildOperationalSignals(params: {
       title: "Recent processing failures",
       message: `${failedJobs.length} recent job${failedJobs.length === 1 ? "" : "s"} failed. Review logs before retrying.`,
       actionLabel: "Open sources",
-      actionHref: "/studio/sources",
+      actionHref: "/tilesets",
     });
   }
 
@@ -438,7 +438,7 @@ export function buildOperationalSignals(params: {
       title: "Quota nearly exhausted",
       message: `${params.quotaPercent}% of monthly quota has been used.`,
       actionLabel: "Review billing",
-      actionHref: "/studio/settings",
+      actionHref: "/billing",
     });
   } else if (params.quotaPercent >= 75) {
     alerts.push({
@@ -447,7 +447,7 @@ export function buildOperationalSignals(params: {
       title: "Quota usage is elevated",
       message: `${params.quotaPercent}% of monthly quota has been used.`,
       actionLabel: "Review usage",
-      actionHref: "/studio/usage",
+      actionHref: "/usage",
     });
   }
 
@@ -498,7 +498,7 @@ export function buildReadiness(params: {
       complete: params.activeApiKeys > 0,
       required: true,
       actionLabel: "Create key",
-      actionHref: "/studio/keys",
+      actionHref: "/keys",
     }),
     readinessItem({
       id: "published-style",
@@ -507,7 +507,7 @@ export function buildReadiness(params: {
       complete: params.publishedStyles > 0,
       required: true,
       actionLabel: "Create style",
-      actionHref: "/studio/styles",
+      actionHref: "/styles",
     }),
     readinessItem({
       id: "published-tileset",
@@ -516,7 +516,7 @@ export function buildReadiness(params: {
       complete: params.publishedTilesets > 0,
       required: true,
       actionLabel: "Upload tileset",
-      actionHref: "/studio/sources",
+      actionHref: "/tilesets",
     }),
     readinessItem({
       id: "martin",
@@ -524,7 +524,7 @@ export function buildReadiness(params: {
       description: "Vector tile serving is responding.",
       complete: isHealthy("martin"),
       required: true,
-      actionHref: "/studio/sources",
+      actionHref: "/tilesets",
     }),
     readinessItem({
       id: "valhalla",
@@ -532,7 +532,7 @@ export function buildReadiness(params: {
       description: "Routing services are responding.",
       complete: isHealthy("valhalla"),
       required: true,
-      actionHref: "/studio/usage",
+      actionHref: "/usage",
     }),
     readinessItem({
       id: "storage",
@@ -540,7 +540,7 @@ export function buildReadiness(params: {
       description: "Uploads and generated artifacts have a backing store.",
       complete: isHealthy("storage"),
       required: true,
-      actionHref: "/studio/sources",
+      actionHref: "/tilesets",
     }),
     readinessItem({
       id: "geocoding",
@@ -562,7 +562,7 @@ export function buildReadiness(params: {
       description: "Transactional email is configured or intentionally unavailable.",
       complete: isHealthy("email") || optional("email"),
       required: false,
-      actionHref: "/studio/settings",
+      actionHref: "/settings/profile",
     }),
     readinessItem({
       id: "billing",
@@ -570,7 +570,7 @@ export function buildReadiness(params: {
       description: "Billing checkout is configured or intentionally unavailable.",
       complete: isHealthy("billing") || optional("billing"),
       required: false,
-      actionHref: "/studio/settings",
+      actionHref: "/billing",
     }),
   ];
 }

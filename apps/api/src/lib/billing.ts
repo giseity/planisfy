@@ -236,8 +236,8 @@ export async function createCheckoutSession(params: {
       name: user.name || user.displayName || user.email,
     },
     product_cart: [{ product_id: productId, quantity: 1 }],
-    return_url: `${env.CONSOLE_URL}/studio/settings?billing=success`,
-    cancel_url: `${env.CONSOLE_URL}/studio/settings?billing=cancelled`,
+    return_url: `${env.CONSOLE_URL}/billing?billing=success`,
+    cancel_url: `${env.CONSOLE_URL}/billing?billing=cancelled`,
     metadata: {
       userId: params.userId,
       accountId: params.accountId,

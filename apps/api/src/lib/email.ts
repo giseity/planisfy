@@ -57,7 +57,7 @@ export async function sendInvitationEmail(params: {
   role: string;
   invitationId: string;
 }) {
-  const acceptUrl = `${CONSOLE_URL}/studio/invitations?accept=${params.invitationId}`;
+  const acceptUrl = `${CONSOLE_URL}/organization?accept=${params.invitationId}`;
 
   return sendEmail({
     to: params.email,
@@ -122,14 +122,14 @@ export async function sendQuotaWarningEmail(params: {
           <div style="background: ${params.percentUsed >= 90 ? '#ef4444' : '#f59e0b'}; height: 8px; border-radius: 6px; width: ${Math.min(params.percentUsed, 100)}%;"></div>
         </div>
         <p>To avoid service interruptions, consider upgrading your plan.</p>
-        <a href="${CONSOLE_URL}/studio/settings" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">
+        <a href="${CONSOLE_URL}/billing" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">
           View Plan Options
         </a>
         <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
         <p style="color: #999; font-size: 12px;">Planisfy — Open-source mapping platform</p>
       </div>
     `,
-    text: `Hi ${params.name},\n\nYou've used ${params.usedUnits.toLocaleString()} of ${params.totalUnits.toLocaleString()} monthly units (${params.percentUsed}%).\n\nUpgrade: ${CONSOLE_URL}/studio/settings`,
+    text: `Hi ${params.name},\n\nYou've used ${params.usedUnits.toLocaleString()} of ${params.totalUnits.toLocaleString()} monthly units (${params.percentUsed}%).\n\nUpgrade: ${CONSOLE_URL}/billing`,
   });
 }
 
@@ -175,13 +175,13 @@ export async function sendWelcomeEmail(params: {
           <li><strong>Generate API keys</strong> — Access tiles, geocoding, and routing APIs</li>
           <li><strong>Invite your team</strong> — Create an organization and collaborate</li>
         </ul>
-        <a href="${CONSOLE_URL}/studio/styles" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">
+        <a href="${CONSOLE_URL}/styles" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">
           Get Started
         </a>
         <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
         <p style="color: #999; font-size: 12px;">Planisfy — Open-source mapping platform</p>
       </div>
     `,
-    text: `Hi ${params.name},\n\nWelcome to Planisfy! Get started: ${CONSOLE_URL}/studio/styles`,
+    text: `Hi ${params.name},\n\nWelcome to Planisfy! Get started: ${CONSOLE_URL}/styles`,
   });
 }
