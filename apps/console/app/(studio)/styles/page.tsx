@@ -5,6 +5,7 @@ import { StyleCard } from "@/components/studio/style-card"
 import { StyleListItem } from "@/components/studio/style-list-item"
 import { Button } from "@planisfy/ui/components/button"
 import { Input } from "@planisfy/ui/components/input"
+import { Skeleton } from "@planisfy/ui/components/skeleton"
 import {
   Dialog,
   DialogContent,
@@ -131,7 +132,7 @@ export default function StylesPage() {
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-48 rounded-lg border bg-muted animate-pulse" />
+            <Skeleton key={i} className="h-48 rounded-lg" />
           ))}
         </div>
       ) : filtered.length === 0 && styles.length === 0 ? (

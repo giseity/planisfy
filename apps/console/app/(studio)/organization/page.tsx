@@ -8,6 +8,17 @@ import { Input } from "@planisfy/ui/components/input"
 import { Label } from "@planisfy/ui/components/label"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
+import { Skeleton } from "@planisfy/ui/components/skeleton"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@planisfy/ui/components/alert-dialog"
 import {
   Tabs,
   TabsContent,
@@ -154,7 +165,7 @@ export default function OrgPage() {
         <h1 className="text-2xl font-bold mb-6">Organization</h1>
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-24 rounded-lg border bg-muted animate-pulse" />
+            <Skeleton key={i} className="h-24 rounded-lg" />
           ))}
         </div>
       </div>
@@ -600,25 +611,26 @@ function MembersTab({
       </Dialog>
 
       {/* Remove confirmation */}
-      <Dialog open={!!removeId} onOpenChange={() => setRemoveId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Remove member?</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={!!removeId} onOpenChange={() => setRemoveId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove member?</AlertDialogTitle>
+            <AlertDialogDescription>
               This person will lose access to all organization resources
               immediately.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRemoveId(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleRemove}>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemove}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Remove
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Role change dialog */}
       <Dialog open={!!roleChange} onOpenChange={() => setRoleChange(null)}>
@@ -767,15 +779,15 @@ function SettingsTab({
       </Card>
 
       {/* Delete confirmation */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete organization?</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete organization?</AlertDialogTitle>
+            <AlertDialogDescription>
               This action cannot be undone. All resources owned by{" "}
               <strong>{org.name}</strong> will be permanently deleted.
-            </DialogDescription>
-          </DialogHeader>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           <div className="py-4">
             <Label htmlFor="delete-confirm">
               Type <strong>{org.name}</strong> to confirm
@@ -788,26 +800,25 @@ function SettingsTab({
               className="mt-1"
             />
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
+          <AlertDialogFooter>
+            <AlertDialogCancel
               onClick={() => {
                 setDeleteOpen(false)
                 setDeleteConfirm("")
               }}
             >
               Cancel
-            </Button>
-            <Button
-              variant="destructive"
+            </AlertDialogCancel>
+            <AlertDialogAction
               disabled={deleteConfirm !== org.name || deleting}
               onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleting ? "Deleting..." : "Delete organization"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

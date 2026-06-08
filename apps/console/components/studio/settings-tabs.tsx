@@ -15,11 +15,22 @@ import { authClient, useSession } from "@planisfy/auth/client"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Button } from "@planisfy/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@planisfy/ui/components/alert-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@planisfy/ui/components/dialog"
 import { Input } from "@planisfy/ui/components/input"
 import { Label } from "@planisfy/ui/components/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@planisfy/ui/components/select"
 import { Separator } from "@planisfy/ui/components/separator"
+import { Skeleton } from "@planisfy/ui/components/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@planisfy/ui/components/table"
 import { Textarea } from "@planisfy/ui/components/textarea"
 import { Check, KeyRound, Monitor, Server, Trash2, Wand2, X } from "lucide-react"
@@ -145,7 +156,7 @@ export function ProfileTab() {
     return (
       <div className="space-y-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-16 rounded-lg border bg-muted animate-pulse" />
+          <Skeleton key={i} className="h-16 rounded-lg" />
         ))}
       </div>
     )
@@ -419,7 +430,7 @@ function SessionsSection() {
     return (
       <div className="space-y-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-16 rounded-lg border bg-muted animate-pulse" />
+          <Skeleton key={i} className="h-16 rounded-lg" />
         ))}
       </div>
     )
@@ -502,45 +513,47 @@ function SessionsSection() {
       </Table>
 
       {/* Revoke single session */}
-      <Dialog open={!!revokeId} onOpenChange={() => setRevokeId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Revoke session?</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={!!revokeId} onOpenChange={() => setRevokeId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke session?</AlertDialogTitle>
+            <AlertDialogDescription>
               This will sign out the device immediately.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRevokeId(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleRevoke}>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRevoke}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Revoke
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Revoke all others */}
-      <Dialog open={revokeAllOpen} onOpenChange={setRevokeAllOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Revoke all other sessions?</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={revokeAllOpen} onOpenChange={setRevokeAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke all other sessions?</AlertDialogTitle>
+            <AlertDialogDescription>
               All devices except your current session will be signed out
               immediately.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRevokeAllOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleRevokeAll}>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRevokeAll}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Revoke all
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -605,15 +618,15 @@ function DangerZone() {
         </CardContent>
       </Card>
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete your account?</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
               This action is permanent. All your styles, API keys, tilesets, and data
               will be deleted. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           <div className="space-y-2 py-2">
             <Label>
               Type <span className="font-mono font-semibold">{profile?.email}</span> to confirm
@@ -625,20 +638,20 @@ function DangerZone() {
             />
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteOpen(false)}>
               Cancel
-            </Button>
-            <Button
-              variant="destructive"
+            </AlertDialogCancel>
+            <AlertDialogAction
               onClick={handleDelete}
               disabled={deleting || confirmation !== profile?.email}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleting ? "Deleting..." : "Delete my account"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -957,7 +970,7 @@ export function ExecutionTab() {
     return (
       <div className="space-y-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-20 rounded-lg border bg-muted animate-pulse" />
+          <Skeleton key={i} className="h-20 rounded-lg" />
         ))}
       </div>
     )
@@ -1459,7 +1472,7 @@ export function BillingTab() {
     return (
       <div className="space-y-3">
         {[...Array(2)].map((_, i) => (
-          <div key={i} className="h-24 rounded-lg border bg-muted animate-pulse" />
+          <Skeleton key={i} className="h-24 rounded-lg" />
         ))}
       </div>
     )
