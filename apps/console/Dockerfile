@@ -11,6 +11,9 @@ COPY apps/console/package.json apps/console/
 COPY packages/ui/package.json packages/ui/
 COPY packages/database/package.json packages/database/
 COPY packages/auth/package.json packages/auth/
+COPY packages/env/package.json packages/env/
+COPY packages/platform-policy/package.json packages/platform-policy/
+COPY packages/style-spec/package.json packages/style-spec/
 COPY packages/types/package.json packages/types/
 COPY packages/utils/package.json packages/utils/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \

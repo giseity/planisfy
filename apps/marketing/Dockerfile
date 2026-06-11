@@ -8,6 +8,11 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/marketing/package.json apps/marketing/
 COPY packages/ui/package.json packages/ui/
+COPY packages/auth/package.json packages/auth/
+COPY packages/env/package.json packages/env/
+COPY packages/database/package.json packages/database/
+COPY packages/eslint-config/package.json packages/eslint-config/
+COPY packages/typescript-config/package.json packages/typescript-config/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter marketing...
 
