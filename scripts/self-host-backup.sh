@@ -70,7 +70,7 @@ compose exec -T postgres pg_dump -U planisfy -d planisfy --format=custom > "$bac
 if compose exec -T redis redis-cli ping >/dev/null 2>&1; then
   echo "Writing Redis backup"
   compose exec -T redis redis-cli SAVE >/dev/null
-  docker cp planisfy-redis:/data/dump.rdb "$backup_dir/redis.dump.rdb" >/dev/null
+  compose cp redis:/data/dump.rdb "$backup_dir/redis.dump.rdb" >/dev/null
 else
   echo "Redis is not reachable; skipping Redis dump" >&2
 fi

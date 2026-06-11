@@ -85,7 +85,7 @@ compose exec -T postgres pg_restore --clean --if-exists -U planisfy -d planisfy 
 if [[ -f "$BACKUP_DIR/redis.dump.rdb" ]]; then
   echo "Restoring Redis dump"
   compose stop redis >/dev/null
-  docker cp "$BACKUP_DIR/redis.dump.rdb" planisfy-redis:/data/dump.rdb >/dev/null
+  compose cp "$BACKUP_DIR/redis.dump.rdb" redis:/data/dump.rdb >/dev/null
   compose up -d redis
 fi
 

@@ -21,6 +21,8 @@
 #
 # Note: Geocoding (Pelias) runs as a separate project.
 
+name: planisfy
+
 services:
   # ============================================
   # Core Applications
@@ -30,7 +32,7 @@ services:
     build:
       context: ../../
       dockerfile: apps/api/Dockerfile
-    container_name: planisfy-api
+    image: planisfy/api:${PLANISFY_IMAGE_TAG:-dev}
     ports:
       - "4000:4000"
     environment:
@@ -99,7 +101,7 @@ services:
     build:
       context: ../../
       dockerfile: apps/worker-geodata/Dockerfile
-    container_name: planisfy-worker-geodata
+    image: planisfy/worker-geodata:${PLANISFY_IMAGE_TAG:-dev}
     environment:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - REDIS_URL=redis://redis:6379
@@ -147,7 +149,7 @@ services:
     build:
       context: ../../
       dockerfile: apps/console/Dockerfile
-    container_name: planisfy-console
+    image: planisfy/console:${PLANISFY_IMAGE_TAG:-dev}
     ports:
       - "3001:3000"
     environment:
@@ -177,7 +179,7 @@ services:
     build:
       context: ../../
       dockerfile: apps/admin/Dockerfile
-    container_name: planisfy-admin
+    image: planisfy/admin:${PLANISFY_IMAGE_TAG:-dev}
     ports:
       - "3003:3000"
     environment:
@@ -204,7 +206,7 @@ services:
     build:
       context: ../../
       dockerfile: apps/self-host-supervisor/Dockerfile
-    container_name: planisfy-self-host-supervisor
+    image: planisfy/self-host-supervisor:${PLANISFY_IMAGE_TAG:-dev}
     profiles:
       - with-supervisor
     ports:
@@ -231,7 +233,7 @@ services:
     build:
       context: ../../
       dockerfile: apps/docs/Dockerfile
-    container_name: planisfy-docs
+    image: planisfy/docs:${PLANISFY_IMAGE_TAG:-dev}
     ports:
       - "3002:3000"
     environment:
@@ -254,7 +256,7 @@ services:
     build:
       context: ../../
       dockerfile: apps/marketing/Dockerfile
-    container_name: planisfy-marketing
+    image: planisfy/marketing:${PLANISFY_IMAGE_TAG:-dev}
     ports:
       - "3000:3000"
     environment:
@@ -268,8 +270,7 @@ services:
   # ============================================
 
   postgres:
-    image: postgres:16-alpine
-    container_name: planisfy-postgres
+    image: ${POSTGRES_IMAGE:-postgres:16}
     ports:
       - "5432:5432"
     environment:
@@ -288,8 +289,7 @@ services:
       - planisfy-network
 
   redis:
-    image: redis:7-alpine
-    container_name: planisfy-redis
+    image: ${REDIS_IMAGE:-redis:7.4}
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes
@@ -305,8 +305,7 @@ services:
       - planisfy-network
 
   minio:
-    image: minio/minio:latest
-    container_name: planisfy-minio
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-06-13T11-33-47Z}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -323,8 +322,7 @@ services:
       - with-minio
 
   minio-init:
-    image: minio/mc:latest
-    container_name: planisfy-minio-init
+    image: ${MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-08-13T08-35-41Z}
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER:-planisfy}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-planisfy-local-minio-password}
@@ -350,8 +348,7 @@ services:
   # ============================================
 
   martin:
-    image: maplibre/martin:latest
-    container_name: planisfy-martin
+    image: ${MARTIN_IMAGE:-maplibre/martin:v0.8.0}
     ports:
       - "3005:3000"
     environment:
@@ -366,8 +363,7 @@ services:
       - planisfy-network
 
   valhalla:
-    image: ghcr.io/valhalla/valhalla:latest
-    container_name: planisfy-valhalla
+    image: ${VALHALLA_IMAGE:-ghcr.io/valhalla/valhalla:3.7.0}
     ports:
       - "3007:8002"
     environment:
@@ -387,8 +383,7 @@ services:
   # ============================================
 
   traefik:
-    image: traefik:v3.0
-    container_name: planisfy-traefik
+    image: ${TRAEFIK_IMAGE:-traefik:v3.7.5}
     ports:
       - "80:80"
       - "443:443"
