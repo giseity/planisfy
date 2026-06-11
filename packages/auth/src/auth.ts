@@ -16,6 +16,11 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { getAuthBaseURL, getAuthSecret } from "./env";
 
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+if (!apiUrl) {
+  throw new Error("NEXT_PUBLIC_API_URL is required.");
+}
+
 // ============================================================================
 // Handle generation (OAuth users — no handle provided at signup)
 // ============================================================================
@@ -72,9 +77,7 @@ export const auth = betterAuth({
         // via a fire-and-forget fetch to the internal email endpoint
         if (process.env.RESEND_API_KEY) {
           try {
-            const emailUrl =
-              process.env.INTERNAL_API_URL || "https://api.planisfy.localhost";
-            await fetch(`${emailUrl}/internal/send-invitation-email`, {
+            await fetch(`${apiUrl}/internal/send-invitation-email`, {
               method: "POST",
               headers: internalHeaders(),
               body: JSON.stringify({
@@ -135,9 +138,7 @@ export const auth = betterAuth({
       console.log(`[password-reset] Sending reset link to ${user.email}`);
       if (process.env.RESEND_API_KEY) {
         try {
-          const emailUrl =
-            process.env.INTERNAL_API_URL || "https://api.planisfy.localhost";
-          await fetch(`${emailUrl}/internal/send-password-reset-email`, {
+          await fetch(`${apiUrl}/internal/send-password-reset-email`, {
             method: "POST",
             headers: internalHeaders(),
             body: JSON.stringify({
@@ -160,9 +161,7 @@ export const auth = betterAuth({
       console.log(`[email-verify] Sending verification to ${user.email}`);
       if (process.env.RESEND_API_KEY) {
         try {
-          const emailUrl =
-            process.env.INTERNAL_API_URL || "https://api.planisfy.localhost";
-          await fetch(`${emailUrl}/internal/send-verification-email`, {
+          await fetch(`${apiUrl}/internal/send-verification-email`, {
             method: "POST",
             headers: internalHeaders(),
             body: JSON.stringify({

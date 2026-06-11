@@ -15,7 +15,7 @@ import type {
 const BASE =
   typeof window !== "undefined"
     ? clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH
-    : (process.env.API_URL || "https://api.planisfy.localhost") + "/console";
+    : `${clientEnv.NEXT_PUBLIC_API_URL}/console`;
 const API_ROOT = BASE.replace(/\/console\/?$/, "");
 
 interface ApiError {

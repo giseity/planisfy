@@ -110,9 +110,9 @@ the `.localhost` hostnames above rather than fixed `localhost:PORT` URLs.
 The web surfaces are intentionally separate. Marketing/public owns managed auth
 entry pages. Console owns authenticated customer workflows and keeps
 self-host/local auth fallback pages. Admin remains an internal operations app.
-`BETTER_AUTH_URL` identifies the server auth handler, while
-`NEXT_PUBLIC_AUTH_ORIGIN` controls where protected Console routes send
-unauthenticated users.
+`NEXT_PUBLIC_AUTH_ORIGIN` is the canonical auth origin: the server derives the
+Better Auth handler URL from it, and protected Console routes use it for sign-in
+redirects.
 
 Run verification:
 

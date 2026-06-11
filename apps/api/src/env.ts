@@ -1,7 +1,6 @@
 import { loadWorkspaceEnv } from "@planisfy/env/node";
 import {
   createEnv,
-  nodeEnvSchema,
   portSchema,
   redisConnectionFromEnv,
   z,
@@ -9,76 +8,64 @@ import {
 
 loadWorkspaceEnv();
 
-const optionalString = z.preprocess(
-  (value) => (value === "" ? undefined : value),
-  z.string().min(1).optional(),
-);
-const optionalUrl = z.preprocess(
-  (value) => (value === "" ? undefined : value),
-  z.string().url().optional(),
-);
+const emptyableString = z.string();
+const emptyableUrl = z.union([z.literal(""), z.string().url()]);
 
 const schema = z.object({
-  NODE_ENV: nodeEnvSchema,
-  PORT: portSchema.default(4000),
-  APP_VERSION: z.string().min(1).default("dev"),
-  DEPLOYMENT_MODE: z.enum(["self_host", "managed"]).default("self_host"),
+  NODE_ENV: z.enum(["development", "test", "production"]),
+  PORT: portSchema,
+  APP_VERSION: z.string().min(1),
+  DEPLOYMENT_MODE: z.enum(["self_host", "managed"]),
 
-  REDIS_URL: optionalUrl,
-  REDIS_HOST: z.string().min(1).default("localhost"),
-  REDIS_PORT: portSchema.default(6379),
+  REDIS_URL: z.string().url(),
+  REDIS_HOST: z.string().min(1),
+  REDIS_PORT: portSchema,
 
-  INTERNAL_API_URL: z.string().url().default("https://api.planisfy.localhost"),
-  INTERNAL_API_SECRET: optionalString,
-  BETTER_AUTH_SECRET: optionalString,
-  CONSOLE_URL: z.string().url().default("https://console.planisfy.localhost"),
+  NEXT_PUBLIC_API_URL: z.string().url(),
+  NEXT_PUBLIC_CONSOLE_URL: z.string().url(),
+  INTERNAL_API_SECRET: z.string().min(1),
+  BETTER_AUTH_SECRET: z.string().min(1),
 
-  MARTIN_URL: z.string().url().default("http://localhost:3005"),
-  VALHALLA_URL: z.string().url().default("http://localhost:3007"),
-  PELIAS_URL: z
-    .string()
-    .url()
-    .default("https://api.planisfy.localhost/geocoding"),
-  GLYPHS_URL: z.string().url().default("https://demotiles.maplibre.org/font"),
-  STATIC_MAP_URL: optionalUrl,
-  ELEVATION_URL: z
-    .string()
-    .url()
-    .default("https://api.open-elevation.com/api/v1"),
+  MARTIN_URL: z.string().url(),
+  VALHALLA_URL: z.string().url(),
+  PELIAS_URL: z.string().url(),
+  GLYPHS_URL: z.string().url(),
+  STATIC_MAP_URL: emptyableUrl,
+  ELEVATION_URL: z.string().url(),
 
-  RESEND_API_KEY: optionalString,
-  FROM_EMAIL: z.string().min(1).default("Planisfy <noreply@planisfy.com>"),
-  DODO_PAYMENTS_API_KEY: optionalString,
-  DODO_PAYMENTS_API_URL: optionalUrl,
-  DODO_PAYMENTS_ENVIRONMENT: z
-    .enum(["test_mode", "live_mode"])
-    .default("test_mode"),
-  DODO_PAYMENTS_WEBHOOK_SECRET: optionalString,
-  DODO_PRO_PRODUCT_ID: optionalString,
-  DODO_ENTERPRISE_PRODUCT_ID: optionalString,
-  SOURCE_CREDENTIAL_ENCRYPTION_KEY: optionalString,
-  ALLOW_PRIVATE_SOURCE_URLS: z
-    .preprocess((value) => value === "true" || value === true, z.boolean())
-    .default(false),
-  OVERTURE_ALLOW_EXPERIMENTAL_TYPES: z
-    .preprocess((value) => value === "true" || value === true, z.boolean())
-    .default(false),
-  OVERTURE_RELEASE: optionalString,
-  DEMO_PMTILES_PATH: optionalString,
-  STORAGE_PROVIDER: z.enum(["local", "s3", "r2"]).default("local"),
-  LOCAL_STORAGE_PATH: optionalString,
-  S3_BUCKET: optionalString,
-  S3_REGION: optionalString,
-  S3_ENDPOINT: optionalUrl,
-  S3_PUBLIC_URL: optionalUrl,
-  AWS_ACCESS_KEY_ID: optionalString,
-  AWS_SECRET_ACCESS_KEY: optionalString,
-  R2_ACCOUNT_ID: optionalString,
-  R2_BUCKET: optionalString,
-  R2_ENDPOINT: optionalUrl,
-  R2_PUBLIC_URL: optionalUrl,
-  R2_ACCESS_KEY_ID: optionalString,
-  R2_SECRET_ACCESS_KEY: optionalString,
+  RESEND_API_KEY: emptyableString,
+  FROM_EMAIL: z.string().min(1),
+  DODO_PAYMENTS_API_KEY: emptyableString,
+  DODO_PAYMENTS_API_URL: emptyableUrl,
+  DODO_PAYMENTS_ENVIRONMENT: z.enum(["test_mode", "live_mode"]),
+  DODO_PAYMENTS_WEBHOOK_SECRET: emptyableString,
+  DODO_PRO_PRODUCT_ID: emptyableString,
+  DODO_ENTERPRISE_PRODUCT_ID: emptyableString,
+  SOURCE_CREDENTIAL_ENCRYPTION_KEY: emptyableString,
+  ALLOW_PRIVATE_SOURCE_URLS: z.preprocess(
+    (value) => value === "true" || value === true,
+    z.boolean(),
+  ),
+  OVERTURE_ALLOW_EXPERIMENTAL_TYPES: z.preprocess(
+    (value) => value === "true" || value === true,
+    z.boolean(),
+  ),
+  OVERTURE_RELEASE: emptyableString,
+  DEMO_PMTILES_PATH: emptyableString,
+  STORAGE_PROVIDER: z.enum(["local", "s3", "r2"]),
+  LOCAL_STORAGE_PATH: z.string().min(1),
+  S3_BUCKET: emptyableString,
+  S3_REGION: emptyableString,
+  S3_ENDPOINT: emptyableUrl,
+  S3_PUBLIC_URL: emptyableUrl,
+  AWS_ACCESS_KEY_ID: emptyableString,
+  AWS_SECRET_ACCESS_KEY: emptyableString,
+  R2_ACCOUNT_ID: emptyableString,
+  R2_BUCKET: emptyableString,
+  R2_ENDPOINT: emptyableUrl,
+  R2_PUBLIC_URL: emptyableUrl,
+  R2_ACCESS_KEY_ID: emptyableString,
+  R2_SECRET_ACCESS_KEY: emptyableString,
 });
 
 export const env = createEnv(schema, process.env, { appName: "api" });

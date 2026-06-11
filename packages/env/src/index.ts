@@ -25,9 +25,7 @@ export type RedisConnection = {
   password?: string;
 };
 
-export const nodeEnvSchema = z
-  .enum(["development", "test", "production"])
-  .default("development");
+export const nodeEnvSchema = z.enum(["development", "test", "production"]);
 
 export const urlSchema = z.string().url();
 
@@ -105,8 +103,12 @@ export function redisConnectionFromEnv(env: {
     };
   }
 
+  if (!env.REDIS_HOST || env.REDIS_PORT === undefined) {
+    throw new Error("REDIS_HOST and REDIS_PORT are required when REDIS_URL is empty.");
+  }
+
   return {
-    host: env.REDIS_HOST || "localhost",
-    port: Number(env.REDIS_PORT || 6379),
+    host: env.REDIS_HOST,
+    port: Number(env.REDIS_PORT),
   };
 }

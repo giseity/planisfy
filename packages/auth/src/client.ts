@@ -1,10 +1,13 @@
 import { createAuthClient } from "better-auth/react";
 import { organizationClient } from "better-auth/client/plugins";
 
+const authOrigin = process.env.NEXT_PUBLIC_AUTH_ORIGIN;
+if (!authOrigin) {
+  throw new Error("NEXT_PUBLIC_AUTH_ORIGIN is required.");
+}
+
 export const authClient = createAuthClient({
-  baseURL:
-    process.env.NEXT_PUBLIC_AUTH_ORIGIN ||
-    process.env.NEXT_PUBLIC_APP_URL || "https://console.planisfy.localhost",
+  baseURL: authOrigin,
   plugins: [organizationClient()],
 });
 

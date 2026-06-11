@@ -44,15 +44,16 @@ services:
       - REDIS_PORT=6379
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
-      - INTERNAL_API_URL=http://api:4000
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
       - SOURCE_CREDENTIAL_ENCRYPTION_KEY=${SOURCE_CREDENTIAL_ENCRYPTION_KEY:-}
       - ALLOW_PRIVATE_SOURCE_URLS=${ALLOW_PRIVATE_SOURCE_URLS:-false}
       - OVERTURE_ALLOW_EXPERIMENTAL_TYPES=${OVERTURE_ALLOW_EXPERIMENTAL_TYPES:-false}
       - DEMO_PMTILES_PATH=${DEMO_PMTILES_PATH:-/data/pmtiles/stuttgart.pmtiles}
-      - CONSOLE_URL=http://localhost:3001
       - MARTIN_URL=http://martin:3000
       - PELIAS_URL=${PELIAS_URL:-http://api:4000/geocoding}
       - GLYPHS_URL=${GLYPHS_URL:-https://demotiles.maplibre.org/font}
+      - STATIC_MAP_URL=${STATIC_MAP_URL:-}
       - ELEVATION_URL=${ELEVATION_URL:-https://api.open-elevation.com/api/v1}
       - VALHALLA_URL=http://valhalla:8002
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
@@ -78,6 +79,9 @@ services:
       - DODO_PAYMENTS_WEBHOOK_SECRET=${DODO_PAYMENTS_WEBHOOK_SECRET:-}
       - DODO_PRO_PRODUCT_ID=${DODO_PRO_PRODUCT_ID:-}
       - DODO_ENTERPRISE_PRODUCT_ID=${DODO_ENTERPRISE_PRODUCT_ID:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - FROM_EMAIL=${FROM_EMAIL:-Planisfy <noreply@planisfy.com>}
+      - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-self_host}
       - NODE_ENV=production
     volumes:
       - ./data/storage:/data/storage
@@ -107,6 +111,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
+      - SOURCE_CREDENTIAL_ENCRYPTION_KEY=${SOURCE_CREDENTIAL_ENCRYPTION_KEY:-}
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
       - LOCAL_STORAGE_PATH=/data/storage
       - LOCAL_STORAGE_URL=${LOCAL_STORAGE_URL:-http://localhost:4000/storage}
@@ -124,6 +131,10 @@ services:
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
       - GEODATA_WORKER_CONCURRENCY=${GEODATA_WORKER_CONCURRENCY:-2}
+      - GEODATA_WORKER_HEARTBEAT_INTERVAL_MS=${GEODATA_WORKER_HEARTBEAT_INTERVAL_MS:-10000}
+      - GEODATA_WORKER_HEARTBEAT_TTL_MS=${GEODATA_WORKER_HEARTBEAT_TTL_MS:-45000}
+      - GEODATA_OUTBOX_POLL_INTERVAL_MS=${GEODATA_OUTBOX_POLL_INTERVAL_MS:-5000}
+      - GEODATA_OUTBOX_BATCH_SIZE=${GEODATA_OUTBOX_BATCH_SIZE:-10}
       - DUCKDB_PATH=${DUCKDB_PATH:-duckdb}
       - TIPPECANOE_PATH=${TIPPECANOE_PATH:-tippecanoe}
       - OGR2OGR_PATH=${OGR2OGR_PATH:-ogr2ogr}
@@ -156,8 +167,6 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
-      - BETTER_AUTH_URL=http://localhost:3001/api/auth
-      - API_URL=http://api:4000
       - NEXT_PUBLIC_APP_URL=http://localhost:3001
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3001
       - NEXT_PUBLIC_API_URL=http://localhost:4000
@@ -186,9 +195,8 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
-      - BETTER_AUTH_URL=http://localhost:3003/api/auth
-      - API_URL=http://api:4000
       - NEXT_PUBLIC_APP_URL=http://localhost:3003
+      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3003
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
       - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
@@ -241,9 +249,9 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-change-this-secret-in-production-min-32-chars}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-change-this-internal-secret}
-      - BETTER_AUTH_URL=http://localhost:3000/api/auth
       - NEXT_PUBLIC_APP_URL=http://localhost:3000
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3000
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
     depends_on:
       postgres:
@@ -261,6 +269,8 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3000
+      - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
     restart: unless-stopped
     networks:
       - planisfy-network

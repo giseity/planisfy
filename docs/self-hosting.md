@@ -169,11 +169,11 @@ The local demo does not require email delivery. If `RESEND_API_KEY` is unset,
 verification emails are not sent, and the Console shows a reminder banner while
 still allowing the signed-in user to continue.
 
-Self-host auth is console-local by default. `BETTER_AUTH_URL` points at the auth
-handler URL used by the server, while `NEXT_PUBLIC_AUTH_ORIGIN` can be omitted
-or set to `http://localhost:3001` so protected Console routes redirect to
-`/sign-in?callbackUrl=...` on the Console origin. Managed deployments set
-`NEXT_PUBLIC_AUTH_ORIGIN` to the public Marketing origin instead.
+Self-host auth is console-local by default. Set `NEXT_PUBLIC_AUTH_ORIGIN` to the
+Console origin so the server derives the auth handler URL from it and protected
+Console routes redirect to `/sign-in?callbackUrl=...` on the Console origin.
+Managed deployments set `NEXT_PUBLIC_AUTH_ORIGIN` to the public Marketing
+origin instead.
 
 Managed mode is different: `DEPLOYMENT_MODE=managed` requires Resend, and API
 key creation is blocked until the user email is verified.

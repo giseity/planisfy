@@ -153,45 +153,62 @@ export class S3Storage implements StorageProvider {
   } {
     if (this.provider === "r2") {
       const endpoint =
-        env.R2_ENDPOINT ??
-        (env.R2_ACCOUNT_ID
+        configured(env.R2_ENDPOINT) ??
+        (configured(env.R2_ACCOUNT_ID)
           ? `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
           : undefined);
       if (!endpoint) {
         throw new Error("R2 storage requires R2_ENDPOINT or R2_ACCOUNT_ID");
       }
 
-      const accessKeyId = env.R2_ACCESS_KEY_ID ?? env.AWS_ACCESS_KEY_ID;
+      const accessKeyId =
+        configured(env.R2_ACCESS_KEY_ID) ?? configured(env.AWS_ACCESS_KEY_ID);
       const secretAccessKey =
-        env.R2_SECRET_ACCESS_KEY ?? env.AWS_SECRET_ACCESS_KEY;
+        configured(env.R2_SECRET_ACCESS_KEY) ??
+        configured(env.AWS_SECRET_ACCESS_KEY);
       if (!accessKeyId || !secretAccessKey) {
         throw new Error(
           "R2 storage requires R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY",
         );
       }
 
+      const bucket = configured(env.R2_BUCKET) ?? configured(env.S3_BUCKET);
+      if (!bucket) {
+        throw new Error("R2 storage requires R2_BUCKET or S3_BUCKET");
+      }
+
       return {
-        bucket: env.R2_BUCKET ?? env.S3_BUCKET,
+        bucket,
         region: "auto",
         endpoint,
-        publicUrl: env.R2_PUBLIC_URL ?? env.S3_PUBLIC_URL,
+        publicUrl: configured(env.R2_PUBLIC_URL) ?? configured(env.S3_PUBLIC_URL),
         credentials: { accessKeyId, secretAccessKey },
       };
     }
 
+    const awsAccessKeyId = configured(env.AWS_ACCESS_KEY_ID);
+    const awsSecretAccessKey = configured(env.AWS_SECRET_ACCESS_KEY);
     const credentials =
-      env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY
+      awsAccessKeyId && awsSecretAccessKey
         ? {
-            accessKeyId: env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+            accessKeyId: awsAccessKeyId,
+            secretAccessKey: awsSecretAccessKey,
           }
         : undefined;
+    const bucket = configured(env.S3_BUCKET);
+    if (!bucket) {
+      throw new Error("S3 storage requires S3_BUCKET");
+    }
+    const region = configured(env.S3_REGION);
+    if (!region) {
+      throw new Error("S3 storage requires S3_REGION");
+    }
 
     return {
-      bucket: env.S3_BUCKET,
-      region: env.S3_REGION,
-      endpoint: env.S3_ENDPOINT,
-      publicUrl: env.S3_PUBLIC_URL,
+      bucket,
+      region,
+      endpoint: configured(env.S3_ENDPOINT),
+      publicUrl: configured(env.S3_PUBLIC_URL),
       credentials,
     };
   }
@@ -203,7 +220,7 @@ export class LocalStorage implements StorageProvider {
   private bucket: string;
 
   constructor() {
-    this.basePath = env.LOCAL_STORAGE_PATH || join(process.cwd(), ".storage");
+    this.basePath = env.LOCAL_STORAGE_PATH;
     this.baseUrl = env.LOCAL_STORAGE_URL;
     this.bucket = env.LOCAL_STORAGE_BUCKET;
 
@@ -313,6 +330,10 @@ async function streamToBuffer(stream: Readable): Promise<Buffer> {
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+function configured(value: string | undefined) {
+  return value && value.length > 0 ? value : undefined;
 }
 
 function encodeCopySourceKey(key: string) {

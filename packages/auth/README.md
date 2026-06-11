@@ -39,6 +39,7 @@ pnpm -F @planisfy/auth lint
 
 - Better Auth inserts the final `users` or `organizations` row after `databaseHooks.*.create.before`; the hook must create the shared anchor row first and return the generated ID.
 - Email delivery is best effort in local development and depends on `RESEND_API_KEY`.
-- `BETTER_AUTH_URL` is the canonical server auth handler URL. Browser redirects
-  use `NEXT_PUBLIC_AUTH_ORIGIN`, which should point at Marketing/public in
-  managed mode and can default to Console in self-host/local mode.
+- `NEXT_PUBLIC_AUTH_ORIGIN` is the canonical auth origin. The server derives
+  the Better Auth handler URL from it, and protected routes use it for sign-in
+  redirects. Point it at Marketing/public in managed mode and Console in
+  self-host/local mode.

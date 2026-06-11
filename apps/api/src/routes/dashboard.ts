@@ -158,7 +158,7 @@ dashboardRoute.get("/dashboard", async (c) => {
       recentJobs: jobRows,
       recentAudit: auditRows,
       health,
-      apiBaseUrl: env.INTERNAL_API_URL.replace(/\/$/, ""),
+      apiBaseUrl: env.NEXT_PUBLIC_API_URL.replace(/\/$/, ""),
     }),
   });
 });

@@ -236,8 +236,8 @@ export async function createCheckoutSession(params: {
       name: user.name || user.displayName || user.email,
     },
     product_cart: [{ product_id: productId, quantity: 1 }],
-    return_url: `${env.CONSOLE_URL}/billing?billing=success`,
-    cancel_url: `${env.CONSOLE_URL}/billing?billing=cancelled`,
+    return_url: `${env.NEXT_PUBLIC_CONSOLE_URL}/billing?billing=success`,
+    cancel_url: `${env.NEXT_PUBLIC_CONSOLE_URL}/billing?billing=cancelled`,
     metadata: {
       userId: params.userId,
       accountId: params.accountId,
@@ -430,12 +430,10 @@ function getDodoProductId(planId: BillablePlanSlug): string | undefined {
 }
 
 function getDodoApiUrl(): string {
-  const url = env.DODO_PAYMENTS_API_URL ?? (
-    env.DODO_PAYMENTS_ENVIRONMENT === "live_mode"
-    ? "https://live.dodopayments.com"
-    : "https://test.dodopayments.com"
-  );
-  return url.replace(/\/$/, "");
+  if (!env.DODO_PAYMENTS_API_URL) {
+    throw new Error("DODO_PAYMENTS_API_URL is required when billing is enabled.");
+  }
+  return env.DODO_PAYMENTS_API_URL.replace(/\/$/, "");
 }
 
 async function dodoFetch<T>(path: string, options?: RequestInit): Promise<T> {

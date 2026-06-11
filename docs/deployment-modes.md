@@ -17,11 +17,11 @@ Planisfy v1 keeps three web surfaces distinct:
 - Console: authenticated customer dashboard, operational pages, and Studio.
 - Admin: internal/super-admin operations UI.
 
-`BETTER_AUTH_URL` remains the canonical server auth handler URL. Frontend apps
-use `NEXT_PUBLIC_AUTH_ORIGIN` to decide where unauthenticated users should sign
-in. In managed mode this should point at the Marketing/public origin. In
-self-host and local development it defaults to the Console origin, so a simple
-single-console auth workflow keeps working.
+`NEXT_PUBLIC_AUTH_ORIGIN` is the canonical auth origin. The server derives the
+Better Auth handler URL from it, and frontend apps use it to decide where
+unauthenticated users should sign in. In managed mode this should point at the
+Marketing/public origin. In self-host and local development it should point at
+the Console origin, so a simple single-console auth workflow keeps working.
 
 ## Self-Host
 
@@ -44,7 +44,7 @@ Optional env:
 - Dodo Payments env; without it, checkout is unavailable.
 - `SUPERVISOR_URL` and `SUPERVISOR_TOKEN`; without them, local upgrade
   automation is unavailable but the app still runs.
-- `NEXT_PUBLIC_AUTH_ORIGIN`; defaults to the Console origin for local/self-host
+- `NEXT_PUBLIC_AUTH_ORIGIN`; set to the Console origin for local/self-host
   installs.
 
 ## Managed

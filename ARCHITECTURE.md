@@ -102,11 +102,12 @@ Planisfy uses better-auth for email/password sessions and organization membershi
 
 The API gateway validates better-auth session cookies directly against the sessions table for cross-origin console/API development ergonomics. API keys use SHA-256 hashes of the full key and can be scoped by API category.
 
-`BETTER_AUTH_URL` is the canonical server auth handler URL. Frontend redirects
-use `NEXT_PUBLIC_AUTH_ORIGIN`: self-host and local installs default it to the
-Console origin, while managed deployments point it at the public Marketing
-origin. The same auth UI components are shared by Marketing managed auth pages
-and Console self-host fallback auth pages.
+`NEXT_PUBLIC_AUTH_ORIGIN` is the canonical auth origin. The server derives the
+Better Auth handler URL from it, and frontend redirects use it directly:
+self-host and local installs set it to the Console origin, while managed
+deployments point it at the public Marketing origin. The same auth UI
+components are shared by Marketing managed auth pages and Console self-host
+fallback auth pages.
 
 ## Web Navigation
 

@@ -57,8 +57,8 @@ usage, and roll back or recover safely.
 Marketing/public, Console, and Admin are separate surfaces. Managed deployments
 mount sign-in, sign-up, and reset-password on Marketing through shared auth UI.
 Self-host and local development keep Console-local auth pages as the default
-fallback. `BETTER_AUTH_URL` identifies the server auth handler; client redirects
-use `NEXT_PUBLIC_AUTH_ORIGIN`.
+fallback. `NEXT_PUBLIC_AUTH_ORIGIN` is the canonical auth origin; the server
+derives the auth handler URL from it, and client redirects use it directly.
 
 Console navigation is driven by a route manifest. Studio is implemented as a
 route group, so Studio URLs are `/styles`, `/styles/[styleId]`, and `/tilesets`.

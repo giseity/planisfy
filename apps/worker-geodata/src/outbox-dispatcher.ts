@@ -494,8 +494,8 @@ export function parseSourceProcessingJobInput(
 
 function credentialSecret() {
   return (
-    env.SOURCE_CREDENTIAL_ENCRYPTION_KEY ??
-    env.BETTER_AUTH_SECRET ??
+    env.SOURCE_CREDENTIAL_ENCRYPTION_KEY ||
+    env.BETTER_AUTH_SECRET ||
     env.INTERNAL_API_SECRET
   );
 }

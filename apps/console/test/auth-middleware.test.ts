@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const AUTH_ENV_KEYS = [
   "NEXT_PUBLIC_AUTH_ORIGIN",
   "NEXT_PUBLIC_APP_URL",
+  "NEXT_PUBLIC_API_URL",
 ] as const;
 
 const originalEnv = Object.fromEntries(
@@ -11,9 +12,9 @@ const originalEnv = Object.fromEntries(
 
 beforeEach(() => {
   vi.resetModules();
-  for (const key of AUTH_ENV_KEYS) {
-    delete process.env[key];
-  }
+  process.env.NEXT_PUBLIC_AUTH_ORIGIN = "https://console.planisfy.localhost";
+  process.env.NEXT_PUBLIC_APP_URL = "https://console.planisfy.localhost";
+  process.env.NEXT_PUBLIC_API_URL = "https://api.planisfy.localhost";
 });
 
 afterEach(() => {
@@ -65,7 +66,7 @@ describe("Console auth middleware helpers", () => {
     );
   });
 
-  it("defaults to the canonical console origin", async () => {
+  it("uses the configured canonical console origin", async () => {
     const { getConsoleAuthOrigin, getSessionBaseURL } = await loadMiddleware();
 
     expect(getConsoleAuthOrigin("https://localhost:4404")).toBe(

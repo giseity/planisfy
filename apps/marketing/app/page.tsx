@@ -2,14 +2,11 @@ import Link from "next/link"
 import { ArrowRight, Database, KeyRound, Map, ServerCog } from "lucide-react"
 import { Button } from "@planisfy/ui/components/button"
 
-const authOrigin =
-  process.env.NEXT_PUBLIC_AUTH_ORIGIN ||
-  process.env.NEXT_PUBLIC_MARKETING_URL ||
-  "https://planisfy.localhost"
-const consoleUrl =
-  process.env.NEXT_PUBLIC_CONSOLE_URL ||
-  process.env.NEXT_PUBLIC_APP_URL ||
-  "https://console.planisfy.localhost"
+const authOrigin = process.env.NEXT_PUBLIC_AUTH_ORIGIN
+const consoleUrl = process.env.NEXT_PUBLIC_CONSOLE_URL
+
+if (!authOrigin) throw new Error("NEXT_PUBLIC_AUTH_ORIGIN is required.")
+if (!consoleUrl) throw new Error("NEXT_PUBLIC_CONSOLE_URL is required.")
 
 export default function Page() {
   return (
