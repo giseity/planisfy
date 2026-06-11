@@ -1,13 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
-import {
-  buildSignInRedirectURL,
-  getConsoleAuthOrigin,
-  getSessionBaseURL,
-} from "../middleware";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const AUTH_ENV_KEYS = [
-  "BETTER_AUTH_URL",
-  "BETTER_AUTH_BASE_URL",
   "NEXT_PUBLIC_AUTH_ORIGIN",
   "NEXT_PUBLIC_APP_URL",
 ] as const;
@@ -16,7 +9,15 @@ const originalEnv = Object.fromEntries(
   AUTH_ENV_KEYS.map((key) => [key, process.env[key]]),
 );
 
+beforeEach(() => {
+  vi.resetModules();
+  for (const key of AUTH_ENV_KEYS) {
+    delete process.env[key];
+  }
+});
+
 afterEach(() => {
+  vi.resetModules();
   for (const key of AUTH_ENV_KEYS) {
     const value = originalEnv[key];
     if (value === undefined) delete process.env[key];
@@ -24,22 +25,16 @@ afterEach(() => {
   }
 });
 
+async function loadMiddleware() {
+  return import("../middleware");
+}
+
 describe("Console auth middleware helpers", () => {
-  it("prefers Better Auth base URLs and normalizes /api/auth suffixes", () => {
-    process.env.BETTER_AUTH_URL = "https://console.planisfy.localhost/api/auth";
+  it("uses public auth origin for sign-in redirects when configured", async () => {
     process.env.NEXT_PUBLIC_AUTH_ORIGIN = "https://planisfy.localhost";
+    process.env.NEXT_PUBLIC_APP_URL = "https://console.planisfy.localhost";
 
-    expect(getConsoleAuthOrigin("https://console.planisfy.localhost")).toBe(
-      "https://console.planisfy.localhost",
-    );
-    expect(getSessionBaseURL("https://console.planisfy.localhost")).toBe(
-      "https://console.planisfy.localhost",
-    );
-  });
-
-  it("uses public auth origin for sign-in redirects when configured", () => {
-    process.env.NEXT_PUBLIC_AUTH_ORIGIN = "https://planisfy.localhost";
-
+    const { buildSignInRedirectURL } = await loadMiddleware();
     const redirect = buildSignInRedirectURL(
       "https://console.planisfy.localhost/styles",
       "https://console.planisfy.localhost",
@@ -50,8 +45,33 @@ describe("Console auth middleware helpers", () => {
     );
   });
 
-  it("falls back to the current request origin for local self-host installs", () => {
-    expect(getConsoleAuthOrigin("https://console.planisfy.localhost")).toBe(
+  it("uses the public app URL as the canonical callback origin", async () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://console.planisfy.localhost";
+
+    const { buildSignInRedirectURL, getConsoleAppOrigin } =
+      await loadMiddleware();
+
+    expect(getConsoleAppOrigin("https://localhost:4404")).toBe(
+      "https://console.planisfy.localhost",
+    );
+
+    const redirect = buildSignInRedirectURL(
+      "https://localhost:4404/platform?tab=checks#summary",
+      "https://localhost:4404",
+    );
+
+    expect(redirect.toString()).toBe(
+      "https://console.planisfy.localhost/sign-in?callbackUrl=https%3A%2F%2Fconsole.planisfy.localhost%2Fplatform%3Ftab%3Dchecks%23summary",
+    );
+  });
+
+  it("defaults to the canonical console origin", async () => {
+    const { getConsoleAuthOrigin, getSessionBaseURL } = await loadMiddleware();
+
+    expect(getConsoleAuthOrigin("https://localhost:4404")).toBe(
+      "https://console.planisfy.localhost",
+    );
+    expect(getSessionBaseURL("https://localhost:4404")).toBe(
       "https://console.planisfy.localhost",
     );
   });

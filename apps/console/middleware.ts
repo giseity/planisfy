@@ -1,24 +1,14 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { Session } from "better-auth/types";
 import { NextResponse, type NextRequest } from "next/server";
+import { env } from "./env";
 
-function trimTrailingSlash(value: string) {
-  return value.replace(/\/+$/, "");
-}
-
-function authOriginFromBaseUrl(value: string | undefined) {
-  if (!value) return undefined;
-  return trimTrailingSlash(value).replace(/\/api\/auth$/, "");
+export function getConsoleAppOrigin(requestOrigin: string) {
+  return env.NEXT_PUBLIC_APP_URL || requestOrigin;
 }
 
 export function getConsoleAuthOrigin(requestOrigin: string) {
-  return (
-    authOriginFromBaseUrl(process.env.BETTER_AUTH_URL) ||
-    authOriginFromBaseUrl(process.env.BETTER_AUTH_BASE_URL) ||
-    process.env.NEXT_PUBLIC_AUTH_ORIGIN ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    requestOrigin
-  );
+  return env.NEXT_PUBLIC_AUTH_ORIGIN || getConsoleAppOrigin(requestOrigin);
 }
 
 export function getSessionBaseURL(requestOrigin: string) {
@@ -27,7 +17,12 @@ export function getSessionBaseURL(requestOrigin: string) {
 
 export function buildSignInRedirectURL(requestUrl: string, requestOrigin: string) {
   const signInUrl = new URL("/sign-in", getConsoleAuthOrigin(requestOrigin));
-  signInUrl.searchParams.set("callbackUrl", requestUrl);
+  const requested = new URL(requestUrl);
+  const callbackUrl = new URL(
+    `${requested.pathname}${requested.search}${requested.hash}`,
+    getConsoleAppOrigin(requestOrigin),
+  );
+  signInUrl.searchParams.set("callbackUrl", callbackUrl.toString());
   return signInUrl;
 }
 
