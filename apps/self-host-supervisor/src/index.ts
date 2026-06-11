@@ -1,8 +1,10 @@
-import "dotenv/config";
+import { loadWorkspaceEnv } from "@planisfy/env/node";
 
 import { serve } from "@hono/node-server";
 
 import { createSupervisorApp, supervisorConfigFromEnv } from "./supervisor";
+
+loadWorkspaceEnv();
 
 const config = supervisorConfigFromEnv();
 const port = Number(process.env.PORT ?? "4010");

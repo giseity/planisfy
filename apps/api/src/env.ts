@@ -1,4 +1,4 @@
-import "dotenv/config";
+import { loadWorkspaceEnv } from "@planisfy/env/node";
 import {
   createEnv,
   nodeEnvSchema,
@@ -6,6 +6,8 @@ import {
   redisConnectionFromEnv,
   z,
 } from "@planisfy/env";
+
+loadWorkspaceEnv();
 
 const optionalString = z.preprocess(
   (value) => (value === "" ? undefined : value),

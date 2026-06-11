@@ -1,7 +1,7 @@
 import { defineConfig } from "drizzle-kit";
-import * as dotenv from "dotenv";
+import { loadWorkspaceEnv } from "@planisfy/env/node";
 
-dotenv.config();
+loadWorkspaceEnv();
 
 export default defineConfig({
   schema: "./src/schema.ts",

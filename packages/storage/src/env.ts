@@ -1,6 +1,8 @@
-import "dotenv/config";
 import { join } from "path";
 import { createEnv, z } from "@planisfy/env";
+import { loadWorkspaceEnv } from "@planisfy/env/node";
+
+loadWorkspaceEnv();
 
 const optionalString = z.preprocess(
   (value) => (value === "" ? undefined : value),

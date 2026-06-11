@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts"
   },
   "scripts": {
     "lint": "node ../eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "dotenv": "^16.4.7",
     "zod": "^4.3.6"
   },
   "devDependencies": {

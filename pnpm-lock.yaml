@@ -409,6 +409,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.14.1
         version: 1.19.11(hono@4.12.7)
+      '@planisfy/env':
+        specifier: workspace:*
+        version: link:../../packages/env
       '@planisfy/upgrade-manifest':
         specifier: workspace:*
         version: link:../../packages/upgrade-manifest
@@ -608,6 +611,9 @@ importers:
 
   packages/env:
     dependencies:
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
       zod:
         specifier: ^4.3.6
         version: 4.3.6

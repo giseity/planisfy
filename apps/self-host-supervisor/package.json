@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.14.1",
+    "@planisfy/env": "workspace:*",
     "@planisfy/upgrade-manifest": "workspace:*",
     "dotenv": "^16.4.7",
     "hono": "^4.7.10",
