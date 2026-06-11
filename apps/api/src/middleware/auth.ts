@@ -31,7 +31,7 @@ export type AuthEnv = {
  */
 export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   const rawToken =
-    getCookie(c, "better-auth.session_token") ||
+    getBetterAuthSessionCookie(c) ||
     c.req.header("authorization")?.replace("Bearer ", "");
 
   if (!rawToken) {
@@ -98,7 +98,7 @@ export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
 
   // Fall back to session cookie
   const rawToken =
-    getCookie(c, "better-auth.session_token") ||
+    getBetterAuthSessionCookie(c) ||
     c.req.header("authorization")?.replace("Bearer ", "");
 
   if (!rawToken) {
@@ -139,3 +139,10 @@ export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
 
   await next();
 });
+
+export function getBetterAuthSessionCookie(c: Parameters<typeof getCookie>[0]) {
+  return (
+    getCookie(c, "better-auth.session_token") ||
+    getCookie(c, "__Secure-better-auth.session_token")
+  );
+}
