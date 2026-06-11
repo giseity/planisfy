@@ -1,11 +1,18 @@
-import { createEnv, z } from "@planisfy/env";
+export const env = {
+  NEXT_PUBLIC_APP_URL: requiredUrl("NEXT_PUBLIC_APP_URL"),
+  NEXT_PUBLIC_API_URL: requiredUrl("NEXT_PUBLIC_API_URL"),
+  NEXT_PUBLIC_AUTH_ORIGIN: requiredUrl("NEXT_PUBLIC_AUTH_ORIGIN"),
+};
 
-const schema = z.object({
-  NEXT_PUBLIC_APP_URL: z.string().url(),
-  NEXT_PUBLIC_API_URL: z.string().url(),
-  NEXT_PUBLIC_AUTH_ORIGIN: z.string().url(),
-});
+function requiredUrl(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required.`);
 
-export const env = createEnv(schema, process.env, {
-  appName: "console server",
-});
+  try {
+    new URL(value);
+  } catch {
+    throw new Error(`${name} must be a valid URL.`);
+  }
+
+  return value;
+}
