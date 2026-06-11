@@ -10,6 +10,7 @@ import {
   AppShellContent,
   AppShellHeader,
 } from "@planisfy/ui/components/app-shell"
+import { PlanisfyLogo } from "@planisfy/ui/components/brand-mark"
 import {
   RouteBreadcrumbs,
 } from "@planisfy/ui/components/route-breadcrumbs"
@@ -79,8 +80,8 @@ function ConsoleSidebarContent({ pathname }: { pathname: string }) {
   return (
     <>
       <SidebarHeader>
-        <Link href="/" className="font-semibold text-lg tracking-tight">
-          Planisfy
+        <Link href="/" className="block min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+          <PlanisfyLogo sublabel="Customer console" />
         </Link>
       </SidebarHeader>
       <SidebarContent>
@@ -110,9 +111,9 @@ function ConsoleSidebarContent({ pathname }: { pathname: string }) {
         ))}
       </SidebarContent>
       <SidebarFooter>
-        <p className="px-2 text-xs text-muted-foreground">
-          Customer console
-        </p>
+        <div className="rounded-md border bg-background/60 px-2 py-1.5 text-xs text-muted-foreground">
+          Self-host ready
+        </div>
       </SidebarFooter>
     </>
   )
