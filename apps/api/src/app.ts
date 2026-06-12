@@ -8,6 +8,7 @@ import { metricsMiddleware } from "./lib/metrics";
 import {
   authMiddleware,
   dualAuthMiddleware,
+  optionalAuthMiddleware,
   type AuthEnv,
 } from "./middleware/auth";
 import { apiKeyMiddleware } from "./middleware/api-key";
@@ -78,12 +79,26 @@ app.route("/", healthRoute);
 app.route("/", storageRoute);
 app.route("/", setupRoute);
 
-// ── Public API routes (require API key or session) ──────────────────────────
-// Pipeline: API key extraction → auth → rate limit → usage log
-const publicApiPaths = [
+// ── Published map assets (anonymous public, optional API key/session) ───────
+// Pipeline: API key extraction → optional auth → rate limit → usage log
+const publishedAssetPaths = [
   "/tiles/*",
   "/styles/v1/*",
   "/fonts/*",
+];
+for (const path of publishedAssetPaths) {
+  app.use(
+    path,
+    apiKeyMiddleware,
+    optionalAuthMiddleware,
+    rateLimitMiddleware,
+    usageLogMiddleware,
+  );
+}
+
+// ── Public API routes (require API key or session) ──────────────────────────
+// Pipeline: API key extraction → auth → rate limit → usage log
+const publicApiPaths = [
   "/geocoding/*",
   "/directions/*",
   "/isochrone/*",

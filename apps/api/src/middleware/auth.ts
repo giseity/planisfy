@@ -41,22 +41,7 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     );
   }
 
-  // better-auth stores the cookie as "{token}.{signature}" but
-  // the sessions table only stores the token portion.
-  const token = rawToken.split(".")[0]!;
-
-  const [session] = await db
-    .select({
-      id: sessions.id,
-      userId: sessions.userId,
-      token: sessions.token,
-      expiresAt: sessions.expiresAt,
-      activeOrganizationId: sessions.activeOrganizationId,
-    })
-    .from(sessions)
-    .where(and(eq(sessions.token, token), gt(sessions.expiresAt, new Date())))
-    .limit(1);
-
+  const session = await findValidSession(rawToken);
   if (!session) {
     return c.json(
       {
@@ -110,20 +95,7 @@ export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     );
   }
 
-  const token = rawToken.split(".")[0]!;
-
-  const [session] = await db
-    .select({
-      id: sessions.id,
-      userId: sessions.userId,
-      token: sessions.token,
-      expiresAt: sessions.expiresAt,
-      activeOrganizationId: sessions.activeOrganizationId,
-    })
-    .from(sessions)
-    .where(and(eq(sessions.token, token), gt(sessions.expiresAt, new Date())))
-    .limit(1);
-
+  const session = await findValidSession(rawToken);
   if (!session) {
     return c.json(
       {
@@ -140,9 +112,64 @@ export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   await next();
 });
 
+/**
+ * Optional auth middleware for published map assets.
+ * Valid API keys or sessions attach owner context for metering/private reads,
+ * but missing or stale cookies do not block anonymous public resources.
+ */
+export const optionalAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
+  const apiKeyOwnerId = c.get("apiKeyOwnerId");
+  if (apiKeyOwnerId) {
+    c.set("userId", apiKeyOwnerId);
+    c.set("ownerId", apiKeyOwnerId);
+    c.set("session", {
+      id: "api-key",
+      userId: apiKeyOwnerId,
+      token: "",
+      activeOrganizationId: null,
+    });
+    await next();
+    return;
+  }
+
+  const rawToken =
+    getBetterAuthSessionCookie(c) ||
+    c.req.header("authorization")?.replace("Bearer ", "");
+  if (rawToken) {
+    const session = await findValidSession(rawToken);
+    if (session) {
+      c.set("userId", session.userId);
+      c.set("session", session);
+      c.set("ownerId", session.activeOrganizationId ?? session.userId);
+    }
+  }
+
+  await next();
+});
+
 export function getBetterAuthSessionCookie(c: Parameters<typeof getCookie>[0]) {
   return (
     getCookie(c, "better-auth.session_token") ||
     getCookie(c, "__Secure-better-auth.session_token")
   );
+}
+
+async function findValidSession(rawToken: string) {
+  // better-auth stores the cookie as "{token}.{signature}" but
+  // the sessions table only stores the token portion.
+  const token = rawToken.split(".")[0]!;
+
+  const [session] = await db
+    .select({
+      id: sessions.id,
+      userId: sessions.userId,
+      token: sessions.token,
+      expiresAt: sessions.expiresAt,
+      activeOrganizationId: sessions.activeOrganizationId,
+    })
+    .from(sessions)
+    .where(and(eq(sessions.token, token), gt(sessions.expiresAt, new Date())))
+    .limit(1);
+
+  return session ?? null;
 }

@@ -6,6 +6,7 @@ import { apiKeyMiddleware } from "./middleware/api-key";
 import {
   dualAuthMiddleware,
   getBetterAuthSessionCookie,
+  optionalAuthMiddleware,
   type AuthEnv,
 } from "./middleware/auth";
 
@@ -13,8 +14,18 @@ const healthApp = new Hono();
 healthApp.route("/", healthRoute);
 
 const protectedApp = new Hono<AuthEnv>();
-protectedApp.use("/styles/v1/*", apiKeyMiddleware, dualAuthMiddleware);
-protectedApp.get("/styles/v1/:owner/:handle", (c) => c.json({ ok: true }));
+protectedApp.use("/directions/*", apiKeyMiddleware, dualAuthMiddleware);
+protectedApp.get("/directions/v1/driving/:coordinates", (c) =>
+  c.json({ ok: true }),
+);
+
+const publishedAssetApp = new Hono<AuthEnv>();
+publishedAssetApp.use(
+  "/styles/v1/*",
+  apiKeyMiddleware,
+  optionalAuthMiddleware,
+);
+publishedAssetApp.get("/styles/v1/:owner/:handle", (c) => c.json({ ok: true }));
 
 const cookieApp = new Hono();
 cookieApp.get("/session-cookie", (c) =>
@@ -39,8 +50,18 @@ test("metrics endpoint returns Prometheus text", async () => {
   assert.match(body, /planisfy_api_info/);
 });
 
-test("public API routes require an API key or session", async () => {
-  const response = await protectedApp.request("/styles/v1/acme/basic");
+test("published map asset routes allow anonymous reads", async () => {
+  const response = await publishedAssetApp.request("/styles/v1/acme/basic");
+  const body = (await response.json()) as { ok?: boolean };
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+});
+
+test("non-asset public API routes require an API key or session", async () => {
+  const response = await protectedApp.request(
+    "/directions/v1/driving/0,0;1,1",
+  );
   const body = (await response.json()) as {
     error?: { code?: string; message?: string };
   };
