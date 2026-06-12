@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import {
   createWriteStream,
+  createReadStream,
   existsSync,
   mkdirSync,
   statSync,
@@ -37,6 +38,7 @@ export interface StorageProvider {
     contentType?: string
   ): Promise<StoredObject>;
   download(key: string): Promise<Buffer>;
+  readRange(key: string, offset: number, length: number): Promise<Buffer>;
   copy(sourceKey: string, targetKey: string): Promise<void>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
@@ -92,6 +94,19 @@ export class S3Storage implements StorageProvider {
   async download(key: string): Promise<Buffer> {
     const object = await this.client.send(
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    if (!object.Body) return Buffer.alloc(0);
+    return Buffer.from(await object.Body.transformToByteArray());
+  }
+
+  async readRange(key: string, offset: number, length: number): Promise<Buffer> {
+    if (length <= 0) return Buffer.alloc(0);
+    const object = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Range: `bytes=${offset}-${offset + length - 1}`,
+      }),
     );
     if (!object.Body) return Buffer.alloc(0);
     return Buffer.from(await object.Body.transformToByteArray());
@@ -266,6 +281,19 @@ export class LocalStorage implements StorageProvider {
   async download(key: string): Promise<Buffer> {
     const { readFile } = await import("fs/promises");
     return readFile(join(this.basePath, key));
+  }
+
+  async readRange(key: string, offset: number, length: number): Promise<Buffer> {
+    if (length <= 0) return Buffer.alloc(0);
+    const chunks: Buffer[] = [];
+    const stream = createReadStream(join(this.basePath, key), {
+      start: offset,
+      end: offset + length - 1,
+    });
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
   }
 
   async copy(sourceKey: string, targetKey: string): Promise<void> {

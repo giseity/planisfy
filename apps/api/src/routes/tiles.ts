@@ -7,18 +7,34 @@ import {
   tilesetVersions,
   tilesets,
 } from "@planisfy/database";
+import { getStorage, type StorageProvider } from "@planisfy/storage";
+import {
+  PMTiles,
+  SharedPromiseCache,
+  TileType,
+  type RangeResponse,
+  type Source,
+} from "pmtiles";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 
 export const tilesRoute = new Hono<AuthEnv>();
 type ApiContext = Context<AuthEnv>;
+type ResolvedTileset = NonNullable<Awaited<ReturnType<typeof resolveTileset>>>;
+
+const pmtilesCache = new SharedPromiseCache(200);
 
 // Stable owner/tileset TileJSON resolves to the promoted current version.
 tilesRoute.get("/tiles/v1/:owner/:handle.json", async (c) => {
-  const resolved = await resolveTileset(
-    c.req.param("owner")!,
-    c.req.param("handle")!,
-  );
+  const parsed = parseStableTileJsonPath(new URL(c.req.url).pathname);
+  if (!parsed) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Tileset not found" } },
+      404,
+    );
+  }
+
+  const resolved = await resolveTileset(parsed.owner, parsed.handle);
   if (!resolved?.version) {
     return c.json(
       { error: { code: "NOT_FOUND", message: "Tileset not found" } },
@@ -26,7 +42,7 @@ tilesRoute.get("/tiles/v1/:owner/:handle.json", async (c) => {
     );
   }
 
-  return c.json(toTileJson(c.req.url, resolved, "stable"), 200, {
+  return c.json(toTileJson(resolved, "stable"), 200, {
     "Cache-Control": "public, max-age=300",
     ETag: `"tileset-${resolved.version.id}"`,
   });
@@ -34,8 +50,8 @@ tilesRoute.get("/tiles/v1/:owner/:handle.json", async (c) => {
 
 // Immutable version TileJSON.
 tilesRoute.get("/tiles/v1/:owner/:handle/versions/:version.json", async (c) => {
-  const versionNumber = Number(c.req.param("version"));
-  if (!Number.isInteger(versionNumber) || versionNumber <= 0) {
+  const parsed = parseVersionedTileJsonPath(new URL(c.req.url).pathname);
+  if (!parsed) {
     return c.json(
       {
         error: {
@@ -48,9 +64,9 @@ tilesRoute.get("/tiles/v1/:owner/:handle/versions/:version.json", async (c) => {
   }
 
   const resolved = await resolveTileset(
-    c.req.param("owner")!,
-    c.req.param("handle")!,
-    versionNumber,
+    parsed.owner,
+    parsed.handle,
+    parsed.version,
   );
   if (!resolved?.version) {
     return c.json(
@@ -59,7 +75,7 @@ tilesRoute.get("/tiles/v1/:owner/:handle/versions/:version.json", async (c) => {
     );
   }
 
-  return c.json(toTileJson(c.req.url, resolved, "version"), 200, {
+  return c.json(toTileJson(resolved, "version"), 200, {
     "Cache-Control": "public, max-age=31536000, immutable",
     ETag: `"tileset-${resolved.version.id}"`,
   });
@@ -87,7 +103,6 @@ tilesRoute.get("/tiles/v1/:source{.+\\.json$}", async (c) => {
 
     return c.json(
       toTileJson(
-        c.req.url,
         resolved,
         parsed.version ? "dotted-version" : "dotted-stable",
       ),
@@ -125,7 +140,9 @@ tilesRoute.get("/tiles/v1/:source/:z/:x/:y", async (c) => {
     const martinSource = parsed.version
       ? `${parsed.owner}.${parsed.handle}.v${parsed.version}`
       : `${parsed.owner}.${parsed.handle}`;
-    return proxyMartinTile(c, `${martinSource}/${z}/${x}/${y}`);
+    return serveResolvedTile(c, resolved, z, x, y, () =>
+      proxyMartinTile(c, `${martinSource}/${z}/${x}/${y}`),
+    );
   }
 
   return proxyMartinTile(c, `${source}/${z}/${x}/${y}`);
@@ -137,13 +154,46 @@ tilesRoute.get(
   "/tiles/v1/:owner/:handle/versions/:version/:z/:x/:y",
   async (c) => {
     const { owner, handle, version, z, x, y } = c.req.param();
-    return proxyMartinTile(c, `${owner}.${handle}.v${version}/${z}/${x}/${y}`);
+    const versionNumber = Number(version);
+    if (!Number.isInteger(versionNumber) || versionNumber <= 0) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid tileset version",
+          },
+        },
+        400,
+      );
+    }
+
+    const resolved = await resolveTileset(owner, handle, versionNumber);
+    if (!resolved?.version) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Tileset version not found" } },
+        404,
+      );
+    }
+
+    return serveResolvedTile(c, resolved, z, x, y, () =>
+      proxyMartinTile(c, `${owner}.${handle}.v${version}/${z}/${x}/${y}`),
+    );
   },
 );
 
 tilesRoute.get("/tiles/v1/:owner/:handle/:z/:x/:y", async (c) => {
   const { owner, handle, z, x, y } = c.req.param();
-  return proxyMartinTile(c, `${owner}.${handle}/${z}/${x}/${y}`);
+  const resolved = await resolveTileset(owner, handle);
+  if (!resolved?.version) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Tileset not found" } },
+      404,
+    );
+  }
+
+  return serveResolvedTile(c, resolved, z, x, y, () =>
+    proxyMartinTile(c, `${owner}.${handle}/${z}/${x}/${y}`),
+  );
 });
 
 async function legacyMartinTileJson(c: ApiContext, source: string) {
@@ -161,7 +211,7 @@ async function legacyMartinTileJson(c: ApiContext, source: string) {
     }
 
     const tileJson = (await res.json()) as { tiles?: string[] };
-    const apiBase = apiBaseFromUrl(c.req.url);
+    const apiBase = publicApiBaseFromEnv();
     tileJson.tiles = [`${apiBase}/tiles/v1/${source}/{z}/{x}/{y}`];
 
     c.header("Cache-Control", "public, max-age=300");
@@ -204,6 +254,87 @@ async function proxyMartinTile(c: ApiContext, path: string) {
     return c.body(body);
   } catch (err) {
     console.error("[tiles] Proxy error:", err);
+    return c.json(
+      { error: { code: "INTERNAL_ERROR", message: "Tile server unavailable" } },
+      503,
+    );
+  }
+}
+
+async function serveResolvedTile(
+  c: ApiContext,
+  resolved: ResolvedTileset,
+  z: string,
+  x: string,
+  y: string,
+  fallback: () => Promise<Response>,
+) {
+  const coords = parseTileCoordinates(z, x, y);
+  if (!coords) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid tile coordinates",
+        },
+      },
+      400,
+    );
+  }
+
+  if (resolved.version?.format !== "PMTILES" || !resolved.artifact) {
+    return fallback();
+  }
+
+  try {
+    const storage = getStorage();
+    const storageInfo = storage.getInfo();
+    if (
+      resolved.artifact.provider !== storageInfo.provider ||
+      (resolved.artifact.bucket && resolved.artifact.bucket !== storageInfo.bucket)
+    ) {
+      console.error("[tiles] Storage provider mismatch", {
+        artifactProvider: resolved.artifact.provider,
+        artifactBucket: resolved.artifact.bucket,
+        configuredProvider: storageInfo.provider,
+        configuredBucket: storageInfo.bucket,
+      });
+      return c.json(
+        {
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Tileset storage is not available from this API instance",
+          },
+        },
+        503,
+      );
+    }
+
+    const archive = new PMTiles(
+      new StorageSource(storage, {
+        provider: resolved.artifact.provider,
+        bucket: resolved.artifact.bucket ?? storageInfo.bucket,
+        key: resolved.artifact.storageKey,
+      }),
+      pmtilesCache,
+    );
+    const tile = await archive.getZxy(coords.z, coords.x, coords.y);
+    if (!tile) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Tile not found" } },
+        404,
+      );
+    }
+
+    const header = await archive.getHeader();
+    c.header("Content-Type", contentTypeForTileType(header.tileType));
+    c.header("Cache-Control", tile.cacheControl ?? "public, max-age=3600");
+    c.header("Access-Control-Allow-Origin", "*");
+    if (tile.expires) c.header("Expires", tile.expires);
+
+    return c.body(tile.data);
+  } catch (err) {
+    console.error("[tiles] PMTiles storage proxy error:", err);
     return c.json(
       { error: { code: "INTERNAL_ERROR", message: "Tile server unavailable" } },
       503,
@@ -255,7 +386,11 @@ async function resolveTileset(
 
   const [artifact] = version?.artifactStorageObjectId
     ? await db
-        .select({ storageKey: storageObjects.storageKey })
+        .select({
+          provider: storageObjects.provider,
+          bucket: storageObjects.bucket,
+          storageKey: storageObjects.storageKey,
+        })
         .from(storageObjects)
         .where(eq(storageObjects.id, version.artifactStorageObjectId))
         .limit(1)
@@ -265,11 +400,10 @@ async function resolveTileset(
 }
 
 function toTileJson(
-  url: string,
-  resolved: NonNullable<Awaited<ReturnType<typeof resolveTileset>>>,
+  resolved: ResolvedTileset,
   mode: "stable" | "version" | "dotted-stable" | "dotted-version",
 ) {
-  const apiBase = apiBaseFromUrl(url);
+  const apiBase = publicApiBaseFromEnv();
   const tilesBase = publicTilesetBaseUrl({
     apiBase,
     owner: resolved.owner,
@@ -313,6 +447,10 @@ export function apiBaseFromUrl(url: string) {
   return `${baseUrl.protocol}//${baseUrl.host}`;
 }
 
+export function publicApiBaseFromEnv() {
+  return env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+}
+
 export function parsePublicTilesetSlug(slug: string) {
   const match = slug.match(
     /^([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)(?:@([1-9]\d*))?$/,
@@ -323,6 +461,31 @@ export function parsePublicTilesetSlug(slug: string) {
     owner: match[1]!,
     handle: match[2]!,
     version: match[3] ? Number(match[3]) : undefined,
+  };
+}
+
+export function parseStableTileJsonPath(pathname: string) {
+  const match = pathname.match(
+    /\/tiles\/v1\/([^/]+)\/([^/]+)\.json$/,
+  );
+  if (!match) return null;
+
+  return {
+    owner: decodeURIComponent(match[1]!),
+    handle: decodeURIComponent(match[2]!),
+  };
+}
+
+export function parseVersionedTileJsonPath(pathname: string) {
+  const match = pathname.match(
+    /\/tiles\/v1\/([^/]+)\/([^/]+)\/versions\/([1-9]\d*)\.json$/,
+  );
+  if (!match) return null;
+
+  return {
+    owner: decodeURIComponent(match[1]!),
+    handle: decodeURIComponent(match[2]!),
+    version: Number(match[3]),
   };
 }
 
@@ -343,4 +506,72 @@ export function publicTilesetBaseUrl(params: {
     return `${params.apiBase}/tiles/v1/${params.owner}.${params.handle}`;
   }
   return `${params.apiBase}/tiles/v1/${params.owner}/${params.handle}`;
+}
+
+export function parseTileCoordinates(z: string, x: string, y: string) {
+  const parsed = {
+    z: Number(z),
+    x: Number(x),
+    y: Number(y),
+  };
+  if (
+    !Number.isInteger(parsed.z) ||
+    !Number.isInteger(parsed.x) ||
+    !Number.isInteger(parsed.y) ||
+    parsed.z < 0 ||
+    parsed.z > 26 ||
+    parsed.x < 0 ||
+    parsed.y < 0 ||
+    parsed.x >= 2 ** parsed.z ||
+    parsed.y >= 2 ** parsed.z
+  ) {
+    return null;
+  }
+  return parsed;
+}
+
+export function contentTypeForTileType(tileType: TileType) {
+  switch (tileType) {
+    case TileType.Mvt:
+      return "application/vnd.mapbox-vector-tile";
+    case TileType.Png:
+      return "image/png";
+    case TileType.Jpeg:
+      return "image/jpeg";
+    case TileType.Webp:
+      return "image/webp";
+    case TileType.Avif:
+      return "image/avif";
+    case TileType.Mlt:
+      return "application/vnd.maplibre-mvt";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+class StorageSource implements Source {
+  constructor(
+    private storage: StorageProvider,
+    private object: { provider: string; bucket: string; key: string },
+  ) {}
+
+  getKey() {
+    return `${this.object.provider}:${this.object.bucket}:${this.object.key}`;
+  }
+
+  async getBytes(
+    offset: number,
+    length: number,
+    _signal?: AbortSignal,
+  ): Promise<RangeResponse> {
+    const data = await this.storage.readRange(this.object.key, offset, length);
+    return { data: toExactArrayBuffer(data) };
+  }
+}
+
+function toExactArrayBuffer(data: Buffer): ArrayBuffer {
+  return data.buffer.slice(
+    data.byteOffset,
+    data.byteOffset + data.byteLength,
+  ) as ArrayBuffer;
 }
