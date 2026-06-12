@@ -134,6 +134,91 @@ test("setup preflight reports self-host product loop fixture readiness", async (
   }
 });
 
+test("setup preflight surfaces actionable self-host storage failures", async () => {
+  const root = await mkdtemp(join(tmpdir(), "planisfy-setup-preflight-"));
+  const storage = join(root, "storage");
+  await mkdir(storage, { recursive: true });
+
+  const previousStorage = process.env.LOCAL_STORAGE_PATH;
+  const previousPmtiles = process.env.DEMO_PMTILES_PATH;
+  const previousMode = process.env.DEPLOYMENT_MODE;
+  const previousProvider = process.env.STORAGE_PROVIDER;
+  process.env.DEPLOYMENT_MODE = "self_host";
+  process.env.STORAGE_PROVIDER = "local";
+  process.env.LOCAL_STORAGE_PATH = storage;
+  process.env.DEMO_PMTILES_PATH = "";
+
+  try {
+    const response = await app.request("/setup/preflight");
+    const body = (await response.json()) as {
+      data?: {
+        checks?: Array<{
+          id: string;
+          status: string;
+          message: string;
+          value?: string | number | boolean | null;
+        }>;
+        capabilities?: Array<{
+          id: string;
+          status: string;
+          message: string;
+          value?: string | number | boolean | null;
+        }>;
+      };
+    };
+
+    assert.equal(response.status, 200);
+    const checks = new Map(
+      body.data?.checks?.map((check) => [check.id, check]),
+    );
+    const capabilities = new Map(
+      body.data?.capabilities?.map((capability) => [
+        capability.id,
+        capability,
+      ]),
+    );
+
+    assert.equal(checks.get("storage")?.status, "pass");
+    assert.equal(checks.get("upload-storage")?.status, "fail");
+    assert.equal(
+      checks.get("demo-pmtiles")?.message,
+      "Default PMTiles fixture path is not configured.",
+    );
+    assert.equal(checks.get("demo-pmtiles")?.value, null);
+
+    assert.equal(capabilities.get("localStorage")?.status, "unavailable");
+    assert.match(
+      capabilities.get("localStorage")?.message ?? "",
+      /^Upload artifact storage is missing\./,
+    );
+    assert.equal(
+      capabilities.get("localStorage")?.value,
+      join(storage, "uploads"),
+    );
+  } finally {
+    if (previousStorage === undefined) {
+      delete process.env.LOCAL_STORAGE_PATH;
+    } else {
+      process.env.LOCAL_STORAGE_PATH = previousStorage;
+    }
+    if (previousPmtiles === undefined) {
+      delete process.env.DEMO_PMTILES_PATH;
+    } else {
+      process.env.DEMO_PMTILES_PATH = previousPmtiles;
+    }
+    if (previousMode === undefined) {
+      delete process.env.DEPLOYMENT_MODE;
+    } else {
+      process.env.DEPLOYMENT_MODE = previousMode;
+    }
+    if (previousProvider === undefined) {
+      delete process.env.STORAGE_PROVIDER;
+    } else {
+      process.env.STORAGE_PROVIDER = previousProvider;
+    }
+  }
+});
+
 test("setup preflight reports blocking managed readiness without R2, Dodo, or Resend", async () => {
   const previousMode = process.env.DEPLOYMENT_MODE;
   const previousProvider = process.env.STORAGE_PROVIDER;

@@ -534,7 +534,9 @@ async function buildProductLoopChecks(
   const storagePath =
     process.env.LOCAL_STORAGE_PATH ?? join(process.cwd(), ".storage");
   const demoPmtilesPath =
-    process.env.DEMO_PMTILES_PATH ?? "/data/pmtiles/stuttgart.pmtiles";
+    process.env.DEMO_PMTILES_PATH === undefined
+      ? "/data/pmtiles/stuttgart.pmtiles"
+      : process.env.DEMO_PMTILES_PATH.trim();
   const martinSourcesPath =
     process.env.MARTIN_SOURCES_PATH ?? join(storagePath, "martin-sources");
 
@@ -592,6 +594,21 @@ async function styleFixtureCheck(storagePath: string): Promise<PreflightCheck> {
 }
 
 async function pmtilesFixtureCheck(path: string): Promise<PreflightCheck> {
+  if (!path.trim()) {
+    return check({
+      id: "demo-pmtiles",
+      group: "Self-host product loop",
+      label: "Default PMTiles fixture",
+      severity: "recommended",
+      ok: false,
+      warnWhenMissing: true,
+      message: "Default PMTiles fixture path is not configured.",
+      action:
+        "Set DEMO_PMTILES_PATH to a compatible PMTiles file or configure DEMO_PMTILES_URL and run scripts/self-host-setup.sh --demo-data.",
+      value: null,
+    });
+  }
+
   if (!(await canAccess(path))) {
     return check({
       id: "demo-pmtiles",
@@ -713,7 +730,12 @@ function buildCapabilityStates(
       return fallbackCapabilityState(deploymentMode, capability);
     }
 
-    const primary = mapped[0]!;
+    const primary =
+      mapped.find(
+        (item) => item.status === "fail" && item.severity === "required",
+      ) ??
+      mapped.find((item) => item.status !== "pass") ??
+      mapped[0]!;
     const requiredFailure = mapped.some(
       (item) => item.status === "fail" && item.severity === "required",
     );
