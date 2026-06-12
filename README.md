@@ -8,9 +8,10 @@ The goal is to make open geospatial infrastructure easier to run by putting a Ty
 
 ## Current Status
 
-Planisfy is in active development. Several core flows are implemented, but the
-self-hosted and managed v1 product loops still need production hardening end to
-end.
+Planisfy is in active development. The self-hosted product loop is usable for
+development, demos, and guided trials, while production readiness still depends
+on stronger QA around restarts, imports, operations, docs, and managed
+infrastructure.
 
 Implemented or partially implemented:
 
@@ -20,7 +21,7 @@ Implemented or partially implemented:
 - PostgreSQL schema and Drizzle migrations
 - Map style CRUD, version history, publishing, and a browser style editor
 - Tileset upload processing with validation, artifacts, retry/cancel, rebuild,
-  and version promotion controls
+  version promotion controls, and API-owned published tile delivery
 - Saved regions and source import records, with DuckDB-backed Overture extract
   execution when `OVERTURE_RELEASE` is configured
 - Marketing/public, Console, Admin, and Docs Next.js apps
@@ -28,12 +29,16 @@ Implemented or partially implemented:
 
 Still in progress or externally dependent:
 
-- Tiles require Martin and configured PMTiles data
+- Built-in/static tile sources require Martin and configured PMTiles data;
+  uploaded published tilesets are served by the API from configured artifact
+  storage
 - Overture imports require DuckDB, `OVERTURE_RELEASE`, and compatible public
   GeoParquet access; larger import UX and managed data releases are still in progress
 - Basemap generation now has a Planetiler regional harness, but global basemap
   releases and managed data packages remain later work
-- Routing requires Valhalla data under `infra/docker/data/valhalla_data`
+- Routing requires Valhalla graph data under `infra/docker/data/valhalla_data`;
+  health/preflight report Valhalla as degraded when the process is up but the
+  route-readiness probe cannot route
 - Geocoding prefers Pelias and falls back to Nominatim for basic development use
 - Static maps return a placeholder unless `STATIC_MAP_URL` is configured
 - Billing uses Dodo Payments-oriented surfaces; it is optional for self-host and
@@ -54,7 +59,7 @@ See [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md) for the canonical roadmap, curr
 | Auth                     | better-auth                                   |
 | Database                 | PostgreSQL + Drizzle ORM                      |
 | Rate limiting and queues | Redis, BullMQ, rate-limiter-flexible          |
-| Tiles                    | Martin                                        |
+| Tiles                    | API PMTiles reader + Martin for static sources |
 | Routing                  | Valhalla                                      |
 | Upload tiling            | Tippecanoe + GDAL/ogr2ogr in `worker-geodata` |
 | Source imports           | DuckDB in `worker-geodata`                    |
@@ -154,6 +159,7 @@ contract agree, creates the local storage mount points, and sets
 directory when `STORAGE_PROVIDER=local`. Published PMTiles are served by the API
 from configured artifact storage, so they do not require Martin to watch local
 upload directories. The API also exposes a public read-only setup preflight at
+`https://api.planisfy.localhost/setup/preflight` or
 `http://localhost:4000/setup/preflight` so first-run operators can verify the
 self-host product-loop prerequisites before signing in.
 
@@ -226,6 +232,10 @@ curl http://localhost:4000/setup/preflight
 curl http://localhost:3005/catalog
 ```
 
+Valhalla readiness is route-backed, not just process-backed. Set
+`VALHALLA_READINESS_ROUTE=lon,lat;lon,lat` when the default Stuttgart probe is
+outside the mounted routing graph.
+
 Run the Docker Compose smoke test:
 
 ```bash
@@ -270,11 +280,15 @@ More detail is available in [docs/self-hosting.md](./docs/self-hosting.md) and
 
 ## API Surface
 
-Public map endpoints accept API key auth via `X-API-Key` or authenticated session fallback:
+Published map asset endpoints are public when the underlying resource is public:
 
 - `/tiles/v1/*`
 - `/styles/v1/*`
 - `/fonts/*`
+
+Service APIs accept API key auth via `X-API-Key`, bearer token, or authenticated
+session fallback:
+
 - `/geocoding/*`
 - `/directions/*`
 - `/isochrone/*`

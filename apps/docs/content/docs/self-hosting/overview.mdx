@@ -153,9 +153,11 @@ You can begin with modest hardware and scale as needed. Tile serving scales hori
 
 **Documentation:** [https://github.com/maplibre/martin](https://github.com/maplibre/martin)
 
-### Pelias (Geocoder)
+### Pelias-Compatible Geocoder (Optional)
 
-**Purpose:** Forward/reverse geocoding and place search
+**Purpose:** Forward/reverse geocoding and place search. The default local
+Planisfy stack does not start Pelias; configure `PELIAS_URL` when you operate a
+Pelias-compatible service.
 
 **Resources:**
 - **RAM:** 8-16 GB
@@ -350,22 +352,21 @@ Before self-hosting Planisfy, ensure you have:
 ### Quick Start (Docker Compose)
 
 ```bash
-# Clone the Planisfy self-hosting repository
-git clone https://github.com/planisfy/self-hosting.git
-cd self-hosting
+# Clone the Planisfy monorepo
+git clone https://github.com/cruzor-blade/planisfy.git
+cd planisfy
 
 # Configure environment variables
 cp .env.example .env
 nano .env
 
-# Start all services
-docker-compose up -d
-
-# Import Overture Maps data
-./scripts/import-overture.sh
+# Prepare local directories and start services
+scripts/self-host-setup.sh
+docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
+pnpm -F @planisfy/database db:migrate
 
 # Verify services are running
-docker-compose ps
+docker compose --env-file .env -f infra/docker/docker-compose.yml ps
 ```
 
 ### Manual Installation

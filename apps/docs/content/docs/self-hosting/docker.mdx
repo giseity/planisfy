@@ -38,8 +38,8 @@ docker compose version
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/planisfy/self-hosting.git
-cd self-hosting
+git clone https://github.com/cruzor-blade/planisfy.git
+cd planisfy
 ```
 
 ### 2. Configure Environment Variables
@@ -52,54 +52,48 @@ nano .env
 **Key environment variables:**
 
 ```bash
-# Martin (Tile Server)
-MARTIN_PORT=3005
-MARTIN_CONFIG_PATH=/config/martin-config.yaml
-
-# Pelias (Geocoder)
-PELIAS_PORT=3100
-PELIAS_ELASTICSEARCH_URL=http://elasticsearch:9200
-
-# Valhalla (Router)
-VALHALLA_PORT=8002
-VALHALLA_CONFIG_PATH=/config/valhalla.json
-
-# API Gateway
-GATEWAY_PORT=8080
-GATEWAY_API_KEY=your-api-key-here
+DEPLOYMENT_MODE=self_host
+NEXT_PUBLIC_API_URL=http://localhost:4000
+NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
+MARTIN_URL=http://martin:3000
+VALHALLA_URL=http://valhalla:8002
+STORAGE_PROVIDER=local
 ```
 
 ### 3. Start Services
 
 ```bash
-docker compose up -d
+scripts/self-host-setup.sh
+docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
+pnpm -F @planisfy/database db:migrate
 ```
 
 This starts all services:
+- **Planisfy API** on port 4000
+- **Console** on port 3001
+- **Marketing** on port 3000
 - **Martin** (tile server) on port 3005
-- **Pelias** (geocoder) on port 3100
 - **Valhalla** (router) on port 8002
 - **PostgreSQL** (database) on port 5432
-- **Elasticsearch** (search engine) on port 9200
-- **API Gateway** on port 8080
+- **Redis** (queue/cache) on port 6379
+- **worker-geodata** for upload/import processing
 
 ### 4. Verify Deployment
 
 ```bash
 # Check all services are running
-docker compose ps
+docker compose --env-file .env -f infra/docker/docker-compose.yml ps
 
 # Check logs
-docker compose logs -f
+docker compose --env-file .env -f infra/docker/docker-compose.yml logs -f
+
+# Test API readiness
+curl http://localhost:4000/health/detailed
+curl http://localhost:4000/setup/preflight
 
 # Test tile server
+
 curl http://localhost:3005/health
-
-# Test geocoder
-curl http://localhost:3100/v1/autocomplete?text=Paris
-
-# Test router
-curl http://localhost:8002/route?locations=-122.42,37.78;-122.45,37.75
 ```
 
 ---
@@ -307,7 +301,10 @@ ports:
 | `SERVER_THREADS` | `4` | Number of worker threads |
 | `LISTEN_ADDRESSES` | `0.0.0.0:3000` | Bind address |
 
-### Pelias Environment Variables
+### Optional Pelias Environment Variables
+
+Pelias is not part of the default local Planisfy Compose stack. Use these when
+you operate an external Pelias-compatible geocoder.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -807,7 +804,7 @@ Add backup cron job:
 
 ```bash
 # Add to crontab
-0 2 * * * cd /path/to/self-hosting && ./scripts/backup.sh
+0 2 * * * cd /path/to/planisfy && ./scripts/backup.sh
 ```
 
 ---

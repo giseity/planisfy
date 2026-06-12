@@ -8,13 +8,17 @@ import { Cards, Card } from 'fumadocs-ui/components/card';
 
 # Welcome to Planisfy
 
-Planisfy is a self-hosted, Mapbox-compatible API platform built with open-source geospatial engines. Switch by changing one URL — keep the same code.
+Planisfy is a geospatial API platform with self-hosted and managed v1 modes,
+MapLibre style publishing, uploaded tilesets, API keys, usage tracking, and
+operator tooling around open geospatial engines.
 
 ## Quick Start
 
-### 1. Get Your API Key
+### 1. Prepare Access
 
-Sign up at [planisfy.com](https://planisfy.com) and create an API key from the dashboard.
+Create a Console account and, when needed, create an API key from the dashboard.
+Published public map assets can be loaded anonymously; service APIs such as
+geocoding and routing still require API key or session auth.
 
 ### 2. Replace Your Mapbox URL
 
@@ -28,7 +32,8 @@ map.setStyle('https://api.planisfy.com/styles/v1/planisfy/streets?access_token=Y
 
 ### 3. That's It!
 
-Everything else works the same — MapLibre GL JS, Mapbox GL JS, tile coordinates, all of it.
+MapLibre GL JS and standard z/x/y tile coordinates work with Planisfy's public
+style and tile URLs.
 
 ---
 
@@ -53,14 +58,16 @@ Everything else works the same — MapLibre GL JS, Mapbox GL JS, tile coordinate
 
 ## What is Planisfy?
 
-Planisfy provides drop-in Mapbox API compatibility using:
+Planisfy provides Mapbox-compatible API shapes where practical using:
 
 - **[Martin](https://github.com/maplibre/martin)** — Vector tile server (Rust)
 - **[Pelias](https://github.com/pelias/pelias)** — Geocoding engine (Node.js)
 - **[Valhalla](https://github.com/valhalla/valhalla)** — Routing engine (C++)
 - **[Overture Maps](https://overturemaps.org/)** — Open map data source
 
-All intended for an open self-hosted stack, with Mapbox-compatible API shapes where practical.
+Uploaded published tilesets are served through Planisfy API-owned TileJSON and
+tile URLs. Martin remains the static/local tile engine for configured PMTiles
+sources; Valhalla requires a mounted routing graph before route APIs are ready.
 
 ---
 
@@ -71,8 +78,8 @@ All intended for an open self-hosted stack, with Mapbox-compatible API shapes wh
 | **Self-Hostable** | ✅ Full control | ❌ Cloud-only |
 | **Open Source** | Pending repository license | ❌ Proprietary |
 | **Data Source** | Overture Maps (free) | Proprietary |
-| **Pricing** | Open-source + SaaS | Subscription only |
-| **API Compatible** | ✅ Drop-in replacement | — |
+| **Pricing** | Self-host + planned SaaS | Subscription only |
+| **API Compatible** | Mapbox-compatible shapes where implemented | — |
 
 ---
 
@@ -80,13 +87,13 @@ All intended for an open self-hosted stack, with Mapbox-compatible API shapes wh
 
 | API | Description | Status |
 |-----|-------------|--------|
-| **Vector Tiles** | Protocol Buffer vector tiles | ✅ Available |
-| **Style JSON** | MapLibre style specifications | ✅ Available |
-| **Sprites & Glyphs** | Map icons and text rendering | ✅ Available |
-| **Geocoding** | Forward/reverse address search | 🟡 In Development |
-| **Directions** | Turn-by-turn routing | 🟡 In Development |
-| **Isochrones** | Time-distance polygons | 🔜 Planned |
-| **Static Images** | PNG map snapshots | 🔜 Planned |
+| **Vector Tiles** | Uploaded/static vector tiles and TileJSON | Available |
+| **Style JSON** | MapLibre style specifications and publishing | Available |
+| **Sprites & Glyphs** | Public map assets for rendering | Available |
+| **Geocoding** | Provider-backed forward/reverse search | Provider dependent |
+| **Directions** | Valhalla-backed routing | Graph dependent |
+| **Isochrones** | Valhalla-backed time-distance polygons | Graph dependent |
+| **Static Images** | PNG map snapshots | Requires `STATIC_MAP_URL` |
 
 ---
 
