@@ -24,6 +24,7 @@ import {
 } from "../lib/publish-safety";
 import { enqueueOutboxEvent } from "../lib/outbox";
 import { checkResourceLimit } from "../lib/plan-check";
+import { verifyStorageArtifactAvailable } from "../lib/storage-artifact-availability";
 import {
   buildRetrySourceResource,
   parseSourceProcessingJobInput,
@@ -627,6 +628,25 @@ resourcesRoute.post("/tilesets/:id/rebuild", async (c) => {
         },
       },
       404,
+    );
+  }
+  const sourceAvailability =
+    await verifyStorageArtifactAvailable(storageObject);
+  if (!sourceAvailability.ok) {
+    return c.json(
+      {
+        error: {
+          code:
+            sourceAvailability.code === "ARTIFACT_MISSING"
+              ? "UPLOAD_ARTIFACT_MISSING"
+              : sourceAvailability.code,
+          message:
+            sourceAvailability.code === "ARTIFACT_MISSING"
+              ? "Original upload artifact is missing from storage; re-upload the source before rebuilding."
+              : sourceAvailability.message,
+        },
+      },
+      sourceAvailability.code === "ARTIFACT_MISSING" ? 409 : 503,
     );
   }
 

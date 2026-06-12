@@ -17,6 +17,10 @@ import {
 } from "pmtiles";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
+import {
+  verifyStorageArtifactAvailable,
+  type StorageArtifactAvailability,
+} from "../lib/storage-artifact-availability";
 
 export const tilesRoute = new Hono<AuthEnv>();
 type ApiContext = Context<AuthEnv>;
@@ -459,17 +463,6 @@ function toTileJson(
   };
 }
 
-type TileJsonArtifactAvailability =
-  | { ok: true }
-  | {
-      ok: false;
-      code:
-        | "ARTIFACT_MISSING"
-        | "ARTIFACT_STORAGE_ERROR"
-        | "ARTIFACT_STORAGE_UNAVAILABLE";
-      message: string;
-    };
-
 export async function verifyTileJsonArtifact(
   resolved: {
     version?: { format?: string } | null;
@@ -480,50 +473,25 @@ export async function verifyTileJsonArtifact(
     } | null;
   },
   storage: StorageProvider = getStorage(),
-): Promise<TileJsonArtifactAvailability> {
+): Promise<StorageArtifactAvailability> {
   if (resolved.version?.format !== "PMTILES") return { ok: true };
-
-  if (!resolved.artifact) {
-    return {
-      ok: false,
-      code: "ARTIFACT_MISSING",
-      message: "Published tileset version does not have a storage artifact.",
-    };
-  }
-
-  const storageInfo = storage.getInfo();
-  if (
-    resolved.artifact.provider !== storageInfo.provider ||
-    (resolved.artifact.bucket && resolved.artifact.bucket !== storageInfo.bucket)
-  ) {
-    return {
-      ok: false,
-      code: "ARTIFACT_STORAGE_UNAVAILABLE",
-      message: "Tileset storage is not available from this API instance.",
-    };
-  }
-
-  try {
-    if (await storage.exists(resolved.artifact.storageKey)) {
-      return { ok: true };
-    }
+  const availability = await verifyStorageArtifactAvailable(
+    resolved.artifact,
+    storage,
+  );
+  if (!availability.ok && availability.code === "ARTIFACT_MISSING") {
     return {
       ok: false,
       code: "ARTIFACT_MISSING",
       message: "Published tileset artifact is missing from storage.",
     };
-  } catch (error) {
-    return {
-      ok: false,
-      code: "ARTIFACT_STORAGE_ERROR",
-      message: error instanceof Error ? error.message : String(error),
-    };
   }
+  return availability;
 }
 
 function tileJsonArtifactError(
   c: ApiContext,
-  availability: Exclude<TileJsonArtifactAvailability, { ok: true }>,
+  availability: Exclude<StorageArtifactAvailability, { ok: true }>,
 ) {
   c.header("Cache-Control", "no-store");
   return c.json(
