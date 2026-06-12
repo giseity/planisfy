@@ -55,7 +55,7 @@ Local self-host compose serves local artifacts from `/storage/*` and records art
 - Production-like environments must set `INTERNAL_API_SECRET`; internal routes must not be exposed with the fallback development secret.
 - Tileset uploads create `uploads`, `storage_objects`, `tilesets`, `processing_jobs`, and `tileset.build.requested` outbox events. `apps/worker-geodata` claims those events and dispatches BullMQ transport work.
 - Published tilesets are promoted explicitly through `/console/tilesets/:id/versions/:version/publish`; processing alone does not make a new version public.
-- `STORAGE_PROVIDER=r2` uses signed S3-compatible R2 access and publishes stable/versioned Martin alias objects under `MARTIN_SOURCES_PREFIX`.
+- `STORAGE_PROVIDER=r2` uses signed S3-compatible R2 access. Published PMTiles are served through API-owned tile URLs, and stable/versioned object aliases are written under `TILE_ALIAS_STORAGE_PREFIX` for deployments that need direct object-store references. `MARTIN_SOURCES_PREFIX` remains supported as a legacy fallback for that prefix.
 - Dodo checkout is created server-side from plan IDs, not client-supplied
   product IDs. Configure the webhook endpoint at `/webhooks/dodo` so Dodo
   subscription events can update `subscriptions` and related billing ledger

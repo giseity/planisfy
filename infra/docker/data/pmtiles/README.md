@@ -10,8 +10,8 @@ expects:
 The repository does not include binary tile data; this directory is a small
 fixture mount point for local self-host demos.
 
-The API proxies public tileset URLs to Martin source names. A stable URL such as
-`/tiles/v1/acme.roads/0/0/0` expects Martin source `acme.roads`; an immutable URL
-such as `/tiles/v1/acme.roads@3/0/0/0` expects Martin source `acme.roads.v3`.
-For uploaded tilesets, generate or extend `infra/docker/configs/martin.yaml`
-with those source names once the artifact path is known.
+Static Martin sources can still be proxied by the API when they are listed in
+`infra/docker/configs/martin.yaml`. Uploaded tilesets use API-owned
+`/tiles/v1/{owner}/{handle}` URLs and are read from configured artifact storage,
+so MinIO/S3/R2-backed uploads do not require matching direct Martin source
+names.

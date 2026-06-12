@@ -6,9 +6,9 @@ import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
 import type { StorageProvider } from "@planisfy/storage";
-import { registerPublishedMartinSources } from "./martin-sources";
+import { registerPublishedTileAliases } from "./martin-sources";
 
-test("registerPublishedMartinSources writes stable and versioned local aliases", async () => {
+test("registerPublishedTileAliases writes stable and versioned local Martin aliases", async () => {
   const previousLocalStoragePath = process.env.LOCAL_STORAGE_PATH;
   const previousMartinSourcesPath = process.env.MARTIN_SOURCES_PATH;
   const root = await mkdtemp(join(tmpdir(), "planisfy-martin-sources-"));
@@ -25,7 +25,7 @@ test("registerPublishedMartinSources writes stable and versioned local aliases",
     await mkdir(dirname(pmtilesPath), { recursive: true });
     await writeFile(pmtilesPath, "pmtiles-fixture");
 
-    const firstRegistration = await registerPublishedMartinSources({
+    const firstRegistration = await registerPublishedTileAliases({
       storageObject: { provider: "local", storageKey: pmtilesKey },
       artifactFormat: "PMTILES",
       ownerHandle: "owner_name",
@@ -34,6 +34,9 @@ test("registerPublishedMartinSources writes stable and versioned local aliases",
     });
 
     assert.ok(firstRegistration);
+    assert.equal(firstRegistration.delivery, "martin");
+    assert.equal(firstRegistration.stableAlias, "owner_name.roads");
+    assert.equal(firstRegistration.versionedAlias, "owner_name.roads.v1");
     assert.equal(
       await readFile(firstRegistration.stablePath, "utf8"),
       "pmtiles-fixture",
@@ -48,7 +51,7 @@ test("registerPublishedMartinSources writes stable and versioned local aliases",
     await mkdir(dirname(mbtilesPath), { recursive: true });
     await writeFile(mbtilesPath, "mbtiles-fixture");
 
-    const secondRegistration = await registerPublishedMartinSources({
+    const secondRegistration = await registerPublishedTileAliases({
       storageObject: { provider: "local", storageKey: mbtilesKey },
       artifactFormat: "MBTILES",
       ownerHandle: "owner_name",
@@ -84,16 +87,18 @@ test("registerPublishedMartinSources writes stable and versioned local aliases",
   }
 });
 
-test("registerPublishedMartinSources writes stable and versioned R2 aliases", async () => {
+test("registerPublishedTileAliases writes stable and versioned R2 object-storage aliases", async () => {
+  const previousTileAliasPrefix = process.env.TILE_ALIAS_STORAGE_PREFIX;
   const previousPrefix = process.env.MARTIN_SOURCES_PREFIX;
   const storage = new MemoryStorage("r2", "planisfy-artifacts", {
     "accounts/account/tilesets/tileset/v4/tiles.pmtiles": "pmtiles-fixture",
   });
 
   try {
+    delete process.env.TILE_ALIAS_STORAGE_PREFIX;
     process.env.MARTIN_SOURCES_PREFIX = "tiles/martin-sources";
 
-    const registration = await registerPublishedMartinSources({
+    const registration = await registerPublishedTileAliases({
       storageObject: {
         provider: "r2",
         bucket: "planisfy-artifacts",
@@ -108,6 +113,9 @@ test("registerPublishedMartinSources writes stable and versioned R2 aliases", as
 
     assert.ok(registration);
     assert.equal(registration.provider, "r2");
+    assert.equal(registration.delivery, "object-storage");
+    assert.equal(registration.stableAlias, "owner.roads");
+    assert.equal(registration.versionedAlias, "owner.roads.v4");
     assert.equal(registration.stableStorageKey, "tiles/martin-sources/owner.roads.pmtiles");
     assert.equal(registration.versionedStorageKey, "tiles/martin-sources/owner.roads.v4.pmtiles");
     assert.equal(
@@ -119,6 +127,12 @@ test("registerPublishedMartinSources writes stable and versioned R2 aliases", as
       "pmtiles-fixture",
     );
   } finally {
+    if (previousTileAliasPrefix === undefined) {
+      delete process.env.TILE_ALIAS_STORAGE_PREFIX;
+    } else {
+      process.env.TILE_ALIAS_STORAGE_PREFIX = previousTileAliasPrefix;
+    }
+
     if (previousPrefix === undefined) {
       delete process.env.MARTIN_SOURCES_PREFIX;
     } else {
@@ -127,15 +141,57 @@ test("registerPublishedMartinSources writes stable and versioned R2 aliases", as
   }
 });
 
-test("registerPublishedMartinSources skips unsupported providers and raw artifacts", async () => {
-  const remoteRegistration = await registerPublishedMartinSources({
+test("registerPublishedTileAliases defaults remote aliases to tile-aliases", async () => {
+  const previousTileAliasPrefix = process.env.TILE_ALIAS_STORAGE_PREFIX;
+  const previousPrefix = process.env.MARTIN_SOURCES_PREFIX;
+  const storage = new MemoryStorage("s3", "planisfy-artifacts", {
+    "accounts/account/tilesets/tileset/v1/tiles.pmtiles": "pmtiles-fixture",
+  });
+
+  try {
+    process.env.TILE_ALIAS_STORAGE_PREFIX = "";
+    delete process.env.MARTIN_SOURCES_PREFIX;
+
+    const registration = await registerPublishedTileAliases({
+      storageObject: {
+        provider: "s3",
+        bucket: "planisfy-artifacts",
+        storageKey: "accounts/account/tilesets/tileset/v1/tiles.pmtiles",
+      },
+      artifactFormat: "PMTILES",
+      ownerHandle: "owner",
+      tilesetHandle: "roads",
+      version: 1,
+      storage,
+    });
+
+    assert.ok(registration);
+    assert.equal(registration.stableStorageKey, "tile-aliases/owner.roads.pmtiles");
+    assert.equal(registration.versionedStorageKey, "tile-aliases/owner.roads.v1.pmtiles");
+  } finally {
+    if (previousTileAliasPrefix === undefined) {
+      delete process.env.TILE_ALIAS_STORAGE_PREFIX;
+    } else {
+      process.env.TILE_ALIAS_STORAGE_PREFIX = previousTileAliasPrefix;
+    }
+
+    if (previousPrefix === undefined) {
+      delete process.env.MARTIN_SOURCES_PREFIX;
+    } else {
+      process.env.MARTIN_SOURCES_PREFIX = previousPrefix;
+    }
+  }
+});
+
+test("registerPublishedTileAliases skips unsupported providers and raw artifacts", async () => {
+  const remoteRegistration = await registerPublishedTileAliases({
     storageObject: { provider: "memory", storageKey: "tiles.pmtiles" },
     artifactFormat: "PMTILES",
     ownerHandle: "owner",
     tilesetHandle: "roads",
     version: 1,
   });
-  const directoryRegistration = await registerPublishedMartinSources({
+  const directoryRegistration = await registerPublishedTileAliases({
     storageObject: { provider: "local", storageKey: "tiles.directory" },
     artifactFormat: "DIRECTORY",
     ownerHandle: "owner",

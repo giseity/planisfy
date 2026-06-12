@@ -1,7 +1,8 @@
 # Martin Tile Server Configuration
 
-# Built-in fixture PMTiles source. Published PMTiles are served by the API from
-# configured artifact storage, so Martin does not need to watch upload storage.
+# Built-in fixture PMTiles source. Uploaded tilesets are served by the API from
+# configured artifact storage, so Martin does not need to watch upload storage
+# or object-store alias prefixes.
 pmtiles:
   sources:
     stuttgart-base: "/data/stuttgart.pmtiles"
@@ -21,11 +22,10 @@ server:
   cache_control_max_age: 604800 # 7 days
 
 # Fixture tile source aliases
-# The API proxies public tileset URLs to Martin source names:
+# Legacy/static Martin source names can still be proxied by the API:
 #
 #   /tiles/v1/{owner}.{tileset}/{z}/{x}/{y}      -> {owner}.{tileset}
 #   /tiles/v1/{owner}.{tileset}@{version}/...    -> {owner}.{tileset}.v{version}
 #
-# Keep these source IDs aligned with the fixture styles. Martin v0.8 exposes
-# PMTiles source names directly, so the stable and immutable aliases are mounted
-# as first-class sources instead of composer aliases.
+# Keep these source IDs aligned with the fixture styles. Uploaded tilesets use
+# API-owned `/tiles/v1/{owner}/{handle}` URLs instead of direct Martin aliases.

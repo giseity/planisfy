@@ -43,7 +43,11 @@ Uploaded tilesets support stable and immutable aliases:
 | `/tiles/v1/{owner}.{tileset}@{version}.json` | TileJSON for an immutable published version |
 | `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | Tiles for an immutable published version |
 
-Self-hosted Martin must expose matching source names: `{owner}.{tileset}` for stable tiles and `{owner}.{tileset}.v{version}` for immutable tiles. The local Docker stack writes these aliases into the mounted `martin-sources` directory when a local tileset version is published.
+These API URLs are the public contract for uploaded tilesets. When artifact
+storage is S3/R2/MinIO, the API reads PMTiles ranges from the configured object
+store and Martin does not need matching source names. Local deployments that
+choose to expose uploaded artifacts directly through Martin can still mount
+local aliases named `{owner}.{tileset}` and `{owner}.{tileset}.v{version}`.
 
 ---
 
@@ -262,7 +266,10 @@ Planisfy tiles work with any Mapbox Vector Tile (MVT) compatible renderer: MapLi
 
 ## Self-Hosting Tiles
 
-When self-hosting Planisfy, tiles are served by **Martin** (Rust-based tile server) from PMTiles archives:
+When self-hosting Planisfy, built-in or static tile sources can be served by
+**Martin** (Rust-based tile server) from PMTiles archives. Uploaded tilesets are
+served through the Planisfy API URLs above so the same contract works for local,
+S3, R2, and MinIO artifact storage.
 
 ```bash
 # Example: Serve tiles locally with Martin

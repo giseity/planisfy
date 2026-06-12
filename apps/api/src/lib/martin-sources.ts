@@ -11,11 +11,12 @@ interface LocalStorageObject {
   storageKey: string;
 }
 
-export interface MartinSourceRegistration {
-  stableSource: string;
-  versionedSource: string;
+export interface PublishedTileAliasRegistration {
+  stableAlias: string;
+  versionedAlias: string;
   stablePath: string;
   versionedPath: string;
+  delivery: "martin" | "object-storage";
   provider: "local" | "s3" | "r2";
   stableStorageKey?: string;
   versionedStorageKey?: string;
@@ -23,7 +24,7 @@ export interface MartinSourceRegistration {
   versionedUrl?: string;
 }
 
-export async function registerPublishedMartinSources({
+export async function registerPublishedTileAliases({
   storageObject,
   artifactFormat,
   ownerHandle,
@@ -37,7 +38,7 @@ export async function registerPublishedMartinSources({
   tilesetHandle: string;
   version: number;
   storage?: StorageProvider;
-}): Promise<MartinSourceRegistration | null> {
+}): Promise<PublishedTileAliasRegistration | null> {
   if (artifactFormat !== "PMTILES" && artifactFormat !== "MBTILES") return null;
 
   const extension = artifactFormat === "MBTILES" ? "mbtiles" : "pmtiles";
@@ -79,7 +80,7 @@ async function registerLocalMartinSources({
   extension: "pmtiles" | "mbtiles";
   stableSource: string;
   versionedSource: string;
-}): Promise<MartinSourceRegistration> {
+}): Promise<PublishedTileAliasRegistration> {
   const localStoragePath =
     process.env.LOCAL_STORAGE_PATH ?? join(process.cwd(), ".storage");
   const sourcesDir =
@@ -98,10 +99,11 @@ async function registerLocalMartinSources({
   await replaceAlias(versionedPath, targetPath);
 
   return {
-    stableSource,
-    versionedSource,
+    stableAlias: stableSource,
+    versionedAlias: versionedSource,
     stablePath,
     versionedPath,
+    delivery: "martin",
     provider: "local",
   };
 }
@@ -118,7 +120,7 @@ async function registerObjectStorageMartinSources({
   extension: "pmtiles" | "mbtiles";
   stableSource: string;
   versionedSource: string;
-}): Promise<MartinSourceRegistration> {
+}): Promise<PublishedTileAliasRegistration> {
   const info = storage.getInfo();
   if (info.provider !== storageObject.provider) {
     throw new Error(
@@ -135,7 +137,9 @@ async function registerObjectStorageMartinSources({
   }
 
   const prefix = normalizeStoragePrefix(
-    process.env.MARTIN_SOURCES_PREFIX ?? "martin-sources",
+    process.env.TILE_ALIAS_STORAGE_PREFIX ??
+      process.env.MARTIN_SOURCES_PREFIX ??
+      "tile-aliases",
   );
   const stableStorageKey = `${prefix}/${stableSource}.${extension}`;
   const versionedStorageKey = `${prefix}/${versionedSource}.${extension}`;
@@ -147,10 +151,11 @@ async function registerObjectStorageMartinSources({
   await storage.copy(storageObject.storageKey, versionedStorageKey);
 
   return {
-    stableSource,
-    versionedSource,
+    stableAlias: stableSource,
+    versionedAlias: versionedSource,
     stablePath: stableStorageKey,
     versionedPath: versionedStorageKey,
+    delivery: "object-storage",
     provider: info.provider,
     stableStorageKey,
     versionedStorageKey,
@@ -199,5 +204,5 @@ async function unlinkIfExists(path: string) {
 }
 
 function normalizeStoragePrefix(prefix: string) {
-  return prefix.replace(/^\/+|\/+$/g, "") || "martin-sources";
+  return prefix.replace(/^\/+|\/+$/g, "") || "tile-aliases";
 }

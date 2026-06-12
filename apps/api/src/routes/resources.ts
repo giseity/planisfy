@@ -17,7 +17,7 @@ import type { AuthEnv } from "../middleware/auth";
 import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
 import { recordStorageObject } from "../lib/storage-ledger";
 import { logAudit } from "../lib/audit";
-import { registerPublishedMartinSources } from "../lib/martin-sources";
+import { registerPublishedTileAliases } from "../lib/martin-sources";
 import {
   buildTilesetPublishAuditMetadata,
   classifyVersionPublish,
@@ -518,7 +518,7 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
       404,
     );
 
-  const martinRegistration = await registerPublishedMartinSources({
+  const tileAliasRegistration = await registerPublishedTileAliases({
     storageObject: artifact,
     artifactFormat: targetVersion.format,
     ownerHandle,
@@ -561,11 +561,11 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
       targetVersion: version,
       previousVersion,
       action: publishAction,
-      martinRegistration,
+      tileAliasRegistration,
     }),
   });
 
-  return c.json({ data: { ...updated, martinRegistration } });
+  return c.json({ data: { ...updated, tileAliasRegistration } });
 });
 
 resourcesRoute.post("/tilesets/:id/rebuild", async (c) => {

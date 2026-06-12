@@ -42,20 +42,21 @@ test("buildTilesetPublishAuditMetadata records rollback-safe context", () => {
       targetVersion: 2,
       previousVersion: 3,
       action: "rollback",
-      martinRegistration: { provider: "local" },
+      tileAliasRegistration: { provider: "local", delivery: "martin" },
     }),
     {
       version: 2,
       previousVersion: 3,
       publishAction: "rollback",
-      martinRegistration: { provider: "local" },
+      tileAliasRegistration: { provider: "local", delivery: "martin" },
     },
   );
 });
 
 test("buildTilesetPublishAuditMetadata preserves alias registration evidence", () => {
-  const martinRegistration = {
+  const tileAliasRegistration = {
     provider: "r2",
+    delivery: "object-storage",
     stableStorageKey: "martin-sources/acme.roads.pmtiles",
     versionedStorageKey: "martin-sources/acme.roads.v4.pmtiles",
   };
@@ -65,13 +66,13 @@ test("buildTilesetPublishAuditMetadata preserves alias registration evidence", (
       targetVersion: 4,
       previousVersion: 3,
       action: "promote",
-      martinRegistration,
+      tileAliasRegistration,
     }),
     {
       version: 4,
       previousVersion: 3,
       publishAction: "promote",
-      martinRegistration,
+      tileAliasRegistration,
     },
   );
 });

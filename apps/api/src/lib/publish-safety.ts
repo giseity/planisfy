@@ -20,12 +20,12 @@ export function buildTilesetPublishAuditMetadata(params: {
   targetVersion: number;
   previousVersion?: number | null;
   action: PublishVersionAction;
-  martinRegistration: unknown;
+  tileAliasRegistration: unknown;
 }) {
   return {
     version: params.targetVersion,
     previousVersion: params.previousVersion ?? null,
     publishAction: params.action,
-    martinRegistration: params.martinRegistration,
+    tileAliasRegistration: params.tileAliasRegistration,
   };
 }
