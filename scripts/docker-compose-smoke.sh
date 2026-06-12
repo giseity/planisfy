@@ -133,6 +133,7 @@ if [[ -f "$ROOT_DIR/infra/docker/data/pmtiles/stuttgart.pmtiles" ]]; then
     compose logs martin >&2
     exit 1
   fi
+  node "$ROOT_DIR/scripts/self-host-default-map-smoke.mjs"
 else
   echo "Demo PMTiles fixture is missing; skipping optional TileJSON check"
 fi

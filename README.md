@@ -173,6 +173,16 @@ scripts/self-host-setup.sh --demo-data
 The downloaded file is validated as PMTiles before it is installed at the
 Martin mount path.
 
+When Martin is running and `stuttgart.pmtiles` is present, verify the default
+map source directly:
+
+```bash
+scripts/self-host-default-map-smoke.mjs
+```
+
+The smoke checks the local PMTiles fixture, Martin TileJSON, vector layer
+metadata, and a real non-empty Stuttgart vector tile.
+
 Start the local stack from the repository root:
 
 ```bash

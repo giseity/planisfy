@@ -85,8 +85,19 @@ scripts/docker-compose-smoke.sh
 The smoke test validates Compose, runs setup, starts Postgres, Redis, and the
 API, waits for `/health`, checks the public `/setup/preflight` product-loop
 prerequisites, checks `/health/detailed` for core runtime dependency entries,
-optionally reports Martin catalog reachability, and removes the smoke-test
-containers and volumes on exit.
+optionally reports Martin catalog reachability, runs the default-map smoke when
+`infra/docker/data/pmtiles/stuttgart.pmtiles` is present, and removes the
+smoke-test containers and volumes on exit.
+
+To check the mounted default map source against an already-running Martin
+service without tearing down Compose, run:
+
+```bash
+scripts/self-host-default-map-smoke.mjs
+```
+
+The smoke verifies the PMTiles magic header, Martin TileJSON vector layer
+metadata, and a real non-empty vector tile around Stuttgart.
 
 Optional flags:
 
