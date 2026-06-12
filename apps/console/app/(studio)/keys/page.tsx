@@ -324,15 +324,15 @@ export default function ApiKeysPage() {
               Create key
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <form action={handleCreate}>
+          <DialogContent className="max-h-[calc(100vh-2rem)] max-w-lg overflow-hidden">
+            <form action={handleCreate} className="flex max-h-[calc(100vh-5rem)] flex-col">
               <DialogHeader>
                 <DialogTitle>Create API key</DialogTitle>
                 <DialogDescription>
                   Select the permissions this key should have.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4 pr-2">
                 <div>
                   <Label htmlFor="name">Name</Label>
                   <Input id="name" name="name" placeholder="My app key" required className="mt-1" />
@@ -340,7 +340,7 @@ export default function ApiKeysPage() {
 
                 <div>
                   <Label>Scopes</Label>
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-md border p-3">
                     {ALL_SCOPES.map((scope) => (
                       <label key={scope.value} className="flex items-start gap-2 cursor-pointer">
                         <Checkbox name={`scope_${scope.value}`} defaultChecked={scope.value === "tiles:read" || scope.value === "styles:read"} className="mt-0.5" />
