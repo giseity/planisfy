@@ -391,8 +391,19 @@ async function fetchTopApiKeys(
     requests: Number(row.requests ?? 0),
     units: Number(row.units ?? 0),
     errorCount: Number(row.errorCount ?? 0),
-    lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
+    lastUsedAt: serializeDateTime(row.lastUsedAt),
   }));
+}
+
+function serializeDateTime(value: Date | string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
 async function fetchDashboardHealth(now: Date): Promise<DashboardHealthEntry[]> {
