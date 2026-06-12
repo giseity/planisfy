@@ -18,7 +18,7 @@ SOURCE_LAYER_CONTRACT="$ROOT_DIR/packages/map-styles/source-layer-contract.json"
 DEMO_PMTILES="$DATA_DIR/pmtiles/stuttgart.pmtiles"
 FIXTURE_TILEJSON_URL="http://localhost:3005/planisfy.basic"
 FIXTURE_MARTIN_SOURCE="stuttgart-base"
-FIXTURE_COMPOSER_ID="planisfy.basic"
+FIXTURE_TILESET_ID="planisfy.basic"
 
 usage() {
   cat <<USAGE
@@ -92,15 +92,15 @@ check_demo_wiring() {
   require_file "$SOURCE_LAYER_CONTRACT"
   require_file "$MARTIN_CONFIG"
 
-  require_text "$SOURCE_LAYER_CONTRACT" "\"tileset\": \"$FIXTURE_COMPOSER_ID\"" \
-    "Source-layer contract must name the same fixture tileset that Martin composes."
+  require_text "$SOURCE_LAYER_CONTRACT" "\"tileset\": \"$FIXTURE_TILESET_ID\"" \
+    "Source-layer contract must name the same fixture tileset that Martin exposes."
   require_text "$SOURCE_LAYER_CONTRACT" "\"sourceId\": \"planisfy-streets\"" \
     "Source-layer contract must match the style source id."
   require_text "$MARTIN_CONFIG" "$FIXTURE_MARTIN_SOURCE: \"/data/stuttgart.pmtiles\"" \
     "Martin config must mount the expected Stuttgart PMTiles fixture source."
-  require_text "$MARTIN_CONFIG" "id: \"$FIXTURE_COMPOSER_ID\"" \
+  require_text "$MARTIN_CONFIG" "$FIXTURE_TILESET_ID: \"/data/stuttgart.pmtiles\"" \
     "Martin config must expose the stable Planisfy fixture tileset."
-  require_text "$MARTIN_CONFIG" "id: \"$FIXTURE_COMPOSER_ID.v1\"" \
+  require_text "$MARTIN_CONFIG" "$FIXTURE_TILESET_ID.v1: \"/data/stuttgart.pmtiles\"" \
     "Martin config must expose the immutable Planisfy fixture tileset alias."
 }
 

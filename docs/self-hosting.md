@@ -200,7 +200,7 @@ webhook secret, and the Pro product ID are required readiness capabilities.
 
 | Path                                        | Purpose                                                                                                            |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `infra/docker/data/pmtiles/`                | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `stuttgart-base` source used by Planisfy Streets.    |
+| `infra/docker/data/pmtiles/`                | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `planisfy.basic` source used by Planisfy Streets.    |
 | `infra/docker/data/valhalla_data/`          | Valhalla graph/runtime data mounted at `/custom_files`.                                                            |
 | `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/uploads/`        | Local upload/object storage area.                                                                                  |
 | `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/styles/`         | Demo and published style JSON. The setup script seeds the legacy, light, and dark Planisfy Streets fixture styles. |

@@ -46,8 +46,8 @@ done
 echo "Checking Martin fixture aliases"
 for expected in \
   'stuttgart-base: "/data/stuttgart.pmtiles"' \
-  'id: "planisfy.basic"' \
-  'id: "planisfy.basic.v1"'
+  'planisfy.basic: "/data/stuttgart.pmtiles"' \
+  'planisfy.basic.v1: "/data/stuttgart.pmtiles"'
 do
   if ! grep -Fq "$expected" "$ROOT_DIR/infra/docker/configs/martin.yaml"; then
     echo "Martin config is missing expected alias: $expected" >&2
@@ -126,7 +126,7 @@ fi
 if [[ -f "$ROOT_DIR/infra/docker/data/pmtiles/stuttgart.pmtiles" ]]; then
   echo "Starting Martin for optional fixture TileJSON check"
   compose up -d martin
-  if curl -fsS http://localhost:3005/planisfy.basic.json >/dev/null 2>&1; then
+  if curl -fsS http://localhost:3005/planisfy.basic >/dev/null 2>&1; then
     echo "Fixture TileJSON is reachable"
   else
     echo "Fixture PMTiles exists, but Martin TileJSON was not reachable" >&2

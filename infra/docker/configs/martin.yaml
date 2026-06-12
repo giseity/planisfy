@@ -5,6 +5,8 @@
 pmtiles:
   sources:
     stuttgart-base: "/data/stuttgart.pmtiles"
+    planisfy.basic: "/data/stuttgart.pmtiles"
+    planisfy.basic.v1: "/data/stuttgart.pmtiles"
 
 # Server settings
 server:
@@ -18,16 +20,12 @@ server:
   # Cache control headers
   cache_control_max_age: 604800 # 7 days
 
-# Tile source combination
+# Fixture tile source aliases
 # The API proxies public tileset URLs to Martin source names:
 #
 #   /tiles/v1/{owner}.{tileset}/{z}/{x}/{y}      -> {owner}.{tileset}
 #   /tiles/v1/{owner}.{tileset}@{version}/...    -> {owner}.{tileset}.v{version}
 #
-# Keep these composer IDs aligned with the tilesets published by the API. The
-# fixture aliases below make the Planisfy Streets demo work locally.
-composer:
-  - id: "planisfy.basic"
-    sources: ["stuttgart-base"]
-  - id: "planisfy.basic.v1"
-    sources: ["stuttgart-base"]
+# Keep these source IDs aligned with the fixture styles. Martin v0.8 exposes
+# PMTiles source names directly, so the stable and immutable aliases are mounted
+# as first-class sources instead of composer aliases.
