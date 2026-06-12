@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useCallback } from "react"
+import { useEffect, useRef, useCallback, useState } from "react"
 import maplibregl from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
 import { useStyleStore } from "@/lib/store/style-store"
@@ -21,6 +21,7 @@ export function MapPreview({ inspectMode, onFeatureInspect }: MapPreviewProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const popupRef = useRef<maplibregl.Popup | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const style = useStyleStore((s) => s.style)
   const setMapLoaded = useStyleStore((s) => s.setMapLoaded)
   const setSelectedLayer = useStyleStore((s) => s.setSelectedLayer)
@@ -85,13 +86,20 @@ export function MapPreview({ inspectMode, onFeatureInspect }: MapPreviewProps) {
   useEffect(() => {
     if (!mapContainer.current || !style) return
 
-    const map = new maplibregl.Map({
-      container: mapContainer.current,
-      style: JSON.parse(JSON.stringify(style)),
-      center: [9.18, 48.78], // Stuttgart
-      zoom: 11,
-      attributionControl: {},
-    })
+    let map: maplibregl.Map
+    try {
+      map = new maplibregl.Map({
+        container: mapContainer.current,
+        style: JSON.parse(JSON.stringify(style)),
+        center: [9.18, 48.78], // Stuttgart
+        zoom: 11,
+        attributionControl: {},
+      })
+    } catch (err) {
+      setPreviewError(previewErrorMessage(err))
+      setMapLoaded(false)
+      return
+    }
 
     map.addControl(new maplibregl.NavigationControl(), "top-right")
 
@@ -155,7 +163,16 @@ export function MapPreview({ inspectMode, onFeatureInspect }: MapPreviewProps) {
 
   return (
     <div className="relative h-full w-full">
-      <div ref={mapContainer} className="h-full w-full" />
+      {previewError ? (
+        <div className="flex h-full w-full items-center justify-center bg-muted/30 p-6 text-center">
+          <div className="max-w-sm space-y-2">
+            <p className="text-sm font-medium">Map preview unavailable</p>
+            <p className="text-xs text-muted-foreground">{previewError}</p>
+          </div>
+        </div>
+      ) : (
+        <div ref={mapContainer} className="h-full w-full" />
+      )}
       {inspectMode && (
         <div className="absolute left-2 top-2 rounded bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground backdrop-blur">
           Inspect mode — click features on map
@@ -163,4 +180,20 @@ export function MapPreview({ inspectMode, onFeatureInspect }: MapPreviewProps) {
       )}
     </div>
   )
+}
+
+function previewErrorMessage(err: unknown) {
+  const fallback =
+    "This browser could not create a WebGL context. The style editor is still usable, but the live map preview is unavailable."
+  if (!(err instanceof Error)) return fallback
+
+  try {
+    const parsed = JSON.parse(err.message) as { message?: unknown; type?: unknown }
+    if (parsed.type === "webglcontextcreationerror") return fallback
+    if (typeof parsed.message === "string") return parsed.message
+  } catch {
+    // Use the message below.
+  }
+
+  return err.message || fallback
 }
