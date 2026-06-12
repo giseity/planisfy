@@ -32,7 +32,23 @@ test("TileJSON path parsing preserves owner and handle segments", () => {
     parseStableTileJsonPath(
       "/tiles/v1/qa_platform_44bee746/qa-minio-streets.json",
     ),
-    { owner: "qa_platform_44bee746", handle: "qa-minio-streets" },
+    {
+      owner: "qa_platform_44bee746",
+      handle: "qa-minio-streets",
+      version: undefined,
+    },
+  );
+  assert.deepEqual(
+    parseStableTileJsonPath(
+      "/tiles/v1/qa_platform_44bee746/qa-minio-streets@2.json",
+    ),
+    { owner: "qa_platform_44bee746", handle: "qa-minio-streets", version: 2 },
+  );
+  assert.equal(
+    parseStableTileJsonPath(
+      "/tiles/v1/qa_platform_44bee746/qa-minio-streets@0.json",
+    ),
+    null,
   );
   assert.deepEqual(
     parseVersionedTileJsonPath(

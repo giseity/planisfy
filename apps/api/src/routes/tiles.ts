@@ -25,6 +25,7 @@ type ResolvedTileset = NonNullable<Awaited<ReturnType<typeof resolveTileset>>>;
 const pmtilesCache = new SharedPromiseCache(200);
 
 // Stable owner/tileset TileJSON resolves to the promoted current version.
+// Inline @version suffixes are accepted for copied/version-pinned URLs.
 tilesRoute.get("/tiles/v1/:owner/:handle.json", async (c) => {
   const parsed = parseStableTileJsonPath(new URL(c.req.url).pathname);
   if (!parsed) {
@@ -34,18 +35,35 @@ tilesRoute.get("/tiles/v1/:owner/:handle.json", async (c) => {
     );
   }
 
-  const resolved = await resolveTileset(parsed.owner, parsed.handle);
+  const resolved = await resolveTileset(
+    parsed.owner,
+    parsed.handle,
+    parsed.version,
+  );
   if (!resolved?.version) {
     return c.json(
-      { error: { code: "NOT_FOUND", message: "Tileset not found" } },
+      {
+        error: {
+          code: "NOT_FOUND",
+          message: parsed.version
+            ? "Tileset version not found"
+            : "Tileset not found",
+        },
+      },
       404,
     );
   }
 
-  return c.json(toTileJson(resolved, "stable"), 200, {
-    "Cache-Control": "public, max-age=300",
-    ETag: `"tileset-${resolved.version.id}"`,
-  });
+  return c.json(
+    toTileJson(resolved, parsed.version ? "version" : "stable"),
+    200,
+    {
+      "Cache-Control": parsed.version
+        ? "public, max-age=31536000, immutable"
+        : "public, max-age=300",
+      ETag: `"tileset-${resolved.version.id}"`,
+    },
+  );
 });
 
 // Immutable version TileJSON.
@@ -466,13 +484,14 @@ export function parsePublicTilesetSlug(slug: string) {
 
 export function parseStableTileJsonPath(pathname: string) {
   const match = pathname.match(
-    /\/tiles\/v1\/([^/]+)\/([^/]+)\.json$/,
+    /\/tiles\/v1\/([^/]+)\/([^/@]+)(?:@([1-9]\d*))?\.json$/,
   );
   if (!match) return null;
 
   return {
     owner: decodeURIComponent(match[1]!),
     handle: decodeURIComponent(match[2]!),
+    version: match[3] ? Number(match[3]) : undefined,
   };
 }
 
