@@ -27,7 +27,7 @@ FROM base AS runner
 WORKDIR /app/apps/worker-geodata
 ENV NODE_ENV=production
 ARG DUCKDB_VERSION=v1.1.3
-ARG TIPPECANOE_VERSION=1.36.0
+ARG TIPPECANOE_VERSION=2.79.0
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -43,7 +43,7 @@ RUN apt-get update && \
     curl -fsSL -o /tmp/duckdb.zip "https://github.com/duckdb/duckdb/releases/download/${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip" && \
     unzip -q /tmp/duckdb.zip -d /usr/local/bin && \
     chmod +x /usr/local/bin/duckdb && \
-    curl -fsSL -o /tmp/tippecanoe.tar.gz "https://github.com/mapbox/tippecanoe/archive/refs/tags/${TIPPECANOE_VERSION}.tar.gz" && \
+    curl -fsSL -o /tmp/tippecanoe.tar.gz "https://github.com/felt/tippecanoe/archive/refs/tags/${TIPPECANOE_VERSION}.tar.gz" && \
     mkdir -p /tmp/tippecanoe && \
     tar -xzf /tmp/tippecanoe.tar.gz -C /tmp/tippecanoe --strip-components=1 && \
     make -C /tmp/tippecanoe -j"$(nproc)" && \
