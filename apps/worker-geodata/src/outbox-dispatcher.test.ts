@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseSourceProcessingJobInput } from "./outbox-dispatcher";
+import {
+  parseSourceProcessingJobInput,
+  removeRetryableSourceProcessingJob,
+} from "./outbox-dispatcher";
 
 test("parseSourceProcessingJobInput derives worker identifiers from event context", () => {
   const input = parseSourceProcessingJobInput(
@@ -72,3 +75,39 @@ test("parseSourceProcessingJobInput preserves dataset build source metadata", ()
   assert.equal(input.uploadId, undefined);
   assert.equal(input.format, "geojson");
 });
+
+test("removeRetryableSourceProcessingJob removes stale failed queue jobs", async () => {
+  const job = new FakeQueueJob("failed");
+  const result = await removeRetryableSourceProcessingJob(
+    { getJob: async () => job },
+    "job-1",
+  );
+
+  assert.deepEqual(result, { action: "removed", state: "failed" });
+  assert.equal(job.removed, true);
+});
+
+test("removeRetryableSourceProcessingJob keeps runnable queue jobs", async () => {
+  const job = new FakeQueueJob("waiting");
+  const result = await removeRetryableSourceProcessingJob(
+    { getJob: async () => job },
+    "job-1",
+  );
+
+  assert.deepEqual(result, { action: "kept", state: "waiting" });
+  assert.equal(job.removed, false);
+});
+
+class FakeQueueJob {
+  removed = false;
+
+  constructor(private state: string) {}
+
+  async getState() {
+    return this.state;
+  }
+
+  async remove() {
+    this.removed = true;
+  }
+}

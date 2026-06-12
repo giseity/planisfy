@@ -34,6 +34,13 @@ const MAX_ATTEMPTS = 5;
 
 type DispatchableEventName = (typeof DISPATCHABLE_EVENTS)[number];
 type OutboxEvent = typeof eventOutbox.$inferSelect;
+type ExistingQueueJob = {
+  getState(): Promise<string>;
+  remove(): Promise<void>;
+};
+type SourceQueue = Pick<Queue<SourceProcessingJob>, "add"> & {
+  getJob(jobId: string): Promise<ExistingQueueJob | null | undefined>;
+};
 
 export interface OutboxDispatcher {
   close(): Promise<void>;
@@ -414,7 +421,7 @@ async function nextDatasetVersion(datasetId: string) {
 }
 
 async function dispatchTilesetBuildRequested(
-  queue: Queue<SourceProcessingJob>,
+  queue: SourceQueue,
   event: OutboxEvent,
 ) {
   const payload = parseEventPayload("tileset.build.requested", event.payload);
@@ -446,6 +453,24 @@ async function dispatchTilesetBuildRequested(
     ownerId: processingJob.accountId,
     processingJobId: payload.jobId,
   });
+  const existingQueueJob = await removeRetryableSourceProcessingJob(
+    queue,
+    payload.jobId,
+  );
+  if (existingQueueJob.action === "kept") {
+    await db.insert(processingJobLogs).values({
+      jobId: payload.jobId,
+      level: "info",
+      message: "Build request already exists in geodata queue",
+      metadata: {
+        outboxEventId: event.id,
+        tilesetId: payload.tilesetId,
+        queueState: existingQueueJob.state,
+      },
+    });
+    return;
+  }
+
   const runtime = await resolveLocalExecutionRuntime({
     accountId: processingJob.accountId,
     executionTargetId: processingJob.executionTargetId,
@@ -466,6 +491,36 @@ async function dispatchTilesetBuildRequested(
       env: Object.keys(runtime.env),
     },
   });
+}
+
+export async function removeRetryableSourceProcessingJob(
+  queue: Pick<SourceQueue, "getJob">,
+  jobId: string,
+): Promise<
+  | { action: "none" }
+  | { action: "kept"; state: string }
+  | { action: "removed"; state: string }
+> {
+  const existing = await queue.getJob(jobId);
+  if (!existing) return { action: "none" };
+
+  const state = await existing.getState();
+  if (isRunnableBullMqState(state)) {
+    return { action: "kept", state };
+  }
+
+  await existing.remove();
+  return { action: "removed", state };
+}
+
+function isRunnableBullMqState(state: string) {
+  return (
+    state === "active" ||
+    state === "delayed" ||
+    state === "prioritized" ||
+    state === "waiting" ||
+    state === "waiting-children"
+  );
 }
 
 export function parseSourceProcessingJobInput(
