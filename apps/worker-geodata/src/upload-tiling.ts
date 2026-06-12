@@ -94,11 +94,32 @@ export function validateUpload(
     return { format, byteLength: data.byteLength };
   }
 
+  if (format === "shapefile") {
+    if (!isZipArchive(data)) {
+      throw new Error("Shapefile upload must be a zipped Shapefile archive");
+    }
+    return {
+      format,
+      schema: { fields: {}, columns: [] },
+      byteLength: data.byteLength,
+    };
+  }
+
   return {
     format,
     schema: { fields: {}, columns: [] },
     byteLength: data.byteLength,
   };
+}
+
+function isZipArchive(data: Buffer): boolean {
+  if (data.byteLength < 4) return false;
+  if (data[0] !== 0x50 || data[1] !== 0x4b) return false;
+  return (
+    (data[2] === 0x03 && data[3] === 0x04) ||
+    (data[2] === 0x05 && data[3] === 0x06) ||
+    (data[2] === 0x07 && data[3] === 0x08)
+  );
 }
 
 function validateGeoJsonUpload(data: Buffer): UploadValidation {

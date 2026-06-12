@@ -38,9 +38,25 @@ scripts/docker-compose-smoke.sh
 ```
 
 The smoke script validates Compose, starts Postgres, Redis, and the API, polls
-`/health`, checks `/health/detailed` for Postgres, Redis, storage,
-worker-geodata, Martin, and Valhalla entries, optionally reports a reachable
-Martin catalog, and then cleans up containers and volumes.
+`/health`, checks `/setup/preflight`, checks `/health/detailed` for Postgres,
+Redis, storage, worker-geodata, Martin, and Valhalla entries, optionally
+reports a reachable Martin catalog, runs the default-map smoke when
+`infra/docker/data/pmtiles/stuttgart.pmtiles` is present, and then cleans up
+containers and volumes.
+
+When the self-host stack is already running with Martin and the demo PMTiles
+fixture, run the default-map smoke directly:
+
+```bash
+scripts/self-host-default-map-smoke.mjs
+```
+
+It verifies the PMTiles magic header, Martin TileJSON vector layer metadata,
+and a non-empty vector tile around Stuttgart.
+
+Upload-format smoke coverage lives in `apps/worker-geodata`: the fast worker
+tests validate GeoJSON, CSV, zipped Shapefile, PMTiles, and MBTiles fixtures
+without requiring GDAL, Tippecanoe, Redis, Postgres, or object storage.
 
 CI runs the same non-binary smoke script after lint, typecheck, tests, builds,
 and Docker image builds. Real PMTiles rendering remains manual/opt-in through
@@ -57,4 +73,4 @@ The trust gate now includes:
 - Docker image builds for API, Console, Admin, Docs, Marketing,
   worker-geodata, and self-host supervisor
 - non-binary Compose smoke
-- optional/manual PMTiles demo-data smoke
+- optional/manual PMTiles demo-data and browser render smoke

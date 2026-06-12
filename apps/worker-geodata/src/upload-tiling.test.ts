@@ -152,6 +152,48 @@ test("validateUpload rejects CSV coordinates outside WGS84 bounds", () => {
   );
 });
 
+test("validateUpload smoke covers every advertised upload format", () => {
+  const geojson = validateUpload(
+    Buffer.from(
+      JSON.stringify({
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: { name: "Depot" },
+            geometry: { type: "Point", coordinates: [9.1, 48.7] },
+          },
+        ],
+      }),
+    ),
+    "geojson",
+  );
+  const csv = validateUpload(
+    Buffer.from("name,lat,lon\nDepot,48.7,9.1\n"),
+    "csv",
+  );
+  const shapefile = validateUpload(
+    Buffer.from("PK\x03\x04fixture"),
+    "shapefile",
+  );
+  const pmtiles = validateUpload(
+    Buffer.from("PMTiles fixture bytes"),
+    "pmtiles",
+  );
+  const mbtiles = validateUpload(
+    Buffer.from("SQLite format 3\0fixture bytes"),
+    "mbtiles",
+  );
+
+  assert.equal(geojson.format, "geojson");
+  assert.equal(geojson.featureCount, 1);
+  assert.equal(csv.format, "csv");
+  assert.deepEqual(csv.csv, { latitude: "lat", longitude: "lon" });
+  assert.equal(shapefile.format, "shapefile");
+  assert.equal(pmtiles.format, "pmtiles");
+  assert.equal(mbtiles.format, "mbtiles");
+});
+
 test("validateUpload checks PMTiles and MBTiles magic headers", () => {
   assert.equal(
     validateUpload(Buffer.from("PMTiles fixture bytes"), "pmtiles").format,
@@ -169,5 +211,13 @@ test("validateUpload checks PMTiles and MBTiles magic headers", () => {
   assert.throws(
     () => validateUpload(Buffer.from("not really mbtiles"), "mbtiles"),
     /SQLite database/,
+  );
+});
+
+test("validateUpload rejects shapefile uploads that are not zip archives", () => {
+  assert.throws(
+    () =>
+      validateUpload(Buffer.from("not really a zipped shapefile"), "shapefile"),
+    /zipped Shapefile archive/,
   );
 });

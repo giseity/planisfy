@@ -84,32 +84,35 @@ the basemap artifact/style contract is reproducible without committing binary
 map data.
 
 **Current state:** Fixture styles, source-layer contract tests, regional
-release metadata, and Planetiler regional build tooling exist. Browser proof
-and polished artifact sourcing still need work.
+release metadata, Planetiler regional build tooling, and a default-map smoke
+script exist. When `stuttgart.pmtiles` is present, the smoke verifies the
+PMTiles magic header, Martin TileJSON vector layers, and a non-empty Stuttgart
+vector tile. Full browser-render proof still depends on a WebGL-capable browser
+environment.
 
 **Remaining evidence:**
 
-- Produce or document a small default PMTiles artifact that a new operator can
-  obtain repeatably.
-- Prove the default map renders non-empty tiles in browser QA.
 - Keep release manifests tied to source data, attribution, SHA-256, layers, and
   style URLs.
-- Document the operator path when `stuttgart.pmtiles` or Valhalla graph data is
-  intentionally absent.
+- Replace the mutable local `stuttgart.pmtiles` fixture story with a polished
+  default artifact source that new operators can obtain repeatably.
+- Prove the default map renders in a browser QA environment with WebGL
+  available.
 
 ### Gate 2 — Upload To Published Tileset
 
 **Promise:** A user can upload supported data, build and publish a served
 tileset, and understand failures before dead URLs leak to production.
 
-**Current state:** Upload validation, worker builds, API-owned tile delivery,
+**Current state:** Upload validation, smoke fixtures for GeoJSON, CSV, zipped
+Shapefile, PMTiles, and MBTiles, worker builds, API-owned tile delivery,
 published artifact checks, retry cleanup, rebuild guards, and public TileJSON
 delivery are implemented for the core QA path.
 
 **Remaining evidence:**
 
-- Add integration smoke for all supported upload formats: GeoJSON, CSV, zipped
-  Shapefile, PMTiles, and MBTiles.
+- Promote the upload-format smoke from validation coverage to API/worker
+  integration coverage for GeoJSON, CSV, zipped Shapefile, PMTiles, and MBTiles.
 - Exercise API, Redis, worker, and storage restarts during build/retry/cancel
   flows.
 - Surface missing published artifacts and missing original uploads directly in
