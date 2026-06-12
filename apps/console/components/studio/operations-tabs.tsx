@@ -74,7 +74,9 @@ export function JobsTab({
       <Card>
         <CardHeader>
           <CardTitle>Recent Processing Jobs</CardTitle>
-          <CardDescription>Timeline entries come from job logs and terminal status.</CardDescription>
+          <CardDescription>
+            Timeline entries come from job logs and terminal status.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -91,17 +93,27 @@ export function JobsTab({
               {jobs.map((job) => (
                 <TableRow key={job.id}>
                   <TableCell className="font-medium">{job.type}</TableCell>
-                  <TableCell><StatusBadge status={job.status} /></TableCell>
+                  <TableCell>
+                    <StatusBadge status={job.status} />
+                  </TableCell>
                   <TableCell>{job.progress}%</TableCell>
                   <TableCell>{formatDate(job.updatedAt)}</TableCell>
                   <TableCell>
-                    <Button size="sm" variant="outline" onClick={() => onTimeline(job.id)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={`View timeline for ${job.type}`}
+                      title="View timeline"
+                      onClick={() => onTimeline(job.id)}
+                    >
                       <ClipboardList className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
-              {jobs.length === 0 && <EmptyRow colSpan={5} label="No processing jobs yet." />}
+              {jobs.length === 0 && (
+                <EmptyRow colSpan={5} label="No processing jobs yet." />
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -109,20 +121,31 @@ export function JobsTab({
       <Card>
         <CardHeader>
           <CardTitle>Timeline</CardTitle>
-          <CardDescription>{timeline ? timeline.job.id : "Select a job to inspect events."}</CardDescription>
+          <CardDescription>
+            {timeline ? timeline.job.id : "Select a job to inspect events."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
             {timeline?.timeline.map((event) => (
-              <div key={`${event.id}-${event.timestamp}`} className="border-l pl-3">
+              <div
+                key={`${event.id}-${event.timestamp}`}
+                className="border-l pl-3"
+              >
                 <div className="flex items-center gap-2">
                   <StatusBadge status={event.level} />
-                  <span className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDate(event.timestamp)}
+                  </span>
                 </div>
                 <p className="mt-1 text-sm">{event.message}</p>
               </div>
             ))}
-            {!timeline && <p className="text-sm text-muted-foreground">Job events will appear here.</p>}
+            {!timeline && (
+              <p className="text-sm text-muted-foreground">
+                Job events will appear here.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -144,7 +167,8 @@ export function SchedulesTab({
   onChanged: () => void;
 }) {
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<ConsoleScheduledOperation["kind"]>("tileset_rebuild");
+  const [kind, setKind] =
+    useState<ConsoleScheduledOperation["kind"]>("tileset_rebuild");
   const [cron, setCron] = useState("0 2 * * *");
   const [timezone, setTimezone] = useState("UTC");
   const [tilesetId, setTilesetId] = useState("");
@@ -152,8 +176,17 @@ export function SchedulesTab({
   const [workerProfileId, setWorkerProfileId] = useState("");
   const [payload, setPayload] = useState("{}");
   const [saving, setSaving] = useState(false);
+  const requiresTileset = kind === "tileset_rebuild";
+  const canCreateSchedule =
+    name.trim().length > 0 &&
+    !saving &&
+    (!requiresTileset || Boolean(tilesetId));
 
   async function createSchedule() {
+    if (requiresTileset && !tilesetId) {
+      toast.error("Select a tileset before creating a rebuild schedule");
+      return;
+    }
     setSaving(true);
     try {
       await api.createScheduledOperation({
@@ -174,18 +207,28 @@ export function SchedulesTab({
       toast.success("Schedule created");
       onChanged();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create schedule");
+      toast.error(
+        err instanceof Error ? err.message : "Failed to create schedule",
+      );
     } finally {
       setSaving(false);
     }
   }
 
   async function runSchedule(id: string) {
-    await runAction(() => api.runScheduledOperation(id), "Schedule run recorded", onChanged);
+    await runAction(
+      () => api.runScheduledOperation(id),
+      "Schedule run recorded",
+      onChanged,
+    );
   }
 
   async function deleteSchedule(id: string) {
-    await runAction(() => api.deleteScheduledOperation(id), "Schedule deleted", onChanged);
+    await runAction(
+      () => api.deleteScheduledOperation(id),
+      "Schedule deleted",
+      onChanged,
+    );
   }
 
   return (
@@ -193,13 +236,25 @@ export function SchedulesTab({
       <Card>
         <CardHeader>
           <CardTitle>Create Schedule</CardTitle>
-          <CardDescription>Use cron syntax for recurring imports, rebuilds, or command workflows.</CardDescription>
+          <CardDescription>
+            Use cron syntax for recurring imports, rebuilds, or command
+            workflows.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label="Name">
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
           <Field label="Kind">
-            <Select value={kind} onValueChange={(value) => setKind(value as ConsoleScheduledOperation["kind"])}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={kind}
+              onValueChange={(value) =>
+                setKind(value as ConsoleScheduledOperation["kind"])
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="tileset_rebuild">Tileset rebuild</SelectItem>
                 <SelectItem value="source_import">Source import</SelectItem>
@@ -208,12 +263,26 @@ export function SchedulesTab({
             </Select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Cron"><Input value={cron} onChange={(e) => setCron(e.target.value)} /></Field>
-            <Field label="Timezone"><Input value={timezone} onChange={(e) => setTimezone(e.target.value)} /></Field>
+            <Field label="Cron">
+              <Input value={cron} onChange={(e) => setCron(e.target.value)} />
+            </Field>
+            <Field label="Timezone">
+              <Input
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+              />
+            </Field>
           </div>
           <Field label="Tileset">
-            <Select value={tilesetId || "none"} onValueChange={(value) => setTilesetId(value === "none" ? "" : value)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={tilesetId || "none"}
+              onValueChange={(value) =>
+                setTilesetId(value === "none" ? "" : value)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No tileset</SelectItem>
                 {tilesets.map((tileset) => (
@@ -223,11 +292,23 @@ export function SchedulesTab({
                 ))}
               </SelectContent>
             </Select>
+            {requiresTileset && !tilesetId && (
+              <p className="text-xs text-muted-foreground">
+                Required for tileset rebuild schedules.
+              </p>
+            )}
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Execution target">
-              <Select value={executionTargetId || "none"} onValueChange={(value) => setExecutionTargetId(value === "none" ? "" : value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={executionTargetId || "none"}
+                onValueChange={(value) =>
+                  setExecutionTargetId(value === "none" ? "" : value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Default target</SelectItem>
                   {executionTargets.map((target) => (
@@ -239,8 +320,15 @@ export function SchedulesTab({
               </Select>
             </Field>
             <Field label="Worker profile">
-              <Select value={workerProfileId || "none"} onValueChange={(value) => setWorkerProfileId(value === "none" ? "" : value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={workerProfileId || "none"}
+                onValueChange={(value) =>
+                  setWorkerProfileId(value === "none" ? "" : value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Default profile</SelectItem>
                   {workerProfiles.map((profile) => (
@@ -252,8 +340,14 @@ export function SchedulesTab({
               </Select>
             </Field>
           </div>
-          <Field label="Advanced payload JSON"><Textarea rows={5} value={payload} onChange={(e) => setPayload(e.target.value)} /></Field>
-          <Button onClick={createSchedule} disabled={!name || saving}>
+          <Field label="Advanced payload JSON">
+            <Textarea
+              rows={5}
+              value={payload}
+              onChange={(e) => setPayload(e.target.value)}
+            />
+          </Field>
+          <Button onClick={createSchedule} disabled={!canCreateSchedule}>
             <CalendarClock className="mr-1.5 h-4 w-4" />
             Create
           </Button>
@@ -278,16 +372,36 @@ export function SchedulesTab({
               {schedules.map((schedule) => (
                 <TableRow key={schedule.id}>
                   <TableCell className="font-medium">{schedule.name}</TableCell>
-                  <TableCell><StatusBadge status={schedule.kind} /></TableCell>
+                  <TableCell>
+                    <StatusBadge status={schedule.kind} />
+                  </TableCell>
                   <TableCell>{schedule.cron}</TableCell>
                   <TableCell>{formatDate(schedule.nextRunAt)}</TableCell>
                   <TableCell className="space-x-1">
-                    <Button size="sm" variant="outline" onClick={() => runSchedule(schedule.id)}><Play className="h-4 w-4" /></Button>
-                    <Button size="sm" variant="outline" onClick={() => deleteSchedule(schedule.id)}><Trash2 className="h-4 w-4" /></Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={`Run schedule ${schedule.name}`}
+                      title="Run schedule"
+                      onClick={() => runSchedule(schedule.id)}
+                    >
+                      <Play className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={`Delete schedule ${schedule.name}`}
+                      title="Delete schedule"
+                      onClick={() => deleteSchedule(schedule.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
-              {schedules.length === 0 && <EmptyRow colSpan={5} label="No schedules configured." />}
+              {schedules.length === 0 && (
+                <EmptyRow colSpan={5} label="No schedules configured." />
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -304,7 +418,8 @@ export function NotificationsTab({
   onChanged: () => void;
 }) {
   const [name, setName] = useState("");
-  const [provider, setProvider] = useState<ConsoleNotificationChannel["provider"]>("webhook");
+  const [provider, setProvider] =
+    useState<ConsoleNotificationChannel["provider"]>("webhook");
   const [target, setTarget] = useState("");
   const [events, setEvents] = useState("job.failed,job.succeeded,schedule.due");
 
@@ -331,13 +446,25 @@ export function NotificationsTab({
       <Card>
         <CardHeader>
           <CardTitle>Add Channel</CardTitle>
-          <CardDescription>Webhook delivery is active; email and chat providers are stored for adapter rollout.</CardDescription>
+          <CardDescription>
+            Webhook delivery is active; email and chat providers are stored for
+            adapter rollout.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label="Name">
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
           <Field label="Provider">
-            <Select value={provider} onValueChange={(value) => setProvider(value as ConsoleNotificationChannel["provider"])}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={provider}
+              onValueChange={(value) =>
+                setProvider(value as ConsoleNotificationChannel["provider"])
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="webhook">Webhook</SelectItem>
                 <SelectItem value="email">Email</SelectItem>
@@ -346,8 +473,12 @@ export function NotificationsTab({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Target"><Input value={target} onChange={(e) => setTarget(e.target.value)} /></Field>
-          <Field label="Events"><Input value={events} onChange={(e) => setEvents(e.target.value)} /></Field>
+          <Field label="Target">
+            <Input value={target} onChange={(e) => setTarget(e.target.value)} />
+          </Field>
+          <Field label="Events">
+            <Input value={events} onChange={(e) => setEvents(e.target.value)} />
+          </Field>
           <Button onClick={createChannel} disabled={!name || !target}>
             <Bell className="mr-1.5 h-4 w-4" />
             Create
@@ -372,19 +503,46 @@ export function NotificationsTab({
               {channels.map((channel) => (
                 <TableRow key={channel.id}>
                   <TableCell className="font-medium">{channel.name}</TableCell>
-                  <TableCell><StatusBadge status={channel.provider} /></TableCell>
+                  <TableCell>
+                    <StatusBadge status={channel.provider} />
+                  </TableCell>
                   <TableCell>{channel.events.join(", ") || "All"}</TableCell>
                   <TableCell className="space-x-1">
-                    <Button size="sm" variant="outline" onClick={() => runAction(() => api.testNotificationChannel(channel.id), "Test sent", onChanged)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () => api.testNotificationChannel(channel.id),
+                          "Test sent",
+                          onChanged,
+                        )
+                      }
+                    >
                       <CheckCircle2 className="h-4 w-4" />
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => runAction(() => api.deleteNotificationChannel(channel.id), "Channel deleted", onChanged)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () => api.deleteNotificationChannel(channel.id),
+                          "Channel deleted",
+                          onChanged,
+                        )
+                      }
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
-              {channels.length === 0 && <EmptyRow colSpan={4} label="No notification channels configured." />}
+              {channels.length === 0 && (
+                <EmptyRow
+                  colSpan={4}
+                  label="No notification channels configured."
+                />
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -406,7 +564,8 @@ export function WorkersTab({
 
   async function createNode() {
     await runAction(
-      () => api.createWorkerNode({ name, kind, endpoint: endpoint || undefined }),
+      () =>
+        api.createWorkerNode({ name, kind, endpoint: endpoint || undefined }),
       "Worker node added",
       () => {
         setName("");
@@ -421,13 +580,25 @@ export function WorkersTab({
       <Card>
         <CardHeader>
           <CardTitle>Register Worker</CardTitle>
-          <CardDescription>Local workers validate by heartbeat; remote and cloud workers validate by endpoint.</CardDescription>
+          <CardDescription>
+            Local workers validate by heartbeat; remote and cloud workers
+            validate by endpoint.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <Field label="Name">
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
           <Field label="Kind">
-            <Select value={kind} onValueChange={(value) => setKind(value as ConsoleWorkerNode["kind"])}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={kind}
+              onValueChange={(value) =>
+                setKind(value as ConsoleWorkerNode["kind"])
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="local">Local</SelectItem>
                 <SelectItem value="remote">Remote</SelectItem>
@@ -435,7 +606,13 @@ export function WorkersTab({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Endpoint"><Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="https://worker.example.com/health" /></Field>
+          <Field label="Endpoint">
+            <Input
+              value={endpoint}
+              onChange={(e) => setEndpoint(e.target.value)}
+              placeholder="https://worker.example.com/health"
+            />
+          </Field>
           <Button onClick={createNode} disabled={!name}>
             <ServerCog className="mr-1.5 h-4 w-4" />
             Register
@@ -462,19 +639,43 @@ export function WorkersTab({
                 <TableRow key={node.id}>
                   <TableCell className="font-medium">{node.name}</TableCell>
                   <TableCell>{node.kind}</TableCell>
-                  <TableCell><StatusBadge status={node.status} /></TableCell>
+                  <TableCell>
+                    <StatusBadge status={node.status} />
+                  </TableCell>
                   <TableCell>{formatDate(node.lastSeenAt)}</TableCell>
                   <TableCell className="space-x-1">
-                    <Button size="sm" variant="outline" onClick={() => runAction(() => api.validateWorkerNode(node.id), "Worker validated", onChanged)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () => api.validateWorkerNode(node.id),
+                          "Worker validated",
+                          onChanged,
+                        )
+                      }
+                    >
                       <RefreshCw className="h-4 w-4" />
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => runAction(() => api.deleteWorkerNode(node.id), "Worker deleted", onChanged)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () => api.deleteWorkerNode(node.id),
+                          "Worker deleted",
+                          onChanged,
+                        )
+                      }
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
-              {nodes.length === 0 && <EmptyRow colSpan={5} label="No worker nodes registered." />}
+              {nodes.length === 0 && (
+                <EmptyRow colSpan={5} label="No worker nodes registered." />
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -515,17 +716,30 @@ export function BackupsTab({
       <Card>
         <CardHeader>
           <CardTitle>Create Backup</CardTitle>
-          <CardDescription>Copy a dataset or tile artifact from its storage key into backup storage.</CardDescription>
+          <CardDescription>
+            Copy a dataset or tile artifact from its storage key into backup
+            storage.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {backupSources.length > 0 && (
             <Field label="Recent artifact">
-              <Select value={storageObjectId || "manual"} onValueChange={(value) => setStorageObjectId(value === "manual" ? "" : value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={storageObjectId || "manual"}
+                onValueChange={(value) =>
+                  setStorageObjectId(value === "manual" ? "" : value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="manual">Manual ID</SelectItem>
                   {backupSources.map((backup) => (
-                    <SelectItem key={backup.id} value={backup.storageObjectId ?? ""}>
+                    <SelectItem
+                      key={backup.id}
+                      value={backup.storageObjectId ?? ""}
+                    >
                       {backup.sourceStorageKey}
                     </SelectItem>
                   ))}
@@ -533,7 +747,12 @@ export function BackupsTab({
               </Select>
             </Field>
           )}
-          <Field label="Storage object ID"><Input value={storageObjectId} onChange={(e) => setStorageObjectId(e.target.value)} /></Field>
+          <Field label="Storage object ID">
+            <Input
+              value={storageObjectId}
+              onChange={(e) => setStorageObjectId(e.target.value)}
+            />
+          </Field>
           <Button onClick={createBackup} disabled={!storageObjectId}>
             <ArchiveRestore className="mr-1.5 h-4 w-4" />
             Back up
@@ -558,18 +777,33 @@ export function BackupsTab({
             <TableBody>
               {backups.map((backup) => (
                 <TableRow key={backup.id}>
-                  <TableCell><StatusBadge status={backup.status} /></TableCell>
+                  <TableCell>
+                    <StatusBadge status={backup.status} />
+                  </TableCell>
                   <TableCell>{backup.provider}</TableCell>
                   <TableCell>{formatBytes(backup.size)}</TableCell>
                   <TableCell>{formatDate(backup.createdAt)}</TableCell>
                   <TableCell>
-                    <Button size="sm" variant="outline" disabled={backup.status === "failed"} onClick={() => runAction(() => api.restoreArtifactBackup(backup.id), "Backup restored", onChanged)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={backup.status === "failed"}
+                      onClick={() =>
+                        runAction(
+                          () => api.restoreArtifactBackup(backup.id),
+                          "Backup restored",
+                          onChanged,
+                        )
+                      }
+                    >
                       <ArchiveRestore className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
-              {backups.length === 0 && <EmptyRow colSpan={5} label="No artifact backups yet." />}
+              {backups.length === 0 && (
+                <EmptyRow colSpan={5} label="No artifact backups yet." />
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -597,13 +831,19 @@ export function DeliveryTab({
   const [host, setHost] = useState("");
 
   function selectResource(value: string, target: "preview" | "domain") {
-    if (target === "preview") setPreviewResourceId(value === "manual" ? "" : value);
+    if (target === "preview")
+      setPreviewResourceId(value === "manual" ? "" : value);
     else setDomainResourceId(value === "manual" ? "" : value);
   }
 
   async function createPreview() {
     await runAction(
-      () => api.createPreviewLink({ resourceType: previewResourceType, resourceId: previewResourceId, targetUrl }),
+      () =>
+        api.createPreviewLink({
+          resourceType: previewResourceType,
+          resourceId: previewResourceId,
+          targetUrl,
+        }),
       "Preview link created",
       () => {
         setPreviewResourceId("");
@@ -636,13 +876,20 @@ export function DeliveryTab({
         <Card>
           <CardHeader>
             <CardTitle>Create Preview</CardTitle>
-            <CardDescription>Temporary links can point at TileJSON, style JSON, or review URLs.</CardDescription>
+            <CardDescription>
+              Temporary links can point at TileJSON, style JSON, or review URLs.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Resource type">
-                <Select value={previewResourceType} onValueChange={setPreviewResourceType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={previewResourceType}
+                  onValueChange={setPreviewResourceType}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="tileset">Tileset</SelectItem>
                     <SelectItem value="style">Style</SelectItem>
@@ -661,8 +908,16 @@ export function DeliveryTab({
                 />
               </Field>
             </div>
-            <Field label="Target URL"><Input value={targetUrl} onChange={(e) => setTargetUrl(e.target.value)} /></Field>
-            <Button onClick={createPreview} disabled={!previewResourceId || !targetUrl}>
+            <Field label="Target URL">
+              <Input
+                value={targetUrl}
+                onChange={(e) => setTargetUrl(e.target.value)}
+              />
+            </Field>
+            <Button
+              onClick={createPreview}
+              disabled={!previewResourceId || !targetUrl}
+            >
               <Link2 className="mr-1.5 h-4 w-4" />
               Create preview
             </Button>
@@ -671,13 +926,20 @@ export function DeliveryTab({
         <Card>
           <CardHeader>
             <CardTitle>Add Domain</CardTitle>
-            <CardDescription>Domains start pending with a verification token for DNS setup.</CardDescription>
+            <CardDescription>
+              Domains start pending with a verification token for DNS setup.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Resource type">
-                <Select value={domainResourceType} onValueChange={setDomainResourceType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={domainResourceType}
+                  onValueChange={setDomainResourceType}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="tileset">Tileset</SelectItem>
                     <SelectItem value="style">Style</SelectItem>
@@ -695,7 +957,9 @@ export function DeliveryTab({
                 />
               </Field>
             </div>
-            <Field label="Host"><Input value={host} onChange={(e) => setHost(e.target.value)} /></Field>
+            <Field label="Host">
+              <Input value={host} onChange={(e) => setHost(e.target.value)} />
+            </Field>
             <Button onClick={createDomain} disabled={!host}>
               <Globe className="mr-1.5 h-4 w-4" />
               Add domain
@@ -704,7 +968,11 @@ export function DeliveryTab({
         </Card>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <DeliveryList title="Preview Links" rows={previews} onChanged={onChanged} />
+        <DeliveryList
+          title="Preview Links"
+          rows={previews}
+          onChanged={onChanged}
+        />
         <DomainList domains={domains} onChanged={onChanged} />
       </div>
     </div>
@@ -725,13 +993,17 @@ function ResourceSelector({
   tilesets: ConsoleTileset[];
 }) {
   if (resourceType !== "tileset" || tilesets.length === 0) {
-    return <Input value={resourceId} onChange={(e) => onManual(e.target.value)} />;
+    return (
+      <Input value={resourceId} onChange={(e) => onManual(e.target.value)} />
+    );
   }
 
   return (
     <div className="space-y-2">
       <Select value={resourceId || "manual"} onValueChange={onSelect}>
-        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
         <SelectContent>
           <SelectItem value="manual">Manual ID</SelectItem>
           {tilesets.map((tileset) => (
@@ -757,7 +1029,9 @@ function DeliveryList({
 }) {
   return (
     <Card>
-      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
@@ -774,15 +1048,29 @@ function DeliveryList({
                 <TableCell>{row.resourceType}</TableCell>
                 <TableCell className="space-x-1">
                   <Button size="sm" variant="outline" asChild>
-                    <a href={row.targetUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /></a>
+                    <a href={row.targetUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => runAction(() => api.deletePreviewLink(row.id), "Preview deleted", onChanged)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      runAction(
+                        () => api.deletePreviewLink(row.id),
+                        "Preview deleted",
+                        onChanged,
+                      )
+                    }
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
               </TableRow>
             ))}
-            {rows.length === 0 && <EmptyRow colSpan={3} label="No preview links yet." />}
+            {rows.length === 0 && (
+              <EmptyRow colSpan={3} label="No preview links yet." />
+            )}
           </TableBody>
         </Table>
       </CardContent>
@@ -799,7 +1087,9 @@ function DomainList({
 }) {
   return (
     <Card>
-      <CardHeader><CardTitle>Custom Domains</CardTitle></CardHeader>
+      <CardHeader>
+        <CardTitle>Custom Domains</CardTitle>
+      </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
@@ -814,19 +1104,45 @@ function DomainList({
             {domains.map((domain) => (
               <TableRow key={domain.id}>
                 <TableCell className="font-medium">{domain.host}</TableCell>
-                <TableCell><StatusBadge status={domain.status} /></TableCell>
-                <TableCell className="max-w-[180px] truncate text-xs">{domain.verificationToken}</TableCell>
+                <TableCell>
+                  <StatusBadge status={domain.status} />
+                </TableCell>
+                <TableCell className="max-w-[180px] truncate text-xs">
+                  {domain.verificationToken}
+                </TableCell>
                 <TableCell className="space-x-1">
-                  <Button size="sm" variant="outline" onClick={() => runAction(() => api.verifyCustomDomain(domain.id), "Domain verified", onChanged)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      runAction(
+                        () => api.verifyCustomDomain(domain.id),
+                        "Domain verified",
+                        onChanged,
+                      )
+                    }
+                  >
                     <CheckCircle2 className="h-4 w-4" />
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => runAction(() => api.deleteCustomDomain(domain.id), "Domain deleted", onChanged)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      runAction(
+                        () => api.deleteCustomDomain(domain.id),
+                        "Domain deleted",
+                        onChanged,
+                      )
+                    }
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
               </TableRow>
             ))}
-            {domains.length === 0 && <EmptyRow colSpan={4} label="No custom domains yet." />}
+            {domains.length === 0 && (
+              <EmptyRow colSpan={4} label="No custom domains yet." />
+            )}
           </TableBody>
         </Table>
       </CardContent>
@@ -870,13 +1186,34 @@ export function TemplatesTab({
       <Card>
         <CardHeader>
           <CardTitle>Create Template</CardTitle>
-          <CardDescription>Store reusable execution targets, schedules, and import workflow payloads.</CardDescription>
+          <CardDescription>
+            Store reusable execution targets, schedules, and import workflow
+            payloads.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-          <Field label="Category"><Input value={category} onChange={(e) => setCategory(e.target.value)} /></Field>
-          <Field label="Description"><Input value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
-          <Field label="Template JSON"><Textarea rows={6} value={template} onChange={(e) => setTemplate(e.target.value)} /></Field>
+          <Field label="Name">
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field label="Category">
+            <Input
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            />
+          </Field>
+          <Field label="Description">
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </Field>
+          <Field label="Template JSON">
+            <Textarea
+              rows={6}
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+            />
+          </Field>
           <Button onClick={createTemplate} disabled={!name || !category}>
             <ClipboardList className="mr-1.5 h-4 w-4" />
             Create
@@ -900,19 +1237,35 @@ export function TemplatesTab({
             <TableBody>
               {templates.map((templateRow) => (
                 <TableRow key={templateRow.id}>
-                  <TableCell className="font-medium">{templateRow.name}</TableCell>
+                  <TableCell className="font-medium">
+                    {templateRow.name}
+                  </TableCell>
                   <TableCell>{templateRow.category}</TableCell>
-                  <TableCell>{templateRow.builtIn ? "Built-in" : "Custom"}</TableCell>
+                  <TableCell>
+                    {templateRow.builtIn ? "Built-in" : "Custom"}
+                  </TableCell>
                   <TableCell>
                     {!templateRow.builtIn && (
-                      <Button size="sm" variant="outline" onClick={() => runAction(() => api.deleteWorkflowTemplate(templateRow.id), "Template deleted", onChanged)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          runAction(
+                            () => api.deleteWorkflowTemplate(templateRow.id),
+                            "Template deleted",
+                            onChanged,
+                          )
+                        }
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
                   </TableCell>
                 </TableRow>
               ))}
-              {templates.length === 0 && <EmptyRow colSpan={4} label="No templates available." />}
+              {templates.length === 0 && (
+                <EmptyRow colSpan={4} label="No templates available." />
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -939,9 +1292,13 @@ function Field({
 function StatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
   const variant =
-    normalized.includes("fail") || normalized.includes("error") || normalized === "offline"
+    normalized.includes("fail") ||
+    normalized.includes("error") ||
+    normalized === "offline"
       ? "destructive"
-      : normalized.includes("healthy") || normalized.includes("success") || normalized.includes("complete")
+      : normalized.includes("healthy") ||
+          normalized.includes("success") ||
+          normalized.includes("complete")
         ? "default"
         : "secondary";
   return <Badge variant={variant}>{status.replaceAll("_", " ")}</Badge>;
@@ -950,7 +1307,10 @@ function StatusBadge({ status }: { status: string }) {
 function EmptyRow({ colSpan, label }: { colSpan: number; label: string }) {
   return (
     <TableRow>
-      <TableCell colSpan={colSpan} className="h-20 text-center text-sm text-muted-foreground">
+      <TableCell
+        colSpan={colSpan}
+        className="h-20 text-center text-sm text-muted-foreground"
+      >
         {label}
       </TableCell>
     </TableRow>
@@ -1023,4 +1383,3 @@ function formatBytes(value: number | null) {
   if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${value} B`;
 }
-

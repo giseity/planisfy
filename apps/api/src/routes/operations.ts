@@ -40,14 +40,27 @@ const notificationSchema = z.object({
   enabled: z.boolean().default(true),
 });
 
-const scheduleSchema = z.object({
-  name: z.string().min(1).max(128),
-  kind: z.enum(["tileset_rebuild", "source_import", "custom_command"]),
-  status: z.enum(["active", "paused"]).default("active"),
-  cron: z.string().min(3).max(128),
-  timezone: z.string().min(1).max(64).default("UTC"),
-  payload: z.record(z.string(), z.unknown()).default({}),
-});
+const scheduleSchema = z
+  .object({
+    name: z.string().min(1).max(128),
+    kind: z.enum(["tileset_rebuild", "source_import", "custom_command"]),
+    status: z.enum(["active", "paused"]).default("active"),
+    cron: z.string().min(3).max(128),
+    timezone: z.string().min(1).max(64).default("UTC"),
+    payload: z.record(z.string(), z.unknown()).default({}),
+  })
+  .superRefine((schedule, ctx) => {
+    if (
+      schedule.kind === "tileset_rebuild" &&
+      typeof schedule.payload.tilesetId !== "string"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Tileset rebuild schedules require a tilesetId payload value",
+        path: ["payload", "tilesetId"],
+      });
+    }
+  });
 
 const workerNodeSchema = z.object({
   name: z.string().min(1).max(128),
@@ -93,6 +106,10 @@ operationsRoute.get("/operations", async (c) => {
   return c.json({ data: await buildOperationsOverview(accountId) });
 });
 
+export function validateScheduleInput(input: unknown) {
+  return scheduleSchema.safeParse(input);
+}
+
 operationsRoute.get("/operations/events", async (c) => {
   const accountId = c.get("ownerId");
   const encoder = new TextEncoder();
@@ -126,7 +143,8 @@ operationsRoute.get("/operations/events", async (c) => {
       } catch (err) {
         if (!signal.aborted && !closed) {
           send("operations-error", {
-            message: err instanceof Error ? err.message : "Operations stream failed",
+            message:
+              err instanceof Error ? err.message : "Operations stream failed",
           });
         }
       } finally {
