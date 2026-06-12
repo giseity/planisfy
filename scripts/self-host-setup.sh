@@ -108,10 +108,12 @@ check_demo_wiring() {
 }
 
 seed_style_fixtures() {
+  local target_style_dir="$1"
+  mkdir -p "$target_style_dir"
   for style_fixture in "${STYLE_FIXTURES[@]}"; do
-    cp "$STYLE_FIXTURE_DIR/$style_fixture" "$STORAGE_STYLE_DIR/$style_fixture"
+    cp "$STYLE_FIXTURE_DIR/$style_fixture" "$target_style_dir/$style_fixture"
   done
-  echo "Seeded local storage style fixtures: infra/docker/data/storage/styles/"
+  echo "Seeded local storage style fixtures: ${target_style_dir#$ROOT_DIR/}"
 }
 
 compose() {
@@ -122,9 +124,60 @@ load_env_file() {
   if [[ -f "$ENV_FILE" ]]; then
     set -a
     # shellcheck disable=SC1090
-    source "$ENV_FILE"
+    source <(sed 's/\r$//' "$ENV_FILE")
     set +a
   fi
+}
+
+resolve_repo_path() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    *) printf '%s\n' "$ROOT_DIR/$1" ;;
+  esac
+}
+
+set_env_if_blank_or_default() {
+  local name="$1"
+  local value="$2"
+  shift 2
+
+  local current="${!name-}"
+  local should_set=false
+  if [[ -z "$current" ]]; then
+    should_set=true
+  else
+    for default_value in "$@"; do
+      if [[ "$current" == "$default_value" ]]; then
+        should_set=true
+        break
+      fi
+    done
+  fi
+
+  if [[ "$should_set" != true ]]; then
+    return
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+  awk -v name="$name" -v value="$value" '
+    BEGIN { done = 0 }
+    {
+      sub(/\r$/, "")
+      if ($0 ~ "^" name "=" && done == 0) {
+        print name "=\"" value "\""
+        done = 1
+        next
+      }
+      print
+    }
+    END {
+      if (done == 0) print name "=\"" value "\""
+    }
+  ' "$ENV_FILE" > "$tmp"
+  mv "$tmp" "$ENV_FILE"
+  export "$name=$value"
+  echo "Set $name=${value#$ROOT_DIR/}"
 }
 
 download_demo_pmtiles() {
@@ -180,22 +233,42 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 load_env_file
 
+set_env_if_blank_or_default LOCAL_STORAGE_PATH "$ROOT_DIR/.storage" ".storage"
+set_env_if_blank_or_default MARTIN_SOURCES_PATH "$ROOT_DIR/.storage/martin-sources"
+set_env_if_blank_or_default DEMO_PMTILES_PATH "$DEMO_PMTILES"
+
+API_STORAGE_DIR="$(resolve_repo_path "${LOCAL_STORAGE_PATH:-.storage}")"
+API_STORAGE_STYLE_DIR="$API_STORAGE_DIR/styles"
+API_STORAGE_MARTIN_SOURCES_DIR="$(resolve_repo_path "${MARTIN_SOURCES_PATH:-${LOCAL_STORAGE_PATH:-.storage}/martin-sources}")"
+
 mkdir -p \
   "$DATA_DIR/pmtiles" \
   "$DATA_DIR/valhalla_data" \
   "$DATA_DIR/storage/uploads" \
   "$DATA_DIR/storage/styles" \
   "$DATA_DIR/storage/fixtures" \
-  "$STORAGE_MARTIN_SOURCES_DIR"
+  "$STORAGE_MARTIN_SOURCES_DIR" \
+  "$API_STORAGE_DIR/uploads" \
+  "$API_STORAGE_STYLE_DIR" \
+  "$API_STORAGE_DIR/fixtures" \
+  "$API_STORAGE_MARTIN_SOURCES_DIR"
 
 if [[ ! -w "$STORAGE_DIR" ]]; then
   echo "Local storage directory is not writable: infra/docker/data/storage" >&2
   exit 1
 fi
 
+if [[ ! -w "$API_STORAGE_DIR" ]]; then
+  echo "Configured local storage directory is not writable: ${API_STORAGE_DIR#$ROOT_DIR/}" >&2
+  exit 1
+fi
+
 check_demo_wiring
 
-seed_style_fixtures
+seed_style_fixtures "$STORAGE_STYLE_DIR"
+if [[ "$API_STORAGE_STYLE_DIR" != "$STORAGE_STYLE_DIR" ]]; then
+  seed_style_fixtures "$API_STORAGE_STYLE_DIR"
+fi
 
 if [[ ! -f "$DEMO_PMTILES" && "$want_demo_data" == true ]]; then
   download_demo_pmtiles

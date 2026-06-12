@@ -16,6 +16,7 @@ node_modules
 coverage
 
 # Self-host backups
+.storage/
 backups/
 support-bundles/
 infra/docker/data/minio/*
