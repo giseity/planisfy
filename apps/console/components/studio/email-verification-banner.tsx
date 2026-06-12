@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSession, authClient } from "@planisfy/auth/client"
 import { Button } from "@planisfy/ui/components/button"
 import { Mail, X } from "lucide-react"
@@ -8,10 +8,16 @@ import { toast } from "sonner"
 
 export function EmailVerificationBanner() {
   const { data: session } = useSession()
+  const [mounted, setMounted] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
 
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return null
   if (dismissed || !session?.user) return null
   if (session.user.emailVerified) return null
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback, useMemo, type FormEvent } from "react"
 import { ApiRequestError, api, type ConsoleProfile, type PlatformPreflight } from "@/lib/api"
 import { Button } from "@planisfy/ui/components/button"
 import { Input } from "@planisfy/ui/components/input"
@@ -230,12 +230,15 @@ export default function ApiKeysPage() {
     [managedEmailBlocked],
   )
 
-  const handleCreate = async (formData: FormData) => {
+  const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
     if (managedEmailBlocked) {
       toast.error("Verify your email before creating API keys")
       return
     }
 
+    const formData = new FormData(event.currentTarget)
     const name = formData.get("name") as string
     const scopeValues = ALL_SCOPES.map((s) => s.value).filter(
       (v) => formData.get(`scope_${v}`) === "on"
@@ -325,7 +328,7 @@ export default function ApiKeysPage() {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-h-[calc(100vh-2rem)] max-w-lg overflow-hidden">
-            <form action={handleCreate} className="flex max-h-[calc(100vh-5rem)] flex-col">
+            <form onSubmit={handleCreate} className="flex max-h-[calc(100vh-5rem)] flex-col">
               <DialogHeader>
                 <DialogTitle>Create API key</DialogTitle>
                 <DialogDescription>
