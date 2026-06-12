@@ -53,6 +53,10 @@ tilesRoute.get("/tiles/v1/:owner/:handle.json", async (c) => {
       404,
     );
   }
+  const artifactAvailability = await verifyTileJsonArtifact(resolved);
+  if (!artifactAvailability.ok) {
+    return tileJsonArtifactError(c, artifactAvailability);
+  }
 
   return c.json(
     toTileJson(resolved, parsed.version ? "version" : "stable"),
@@ -92,6 +96,10 @@ tilesRoute.get("/tiles/v1/:owner/:handle/versions/:version.json", async (c) => {
       404,
     );
   }
+  const artifactAvailability = await verifyTileJsonArtifact(resolved);
+  if (!artifactAvailability.ok) {
+    return tileJsonArtifactError(c, artifactAvailability);
+  }
 
   return c.json(toTileJson(resolved, "version"), 200, {
     "Cache-Control": "public, max-age=31536000, immutable",
@@ -117,6 +125,10 @@ tilesRoute.get("/tiles/v1/:source{.+\\.json$}", async (c) => {
         { error: { code: "NOT_FOUND", message: "Tileset not found" } },
         404,
       );
+    }
+    const artifactAvailability = await verifyTileJsonArtifact(resolved);
+    if (!artifactAvailability.ok) {
+      return tileJsonArtifactError(c, artifactAvailability);
     }
 
     return c.json(
@@ -445,6 +457,84 @@ function toTileJson(
     ),
     artifact: resolved.artifact?.storageKey,
   };
+}
+
+type TileJsonArtifactAvailability =
+  | { ok: true }
+  | {
+      ok: false;
+      code:
+        | "ARTIFACT_MISSING"
+        | "ARTIFACT_STORAGE_ERROR"
+        | "ARTIFACT_STORAGE_UNAVAILABLE";
+      message: string;
+    };
+
+export async function verifyTileJsonArtifact(
+  resolved: {
+    version?: { format?: string } | null;
+    artifact?: {
+      provider: string;
+      bucket?: string | null;
+      storageKey: string;
+    } | null;
+  },
+  storage: StorageProvider = getStorage(),
+): Promise<TileJsonArtifactAvailability> {
+  if (resolved.version?.format !== "PMTILES") return { ok: true };
+
+  if (!resolved.artifact) {
+    return {
+      ok: false,
+      code: "ARTIFACT_MISSING",
+      message: "Published tileset version does not have a storage artifact.",
+    };
+  }
+
+  const storageInfo = storage.getInfo();
+  if (
+    resolved.artifact.provider !== storageInfo.provider ||
+    (resolved.artifact.bucket && resolved.artifact.bucket !== storageInfo.bucket)
+  ) {
+    return {
+      ok: false,
+      code: "ARTIFACT_STORAGE_UNAVAILABLE",
+      message: "Tileset storage is not available from this API instance.",
+    };
+  }
+
+  try {
+    if (await storage.exists(resolved.artifact.storageKey)) {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      code: "ARTIFACT_MISSING",
+      message: "Published tileset artifact is missing from storage.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      code: "ARTIFACT_STORAGE_ERROR",
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function tileJsonArtifactError(
+  c: ApiContext,
+  availability: Exclude<TileJsonArtifactAvailability, { ok: true }>,
+) {
+  c.header("Cache-Control", "no-store");
+  return c.json(
+    {
+      error: {
+        code: availability.code,
+        message: availability.message,
+      },
+    },
+    503,
+  );
 }
 
 export function extractVectorLayers(schema: unknown) {

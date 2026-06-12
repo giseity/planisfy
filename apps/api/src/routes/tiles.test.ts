@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Readable } from "node:stream";
 import { TileType } from "pmtiles";
+import type { StorageProvider, StoredObject } from "@planisfy/storage";
 import {
   apiBaseFromUrl,
   contentTypeForTileType,
@@ -10,6 +12,7 @@ import {
   parseStableTileJsonPath,
   parseVersionedTileJsonPath,
   publicTilesetBaseUrl,
+  verifyTileJsonArtifact,
 } from "./tiles";
 
 test("parsePublicTilesetSlug accepts stable and immutable dotted aliases", () => {
@@ -125,3 +128,110 @@ test("contentTypeForTileType maps PMTiles tile types to HTTP content types", () 
     "application/octet-stream",
   );
 });
+
+test("verifyTileJsonArtifact confirms PMTiles artifact availability", async () => {
+  const storage = new MemoryStorage("s3", "planisfy-artifacts", ["tiles.pmtiles"]);
+  const result = await verifyTileJsonArtifact(
+    {
+      version: { format: "PMTILES" },
+      artifact: {
+        provider: "s3",
+        bucket: "planisfy-artifacts",
+        storageKey: "tiles.pmtiles",
+      },
+    },
+    storage,
+  );
+
+  assert.deepEqual(result, { ok: true });
+});
+
+test("verifyTileJsonArtifact marks missing PMTiles artifacts as unavailable", async () => {
+  const storage = new MemoryStorage("s3", "planisfy-artifacts", []);
+  const result = await verifyTileJsonArtifact(
+    {
+      version: { format: "PMTILES" },
+      artifact: {
+        provider: "s3",
+        bucket: "planisfy-artifacts",
+        storageKey: "tiles.pmtiles",
+      },
+    },
+    storage,
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.code, "ARTIFACT_MISSING");
+  }
+});
+
+test("verifyTileJsonArtifact marks storage provider mismatches as unavailable", async () => {
+  const storage = new MemoryStorage("s3", "planisfy-artifacts", ["tiles.pmtiles"]);
+  const result = await verifyTileJsonArtifact(
+    {
+      version: { format: "PMTILES" },
+      artifact: {
+        provider: "r2",
+        bucket: "planisfy-artifacts",
+        storageKey: "tiles.pmtiles",
+      },
+    },
+    storage,
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.code, "ARTIFACT_STORAGE_UNAVAILABLE");
+  }
+});
+
+class MemoryStorage implements StorageProvider {
+  constructor(
+    private provider: "local" | "s3" | "r2",
+    private bucket: string,
+    private keys: string[],
+  ) {}
+
+  async upload(
+    key: string,
+    _data: Buffer | Readable,
+    contentType = "application/octet-stream",
+  ): Promise<StoredObject> {
+    this.keys.push(key);
+    return {
+      key,
+      url: this.getUrl(key),
+      size: 0,
+      contentType,
+    };
+  }
+
+  async download(): Promise<Buffer> {
+    return Buffer.alloc(0);
+  }
+
+  async readRange(): Promise<Buffer> {
+    return Buffer.alloc(0);
+  }
+
+  async copy() {
+    throw new Error("Not implemented");
+  }
+
+  async delete() {
+    throw new Error("Not implemented");
+  }
+
+  async exists(key: string) {
+    return this.keys.includes(key);
+  }
+
+  getUrl(key: string) {
+    return `memory://${key}`;
+  }
+
+  getInfo() {
+    return { provider: this.provider, bucket: this.bucket };
+  }
+}
