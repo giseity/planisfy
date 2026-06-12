@@ -22,12 +22,6 @@ import {
   ResizablePanelGroup,
 } from "@planisfy/ui/components/resizable";
 import { StatusAlert } from "@planisfy/ui/components/status-alert";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@planisfy/ui/components/tabs";
 import { ValidationPanel } from "@/components/studio/validation-panel";
 import { VersionHistoryButton } from "@/components/studio/version-history";
 import { toast } from "sonner";
@@ -92,6 +86,7 @@ export default function StyleEditorPage() {
   const [urlLoading, setUrlLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [ownerHandle, setOwnerHandle] = useState<string | null>(null);
+  const [leftPanelTab, setLeftPanelTab] = useState("layers");
 
   const searchParams = useSearchParams();
 
@@ -594,52 +589,72 @@ export default function StyleEditorPage() {
 
       {/* Main editor area */}
       <ResizablePanelGroup
-        id="style-editor-panels"
+        id="style-editor-panels-v2"
         orientation="horizontal"
         defaultLayout={{
-          "style-editor-left": 18,
-          "style-editor-map": 60,
-          "style-editor-properties": 22,
+          "style-editor-left": 20,
+          "style-editor-map": 56,
+          "style-editor-properties": 24,
         }}
         className="flex-1 overflow-hidden"
       >
         {/* Left panel — Layers + Sources + Settings */}
         <ResizablePanel
           id="style-editor-left"
-          defaultSize="18%"
-          minSize="14rem"
-          maxSize="24rem"
+          defaultSize="20%"
+          minSize="12rem"
+          maxSize="26rem"
           className="flex min-w-0 flex-col border-r bg-background"
         >
           <aside className="flex h-full min-w-0 flex-col">
-            <Tabs defaultValue="layers" className="flex flex-1 flex-col">
-              <TabsList className="mx-2 mt-1 h-7">
-                <TabsTrigger value="layers" className="text-xs h-6">
-                  Layers ({style.layers.length})
-                </TabsTrigger>
-                <TabsTrigger value="sources" className="text-xs h-6">
-                  Sources ({Object.keys(style.sources).length})
-                </TabsTrigger>
-                <TabsTrigger value="settings" className="text-xs h-6">
-                  <Settings className="h-3 w-3" />
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="layers" className="flex-1 overflow-hidden mt-0">
-                <LayerList />
-              </TabsContent>
-              <TabsContent
-                value="sources"
-                className="flex-1 overflow-hidden mt-0"
+            <div className="mx-2 mt-1 flex h-7 rounded-lg bg-muted p-[3px] text-muted-foreground">
+              <Button
+                type="button"
+                variant={leftPanelTab === "layers" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 flex-1 rounded-md px-1.5 text-xs"
+                onClick={() => setLeftPanelTab("layers")}
               >
-                <SourcePanel />
-              </TabsContent>
-              <TabsContent
-                value="settings"
-                className="flex-1 overflow-hidden mt-0"
+                Layers ({style.layers.length})
+              </Button>
+              <Button
+                type="button"
+                variant={leftPanelTab === "sources" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 flex-1 rounded-md px-1.5 text-xs"
+                onClick={() => setLeftPanelTab("sources")}
               >
-                <StyleSettingsPanel />
-              </TabsContent>
-            </Tabs>
+                Sources ({Object.keys(style.sources).length})
+              </Button>
+              <Button
+                type="button"
+                variant={leftPanelTab === "settings" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 w-8 rounded-md px-1.5 text-xs"
+                onClick={() => setLeftPanelTab("settings")}
+                aria-label="Style settings"
+                title="Style settings"
+              >
+                <Settings className="h-3 w-3" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-hidden text-sm outline-none">
+              {leftPanelTab === "layers" && (
+                <div className="h-full overflow-hidden">
+                  <LayerList />
+                </div>
+              )}
+              {leftPanelTab === "sources" && (
+                <div className="h-full overflow-hidden">
+                  <SourcePanel />
+                </div>
+              )}
+              {leftPanelTab === "settings" && (
+                <div className="h-full overflow-hidden">
+                  <StyleSettingsPanel />
+                </div>
+              )}
+            </div>
           </aside>
         </ResizablePanel>
         <ResizableHandle withHandle />
@@ -647,8 +662,8 @@ export default function StyleEditorPage() {
         {/* Map + optional JSON/Validation panel */}
         <ResizablePanel
           id="style-editor-map"
-          defaultSize="60%"
-          minSize="28rem"
+          defaultSize="56%"
+          minSize="20rem"
           className="min-w-0"
         >
           <main className="flex h-full min-w-0 flex-col">
@@ -682,9 +697,9 @@ export default function StyleEditorPage() {
         {/* Right panel — Properties */}
         <ResizablePanel
           id="style-editor-properties"
-          defaultSize="22%"
-          minSize="18rem"
-          maxSize="32rem"
+          defaultSize="24%"
+          minSize="14rem"
+          maxSize="28rem"
           className="min-w-0 border-l bg-background"
         >
           <aside className="h-full min-w-0">
