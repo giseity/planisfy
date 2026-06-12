@@ -75,6 +75,7 @@ export default function StyleEditorPage() {
   const styleVersion = useStyleStore((s) => s.styleVersion);
   const styleHandle = useStyleStore((s) => s.styleHandle);
   const isPublic = useStyleStore((s) => s.isPublic);
+  const publishedVersion = useStyleStore((s) => s.publishedVersion);
   const lastSavedAt = useStyleStore((s) => s.lastSavedAt);
   const [showJson, setShowJson] = useState(false);
   const [inspectMode, setInspectMode] = useState(false);
@@ -390,11 +391,11 @@ export default function StyleEditorPage() {
                     {publishing ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : isPublic ? (
-                      <GlobeLock className="h-3 w-3" />
+                      <Globe className="h-3 w-3" />
                     ) : (
                       <Globe className="h-3 w-3" />
                     )}
-                    {isPublic ? "Unpublish to draft" : "Publish style"}
+                    {isPublic ? "Publish latest changes" : "Publish style"}
                   </Button>
                   <div className="grid gap-1">
                     <Button
@@ -414,15 +415,17 @@ export default function StyleEditorPage() {
                       variant="ghost"
                       size="sm"
                       className="h-7 justify-start gap-2 text-xs"
-                      disabled={!isPublic || !ownerHandle}
-                      onClick={() => copyUrl("Version", publicUrl(styleVersion))}
+                      disabled={!isPublic || !ownerHandle || !publishedVersion}
+                      onClick={() =>
+                        copyUrl("Version", publicUrl(publishedVersion))
+                      }
                     >
                       {copiedUrl === "Version" ? (
                         <Check className="h-3 w-3" />
                       ) : (
                         <Link className="h-3 w-3" />
                       )}
-                      Copy published v{styleVersion ?? "latest"} URL
+                      Copy published v{publishedVersion ?? "latest"} URL
                     </Button>
                     <Button
                       variant="ghost"

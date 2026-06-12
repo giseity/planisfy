@@ -34,6 +34,7 @@ export interface StyleStore {
   lastSavedAt: Date | null;
   isPublic: boolean;
   styleHandle: string | null;
+  publishedVersion: number | null;
 
   // Undo/redo
   undoStack: StyleSpecification[];
@@ -93,6 +94,7 @@ interface StyleDetailResponse {
   id: string;
   handle?: string;
   isPublic?: boolean;
+  publishedVersion?: number | null;
 }
 
 export interface SourceLayerOptions {
@@ -161,6 +163,7 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
     lastSavedAt: null,
     isPublic: false,
     styleHandle: null,
+    publishedVersion: null,
 
     // Actions
     loadStyle: (style) =>
@@ -175,13 +178,21 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
       const res = await api.get<ApiEnvelope<StyleDetailResponse>>(
         `/styles/${id}`,
       );
-      const { styleJson, version, id: styleId, handle, isPublic } = res.data;
+      const {
+        styleJson,
+        version,
+        id: styleId,
+        handle,
+        isPublic,
+        publishedVersion,
+      } = res.data;
       set({
         style: JSON.parse(JSON.stringify(styleJson)),
         styleId,
         styleVersion: version,
         styleHandle: handle ?? null,
         isPublic: isPublic ?? false,
+        publishedVersion: publishedVersion ?? null,
         selectedLayerId:
           (styleJson as StyleSpecification).layers?.[0]?.id ?? null,
         undoStack: [],
@@ -228,6 +239,7 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
         isPublic: res.data.isPublic,
         styleHandle: res.data.handle,
         styleVersion: res.data.version,
+        publishedVersion: res.data.publishedVersion,
       });
       return res.data.isPublic;
     },

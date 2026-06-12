@@ -149,7 +149,9 @@ stylesRoute.get("/styles/:id", async (c) => {
     );
   }
 
-  return c.json({ data: style });
+  const publishedVersion = await resolveLatestPublishedStyleVersion(style.id);
+
+  return c.json({ data: { ...style, publishedVersion } });
 });
 
 // ── PUT /console/styles/:id — Update ────────────────────────────────────────
@@ -783,4 +785,27 @@ async function publishStyleSnapshot({
   }
 
   return publication;
+}
+
+async function resolveLatestPublishedStyleVersion(styleId: string) {
+  const [publication] = await db
+    .select({ styleVersionId: stylePublications.styleVersionId })
+    .from(stylePublications)
+    .where(
+      and(
+        eq(stylePublications.styleId, styleId),
+        eq(stylePublications.alias, "latest"),
+      ),
+    )
+    .limit(1);
+
+  if (!publication) return null;
+
+  const [snapshot] = await db
+    .select({ version: styleVersions.version })
+    .from(styleVersions)
+    .where(eq(styleVersions.id, publication.styleVersionId))
+    .limit(1);
+
+  return snapshot?.version ?? null;
 }

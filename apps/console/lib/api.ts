@@ -525,6 +525,7 @@ export interface StylePublishResponse {
   name: string;
   isPublic: boolean;
   version: number;
+  publishedVersion: number;
 }
 
 export type DashboardHealthStatus =
