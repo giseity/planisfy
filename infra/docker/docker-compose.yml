@@ -62,7 +62,7 @@ services:
       - LOCAL_STORAGE_BUCKET=${LOCAL_STORAGE_BUCKET:-planisfy-local}
       - S3_BUCKET=${S3_BUCKET:-planisfy-uploads}
       - S3_REGION=${S3_REGION:-auto}
-      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - S3_ENDPOINT=${CONTAINER_S3_ENDPOINT:-${S3_ENDPOINT:-}}
       - S3_PUBLIC_URL=${S3_PUBLIC_URL:-}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
@@ -84,8 +84,10 @@ services:
       - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-self_host}
       - NODE_ENV=production
     volumes:
-      - ./data/storage:/data/storage
+      - ${LOCAL_STORAGE_HOST_PATH:-./data/storage}:/data/storage
       - ./data/pmtiles:/data/pmtiles:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: [ "CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"" ]
       interval: 10s
@@ -120,7 +122,7 @@ services:
       - LOCAL_STORAGE_BUCKET=${LOCAL_STORAGE_BUCKET:-planisfy-local}
       - S3_BUCKET=${S3_BUCKET:-planisfy-uploads}
       - S3_REGION=${S3_REGION:-auto}
-      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - S3_ENDPOINT=${CONTAINER_S3_ENDPOINT:-${S3_ENDPOINT:-}}
       - S3_PUBLIC_URL=${S3_PUBLIC_URL:-}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
@@ -145,8 +147,10 @@ services:
       - SOURCE_IMPORT_TIMEOUT_MS=${SOURCE_IMPORT_TIMEOUT_MS:-900000}
       - NODE_ENV=production
     volumes:
-      - ./data/storage:/data/storage
+      - ${LOCAL_STORAGE_HOST_PATH:-./data/storage}:/data/storage
       - ./data/pmtiles:/data/pmtiles:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -366,7 +370,6 @@ services:
     volumes:
       - ./configs/martin.yaml:/config/config.yaml:ro
       - ./data/pmtiles:/data:ro
-      - ./data/storage:/storage:ro
     command: [ "--config", "/config/config.yaml" ]
     restart: unless-stopped
     networks:

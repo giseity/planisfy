@@ -1,18 +1,10 @@
 # Martin Tile Server Configuration
 
-# Storage backends for PMTiles
+# Built-in fixture PMTiles source. Published PMTiles are served by the API from
+# configured artifact storage, so Martin does not need to watch upload storage.
 pmtiles:
-  paths:
-    - "/storage/martin-sources"
   sources:
     stuttgart-base: "/data/stuttgart.pmtiles"
-
-# Martin hot-reloads MBTiles files from watched paths. PMTiles reload behavior
-# depends on the Martin version; restart Martin if a newly published local
-# PMTiles artifact does not appear immediately.
-mbtiles:
-  paths:
-    - "/storage/martin-sources"
 
 # Server settings
 server:

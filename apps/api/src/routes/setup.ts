@@ -556,13 +556,13 @@ async function buildProductLoopChecks(
     await pathAccessCheck({
       id: "martin-source-aliases",
       group: "Self-host product loop",
-      label: "Martin source aliases",
+      label: "Published tile aliases",
       severity: "required",
       path: martinSourcesPath,
-      okMessage: "Martin source alias storage is ready for published tilesets.",
-      missingMessage: "Martin source alias storage is missing.",
+      okMessage: "Published tile alias storage is ready.",
+      missingMessage: "Published tile alias storage is missing.",
       action:
-        "Run scripts/self-host-setup.sh so published PMTiles/MBTiles aliases have a mounted directory.",
+        "Run scripts/self-host-setup.sh so published local PMTiles/MBTiles aliases have a directory.",
     }),
     await pmtilesFixtureCheck(demoPmtilesPath),
   ];

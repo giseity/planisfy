@@ -61,7 +61,7 @@ const capabilityDefinitions = {
   localStorage: {
     id: "localStorage",
     label: "Local object storage",
-    description: "Self-host local artifact storage and Martin source aliases.",
+    description: "Self-host local artifact storage and published tile aliases.",
   },
   selfHostSupervisor: {
     id: "selfHostSupervisor",

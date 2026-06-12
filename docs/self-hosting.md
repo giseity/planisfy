@@ -28,8 +28,9 @@ rather than blocking application startup.
 - Redis
 - Martin
 - Valhalla
-- local artifact storage bind mount at `infra/docker/data/storage`
-- optional MinIO S3-compatible storage profile
+- local artifact storage bind mount configured by `LOCAL_STORAGE_HOST_PATH`
+- recommended MinIO S3-compatible storage profile for production-like artifact
+  storage
 - optional local-only self-host supervisor profile
 
 ## Setup Script
@@ -46,7 +47,7 @@ The script:
 2. creates local demo directories under `infra/docker/data/`;
 3. copies the Planisfy Streets fixture style into local storage;
 4. downloads the configured demo PMTiles fixture when `--demo-data` is passed;
-5. validates that the fixture style, source-layer contract, and Martin aliases agree;
+5. validates that the fixture style and source-layer contract agree;
 6. reports whether the default `stuttgart.pmtiles` fixture is present;
 7. validates the Compose file with `docker compose config`;
 8. makes the read-only `/setup/preflight` checks actionable after the API starts;
@@ -128,11 +129,12 @@ Automated apply requires a valid release manifest and a successful backup
 operation ID. Floating `:latest` image targets are refused. Rollback requires a
 manifest with `rollbackSupported: true`.
 
-## Optional MinIO Storage
+## Recommended MinIO Storage
 
-The default self-host profile uses local filesystem storage. To test the same
-S3-compatible storage path used by S3/R2 deployments, enable the optional MinIO
-profile:
+The simplest self-host profile can use local filesystem storage, but the
+production-like path is S3-compatible object storage. For local self-hosting,
+use the MinIO profile so the API and workers share artifacts through the same
+storage contract as S3/R2 deployments:
 
 ```bash
 docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
@@ -144,7 +146,8 @@ Use these `.env` values for the local MinIO profile:
 STORAGE_PROVIDER=s3
 S3_BUCKET=planisfy-artifacts
 S3_REGION=auto
-S3_ENDPOINT=http://minio:9000
+S3_ENDPOINT=http://localhost:9000
+CONTAINER_S3_ENDPOINT=http://host.docker.internal:9000
 S3_PUBLIC_URL=http://localhost:9000/planisfy-artifacts
 AWS_ACCESS_KEY_ID=planisfy
 AWS_SECRET_ACCESS_KEY=planisfy-local-minio-password
@@ -155,6 +158,10 @@ MINIO_ROOT_PASSWORD=planisfy-local-minio-password
 The MinIO console is available at `http://localhost:9001`. The `minio-init`
 container creates the bucket and enables anonymous download for local artifact
 URLs. Use stronger credentials outside local development.
+
+For an all-Compose stack, `S3_ENDPOINT=http://minio:9000` also works. The
+`CONTAINER_S3_ENDPOINT` override keeps mixed host+Docker development aligned
+when the API runs on the host and workers run in Docker.
 
 ## First Account
 
@@ -195,9 +202,9 @@ webhook secret, and the Pro product ID are required readiness capabilities.
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `infra/docker/data/pmtiles/`                | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `stuttgart-base` source used by Planisfy Streets.    |
 | `infra/docker/data/valhalla_data/`          | Valhalla graph/runtime data mounted at `/custom_files`.                                                            |
-| `infra/docker/data/storage/uploads/`        | Local upload/object storage area.                                                                                  |
-| `infra/docker/data/storage/styles/`         | Demo and published style JSON. The setup script seeds the legacy, light, and dark Planisfy Streets fixture styles. |
-| `infra/docker/data/storage/martin-sources/` | Local aliases for published PMTiles/MBTiles artifacts. Martin mounts this at `/storage/martin-sources`.            |
+| `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/uploads/`        | Local upload/object storage area.                                                                                  |
+| `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/styles/`         | Demo and published style JSON. The setup script seeds the legacy, light, and dark Planisfy Streets fixture styles. |
+| `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/martin-sources/` | Local aliases for published PMTiles/MBTiles artifacts when using filesystem storage. Published PMTiles are served by the API from storage. |
 | `packages/map-styles/`                      | Versioned Planisfy Streets fixture style, source-layer contract, schema, and release manifest.                     |
 
 The repository intentionally does not store binary map data. Keep downloaded
@@ -259,20 +266,21 @@ key in production. Remote source URLs reject localhost, private IP ranges, and
 metadata-service hosts by default; only set `ALLOW_PRIVATE_SOURCE_URLS=true` for
 explicitly isolated deployments that need internal source endpoints.
 
-## Martin Tileset Aliases
+## Published Tile Delivery
 
-The API proxies public tileset URLs to Martin source names:
+The API exposes stable public tileset URLs:
 
-| API URL                                             | Martin source                  |
-| --------------------------------------------------- | ------------------------------ |
-| `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}`           | `{owner}.{tileset}`            |
-| `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | `{owner}.{tileset}.v{version}` |
+| API URL                                             | Artifact version            |
+| --------------------------------------------------- | --------------------------- |
+| `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}`           | Current published version   |
+| `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | Immutable published version |
 
 The default config includes `planisfy.basic` and `planisfy.basic.v1` aliases for
-the local fixture. Local published uploads write stable and versioned aliases to
-`infra/docker/data/storage/martin-sources/`, which Martin mounts at
-`/storage/martin-sources`. Restart Martin if a newly published local PMTiles
-source does not appear immediately.
+the local fixture. User-published PMTiles are served by the API directly from
+configured artifact storage, including local filesystem storage, MinIO/S3, and
+R2. This avoids coupling API, worker, and Martin to one shared upload directory.
+MBTiles artifacts can still be bridged through deployment-specific tile serving
+glue.
 
 ## Migrations
 
@@ -336,7 +344,8 @@ Expected notes:
 - `/health/detailed` is the best single endpoint for database, Redis, engine,
   worker heartbeat, and storage configuration status.
 - `/setup/preflight` is a public read-only first-run checklist for identity,
-  storage, seeded demo styles, Martin aliases, and the optional PMTiles fixture.
+  storage, seeded demo styles, published tile aliases, and the optional PMTiles
+  fixture.
 - `/health/detailed` reports local storage as `ok` when the configured path is
   reachable. S3 and R2 storage are reported as configured or degraded based on
   environment variables without making remote bucket calls.
@@ -367,7 +376,8 @@ Expected notes:
 ## Acceptance
 
 - Setup reports whether the default PMTiles fixture is present.
-- Public setup preflight reports seeded style fixtures, upload storage, Martin aliases, and PMTiles readiness.
+- Public setup preflight reports seeded style fixtures, upload storage,
+  published tile alias storage, and PMTiles readiness.
 - Console shows a real map when compatible PMTiles are supplied.
 - Demo style, source metadata, and sample tiles agree.
 - Health reports API, database, Redis, Martin, Valhalla, and worker-geodata heartbeat state.

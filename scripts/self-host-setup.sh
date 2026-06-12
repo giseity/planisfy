@@ -15,9 +15,6 @@ STYLE_FIXTURES=(
   "planisfy-streets-dark-v1.json"
 )
 SOURCE_LAYER_CONTRACT="$ROOT_DIR/packages/map-styles/source-layer-contract.json"
-STORAGE_DIR="$DATA_DIR/storage"
-STORAGE_STYLE_DIR="$DATA_DIR/storage/styles"
-STORAGE_MARTIN_SOURCES_DIR="$DATA_DIR/storage/martin-sources"
 DEMO_PMTILES="$DATA_DIR/pmtiles/stuttgart.pmtiles"
 FIXTURE_TILEJSON_URL="http://localhost:3005/planisfy.basic"
 FIXTURE_MARTIN_SOURCE="stuttgart-base"
@@ -27,7 +24,7 @@ usage() {
   cat <<USAGE
 Usage: scripts/self-host-setup.sh [--demo-data] [--up] [--migrate] [--pull]
 
-Prepares a local self-host demo environment by creating .env, local storage
+Prepares a local self-host demo environment by creating .env, artifact storage
 folders, and demo fixtures used by Docker Compose.
 
 Options:
@@ -234,27 +231,32 @@ fi
 load_env_file
 
 set_env_if_blank_or_default LOCAL_STORAGE_PATH "$ROOT_DIR/.storage" ".storage"
+set_env_if_blank_or_default LOCAL_STORAGE_HOST_PATH "$ROOT_DIR/.storage" ".storage" "infra/docker/data/storage"
 set_env_if_blank_or_default MARTIN_SOURCES_PATH "$ROOT_DIR/.storage/martin-sources"
 set_env_if_blank_or_default DEMO_PMTILES_PATH "$DEMO_PMTILES"
 
 API_STORAGE_DIR="$(resolve_repo_path "${LOCAL_STORAGE_PATH:-.storage}")"
+LOCAL_STORAGE_MOUNT_DIR="$(resolve_repo_path "${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}")"
+LOCAL_STORAGE_MOUNT_STYLE_DIR="$LOCAL_STORAGE_MOUNT_DIR/styles"
+LOCAL_STORAGE_MOUNT_FIXTURE_DIR="$LOCAL_STORAGE_MOUNT_DIR/fixtures"
+LOCAL_STORAGE_MOUNT_MARTIN_SOURCES_DIR="$LOCAL_STORAGE_MOUNT_DIR/martin-sources"
 API_STORAGE_STYLE_DIR="$API_STORAGE_DIR/styles"
 API_STORAGE_MARTIN_SOURCES_DIR="$(resolve_repo_path "${MARTIN_SOURCES_PATH:-${LOCAL_STORAGE_PATH:-.storage}/martin-sources}")"
 
 mkdir -p \
   "$DATA_DIR/pmtiles" \
   "$DATA_DIR/valhalla_data" \
-  "$DATA_DIR/storage/uploads" \
-  "$DATA_DIR/storage/styles" \
-  "$DATA_DIR/storage/fixtures" \
-  "$STORAGE_MARTIN_SOURCES_DIR" \
+  "$LOCAL_STORAGE_MOUNT_DIR/uploads" \
+  "$LOCAL_STORAGE_MOUNT_STYLE_DIR" \
+  "$LOCAL_STORAGE_MOUNT_FIXTURE_DIR" \
+  "$LOCAL_STORAGE_MOUNT_MARTIN_SOURCES_DIR" \
   "$API_STORAGE_DIR/uploads" \
   "$API_STORAGE_STYLE_DIR" \
   "$API_STORAGE_DIR/fixtures" \
   "$API_STORAGE_MARTIN_SOURCES_DIR"
 
-if [[ ! -w "$STORAGE_DIR" ]]; then
-  echo "Local storage directory is not writable: infra/docker/data/storage" >&2
+if [[ ! -w "$LOCAL_STORAGE_MOUNT_DIR" ]]; then
+  echo "Local storage mount directory is not writable: ${LOCAL_STORAGE_MOUNT_DIR#$ROOT_DIR/}" >&2
   exit 1
 fi
 
@@ -265,8 +267,8 @@ fi
 
 check_demo_wiring
 
-seed_style_fixtures "$STORAGE_STYLE_DIR"
-if [[ "$API_STORAGE_STYLE_DIR" != "$STORAGE_STYLE_DIR" ]]; then
+seed_style_fixtures "$LOCAL_STORAGE_MOUNT_STYLE_DIR"
+if [[ "$API_STORAGE_STYLE_DIR" != "$LOCAL_STORAGE_MOUNT_STYLE_DIR" ]]; then
   seed_style_fixtures "$API_STORAGE_STYLE_DIR"
 fi
 
@@ -287,7 +289,7 @@ map data out of Git.
 PMTILES_WARNING
 fi
 
-cat > "$DATA_DIR/storage/fixtures/README.md" <<'FIXTURE_README'
+cat > "$LOCAL_STORAGE_MOUNT_FIXTURE_DIR/README.md" <<'FIXTURE_README'
 # Local demo storage fixtures
 
 This directory is intentionally small and git-friendly. Runtime uploads and
@@ -335,9 +337,12 @@ Demo data directories:
                                    The default fixture expects stuttgart.pmtiles.
                                    Use --demo-data with DEMO_PMTILES_URL to fetch it.
   infra/docker/data/valhalla_data  Put Valhalla tiles/config data here.
-  infra/docker/data/storage        Local object storage mount.
-  infra/docker/data/storage/martin-sources
-                                   Published local tileset aliases for Martin.
+  ${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}
+                                   Host local object storage mount shared by API
+                                   and worker-geodata.
+  ${MARTIN_SOURCES_PATH:-${LOCAL_STORAGE_PATH:-.storage}/martin-sources}
+                                   Published local tileset aliases for
+                                   filesystem storage.
 
 First account:
   After migrations complete, create the first local user at:

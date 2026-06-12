@@ -148,10 +148,12 @@ binary map data; when that PMTiles file is missing, the stack can still boot,
 but the default Planisfy Streets map will show a clear fixture-data-missing
 state until compatible local PMTiles are supplied.
 
-The setup script also validates that the fixture styles, source-layer contract,
-and Martin source aliases agree, creates the local storage mount points,
-including `infra/docker/data/storage/martin-sources`, and prints the first
-account sign-up URL. The API also exposes a public read-only setup preflight at
+The setup script also validates that the fixture styles and source-layer
+contract agree, creates the local storage mount points, and sets
+`LOCAL_STORAGE_HOST_PATH` so Docker services share the same local storage
+directory when `STORAGE_PROVIDER=local`. Published PMTiles are served by the API
+from configured artifact storage, so they do not require Martin to watch local
+upload directories. The API also exposes a public read-only setup preflight at
 `http://localhost:4000/setup/preflight` so first-run operators can verify the
 self-host product-loop prerequisites before signing in.
 
@@ -212,6 +214,8 @@ Local demo assets:
 - Optional PMTiles preflight/download controls: `DEMO_PMTILES_PATH`, `DEMO_PMTILES_URL`, and `DEMO_PMTILES_SHA256`
 - Regional basemap build harness: `pnpm -F @planisfy/map-styles build:planetiler-regional`
 - Local object storage mount: `infra/docker/data/storage`
+- Recommended self-host artifact storage: MinIO/S3-compatible storage via the
+  Compose `with-minio` profile
 
 Health checks:
 
