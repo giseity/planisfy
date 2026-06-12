@@ -42,6 +42,7 @@ import {
   serializePlanLimits,
 } from "../lib/billing";
 import { getMonthlyUsagePeriod } from "../lib/usage-quota";
+import { probeValhallaReadiness } from "../lib/valhalla-readiness";
 import type { AuthEnv } from "../middleware/auth";
 import { env, redisConnection } from "../env";
 
@@ -423,13 +424,7 @@ async function fetchDashboardHealth(now: Date): Promise<DashboardHealthEntry[]> 
       probeRedis(checkedAt),
       probeWorker(checkedAt),
       probeUrl("martin", "Martin", `${env.MARTIN_URL}/health`, true, checkedAt),
-      probeUrl(
-        "valhalla",
-        "Valhalla",
-        `${env.VALHALLA_URL}/status`,
-        true,
-        checkedAt,
-      ),
+      probeValhalla(checkedAt),
       probeConfiguredOnly(
         "geocoding",
         "Geocoding",
@@ -470,6 +465,23 @@ async function fetchDashboardHealth(now: Date): Promise<DashboardHealthEntry[]> 
       checkedAt,
     }),
   ];
+}
+
+async function probeValhalla(checkedAt: string) {
+  const result = await probeValhallaReadiness(env.VALHALLA_URL);
+  return makeHealthEntry({
+    id: "valhalla",
+    label: "Valhalla",
+    status:
+      result.status === "ok"
+        ? "healthy"
+        : result.status === "unavailable"
+          ? "offline"
+          : "degraded",
+    latencyMs: result.latency,
+    message: result.status === "ok" ? null : result.message,
+    checkedAt,
+  });
 }
 
 async function probePostgres(checkedAt: string) {

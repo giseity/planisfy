@@ -61,6 +61,7 @@ services:
       - STATIC_MAP_URL=${STATIC_MAP_URL:-}
       - ELEVATION_URL=${ELEVATION_URL:-https://api.open-elevation.com/api/v1}
       - VALHALLA_URL=http://valhalla:8002
+      - VALHALLA_READINESS_ROUTE=${VALHALLA_READINESS_ROUTE:-}
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
       - LOCAL_STORAGE_PATH=/data/storage
       - LOCAL_STORAGE_URL=${LOCAL_STORAGE_URL:-http://localhost:4000/storage}

@@ -61,7 +61,9 @@ test("setup preflight reports self-host product loop fixture readiness", async (
   process.env.BETTER_AUTH_SECRET = "test-secret";
 
   try {
-    const response = await app.request("/setup/preflight");
+    const response = await withMockValhalla(async () =>
+      app.request("/setup/preflight"),
+    );
     const body = (await response.json()) as {
       data?: {
         checks?: Array<{ id: string; status: string; group: string }>;
@@ -149,7 +151,9 @@ test("setup preflight surfaces actionable self-host storage failures", async () 
   process.env.DEMO_PMTILES_PATH = "";
 
   try {
-    const response = await app.request("/setup/preflight");
+    const response = await withMockValhalla(async () =>
+      app.request("/setup/preflight"),
+    );
     const body = (await response.json()) as {
       data?: {
         checks?: Array<{
@@ -226,7 +230,9 @@ test("setup preflight reports blocking managed readiness without R2, Dodo, or Re
   process.env.STORAGE_PROVIDER = "local";
 
   try {
-    const response = await app.request("/setup/preflight");
+    const response = await withMockValhalla(async () =>
+      app.request("/setup/preflight"),
+    );
     const body = (await response.json()) as {
       data?: {
         deploymentMode?: string;
@@ -277,3 +283,53 @@ test("setup preflight reports blocking managed readiness without R2, Dodo, or Re
     }
   }
 });
+
+test("setup preflight warns when Valhalla cannot answer the route probe", async () => {
+  const response = await withMockValhalla(
+    async () => app.request("/setup/preflight"),
+    { routeOk: false },
+  );
+  const body = (await response.json()) as {
+    data?: {
+      checks?: Array<{
+        id: string;
+        status: string;
+        severity: string;
+        message: string;
+      }>;
+    };
+  };
+  const checks = new Map(body.data?.checks?.map((check) => [check.id, check]));
+
+  assert.equal(response.status, 200);
+  assert.equal(checks.get("valhalla")?.status, "warn");
+  assert.equal(checks.get("valhalla")?.severity, "recommended");
+  assert.match(checks.get("valhalla")?.message ?? "", /No suitable edges/);
+});
+
+async function withMockValhalla<T>(
+  fn: () => Promise<T>,
+  options: { routeOk?: boolean } = {},
+) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/status")) {
+      return new Response("{}", { status: 200 });
+    }
+    if (url.endsWith("/route")) {
+      return options.routeOk === false
+        ? Response.json(
+            { error: "No suitable edges near location" },
+            { status: 400 },
+          )
+        : new Response("{}", { status: 200 });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}

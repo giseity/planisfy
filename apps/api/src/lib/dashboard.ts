@@ -528,10 +528,10 @@ export function buildReadiness(params: {
     }),
     readinessItem({
       id: "valhalla",
-      label: "Valhalla reachable",
-      description: "Routing services are responding.",
+      label: "Valhalla route ready",
+      description: "Routing services can answer a graph-backed route probe.",
       complete: isHealthy("valhalla"),
-      required: true,
+      required: false,
       actionHref: "/usage",
     }),
     readinessItem({

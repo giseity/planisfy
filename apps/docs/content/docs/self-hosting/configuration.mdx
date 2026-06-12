@@ -725,6 +725,11 @@ docker exec valhalla \
   valhalla_config --config /config/valhalla/valhalla.json --validate
 ```
 
+Planisfy health and preflight checks also submit a tiny route request to
+Valhalla. If your self-host graph does not cover the default Stuttgart probe,
+set `VALHALLA_READINESS_ROUTE=lon,lat;lon,lat` to coordinates inside your
+mounted graph.
+
 ---
 
 ## Common Configuration Patterns

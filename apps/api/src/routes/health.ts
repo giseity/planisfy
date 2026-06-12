@@ -6,6 +6,7 @@ import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { env, redisConnection } from "../env";
 import { renderPrometheusMetrics } from "../lib/metrics";
+import { probeValhallaReadiness } from "../lib/valhalla-readiness";
 
 export const healthRoute = new Hono();
 type HealthCheck = {
@@ -102,18 +103,12 @@ healthRoute.get("/health/detailed", async (c) => {
   }
 
   // Valhalla (routing)
-  const valhallaUrl = env.VALHALLA_URL;
-  const valhallaStart = Date.now();
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${valhallaUrl}/status`, { signal: controller.signal });
-    clearTimeout(timeout);
-    checks.valhalla = { status: res.ok ? "ok" : "degraded", latency: Date.now() - valhallaStart };
-  } catch (err) {
-    checks.valhalla = { status: "unavailable", latency: Date.now() - valhallaStart, error: err instanceof Error ? err.message : String(err) };
-    // Valhalla being down is not critical
-  }
+  const valhalla = await probeValhallaReadiness(env.VALHALLA_URL);
+  checks.valhalla = {
+    status: valhalla.status,
+    latency: valhalla.latency,
+    error: valhalla.status === "ok" ? undefined : valhalla.message,
+  };
 
   const status = healthy ? "ok" : "degraded";
 

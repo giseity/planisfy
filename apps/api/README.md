@@ -37,7 +37,9 @@ Required local services:
 - PostgreSQL via `DATABASE_URL`
 - Redis via `REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`
 - Martin via `MARTIN_URL`
-- Valhalla via `VALHALLA_URL`
+- Valhalla via `VALHALLA_URL`; health/preflight also run a small route probe.
+  Set `VALHALLA_READINESS_ROUTE=lon,lat;lon,lat` when the default Stuttgart
+  probe is outside your graph.
 
 Optional providers:
 

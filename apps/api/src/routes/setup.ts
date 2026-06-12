@@ -15,6 +15,7 @@ import {
 } from "@planisfy/platform-policy";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
+import { probeValhallaReadiness } from "../lib/valhalla-readiness";
 
 export const setupRoute = new Hono<AuthEnv>();
 
@@ -86,6 +87,7 @@ async function buildPreflightChecks(
   const storage = await storageCheck(deploymentMode);
   const productLoopChecks = await buildProductLoopChecks(deploymentMode);
   const upgradeChecks = await buildUpgradeReadinessChecks(storage);
+  const valhalla = await valhallaReadinessCheck();
 
   return [
     check({
@@ -157,17 +159,7 @@ async function buildPreflightChecks(
       action: "Configure MARTIN_URL and publish matching source aliases.",
       value: env.MARTIN_URL,
     }),
-    check({
-      id: "valhalla",
-      group: "Geospatial engines",
-      label: "Valhalla routing",
-      severity: "recommended",
-      ok: Boolean(env.VALHALLA_URL),
-      warnWhenMissing: true,
-      message: `Valhalla URL is ${env.VALHALLA_URL}.`,
-      action: "Configure VALHALLA_URL when routing APIs should be available.",
-      value: env.VALHALLA_URL,
-    }),
+    valhalla,
     check({
       id: "geocoding",
       group: "Geospatial engines",
@@ -366,6 +358,41 @@ async function buildUpgradeReadinessChecks(
     }),
     await freeDiskCheck(),
   ];
+}
+
+async function valhallaReadinessCheck(): Promise<PreflightCheck> {
+  if (!env.VALHALLA_URL) {
+    return check({
+      id: "valhalla",
+      group: "Geospatial engines",
+      label: "Valhalla routing",
+      severity: "recommended",
+      ok: false,
+      warnWhenMissing: true,
+      message: "Valhalla URL is not configured.",
+      action: "Configure VALHALLA_URL when routing APIs should be available.",
+      value: null,
+    });
+  }
+
+  const readiness = await probeValhallaReadiness(env.VALHALLA_URL);
+  return check({
+    id: "valhalla",
+    group: "Geospatial engines",
+    label: "Valhalla routing",
+    severity: "recommended",
+    ok: readiness.status === "ok",
+    warnWhenMissing: true,
+    message:
+      readiness.status === "ok"
+        ? "Valhalla is reachable and can answer the route readiness probe."
+        : readiness.message,
+    action:
+      readiness.status === "ok"
+        ? undefined
+        : "Build or mount a Valhalla routing graph for the configured readiness route, or set VALHALLA_READINESS_ROUTE to coordinates covered by the graph.",
+    value: env.VALHALLA_URL,
+  });
 }
 
 async function upgradeManifestCheck(path: string | undefined): Promise<{
