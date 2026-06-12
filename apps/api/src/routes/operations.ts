@@ -90,6 +90,70 @@ const templateSchema = z.object({
 
 operationsRoute.get("/operations", async (c) => {
   const accountId = c.get("ownerId");
+  return c.json({ data: await buildOperationsOverview(accountId) });
+});
+
+operationsRoute.get("/operations/events", async (c) => {
+  const accountId = c.get("ownerId");
+  const encoder = new TextEncoder();
+  const signal = c.req.raw.signal;
+  let closed = false;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: string, data: unknown) => {
+        if (closed) return;
+        controller.enqueue(encoder.encode(formatSseEvent(event, data)));
+      };
+
+      try {
+        let lastSignature = "";
+        let lastHeartbeat = Date.now();
+
+        while (!closed && !signal.aborted) {
+          const overview = await buildOperationsOverview(accountId);
+          const signature = operationsOverviewSignature(overview);
+          if (signature !== lastSignature) {
+            send("operations", overview);
+            lastSignature = signature;
+          } else if (Date.now() - lastHeartbeat > 25_000) {
+            send("heartbeat", { at: new Date().toISOString() });
+            lastHeartbeat = Date.now();
+          }
+
+          await abortableDelay(2_000, signal);
+        }
+      } catch (err) {
+        if (!signal.aborted && !closed) {
+          send("operations-error", {
+            message: err instanceof Error ? err.message : "Operations stream failed",
+          });
+        }
+      } finally {
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // The client may already have closed the stream.
+        }
+      }
+    },
+    cancel() {
+      closed = true;
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+});
+
+async function buildOperationsOverview(accountId: string) {
   const [
     recentJobs,
     channels,
@@ -167,20 +231,72 @@ operationsRoute.get("/operations", async (c) => {
     fetchWorkerHealth(),
   ]);
 
-  return c.json({
-    data: {
-      recentJobs,
-      notificationChannels: channels.map(stripNotificationSecrets),
-      scheduledOperations: schedules,
-      artifactBackups: backups,
-      workerNodes: nodes,
-      previewLinks: previews,
-      customDomains: domains,
-      workflowTemplates: templates,
-      workerHealth,
-    },
+  return {
+    recentJobs,
+    notificationChannels: channels.map(stripNotificationSecrets),
+    scheduledOperations: schedules,
+    artifactBackups: backups,
+    workerNodes: nodes,
+    previewLinks: previews,
+    customDomains: domains,
+    workflowTemplates: templates,
+    workerHealth,
+  };
+}
+
+type OperationsOverview = Awaited<ReturnType<typeof buildOperationsOverview>>;
+
+export function operationsOverviewSignature(overview: OperationsOverview) {
+  return JSON.stringify({
+    recentJobs: overview.recentJobs.map((job) => ({
+      id: job.id,
+      status: job.status,
+      progress: job.progress,
+      updatedAt: job.updatedAt,
+      completedAt: job.completedAt,
+      errorCode: job.errorCode,
+    })),
+    notificationChannels: overview.notificationChannels.map((channel) => ({
+      id: channel.id,
+      enabled: channel.enabled,
+      updatedAt: channel.updatedAt,
+    })),
+    scheduledOperations: overview.scheduledOperations.map((schedule) => ({
+      id: schedule.id,
+      status: schedule.status,
+      lastRunAt: schedule.lastRunAt,
+      nextRunAt: schedule.nextRunAt,
+      updatedAt: schedule.updatedAt,
+    })),
+    artifactBackups: overview.artifactBackups.map((backup) => ({
+      id: backup.id,
+      status: backup.status,
+      completedAt: backup.completedAt,
+      restoredAt: backup.restoredAt,
+    })),
+    workerNodes: overview.workerNodes.map((node) => ({
+      id: node.id,
+      status: node.status,
+      lastSeenAt: node.lastSeenAt,
+      updatedAt: node.updatedAt,
+    })),
+    previewLinks: overview.previewLinks.map((link) => ({
+      id: link.id,
+      expiresAt: link.expiresAt,
+      createdAt: link.createdAt,
+    })),
+    customDomains: overview.customDomains.map((domain) => ({
+      id: domain.id,
+      status: domain.status,
+      updatedAt: domain.updatedAt,
+    })),
+    workflowTemplates: overview.workflowTemplates.map((template) => ({
+      id: template.id,
+      createdAt: template.builtIn ? null : template.createdAt,
+    })),
+    workerHealth: { status: overview.workerHealth.status },
   });
-});
+}
 
 operationsRoute.get("/operations/jobs/:id/timeline", async (c) => {
   const accountId = c.get("ownerId");
@@ -1040,6 +1156,29 @@ function missingRouteParam(c: Context, param: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+export function formatSseEvent(event: string, data: unknown) {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function abortableDelay(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    const timeout = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeout);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

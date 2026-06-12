@@ -27,6 +27,7 @@ import {
   type ConsoleTileset,
   type ConsoleWorkerProfile,
 } from "@/lib/api"
+import { clientEnv } from "@/env.client"
 
 const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
   recentJobs: [],
@@ -57,7 +58,7 @@ interface OperationsContextValue {
   executionTargets: ConsoleExecutionTarget[]
   workerProfiles: ConsoleWorkerProfile[]
   loading: boolean
-  load: () => void
+  load: (options?: { silent?: boolean }) => void
   openTimeline: (jobId: string) => void
 }
 
@@ -71,7 +72,7 @@ export function OperationsProvider({ children }: { children: React.ReactNode }) 
   const [workerProfiles, setWorkerProfiles] = React.useState<ConsoleWorkerProfile[]>([])
   const [loading, setLoading] = React.useState(true)
 
-  const load = React.useCallback(async () => {
+  const load = React.useCallback(async (options: { silent?: boolean } = {}) => {
     try {
       const [operationsRes, tilesetsRes, targetsRes, profilesRes] = await Promise.all([
         api.getOperations(),
@@ -84,7 +85,9 @@ export function OperationsProvider({ children }: { children: React.ReactNode }) 
       setExecutionTargets(targetsRes.data)
       setWorkerProfiles(profilesRes.data)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load operations")
+      if (!options.silent) {
+        toast.error(err instanceof Error ? err.message : "Failed to load operations")
+      }
     } finally {
       setLoading(false)
     }
@@ -92,8 +95,45 @@ export function OperationsProvider({ children }: { children: React.ReactNode }) 
 
   React.useEffect(() => {
     load()
-    const timer = window.setInterval(load, 10_000)
-    return () => window.clearInterval(timer)
+  }, [load])
+
+  React.useEffect(() => {
+    let closed = false
+    let reconnectTimer: number | undefined
+    let source: EventSource | undefined
+
+    const connect = () => {
+      source?.close()
+      source = new EventSource(operationsEventsUrl(), { withCredentials: true })
+
+      source.addEventListener("operations", (event) => {
+        try {
+          setOverview(JSON.parse((event as MessageEvent<string>).data) as ConsoleOperationsOverview)
+          setLoading(false)
+        } catch {
+          window.setTimeout(() => load({ silent: true }), 0)
+        }
+      })
+
+      source.addEventListener("operations-error", () => {
+        window.setTimeout(() => load({ silent: true }), 0)
+      })
+
+      source.onerror = () => {
+        source?.close()
+        if (closed) return
+        window.setTimeout(() => load({ silent: true }), 0)
+        reconnectTimer = window.setTimeout(connect, 5_000)
+      }
+    }
+
+    connect()
+
+    return () => {
+      closed = true
+      source?.close()
+      if (reconnectTimer) window.clearTimeout(reconnectTimer)
+    }
   }, [load])
 
   const openTimeline = React.useCallback(async (jobId: string) => {
@@ -126,6 +166,10 @@ export function OperationsProvider({ children }: { children: React.ReactNode }) 
   )
 }
 
+function operationsEventsUrl() {
+  return `${clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH.replace(/\/$/, "")}/operations/events`
+}
+
 export function useOperations() {
   const value = React.useContext(OperationsContext)
   if (!value) throw new Error("useOperations must be used within OperationsProvider")
@@ -151,7 +195,7 @@ function OperationsShell({ children }: { children: React.ReactNode }) {
           </PageDescription>
         </PageHeaderText>
         <PageActions>
-          <Button variant="outline" onClick={load}>
+          <Button variant="outline" onClick={() => load()}>
             <RefreshCw className="mr-1.5 h-4 w-4" />
             Refresh
           </Button>
