@@ -353,12 +353,15 @@ resourcesRoute.get("/tilesets", async (c) => {
           .orderBy(desc(uploads.createdAt))
       : [];
   const artifactById = await fetchArtifactMap(versions);
+  const uploadAvailabilityById =
+    await fetchUploadArtifactAvailabilityMap(linkedUploads);
 
   return c.json({
     data: rows.map((row) =>
       toConsoleTileset(row, ownerHandle, versionsForTileset(versions, row.id), {
         uploads: uploadsForTileset(linkedUploads, row.id),
         artifactById,
+        uploadAvailabilityById,
       }),
     ),
   });
@@ -404,11 +407,14 @@ resourcesRoute.get("/tilesets/:id", async (c) => {
     )
     .orderBy(desc(uploads.createdAt));
   const artifactById = await fetchArtifactMap(versions);
+  const uploadAvailabilityById =
+    await fetchUploadArtifactAvailabilityMap(linkedUploads);
 
   return c.json({
     data: toConsoleTileset(tileset, ownerHandle, versions, {
       uploads: linkedUploads,
       artifactById,
+      uploadAvailabilityById,
     }),
   });
 });
@@ -1011,8 +1017,8 @@ async function fetchArtifactMap(
     .from(storageObjects)
     .where(inArray(storageObjects.id, artifactIds));
   const storage = getStorage();
-  return new Map(
-    rows.map((object) => [
+  const entries = await Promise.all(
+    rows.map(async (object) => [
       object.id,
       {
         id: object.id,
@@ -1023,9 +1029,57 @@ async function fetchArtifactMap(
         contentType: object.contentType,
         size: object.size,
         url: storage.getUrl(object.storageKey),
+        availability: await verifyStorageArtifactAvailable(object, storage),
       },
-    ]),
+    ] as const),
   );
+  return new Map(entries);
+}
+
+async function fetchUploadArtifactAvailabilityMap(
+  uploadRows: Array<typeof uploads.$inferSelect>,
+) {
+  const storageObjectIds = uploadRows
+    .map((upload) => upload.storageObjectId)
+    .filter((id): id is string => Boolean(id));
+  const objectRows =
+    storageObjectIds.length > 0
+      ? await db
+          .select()
+          .from(storageObjects)
+          .where(inArray(storageObjects.id, storageObjectIds))
+      : [];
+  const objectById = new Map(objectRows.map((object) => [object.id, object]));
+  const storage = getStorage();
+  const entries: Array<readonly [string, ConsoleArtifactAvailability]> =
+    await Promise.all(
+      uploadRows.map(async (upload) => {
+        if (!upload.storageObjectId) {
+          return [
+            upload.id,
+            {
+              ok: false,
+              code: "UPLOAD_ARTIFACT_NOT_FOUND",
+              message: "Original upload artifact was not recorded.",
+            },
+          ] as const;
+        }
+        const object = objectById.get(upload.storageObjectId);
+        if (!object) {
+          return [
+            upload.id,
+            {
+              ok: false,
+              code: "UPLOAD_ARTIFACT_NOT_FOUND",
+              message: "Original upload artifact record was not found.",
+            },
+          ] as const;
+        }
+        const availability = await verifyStorageArtifactAvailable(object, storage);
+        return [upload.id, availability] as const;
+      }),
+    );
+  return new Map(entries);
 }
 
 function toConsoleTileset(
@@ -1035,6 +1089,7 @@ function toConsoleTileset(
   params: {
     uploads?: Array<typeof uploads.$inferSelect>;
     artifactById?: Map<string, ConsoleArtifact>;
+    uploadAvailabilityById?: Map<string, ConsoleArtifactAvailability>;
   } = {},
 ) {
   const currentVersion =
@@ -1047,6 +1102,9 @@ function toConsoleTileset(
       (version) => version.id === tileset.currentVersionId,
     ) ?? null;
   const latestConsoleVersion = consoleVersions[0] ?? null;
+  const consoleUploads = (params.uploads ?? []).map((upload) =>
+    toConsoleUpload(upload, params.uploadAvailabilityById),
+  );
   const tilejsonUrl =
     ownerHandle && currentVersion
       ? `/tiles/v1/${ownerHandle}/${tileset.handle}.json`
@@ -1055,8 +1113,8 @@ function toConsoleTileset(
   return {
     ...tileset,
     ownerHandle,
-    uploads: params.uploads ?? [],
-    latestUpload: params.uploads?.[0] ?? null,
+    uploads: consoleUploads,
+    latestUpload: consoleUploads[0] ?? null,
     versions: consoleVersions,
     latestVersion: latestConsoleVersion,
     currentVersion: currentConsoleVersion,
@@ -1066,6 +1124,16 @@ function toConsoleTileset(
       ownerHandle && currentVersion
         ? `/tiles/v1/${ownerHandle}/${tileset.handle}/versions/${currentVersion.version}.json`
         : null,
+  };
+}
+
+function toConsoleUpload(
+  upload: typeof uploads.$inferSelect,
+  availabilityById?: Map<string, ConsoleArtifactAvailability>,
+) {
+  return {
+    ...upload,
+    artifactAvailability: availabilityById?.get(upload.id) ?? null,
   };
 }
 
@@ -1090,4 +1158,9 @@ type ConsoleArtifact = {
   contentType: string | null;
   size: number | null;
   url: string;
+  availability: ConsoleArtifactAvailability;
 };
+
+type ConsoleArtifactAvailability =
+  | { ok: true }
+  | { ok: false; code: string; message: string };

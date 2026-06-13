@@ -78,7 +78,8 @@ export function SourceTilesetsTable({
           const artifact = displayVersion?.artifact;
           const canPublish = Boolean(
             tileset.latestVersion &&
-              tileset.latestVersion.id !== tileset.currentVersion?.id,
+              tileset.latestVersion.id !== tileset.currentVersion?.id &&
+              hasAvailableArtifact(tileset.latestVersion),
           );
           const showDetails = Boolean(
             validation ||
@@ -263,6 +264,7 @@ export function SourceTilesetsTable({
                                 size="sm"
                                 className="h-6 px-2"
                                 onClick={() => onCopyArtifactUrl(displayVersion)}
+                                disabled={!artifact.availability.ok}
                               >
                                 <Copy className="mr-1 h-3 w-3" />
                                 Copy
@@ -278,6 +280,7 @@ export function SourceTilesetsTable({
                                     "noopener,noreferrer",
                                   )
                                 }
+                                disabled={!artifact.availability.ok}
                               >
                                 <ExternalLink className="mr-1 h-3 w-3" />
                                 Open
@@ -309,7 +312,7 @@ export function SourceTilesetsTable({
                                 disabled={
                                   current ||
                                   publishingVersionId === version.id ||
-                                  !version.artifact
+                                  !hasAvailableArtifact(version)
                                 }
                                 onClick={() => onPublish(tileset, version)}
                               >
@@ -359,6 +362,9 @@ function uploadSummary(tileset: ConsoleTileset) {
   const upload = tileset.latestUpload;
   if (!upload) return "No linked upload.";
   const size = upload.size ? formatBytes(upload.size) : "unknown size";
+  if (upload.artifactAvailability && !upload.artifactAvailability.ok) {
+    return `${upload.originalFileName} - ${upload.artifactAvailability.message}`;
+  }
   return `${upload.originalFileName} - ${upload.status} - ${size}`;
 }
 
@@ -382,11 +388,22 @@ function boundsSummary(
 }
 
 function artifactSummary(version: ConsoleTilesetVersion | null) {
-  if (!version?.artifact) return "No processed artifact yet.";
+  if (!version?.artifact) {
+    return version?.artifactStorageObjectId
+      ? "Processed artifact record is missing."
+      : "No processed artifact yet.";
+  }
+  if (!version.artifact.availability.ok) {
+    return `${version.format} v${version.version} - ${version.artifact.availability.message}`;
+  }
   const size = version.artifact.size
     ? formatBytes(version.artifact.size)
     : "unknown size";
   return `${version.format} v${version.version} - ${size}`;
+}
+
+function hasAvailableArtifact(version: ConsoleTilesetVersion | null | undefined) {
+  return Boolean(version?.artifact?.availability.ok);
 }
 
 function formatBytes(bytes: number) {

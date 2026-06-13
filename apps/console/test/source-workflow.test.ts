@@ -195,6 +195,7 @@ describe("Console tileset workflow", () => {
             size: 100,
             storageObjectId: "storage-1",
             linkedTilesetId: "tileset-1",
+            artifactAvailability: { ok: true },
             status: "READY",
             validationResult: null,
             createdAt: "2026-01-01T00:00:00.000Z",

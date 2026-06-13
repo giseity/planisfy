@@ -51,6 +51,7 @@ export interface ConsoleTilesetVersion {
   version: number;
   buildJobId: string | null;
   format: string;
+  artifactStorageObjectId: string | null;
   schema: {
     vector_layers?: ConsoleVectorLayer[];
   } | null;
@@ -84,6 +85,7 @@ export interface ConsoleUpload {
   contentType: string | null;
   size: number | null;
   storageObjectId: string | null;
+  artifactAvailability: ConsoleArtifactAvailability | null;
   status: string;
   validationResult: ConsoleUploadValidation | null;
   linkedTilesetId: string | null;
@@ -100,7 +102,12 @@ export interface ConsoleStorageArtifact {
   contentType: string | null;
   size: number | null;
   url: string;
+  availability: ConsoleArtifactAvailability;
 }
+
+export type ConsoleArtifactAvailability =
+  | { ok: true }
+  | { ok: false; code: string; message: string };
 
 export interface ConsoleTileset {
   id: string;
