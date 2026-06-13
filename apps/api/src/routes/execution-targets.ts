@@ -9,10 +9,7 @@ import {
   executionTargets,
   workerProfiles,
 } from "@planisfy/database";
-import {
-  requireOrgMutationRole,
-  type AuthEnv,
-} from "../middleware/auth";
+import { requireOrgMutationPermission, type AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 import { customerComputeMutationGate } from "../lib/platform-gates";
 import {
@@ -27,19 +24,19 @@ export const executionTargetsRoute = new Hono<AuthEnv>();
 
 executionTargetsRoute.use(
   "/execution-targets",
-  requireOrgMutationRole("admin"),
+  requireOrgMutationPermission("execution_target.manage"),
 );
 executionTargetsRoute.use(
   "/execution-targets/*",
-  requireOrgMutationRole("admin"),
+  requireOrgMutationPermission("execution_target.manage"),
 );
 executionTargetsRoute.use(
   "/worker-profiles",
-  requireOrgMutationRole("admin"),
+  requireOrgMutationPermission("execution_target.manage"),
 );
 executionTargetsRoute.use(
   "/worker-profiles/*",
-  requireOrgMutationRole("admin"),
+  requireOrgMutationPermission("execution_target.manage"),
 );
 
 const providerSchema = z.enum(["local", "aws_batch", "gcp_batch"]);
@@ -132,7 +129,9 @@ executionTargetsRoute.post("/execution-targets", async (c) => {
   const parsed = targetSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
 
-  const encryptedCredentials = encryptCredentials(parsed.data.credentials ?? {});
+  const encryptedCredentials = encryptCredentials(
+    parsed.data.credentials ?? {},
+  );
   if (encryptedCredentials instanceof Response) return encryptedCredentials;
 
   const [created] = await db
@@ -166,9 +165,12 @@ executionTargetsRoute.patch("/execution-targets/:id", async (c) => {
     updatedAt: new Date(),
   };
   if (parsed.data.name !== undefined) values.name = parsed.data.name;
-  if (parsed.data.provider !== undefined) values.provider = parsed.data.provider;
-  if (parsed.data.authMode !== undefined) values.authMode = parsed.data.authMode;
-  if (parsed.data.region !== undefined) values.region = parsed.data.region ?? null;
+  if (parsed.data.provider !== undefined)
+    values.provider = parsed.data.provider;
+  if (parsed.data.authMode !== undefined)
+    values.authMode = parsed.data.authMode;
+  if (parsed.data.region !== undefined)
+    values.region = parsed.data.region ?? null;
   if (parsed.data.config !== undefined) values.config = parsed.data.config;
   if (parsed.data.credentials !== undefined) {
     const encryptedCredentials = encryptCredentials(parsed.data.credentials);
@@ -281,7 +283,8 @@ executionTargetsRoute.patch("/execution-targets/:id/env/:name", async (c) => {
     if (encryptedValue instanceof Response) return encryptedValue;
     values.encryptedValue = encryptedValue;
   }
-  if (parsed.data.isSecret !== undefined) values.isSecret = parsed.data.isSecret;
+  if (parsed.data.isSecret !== undefined)
+    values.isSecret = parsed.data.isSecret;
   if (parsed.data.description !== undefined) {
     values.description = parsed.data.description;
   }
@@ -324,7 +327,12 @@ executionTargetsRoute.get("/worker-profiles", async (c) => {
   const rows = await db
     .select()
     .from(workerProfiles)
-    .where(and(eq(workerProfiles.accountId, accountId), isNull(workerProfiles.deletedAt)))
+    .where(
+      and(
+        eq(workerProfiles.accountId, accountId),
+        isNull(workerProfiles.deletedAt),
+      ),
+    )
     .orderBy(desc(workerProfiles.createdAt));
 
   return c.json({ data: rows });
@@ -375,7 +383,8 @@ executionTargetsRoute.patch("/worker-profiles/:id", async (c) => {
   if (parsed.data.command !== undefined) values.command = parsed.data.command;
   if (parsed.data.args !== undefined) values.args = parsed.data.args;
   if (parsed.data.cpu !== undefined) values.cpu = parsed.data.cpu ?? null;
-  if (parsed.data.memoryMb !== undefined) values.memoryMb = parsed.data.memoryMb ?? null;
+  if (parsed.data.memoryMb !== undefined)
+    values.memoryMb = parsed.data.memoryMb ?? null;
   if (parsed.data.timeoutSeconds !== undefined) {
     values.timeoutSeconds = parsed.data.timeoutSeconds ?? null;
   }
@@ -436,7 +445,8 @@ executionTargetsRoute.post("/processing-jobs/estimate", async (c) => {
 
   return c.json({
     data: estimateProcessingDuration({
-      provider: (target?.provider as ExecutionTargetProvider | undefined) ?? "local",
+      provider:
+        (target?.provider as ExecutionTargetProvider | undefined) ?? "local",
       sourceSizeBytes: parsed.data.sourceSizeBytes,
       featureCount: parsed.data.featureCount,
       minZoom: parsed.data.minZoom,

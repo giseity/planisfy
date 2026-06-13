@@ -1,9 +1,21 @@
-import { notFound } from "next/navigation"
-import { db, users, accounts, styles, apiKeys, auditEvents } from "@planisfy/database"
-import { eq, and, isNull, desc } from "drizzle-orm"
-import { Badge } from "@planisfy/ui/components/badge"
-import { Button } from "@planisfy/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
+import { notFound } from "next/navigation";
+import {
+  db,
+  users,
+  accounts,
+  styles,
+  apiKeys,
+  auditEvents,
+} from "@planisfy/database";
+import { eq, and, isNull, desc } from "drizzle-orm";
+import { Badge } from "@planisfy/ui/components/badge";
+import { Button } from "@planisfy/ui/components/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@planisfy/ui/components/card";
 import {
   Table,
   TableBody,
@@ -11,21 +23,26 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@planisfy/ui/components/tabs"
-import Link from "next/link"
-import { Ban, LogIn, Monitor, Shield } from "lucide-react"
-import { requireAdmin } from "@/lib/admin-auth"
+} from "@planisfy/ui/components/table";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@planisfy/ui/components/tabs";
+import Link from "next/link";
+import { Ban, LogIn, Monitor, Shield } from "lucide-react";
+import { requireAdmin } from "@/lib/admin-auth";
 
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
 export default async function UserDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }) {
-  await requireAdmin()
-  const { id } = await params
+  await requireAdmin();
+  const { id } = await params;
 
   const [user] = await db
     .select({
@@ -41,9 +58,9 @@ export default async function UserDetailPage({
     .from(users)
     .leftJoin(accounts, eq(users.id, accounts.id))
     .where(eq(users.id, id))
-    .limit(1)
+    .limit(1);
 
-  if (!user) notFound()
+  if (!user) notFound();
 
   const [userStyles, userKeys, recentAudit] = await Promise.all([
     db
@@ -83,12 +100,15 @@ export default async function UserDetailPage({
       .where(eq(auditEvents.profileId, id))
       .orderBy(desc(auditEvents.timestamp))
       .limit(50),
-  ])
+  ]);
 
   return (
     <div className="p-6">
       <div className="flex items-center gap-2 mb-1">
-        <Link href="/users" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          href="/users"
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
           Users
         </Link>
         <span className="text-sm text-muted-foreground">/</span>
@@ -133,7 +153,10 @@ export default async function UserDetailPage({
             </div>
             <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <Fact label="Handle" value={`@${user.handle ?? "-"}`} />
-              <Fact label="Joined" value={new Date(user.createdAt).toLocaleDateString()} />
+              <Fact
+                label="Joined"
+                value={new Date(user.createdAt).toLocaleDateString()}
+              />
               <Fact label="Last active" value="Activity tracked in sessions" />
               <Fact label="Organization" value="See memberships" />
             </div>
@@ -163,7 +186,9 @@ export default async function UserDetailPage({
             <CardTitle className="text-sm font-medium">Joined</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm">{new Date(user.createdAt).toLocaleDateString()}</p>
+            <p className="text-sm">
+              {new Date(user.createdAt).toLocaleDateString()}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -171,7 +196,9 @@ export default async function UserDetailPage({
             <CardTitle className="text-sm font-medium">Resources</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm">{userStyles.length} styles, {userKeys.length} keys</p>
+            <p className="text-sm">
+              {userStyles.length} styles, {userKeys.length} keys
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -180,7 +207,9 @@ export default async function UserDetailPage({
         <TabsList>
           <TabsTrigger value="styles">Styles ({userStyles.length})</TabsTrigger>
           <TabsTrigger value="keys">API Keys ({userKeys.length})</TabsTrigger>
-          <TabsTrigger value="audit">Audit Log ({recentAudit.length})</TabsTrigger>
+          <TabsTrigger value="audit">
+            Audit Log ({recentAudit.length})
+          </TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
         </TabsList>
 
@@ -199,7 +228,9 @@ export default async function UserDetailPage({
               {userStyles.map((style) => (
                 <TableRow key={style.id}>
                   <TableCell className="font-medium">{style.name}</TableCell>
-                  <TableCell className="text-muted-foreground font-mono text-xs">{style.handle}</TableCell>
+                  <TableCell className="text-muted-foreground font-mono text-xs">
+                    {style.handle}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={style.isPublic ? "success" : "secondary"}>
                       {style.isPublic ? "Public" : "Draft"}
@@ -213,7 +244,12 @@ export default async function UserDetailPage({
               ))}
               {userStyles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No styles</TableCell>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center py-8 text-muted-foreground"
+                  >
+                    No styles
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -235,19 +271,31 @@ export default async function UserDetailPage({
               {userKeys.map((key) => (
                 <TableRow key={key.id}>
                   <TableCell className="font-medium">{key.name}</TableCell>
-                  <TableCell className="font-mono text-xs">{key.id.slice(0, 12)}...</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {key.id.slice(0, 12)}...
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {(key.scopes as string[]).slice(0, 3).map((s) => (
-                        <Badge key={s} variant="secondary" className="text-[10px]">{s}</Badge>
+                        <Badge
+                          key={s}
+                          variant="secondary"
+                          className="text-[10px]"
+                        >
+                          {s}
+                        </Badge>
                       ))}
                       {(key.scopes as string[]).length > 3 && (
-                        <Badge variant="secondary" className="text-[10px]">+{(key.scopes as string[]).length - 3}</Badge>
+                        <Badge variant="secondary" className="text-[10px]">
+                          +{(key.scopes as string[]).length - 3}
+                        </Badge>
                       )}
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
-                    {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : "Never"}
+                    {key.lastUsedAt
+                      ? new Date(key.lastUsedAt).toLocaleDateString()
+                      : "Never"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {new Date(key.createdAt).toLocaleDateString()}
@@ -256,7 +304,12 @@ export default async function UserDetailPage({
               ))}
               {userKeys.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No API keys</TableCell>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center py-8 text-muted-foreground"
+                  >
+                    No API keys
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -281,18 +334,29 @@ export default async function UserDetailPage({
                     {new Date(event.timestamp).toLocaleString()}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-[10px]">{event.action}</Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {event.action}
+                    </Badge>
                   </TableCell>
-                  <TableCell className="text-sm">{event.resourceType}</TableCell>
+                  <TableCell className="text-sm">
+                    {event.resourceType}
+                  </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
                     {event.resourceId?.slice(0, 12) || "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{event.ipAddress || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {event.ipAddress || "—"}
+                  </TableCell>
                 </TableRow>
               ))}
               {recentAudit.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No audit events</TableCell>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center py-8 text-muted-foreground"
+                  >
+                    No audit events
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -334,9 +398,15 @@ export default async function UserDetailPage({
                       {session.device}
                     </span>
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{session.ip}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{session.location}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{session.lastActive}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {session.ip}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {session.location}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {session.lastActive}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={session.current ? "success" : "secondary"}>
                       {session.current ? "Current" : "Active"}
@@ -349,23 +419,25 @@ export default async function UserDetailPage({
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }
 
 function RoleBadge({ role }: { role: string }) {
   return (
     <Badge
       variant={
-        role === "SUPER"
+        role === "OWNER"
           ? "destructive"
-          : role === "ADMIN"
-            ? "warning"
-            : "secondary"
+          : role === "SUPER"
+            ? "destructive"
+            : role === "ADMIN"
+              ? "warning"
+              : "secondary"
       }
     >
       {role}
     </Badge>
-  )
+  );
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
@@ -374,7 +446,7 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
-  )
+  );
 }
 
 function initials(name: string | null) {
@@ -383,5 +455,5 @@ function initials(name: string | null) {
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
-    .join("")
+    .join("");
 }

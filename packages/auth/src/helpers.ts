@@ -1,18 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db, members, sessions } from "@planisfy/database";
-
-// ============================================================================
-// Org role hierarchy (lowest → highest)
-// ============================================================================
-
-const ORG_ROLE_RANK: Record<string, number> = {
-  viewer: 0,
-  member: 1,
-  admin: 2,
-  owner: 3,
-};
-
-export type OrgRole = keyof typeof ORG_ROLE_RANK;
+import { hasMinOrgRole, type OrgRole } from "@planisfy/utils";
 
 // ============================================================================
 // getActiveOwnerId — resolves the "who owns this resource?" question
@@ -55,7 +43,7 @@ export async function getActiveOwnerId(sessionToken: string): Promise<string> {
 export async function requireOrgRole(
   userId: string,
   orgId: string,
-  minRole: OrgRole
+  minRole: OrgRole,
 ): Promise<string> {
   const [membership] = await db
     .select({ role: members.role })
@@ -67,12 +55,9 @@ export async function requireOrgRole(
     throw new Error("Not a member of this organization");
   }
 
-  const userRank = ORG_ROLE_RANK[membership.role] ?? -1;
-  const requiredRank = ORG_ROLE_RANK[minRole] ?? 0;
-
-  if (userRank < requiredRank) {
+  if (!hasMinOrgRole(membership.role, minRole)) {
     throw new Error(
-      `Insufficient permissions: requires ${minRole}, have ${membership.role}`
+      `Insufficient permissions: requires ${minRole}, have ${membership.role}`,
     );
   }
 

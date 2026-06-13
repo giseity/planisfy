@@ -23,7 +23,12 @@ export const accountLifecycleStatusEnum = pgEnum("account_lifecycle_status", [
   "SUSPENDED",
   "BANNED",
 ]);
-export const systemRoleEnum = pgEnum("system_role", ["USER", "ADMIN", "SUPER"]);
+export const systemRoleEnum = pgEnum("system_role", [
+  "USER",
+  "ADMIN",
+  "SUPER",
+  "OWNER",
+]);
 
 export const sourceStatusEnum = pgEnum("source_status", [
   "PENDING",
@@ -95,14 +100,13 @@ export const executionTargetProviderEnum = pgEnum("execution_target_provider", [
   "aws_batch",
   "gcp_batch",
 ]);
-export const executionTargetAuthModeEnum = pgEnum("execution_target_auth_mode", [
-  "federated",
-  "static",
-  "external",
-]);
+export const executionTargetAuthModeEnum = pgEnum(
+  "execution_target_auth_mode",
+  ["federated", "static", "external"],
+);
 export const notificationChannelProviderEnum = pgEnum(
   "notification_channel_provider",
-  ["webhook", "email", "slack", "discord"]
+  ["webhook", "email", "slack", "discord"],
 );
 export const scheduledOperationKindEnum = pgEnum("scheduled_operation_kind", [
   "tileset_rebuild",
@@ -111,7 +115,7 @@ export const scheduledOperationKindEnum = pgEnum("scheduled_operation_kind", [
 ]);
 export const scheduledOperationStatusEnum = pgEnum(
   "scheduled_operation_status",
-  ["active", "paused"]
+  ["active", "paused"],
 );
 export const artifactBackupStatusEnum = pgEnum("artifact_backup_status", [
   "pending",
@@ -184,7 +188,7 @@ export const accounts = pgTable(
       .on(table.handle)
       .where(sql`${table.deletedAt} IS NULL`),
     index("accounts_lifecycle_status_idx").on(table.lifecycleStatus),
-  ]
+  ],
 );
 
 // Transitional export for legacy callers. New code should import `accounts`.
@@ -214,7 +218,7 @@ export const users = pgTable(
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  (table) => [uniqueIndex("users_email_unique").on(table.email)]
+  (table) => [uniqueIndex("users_email_unique").on(table.email)],
 );
 
 // ============================================================================
@@ -247,7 +251,7 @@ export const organizations = pgTable(
     uniqueIndex("organizations_slug_unique")
       .on(table.slug)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 // ============================================================================
@@ -276,11 +280,11 @@ export const members = pgTable(
   (table) => [
     uniqueIndex("members_org_user_unique").on(
       table.organizationId,
-      table.userId
+      table.userId,
     ),
     index("members_user_idx").on(table.userId),
     index("members_org_idx").on(table.organizationId),
-  ]
+  ],
 );
 
 // ============================================================================
@@ -308,7 +312,7 @@ export const invitations = pgTable(
   (table) => [
     index("invitations_org_idx").on(table.organizationId),
     index("invitations_email_idx").on(table.email),
-  ]
+  ],
 );
 
 // ============================================================================
@@ -400,7 +404,7 @@ export const styles = pgTable(
     uniqueIndex("styles_owner_handle_unique")
       .on(table.ownerId, table.handle)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const styleVersions = pgTable(
@@ -424,9 +428,9 @@ export const styleVersions = pgTable(
     index("style_versions_style_idx").on(table.styleId),
     uniqueIndex("style_versions_style_version_unique").on(
       table.styleId,
-      table.version
+      table.version,
     ),
-  ]
+  ],
 );
 
 export const apiKeys = pgTable(
@@ -453,7 +457,7 @@ export const apiKeys = pgTable(
     index("api_keys_owner_idx").on(table.ownerId),
     index("api_keys_hash_idx").on(table.keyHash),
     index("api_keys_scopes_idx").using("gin", table.scopes),
-  ]
+  ],
 );
 
 export const tilesetSources = pgTable(
@@ -488,7 +492,7 @@ export const tilesetSources = pgTable(
     uniqueIndex("tileset_sources_owner_handle_unique")
       .on(table.ownerId, table.handle)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const sourceCredentials = pgTable(
@@ -515,7 +519,7 @@ export const sourceCredentials = pgTable(
     uniqueIndex("source_credentials_account_name_unique")
       .on(table.accountId, table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const savedRegions = pgTable(
@@ -543,7 +547,7 @@ export const savedRegions = pgTable(
     uniqueIndex("saved_regions_account_handle_unique")
       .on(table.accountId, table.handle)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const sourceConnections = pgTable(
@@ -574,7 +578,7 @@ export const sourceConnections = pgTable(
     uniqueIndex("source_connections_account_handle_unique")
       .on(table.accountId, table.handle)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const usageLogs = pgTable(
@@ -583,7 +587,7 @@ export const usageLogs = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     apiKeyId: varchar("api_key_id", { length: 64 }).references(
       () => apiKeys.id,
-      { onDelete: "set null" }
+      { onDelete: "set null" },
     ),
     profileId: uuid("account_id").references(() => accounts.id, {
       onDelete: "set null",
@@ -606,7 +610,7 @@ export const usageLogs = pgTable(
     index("usage_logs_api_key_idx").on(table.apiKeyId),
     index("usage_logs_account_idx").on(table.profileId),
     index("usage_logs_timestamp_idx").on(table.timestamp),
-  ]
+  ],
 );
 
 // ============================================================================
@@ -632,11 +636,8 @@ export const auditEvents = pgTable(
   (table) => [
     index("audit_events_account_idx").on(table.profileId),
     index("audit_events_timestamp_idx").on(table.timestamp),
-    index("audit_events_resource_idx").on(
-      table.resourceType,
-      table.resourceId
-    ),
-  ]
+    index("audit_events_resource_idx").on(table.resourceType, table.resourceId),
+  ],
 );
 
 // ============================================================================
@@ -669,7 +670,7 @@ export const uploads = pgTable(
   (table) => [
     index("uploads_account_idx").on(table.accountId),
     index("uploads_status_idx").on(table.status),
-  ]
+  ],
 );
 
 export const datasets = pgTable(
@@ -700,7 +701,7 @@ export const datasets = pgTable(
     uniqueIndex("datasets_account_handle_unique")
       .on(table.accountId, table.handle)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const datasetVersions = pgTable(
@@ -723,9 +724,9 @@ export const datasetVersions = pgTable(
     index("dataset_versions_dataset_idx").on(table.datasetId),
     uniqueIndex("dataset_versions_dataset_version_unique").on(
       table.datasetId,
-      table.version
+      table.version,
     ),
-  ]
+  ],
 );
 
 export const sourceImports = pgTable(
@@ -737,7 +738,7 @@ export const sourceImports = pgTable(
       .references(() => accounts.id, { onDelete: "cascade" }),
     sourceConnectionId: uuid("source_connection_id").references(
       () => sourceConnections.id,
-      { onDelete: "set null" }
+      { onDelete: "set null" },
     ),
     regionId: uuid("region_id").references(() => savedRegions.id, {
       onDelete: "set null",
@@ -747,7 +748,7 @@ export const sourceImports = pgTable(
     }),
     processingJobId: uuid("processing_job_id").references(
       () => processingJobs.id,
-      { onDelete: "set null" }
+      { onDelete: "set null" },
     ),
     provider: sourceProviderEnum("provider").notNull(),
     sourceName: varchar("source_name", { length: 128 }).notNull(),
@@ -767,7 +768,7 @@ export const sourceImports = pgTable(
     index("source_imports_account_idx").on(table.accountId),
     index("source_imports_status_idx").on(table.status),
     index("source_imports_dataset_idx").on(table.datasetId),
-  ]
+  ],
 );
 
 export const tilesets = pgTable(
@@ -800,7 +801,7 @@ export const tilesets = pgTable(
     uniqueIndex("tilesets_account_handle_unique")
       .on(table.accountId, table.handle)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const tilesetVersions = pgTable(
@@ -827,9 +828,9 @@ export const tilesetVersions = pgTable(
     index("tileset_versions_tileset_idx").on(table.tilesetId),
     uniqueIndex("tileset_versions_tileset_version_unique").on(
       table.tilesetId,
-      table.version
+      table.version,
     ),
-  ]
+  ],
 );
 
 export const executionTargets = pgTable(
@@ -840,7 +841,9 @@ export const executionTargets = pgTable(
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 128 }).notNull(),
-    provider: executionTargetProviderEnum("provider").notNull().default("local"),
+    provider: executionTargetProviderEnum("provider")
+      .notNull()
+      .default("local"),
     authMode: executionTargetAuthModeEnum("auth_mode")
       .notNull()
       .default("federated"),
@@ -862,7 +865,7 @@ export const executionTargets = pgTable(
     uniqueIndex("execution_targets_account_name_unique")
       .on(table.accountId, table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const executionTargetEnvVars = pgTable(
@@ -893,7 +896,7 @@ export const executionTargetEnvVars = pgTable(
     uniqueIndex("execution_target_env_vars_target_name_unique")
       .on(table.executionTargetId, table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const workerProfiles = pgTable(
@@ -925,7 +928,7 @@ export const workerProfiles = pgTable(
     uniqueIndex("worker_profiles_account_name_unique")
       .on(table.accountId, table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const notificationChannels = pgTable(
@@ -954,7 +957,7 @@ export const notificationChannels = pgTable(
     uniqueIndex("notification_channels_account_name_unique")
       .on(table.accountId, table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const scheduledOperations = pgTable(
@@ -982,8 +985,11 @@ export const scheduledOperations = pgTable(
   },
   (table) => [
     index("scheduled_operations_account_idx").on(table.accountId),
-    index("scheduled_operations_next_run_idx").on(table.status, table.nextRunAt),
-  ]
+    index("scheduled_operations_next_run_idx").on(
+      table.status,
+      table.nextRunAt,
+    ),
+  ],
 );
 
 export const artifactBackups = pgTable(
@@ -995,7 +1001,7 @@ export const artifactBackups = pgTable(
       .references(() => accounts.id, { onDelete: "cascade" }),
     storageObjectId: uuid("storage_object_id").references(
       () => storageObjects.id,
-      { onDelete: "set null" }
+      { onDelete: "set null" },
     ),
     status: artifactBackupStatusEnum("status").notNull().default("pending"),
     provider: varchar("provider", { length: 32 }).notNull(),
@@ -1014,7 +1020,7 @@ export const artifactBackups = pgTable(
   (table) => [
     index("artifact_backups_account_idx").on(table.accountId),
     index("artifact_backups_storage_object_idx").on(table.storageObjectId),
-  ]
+  ],
 );
 
 export const workerNodes = pgTable(
@@ -1042,7 +1048,7 @@ export const workerNodes = pgTable(
   (table) => [
     index("worker_nodes_account_idx").on(table.accountId),
     index("worker_nodes_status_idx").on(table.status),
-  ]
+  ],
 );
 
 export const previewLinks = pgTable(
@@ -1068,7 +1074,7 @@ export const previewLinks = pgTable(
     uniqueIndex("preview_links_slug_unique")
       .on(table.slug)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const customDomains = pgTable(
@@ -1099,7 +1105,7 @@ export const customDomains = pgTable(
     uniqueIndex("custom_domains_host_path_unique")
       .on(table.host, table.path)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const workflowTemplates = pgTable(
@@ -1122,7 +1128,7 @@ export const workflowTemplates = pgTable(
   (table) => [
     index("workflow_templates_account_idx").on(table.accountId),
     index("workflow_templates_category_idx").on(table.category),
-  ]
+  ],
 );
 
 export const stylePublications = pgTable(
@@ -1151,9 +1157,9 @@ export const stylePublications = pgTable(
     index("style_publications_style_idx").on(table.styleId),
     uniqueIndex("style_publications_style_alias_unique").on(
       table.styleId,
-      table.alias
+      table.alias,
     ),
-  ]
+  ],
 );
 
 export const processingJobs = pgTable(
@@ -1168,11 +1174,11 @@ export const processingJobs = pgTable(
     progress: integer("progress").notNull().default(0),
     executionTargetId: uuid("execution_target_id").references(
       () => executionTargets.id,
-      { onDelete: "set null" }
+      { onDelete: "set null" },
     ),
     workerProfileId: uuid("worker_profile_id").references(
       () => workerProfiles.id,
-      { onDelete: "set null" }
+      { onDelete: "set null" },
     ),
     input: jsonb("input"),
     output: jsonb("output"),
@@ -1194,7 +1200,7 @@ export const processingJobs = pgTable(
     index("processing_jobs_status_idx").on(table.status),
     index("processing_jobs_execution_target_idx").on(table.executionTargetId),
     index("processing_jobs_worker_profile_idx").on(table.workerProfileId),
-  ]
+  ],
 );
 
 export const processingJobLogs = pgTable(
@@ -1211,7 +1217,7 @@ export const processingJobLogs = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("processing_job_logs_job_idx").on(table.jobId)]
+  (table) => [index("processing_job_logs_job_idx").on(table.jobId)],
 );
 
 export const eventOutbox = pgTable(
@@ -1236,7 +1242,7 @@ export const eventOutbox = pgTable(
   (table) => [
     index("event_outbox_next_event_idx").on(table.status, table.processAt),
     index("event_outbox_event_name_idx").on(table.eventName),
-  ]
+  ],
 );
 
 export const storageObjects = pgTable(
@@ -1270,12 +1276,12 @@ export const storageObjects = pgTable(
     index("storage_objects_account_idx").on(table.accountId),
     index("storage_objects_resource_idx").on(
       table.resourceType,
-      table.resourceId
+      table.resourceId,
     ),
     uniqueIndex("storage_objects_key_unique")
       .on(table.provider, table.bucket, table.storageKey)
       .where(sql`${table.deletedAt} IS NULL`),
-  ]
+  ],
 );
 
 export const basemapReleases = pgTable(
@@ -1304,9 +1310,9 @@ export const basemapReleases = pgTable(
   (table) => [
     uniqueIndex("basemap_releases_name_version_unique").on(
       table.name,
-      table.version
+      table.version,
     ),
-  ]
+  ],
 );
 
 export const usageRollups = pgTable(
@@ -1329,9 +1335,9 @@ export const usageRollups = pgTable(
   (table) => [
     index("usage_rollups_account_period_idx").on(
       table.accountId,
-      table.periodStart
+      table.periodStart,
     ),
-  ]
+  ],
 );
 
 export const billingCustomers = pgTable(
@@ -1355,13 +1361,13 @@ export const billingCustomers = pgTable(
   (table) => [
     uniqueIndex("billing_customers_account_provider_unique").on(
       table.accountId,
-      table.provider
+      table.provider,
     ),
     uniqueIndex("billing_customers_provider_id_unique").on(
       table.provider,
-      table.providerCustomerId
+      table.providerCustomerId,
     ),
-  ]
+  ],
 );
 
 export const plans = pgTable("plans", {
@@ -1400,7 +1406,7 @@ export const subscriptions = pgTable(
   (table) => [
     index("subscriptions_account_idx").on(table.accountId),
     index("subscriptions_status_idx").on(table.status),
-  ]
+  ],
 );
 
 export const billingTransactions = pgTable(
@@ -1430,11 +1436,11 @@ export const billingTransactions = pgTable(
     index("billing_transactions_account_idx").on(table.accountId),
     uniqueIndex("billing_transactions_checkout_unique").on(
       table.provider,
-      table.providerCheckoutId
+      table.providerCheckoutId,
     ),
     uniqueIndex("billing_transactions_order_unique").on(
       table.provider,
-      table.providerOrderId
+      table.providerOrderId,
     ),
-  ]
+  ],
 );

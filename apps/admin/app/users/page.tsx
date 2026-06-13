@@ -1,6 +1,6 @@
-import { db, users, accounts } from "@planisfy/database"
-import { eq, sql, desc, count, ilike, or } from "drizzle-orm"
-import { Badge } from "@planisfy/ui/components/badge"
+import { db, users, accounts } from "@planisfy/database";
+import { eq, sql, desc, count, ilike, or } from "drizzle-orm";
+import { Badge } from "@planisfy/ui/components/badge";
 import {
   Table,
   TableBody,
@@ -8,44 +8,46 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table"
-import Link from "next/link"
-import { requireAdmin } from "@/lib/admin-auth"
+} from "@planisfy/ui/components/table";
+import Link from "next/link";
+import { requireAdmin } from "@/lib/admin-auth";
+import { platformRoles } from "@planisfy/utils";
 
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-const userRoles = ["USER", "ADMIN", "SUPER"] as const
+const userRoles = platformRoles;
 
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string; role?: string }>
+  searchParams: Promise<{ q?: string; page?: string; role?: string }>;
 }) {
-  await requireAdmin()
-  const params = await searchParams
-  const page = Math.max(1, Number(params.page) || 1)
-  const limit = 25
-  const offset = (page - 1) * limit
-  const search = params.q || ""
-  const roleFilter = userRoles.find((role) => role === params.role)
+  await requireAdmin();
+  const params = await searchParams;
+  const page = Math.max(1, Number(params.page) || 1);
+  const limit = 25;
+  const offset = (page - 1) * limit;
+  const search = params.q || "";
+  const roleFilter = userRoles.find((role) => role === params.role);
 
-  const conditions = []
+  const conditions = [];
   if (search) {
     conditions.push(
       or(
         ilike(users.name, `%${search}%`),
         ilike(users.email, `%${search}%`),
-        ilike(accounts.handle, `%${search}%`)
-      )
-    )
+        ilike(accounts.handle, `%${search}%`),
+      ),
+    );
   }
   if (roleFilter) {
-    conditions.push(eq(users.role, roleFilter))
+    conditions.push(eq(users.role, roleFilter));
   }
 
-  const whereClause = conditions.length > 0
-    ? sql`${sql.join(conditions, sql` AND `)}`
-    : undefined
+  const whereClause =
+    conditions.length > 0
+      ? sql`${sql.join(conditions, sql` AND `)}`
+      : undefined;
 
   const userList = await db
     .select({
@@ -55,18 +57,24 @@ export default async function UsersPage({
       role: users.role,
       handle: accounts.handle,
       createdAt: users.createdAt,
-      styleCount: sql<number>`(SELECT count(*) FROM styles WHERE styles.owner_id = ${users.id} AND styles.deleted_at IS NULL)`.as("style_count"),
-      keyCount: sql<number>`(SELECT count(*) FROM api_keys WHERE api_keys.owner_id = ${users.id} AND api_keys.deleted_at IS NULL)`.as("key_count"),
+      styleCount:
+        sql<number>`(SELECT count(*) FROM styles WHERE styles.owner_id = ${users.id} AND styles.deleted_at IS NULL)`.as(
+          "style_count",
+        ),
+      keyCount:
+        sql<number>`(SELECT count(*) FROM api_keys WHERE api_keys.owner_id = ${users.id} AND api_keys.deleted_at IS NULL)`.as(
+          "key_count",
+        ),
     })
     .from(users)
     .leftJoin(accounts, eq(users.id, accounts.id))
     .where(whereClause)
     .orderBy(desc(users.createdAt))
     .limit(limit)
-    .offset(offset)
+    .offset(offset);
 
-  const [totalRow] = await db.select({ count: count() }).from(users)
-  const total = totalRow?.count ?? 0
+  const [totalRow] = await db.select({ count: count() }).from(users);
+  const total = totalRow?.count ?? 0;
 
   return (
     <div className="p-6">
@@ -89,6 +97,7 @@ export default async function UsersPage({
             <option value="USER">User</option>
             <option value="ADMIN">Admin</option>
             <option value="SUPER">Super</option>
+            <option value="OWNER">Owner</option>
           </select>
           <button
             type="submit"
@@ -115,19 +124,29 @@ export default async function UsersPage({
           {userList.map((user) => (
             <TableRow key={user.id}>
               <TableCell>
-                <Link href={`/users/${user.id}`} className="font-medium hover:underline">
+                <Link
+                  href={`/users/${user.id}`}
+                  className="font-medium hover:underline"
+                >
                   {user.name}
                 </Link>
               </TableCell>
-              <TableCell className="text-muted-foreground">{user.email}</TableCell>
+              <TableCell className="text-muted-foreground">
+                {user.email}
+              </TableCell>
               <TableCell className="text-muted-foreground font-mono text-xs">
                 @{user.handle}
               </TableCell>
               <TableCell>
                 <Badge
                   variant={
-                    user.role === "SUPER" ? "destructive" :
-                    user.role === "ADMIN" ? "warning" : "secondary"
+                    user.role === "OWNER"
+                      ? "destructive"
+                      : user.role === "SUPER"
+                        ? "destructive"
+                        : user.role === "ADMIN"
+                          ? "warning"
+                          : "secondary"
                   }
                 >
                   {user.role}
@@ -142,7 +161,10 @@ export default async function UsersPage({
           ))}
           {userList.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+              <TableCell
+                colSpan={7}
+                className="text-center py-8 text-muted-foreground"
+              >
                 No users found
               </TableCell>
             </TableRow>
@@ -176,5 +198,5 @@ export default async function UsersPage({
         </div>
       )}
     </div>
-  )
+  );
 }

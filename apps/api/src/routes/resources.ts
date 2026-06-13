@@ -39,14 +39,20 @@ import {
   ExecutionRuntimeSelectionError,
   resolveExecutionRuntimeSelection,
 } from "../lib/execution-runtime";
-import { requireOrgMutationRole } from "../middleware/auth";
+import { requireOrgMutationPermission } from "../middleware/auth";
 
 export const resourcesRoute = new Hono<AuthEnv>();
 
-resourcesRoute.use("/uploads", requireOrgMutationRole("member"));
-resourcesRoute.use("/uploads/*", requireOrgMutationRole("member"));
-resourcesRoute.use("/tilesets/*", requireOrgMutationRole("member"));
-resourcesRoute.use("/jobs/*", requireOrgMutationRole("member"));
+resourcesRoute.use("/uploads", requireOrgMutationPermission("resource.write"));
+resourcesRoute.use(
+  "/uploads/*",
+  requireOrgMutationPermission("resource.write"),
+);
+resourcesRoute.use(
+  "/tilesets/*",
+  requireOrgMutationPermission("resource.write"),
+);
+resourcesRoute.use("/jobs/*", requireOrgMutationPermission("resource.write"));
 
 const MAX_UPLOAD_SIZE = 250 * 1024 * 1024;
 
@@ -1024,20 +1030,23 @@ async function fetchArtifactMap(
     .where(inArray(storageObjects.id, artifactIds));
   const storage = getStorage();
   const entries = await Promise.all(
-    rows.map(async (object) => [
-      object.id,
-      {
-        id: object.id,
-        provider: object.provider,
-        bucket: object.bucket,
-        storageKey: object.storageKey,
-        fileName: object.fileName,
-        contentType: object.contentType,
-        size: object.size,
-        url: storage.getUrl(object.storageKey),
-        availability: await verifyStorageArtifactAvailable(object, storage),
-      },
-    ] as const),
+    rows.map(
+      async (object) =>
+        [
+          object.id,
+          {
+            id: object.id,
+            provider: object.provider,
+            bucket: object.bucket,
+            storageKey: object.storageKey,
+            fileName: object.fileName,
+            contentType: object.contentType,
+            size: object.size,
+            url: storage.getUrl(object.storageKey),
+            availability: await verifyStorageArtifactAvailable(object, storage),
+          },
+        ] as const,
+    ),
   );
   return new Map(entries);
 }
@@ -1081,7 +1090,10 @@ async function fetchUploadArtifactAvailabilityMap(
             },
           ] as const;
         }
-        const availability = await verifyStorageArtifactAvailable(object, storage);
+        const availability = await verifyStorageArtifactAvailable(
+          object,
+          storage,
+        );
         return [upload.id, availability] as const;
       }),
     );

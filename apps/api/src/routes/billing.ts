@@ -15,11 +15,14 @@ import {
   listPlanDefinitions,
   serializePlanLimits,
 } from "../lib/billing";
-import { getMonthlyUsagePeriod, getMonthlyUsageUnits } from "../lib/usage-quota";
+import {
+  getMonthlyUsagePeriod,
+  getMonthlyUsageUnits,
+} from "../lib/usage-quota";
 import { db, styles, tilesets, apiKeys } from "@planisfy/database";
 import { eq, and, isNull, count } from "drizzle-orm";
 import { env } from "../env";
-import { requireOrgMinRole } from "../middleware/auth";
+import { requireOrgPermission } from "../middleware/auth";
 
 const checkoutSchema = z.object({
   planId: z.enum(["pro", "enterprise"]),
@@ -28,8 +31,8 @@ const checkoutSchema = z.object({
 export const billingRoute = new Hono<AuthEnv>();
 export const billingWebhookRoute = new Hono();
 
-billingRoute.use("/billing/checkout", requireOrgMinRole("admin"));
-billingRoute.use("/billing/portal", requireOrgMinRole("admin"));
+billingRoute.use("/billing/checkout", requireOrgPermission("billing.manage"));
+billingRoute.use("/billing/portal", requireOrgPermission("billing.manage"));
 
 // ── GET /billing — Current plan, usage, and limits ──────────────────────────
 
@@ -79,9 +82,10 @@ billingRoute.get("/billing", async (c) => {
       sources: tilesetCount?.count ?? 0,
       apiKeys: keyCount?.count ?? 0,
     },
-    quotaPercent: limits.monthlyUnits === Infinity
-      ? 0
-      : Math.round((monthlyUnits / limits.monthlyUnits) * 100),
+    quotaPercent:
+      limits.monthlyUnits === Infinity
+        ? 0
+        : Math.round((monthlyUnits / limits.monthlyUnits) * 100),
     period: {
       start: period.start.toISOString(),
       end: period.end.toISOString(),
@@ -106,9 +110,7 @@ billingRoute.get("/billing/plans", async (c) => {
         ? "Unlimited"
         : plan.limits.monthlyUnits,
     maxStyles:
-      plan.limits.maxStyles === Infinity
-        ? "Unlimited"
-        : plan.limits.maxStyles,
+      plan.limits.maxStyles === Infinity ? "Unlimited" : plan.limits.maxStyles,
     maxSources:
       plan.limits.maxSources === Infinity
         ? "Unlimited"
@@ -137,12 +139,16 @@ billingRoute.post("/billing/checkout", async (c) => {
   });
 
   if (!session) {
-    return c.json({
-      error: {
-        code: "SERVICE_UNAVAILABLE",
-        message: "Billing is not configured. Set Dodo Payments credentials and product IDs to enable payments.",
+    return c.json(
+      {
+        error: {
+          code: "SERVICE_UNAVAILABLE",
+          message:
+            "Billing is not configured. Set Dodo Payments credentials and product IDs to enable payments.",
+        },
       },
-    }, 503);
+      503,
+    );
   }
 
   return c.json(session);
@@ -154,12 +160,15 @@ billingRoute.get("/billing/portal", async (c) => {
   const url = await getCustomerPortalUrl();
 
   if (!url) {
-    return c.json({
-      error: {
-        code: "SERVICE_UNAVAILABLE",
-        message: "Billing portal is not configured.",
+    return c.json(
+      {
+        error: {
+          code: "SERVICE_UNAVAILABLE",
+          message: "Billing portal is not configured.",
+        },
       },
-    }, 503);
+      503,
+    );
   }
 
   return c.json({ url });
@@ -167,12 +176,15 @@ billingRoute.get("/billing/portal", async (c) => {
 
 billingWebhookRoute.post("/webhooks/dodo", async (c) => {
   if (!env.DODO_PAYMENTS_WEBHOOK_SECRET) {
-    return c.json({
-      error: {
-        code: "SERVICE_UNAVAILABLE",
-        message: "Dodo webhook secret is not configured.",
+    return c.json(
+      {
+        error: {
+          code: "SERVICE_UNAVAILABLE",
+          message: "Dodo webhook secret is not configured.",
+        },
       },
-    }, 503);
+      503,
+    );
   }
 
   const rawBody = await c.req.text();
@@ -183,13 +195,21 @@ billingWebhookRoute.post("/webhooks/dodo", async (c) => {
     payload = webhook.verify(rawBody, Object.fromEntries(c.req.raw.headers));
   } catch (err) {
     if (err instanceof WebhookVerificationError) {
-      return c.json({
-        error: { code: "INVALID_SIGNATURE", message: "Invalid webhook signature." },
-      }, 401);
+      return c.json(
+        {
+          error: {
+            code: "INVALID_SIGNATURE",
+            message: "Invalid webhook signature.",
+          },
+        },
+        401,
+      );
     }
     throw err;
   }
 
-  const result = await applyDodoWebhookEvent(payload as Record<string, unknown>);
+  const result = await applyDodoWebhookEvent(
+    payload as Record<string, unknown>,
+  );
   return c.json({ data: result });
 });

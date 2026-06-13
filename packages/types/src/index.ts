@@ -55,7 +55,7 @@ export type AccountType = "USER" | "ORGANIZATION";
 /** @deprecated Use AccountType. */
 export type ProfileType = AccountType;
 export type AccountLifecycleStatus = "ACTIVE" | "SUSPENDED" | "BANNED";
-export type SystemRole = "USER" | "ADMIN" | "SUPER";
+export type SystemRole = "USER" | "ADMIN" | "SUPER" | "OWNER";
 export type SourceStatus = "PENDING" | "PROCESSING" | "READY" | "ERROR";
 export type SourceType = "VECTOR" | "RASTER" | "GEOJSON" | "IMAGE" | "VIDEO";
 

@@ -1,19 +1,20 @@
-import { headers } from "next/headers"
-import { redirect } from "next/navigation"
-import { auth } from "@planisfy/auth/auth"
-import { db, users } from "@planisfy/database"
-import { eq } from "drizzle-orm"
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { auth } from "@planisfy/auth/auth";
+import { db, users } from "@planisfy/database";
+import { hasMinPlatformRole } from "@planisfy/utils";
+import { eq } from "drizzle-orm";
 
 /**
  * Verify the current session belongs to an admin or super user.
  * Redirects to sign-in if not authenticated, throws if not admin.
  */
 export async function requireAdmin() {
-  const h = await headers()
-  const session = await auth.api.getSession({ headers: h })
+  const h = await headers();
+  const session = await auth.api.getSession({ headers: h });
 
   if (!session?.user) {
-    redirect("/sign-in")
+    redirect("/sign-in");
   }
 
   // Check role in the users table
@@ -21,10 +22,10 @@ export async function requireAdmin() {
     .select({ role: users.role })
     .from(users)
     .where(eq(users.id, session.user.id))
-    .limit(1)
+    .limit(1);
 
-  if (!user || (user.role !== "ADMIN" && user.role !== "SUPER")) {
-    throw new Error("Forbidden: admin access required")
+  if (!user || !hasMinPlatformRole(user.role, "ADMIN")) {
+    throw new Error("Forbidden: admin access required");
   }
 
   return {
@@ -32,5 +33,5 @@ export async function requireAdmin() {
     name: session.user.name,
     email: session.user.email,
     role: user.role,
-  }
+  };
 }

@@ -10,17 +10,14 @@ import {
   normalizeAllowedDomains,
 } from "../lib/api-key";
 import { checkResourceLimit } from "../lib/plan-check";
-import {
-  requireOrgMutationRole,
-  type AuthEnv,
-} from "../middleware/auth";
+import { requireOrgMutationPermission, type AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 import { apiKeyMutationGate } from "../lib/platform-gates";
 
 export const keysRoute = new Hono<AuthEnv>();
 
-keysRoute.use("/keys", requireOrgMutationRole("admin"));
-keysRoute.use("/keys/*", requireOrgMutationRole("admin"));
+keysRoute.use("/keys", requireOrgMutationPermission("api_key.manage"));
+keysRoute.use("/keys/*", requireOrgMutationPermission("api_key.manage"));
 
 function getClientIp(req: Request): string | undefined {
   return (
@@ -241,7 +238,9 @@ keysRoute.put("/keys/:id", async (c) => {
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.scopes !== undefined) updates.scopes = parsed.data.scopes;
   if (parsed.data.allowedDomains !== undefined) {
-    const normalizedDomains = normalizeAllowedDomains(parsed.data.allowedDomains);
+    const normalizedDomains = normalizeAllowedDomains(
+      parsed.data.allowedDomains,
+    );
     if (normalizedDomains.errors.length > 0) {
       return c.json(
         {

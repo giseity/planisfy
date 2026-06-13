@@ -53,6 +53,9 @@ importers:
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@planisfy/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(kysely@0.28.11)(postgres@3.4.8)
@@ -519,6 +522,9 @@ importers:
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../ui
+      '@planisfy/utils':
+        specifier: workspace:*
+        version: link:../utils
       bcrypt:
         specifier: ^5.1.1
         version: 5.1.1

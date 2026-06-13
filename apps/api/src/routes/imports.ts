@@ -40,19 +40,37 @@ import {
   ExecutionRuntimeSelectionError,
   resolveExecutionRuntimeSelection,
 } from "../lib/execution-runtime";
-import { requireOrgMutationRole } from "../middleware/auth";
+import { requireOrgMutationPermission } from "../middleware/auth";
 
 export const importsRoute = new Hono<AuthEnv>();
 
-importsRoute.use("/regions", requireOrgMutationRole("member"));
-importsRoute.use("/regions/*", requireOrgMutationRole("member"));
-importsRoute.use("/source-imports", requireOrgMutationRole("member"));
-importsRoute.use("/source-imports/*", requireOrgMutationRole("member"));
-importsRoute.use("/datasets/*", requireOrgMutationRole("member"));
-importsRoute.use("/source-credentials", requireOrgMutationRole("admin"));
-importsRoute.use("/source-credentials/*", requireOrgMutationRole("admin"));
-importsRoute.use("/source-connections", requireOrgMutationRole("admin"));
-importsRoute.use("/source-connections/*", requireOrgMutationRole("admin"));
+importsRoute.use("/regions", requireOrgMutationPermission("resource.write"));
+importsRoute.use("/regions/*", requireOrgMutationPermission("resource.write"));
+importsRoute.use(
+  "/source-imports",
+  requireOrgMutationPermission("resource.write"),
+);
+importsRoute.use(
+  "/source-imports/*",
+  requireOrgMutationPermission("resource.write"),
+);
+importsRoute.use("/datasets/*", requireOrgMutationPermission("resource.write"));
+importsRoute.use(
+  "/source-credentials",
+  requireOrgMutationPermission("integration.manage"),
+);
+importsRoute.use(
+  "/source-credentials/*",
+  requireOrgMutationPermission("integration.manage"),
+);
+importsRoute.use(
+  "/source-connections",
+  requireOrgMutationPermission("integration.manage"),
+);
+importsRoute.use(
+  "/source-connections/*",
+  requireOrgMutationPermission("integration.manage"),
+);
 
 const handleSchema = sourceImportHandleSchema;
 const bboxSchema = z
@@ -291,7 +309,9 @@ importsRoute.post("/source-imports/overture", async (c) => {
     }
     return validationError(c, parsed.error);
   }
-  const releaseReadiness = assertOvertureReleaseConfigured(env.OVERTURE_RELEASE);
+  const releaseReadiness = assertOvertureReleaseConfigured(
+    env.OVERTURE_RELEASE,
+  );
   if (!releaseReadiness.ok) {
     return c.json(
       {

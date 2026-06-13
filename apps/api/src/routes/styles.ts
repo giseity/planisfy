@@ -15,15 +15,12 @@ import {
 } from "@planisfy/database/style-service";
 import { logAudit } from "../lib/audit";
 import { checkResourceLimit } from "../lib/plan-check";
-import {
-  requireOrgMutationRole,
-  type AuthEnv,
-} from "../middleware/auth";
+import { requireOrgMutationPermission, type AuthEnv } from "../middleware/auth";
 
 export const stylesRoute = new Hono<AuthEnv>();
 
-stylesRoute.use("/styles", requireOrgMutationRole("member"));
-stylesRoute.use("/styles/*", requireOrgMutationRole("member"));
+stylesRoute.use("/styles", requireOrgMutationPermission("resource.write"));
+stylesRoute.use("/styles/*", requireOrgMutationPermission("resource.write"));
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 

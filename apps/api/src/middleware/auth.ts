@@ -3,15 +3,12 @@ import type { Context } from "hono";
 import { db, members, sessions } from "@planisfy/database";
 import { eq, and, gt } from "drizzle-orm";
 import { getCookie } from "hono/cookie";
-
-const ORG_ROLE_RANK: Record<string, number> = {
-  viewer: 0,
-  member: 1,
-  admin: 2,
-  owner: 3,
-};
-
-export type OrgRole = keyof typeof ORG_ROLE_RANK;
+import {
+  canOrg,
+  hasMinOrgRole,
+  type OrgPermission,
+  type OrgRole,
+} from "@planisfy/utils";
 
 type SessionContext = {
   id: string;
@@ -153,47 +150,51 @@ export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
  * Valid API keys or sessions attach owner context for metering/private reads,
  * but missing or stale cookies do not block anonymous public resources.
  */
-export const optionalAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
-  const apiKeyOwnerId = c.get("apiKeyOwnerId");
-  if (apiKeyOwnerId) {
-    c.set("userId", apiKeyOwnerId);
-    c.set("ownerId", apiKeyOwnerId);
-    c.set("session", {
-      id: "api-key",
-      userId: apiKeyOwnerId,
-      token: "",
-      activeOrganizationId: null,
-    });
-    c.set("orgRole", null);
-    await next();
-    return;
-  }
+export const optionalAuthMiddleware = createMiddleware<AuthEnv>(
+  async (c, next) => {
+    const apiKeyOwnerId = c.get("apiKeyOwnerId");
+    if (apiKeyOwnerId) {
+      c.set("userId", apiKeyOwnerId);
+      c.set("ownerId", apiKeyOwnerId);
+      c.set("session", {
+        id: "api-key",
+        userId: apiKeyOwnerId,
+        token: "",
+        activeOrganizationId: null,
+      });
+      c.set("orgRole", null);
+      await next();
+      return;
+    }
 
-  const rawToken =
-    getBetterAuthSessionCookie(c) ||
-    c.req.header("authorization")?.replace("Bearer ", "");
-  if (rawToken) {
-    const session = await findValidSession(rawToken);
-    if (session) {
-      const ownerContext = await resolveSessionOwnerContext(session);
-      if (ownerContext.ok) {
-        setSessionContext(c, session, ownerContext);
-      } else {
-        setSessionContext(c, { ...session, activeOrganizationId: null }, {
-          ownerId: session.userId,
-          orgRole: null,
-        });
+    const rawToken =
+      getBetterAuthSessionCookie(c) ||
+      c.req.header("authorization")?.replace("Bearer ", "");
+    if (rawToken) {
+      const session = await findValidSession(rawToken);
+      if (session) {
+        const ownerContext = await resolveSessionOwnerContext(session);
+        if (ownerContext.ok) {
+          setSessionContext(c, session, ownerContext);
+        } else {
+          setSessionContext(
+            c,
+            { ...session, activeOrganizationId: null },
+            {
+              ownerId: session.userId,
+              orgRole: null,
+            },
+          );
+        }
       }
     }
-  }
 
-  await next();
-});
+    await next();
+  },
+);
 
 export function isOrgRoleAtLeast(role: string | null, minRole: OrgRole) {
-  if (!role) return false;
-  const minimumRank = ORG_ROLE_RANK[minRole] ?? Number.POSITIVE_INFINITY;
-  return (ORG_ROLE_RANK[role] ?? -1) >= minimumRank;
+  return hasMinOrgRole(role, minRole);
 }
 
 export function requireOrgMinRole(minRole: OrgRole) {
@@ -220,6 +221,30 @@ export function requireOrgMinRole(minRole: OrgRole) {
   });
 }
 
+export function requireOrgPermission(permission: OrgPermission) {
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    const session = c.get("session");
+    if (!session?.activeOrganizationId) {
+      await next();
+      return;
+    }
+
+    if (!canOrg(c.get("orgRole"), permission)) {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: `Requires ${permission} permission for this organization.`,
+          },
+        },
+        403,
+      );
+    }
+
+    await next();
+  });
+}
+
 export function requireOrgMutationRole(
   minRole: OrgRole,
   methods = ["POST", "PUT", "PATCH", "DELETE"],
@@ -234,6 +259,23 @@ export function requireOrgMutationRole(
     }
 
     return requireRole(c, next);
+  });
+}
+
+export function requireOrgMutationPermission(
+  permission: OrgPermission,
+  methods = ["POST", "PUT", "PATCH", "DELETE"],
+) {
+  const methodSet = new Set(methods);
+  const requirePermission = requireOrgPermission(permission);
+
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    if (!methodSet.has(c.req.method.toUpperCase())) {
+      await next();
+      return;
+    }
+
+    return requirePermission(c, next);
   });
 }
 
@@ -266,7 +308,10 @@ async function findValidSession(rawToken: string) {
 
 export async function resolveSessionOwnerContext(
   session: SessionContext,
-  findRole: (userId: string, orgId: string) => Promise<string | null> = findMembershipRole,
+  findRole: (
+    userId: string,
+    orgId: string,
+  ) => Promise<string | null> = findMembershipRole,
 ): Promise<
   | { ok: true; ownerId: string; orgRole: string | null }
   | { ok: false; message: string }
