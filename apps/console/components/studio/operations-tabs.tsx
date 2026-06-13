@@ -787,6 +787,8 @@ export function BackupsTab({
                     <Button
                       size="sm"
                       variant="outline"
+                      aria-label={`Restore backup from ${backup.sourceStorageKey}`}
+                      title="Restore backup"
                       disabled={backup.status === "failed"}
                       onClick={() =>
                         runAction(
@@ -1048,13 +1050,21 @@ function DeliveryList({
                 <TableCell>{row.resourceType}</TableCell>
                 <TableCell className="space-x-1">
                   <Button size="sm" variant="outline" asChild>
-                    <a href={row.targetUrl} target="_blank" rel="noreferrer">
+                    <a
+                      href={row.targetUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Open preview ${row.slug}`}
+                      title="Open preview"
+                    >
                       <ExternalLink className="h-4 w-4" />
                     </a>
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
+                    aria-label={`Delete preview ${row.slug}`}
+                    title="Delete preview"
                     onClick={() =>
                       runAction(
                         () => api.deletePreviewLink(row.id),
@@ -1114,6 +1124,8 @@ function DomainList({
                   <Button
                     size="sm"
                     variant="outline"
+                    aria-label={`Verify domain ${domain.host}`}
+                    title="Verify domain"
                     onClick={() =>
                       runAction(
                         () => api.verifyCustomDomain(domain.id),
@@ -1127,6 +1139,8 @@ function DomainList({
                   <Button
                     size="sm"
                     variant="outline"
+                    aria-label={`Delete domain ${domain.host}`}
+                    title="Delete domain"
                     onClick={() =>
                       runAction(
                         () => api.deleteCustomDomain(domain.id),

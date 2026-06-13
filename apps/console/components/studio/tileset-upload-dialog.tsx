@@ -148,31 +148,40 @@ export function TilesetUploadDialog({
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
-            <Label>Name</Label>
+            <Label htmlFor="tileset-upload-name">Name (required)</Label>
             <Input
+              id="tileset-upload-name"
+              required
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Transit stops"
+              placeholder="Enter tileset name"
             />
           </div>
           <div className="space-y-2">
-            <Label>Handle</Label>
+            <Label htmlFor="tileset-upload-handle">Handle (required)</Label>
             <Input
+              id="tileset-upload-handle"
+              required
+              aria-describedby="tileset-upload-handle-help"
               value={newHandle}
               onChange={(e) =>
                 setNewHandle(
                   e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
                 )
               }
-              placeholder="transit-stops"
+              placeholder="enter-handle"
             />
-            <p className="text-xs text-muted-foreground">
+            <p
+              id="tileset-upload-handle-help"
+              className="text-xs text-muted-foreground"
+            >
               Lowercase letters, numbers, and hyphens only.
             </p>
           </div>
           <div className="space-y-2">
-            <Label>Description</Label>
+            <Label htmlFor="tileset-upload-description">Description</Label>
             <Input
+              id="tileset-upload-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional"
@@ -219,13 +228,19 @@ export function TilesetUploadDialog({
             </div>
           </div>
           <div className="space-y-2">
-            <Label>File</Label>
+            <Label htmlFor="tileset-upload-file">File (required)</Label>
             <Input
+              id="tileset-upload-file"
               type="file"
+              required
               accept=".geojson,.json,.csv,.zip,.pmtiles,.mbtiles"
+              aria-describedby="tileset-upload-file-help"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
-            <p className="text-xs text-muted-foreground">
+            <p
+              id="tileset-upload-file-help"
+              className="text-xs text-muted-foreground"
+            >
               GeoJSON, CSV, zipped Shapefile, PMTiles, or MBTiles.
             </p>
           </div>
