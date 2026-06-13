@@ -40,7 +40,7 @@ Still in progress or externally dependent:
   health/preflight report Valhalla as degraded when the process is up but the
   route-readiness probe cannot route
 - Geocoding requires a Pelias-compatible service; no Nominatim fallback is used
-- Static maps return a placeholder unless `STATIC_MAP_URL` is configured
+- Static maps return `501` unless `STATIC_MAP_URL` points at a real renderer
 - Billing uses Dodo Payments-oriented surfaces; it is optional for self-host and
   required for managed
 - Email delivery is optional/dry-run for self-host and required through Resend

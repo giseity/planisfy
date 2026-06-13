@@ -43,6 +43,13 @@
       "when": 1781357722138,
       "tag": "0005_platform_owner_role",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781360000000,
+      "tag": "0006_usage_log_duration",
+      "breakpoints": true
     }
   ]
 }

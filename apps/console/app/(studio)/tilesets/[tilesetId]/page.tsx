@@ -32,78 +32,6 @@ import {
 import { api, type ConsoleProcessingJob, type ConsoleTileset } from "@/lib/api"
 import type { ComponentProps } from "react"
 
-const fallbackTileset: ConsoleTileset = {
-  id: "buildings-usa",
-  accountId: "demo",
-  ownerHandle: "alexchen",
-  name: "Buildings USA",
-  handle: "buildings-usa",
-  description: "Overture-derived building footprints for US coverage.",
-  type: "VECTOR",
-  status: "READY",
-  currentVersionId: "buildings-v3",
-  bounds: null,
-  minZoom: 0,
-  maxZoom: 14,
-  layerMetadata: { vector_layers: [{ id: "buildings", fields: {}, minzoom: 0, maxzoom: 14 }] },
-  uploads: [],
-  latestUpload: {
-    id: "upload-buildings",
-    accountId: "demo",
-    originalFileName: "overture-buildings.geojson",
-    contentType: "application/geo+json",
-    size: 1_200_000_000,
-    storageObjectId: "obj_buildings",
-    artifactAvailability: { ok: true },
-    status: "COMPLETED",
-    validationResult: {
-      format: "GeoJSON",
-      featureCount: 12_400_000,
-      schema: { columns: ["id", "height", "class"] },
-    },
-    linkedTilesetId: "buildings-usa",
-    createdAt: new Date("2026-06-08T10:00:00.000Z").toISOString(),
-    updatedAt: new Date("2026-06-08T10:00:00.000Z").toISOString(),
-  },
-  versions: [
-    {
-      id: "buildings-v3",
-      tilesetId: "buildings-usa",
-      version: 3,
-      buildJobId: "job_a1b2",
-      format: "PMTiles",
-      artifactStorageObjectId: "obj_buildings_v3",
-      schema: { vector_layers: [{ id: "buildings", fields: {}, minzoom: 0, maxzoom: 14 }] },
-      bounds: null,
-      minZoom: 0,
-      maxZoom: 14,
-      createdAt: new Date("2026-06-09T11:42:00.000Z").toISOString(),
-      publishedAt: new Date("2026-06-09T11:42:00.000Z").toISOString(),
-      artifact: {
-        id: "obj_buildings_v3",
-        provider: "r2",
-        bucket: "planisfy-tiles",
-        storageKey: "tiles/buildings-usa/v3.pmtiles",
-        fileName: "buildings-usa-v3.pmtiles",
-        contentType: "application/octet-stream",
-        size: 1_200_000_000,
-        url: "https://api.planisfy.com/v1/tiles/buildings-usa",
-        availability: { ok: true },
-      },
-    },
-  ],
-  latestVersion: null,
-  currentVersion: null,
-  isPublished: true,
-  tilejsonUrl: "https://api.planisfy.com/v1/tiles/buildings-usa/tilejson.json?key=YOUR_KEY",
-  versionedTilejsonUrl: "https://api.planisfy.com/v1/tiles/buildings-usa@3/tilejson.json?key=YOUR_KEY",
-  createdAt: new Date("2026-05-28T15:20:00.000Z").toISOString(),
-  updatedAt: new Date("2026-06-09T11:42:00.000Z").toISOString(),
-}
-
-fallbackTileset.latestVersion = fallbackTileset.versions[0] ?? null
-fallbackTileset.currentVersion = fallbackTileset.versions[0] ?? null
-
 export default function TilesetDetailPage() {
   const params = useParams<{ tilesetId: string }>()
   const [tilesets, setTilesets] = useState<ConsoleTileset[]>([])
@@ -130,12 +58,23 @@ export default function TilesetDetailPage() {
 
   const tileset = useMemo(
     () =>
-      tilesets.find((item) => item.id === params.tilesetId || item.handle === params.tilesetId) ??
-      fallbackTileset,
+      tilesets.find((item) => item.id === params.tilesetId || item.handle === params.tilesetId) ?? null,
     [params.tilesetId, tilesets],
   )
 
-  const versions = tileset.versions.length > 0 ? tileset.versions : fallbackTileset.versions
+  if (!tileset) {
+    return (
+      <div className="flex min-h-[360px] items-center justify-center rounded-lg border">
+        <div className="text-center">
+          <Database className="mx-auto h-8 w-8 text-muted-foreground" />
+          <h1 className="mt-3 text-lg font-semibold">Tileset not found</h1>
+          <p className="mt-1 text-sm text-muted-foreground">No tileset matched this ID or handle.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const versions = tileset.versions
   const currentVersion = tileset.currentVersion ?? tileset.latestVersion ?? versions[0] ?? null
   const matchingJobs = jobs.filter((job) => job.input?.tilesetId === tileset.id)
 
@@ -233,25 +172,33 @@ export default function TilesetDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {versions.map((version) => (
-                <TableRow key={version.id}>
-                  <TableCell className="font-medium">v{version.version}</TableCell>
-                  <TableCell>
-                    <Badge variant={version.publishedAt ? "success" : "secondary"}>
-                      {version.publishedAt ? "published" : "available"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{formatDate(version.createdAt)}</TableCell>
-                  <TableCell>{version.schema?.vector_layers?.length ?? 0}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{formatBytes(version.artifact?.size ?? null)}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{version.minZoom ?? 0}-{version.maxZoom ?? 14}</TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon-sm" aria-label={`Actions for version ${version.version}`}>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
+              {versions.length > 0 ? (
+                versions.map((version) => (
+                  <TableRow key={version.id}>
+                    <TableCell className="font-medium">v{version.version}</TableCell>
+                    <TableCell>
+                      <Badge variant={version.publishedAt ? "success" : "secondary"}>
+                        {version.publishedAt ? "published" : "available"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatDate(version.createdAt)}</TableCell>
+                    <TableCell>{version.schema?.vector_layers?.length ?? 0}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{formatBytes(version.artifact?.size ?? null)}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{version.minZoom ?? 0}-{version.maxZoom ?? 14}</TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Actions for version ${version.version}`}>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
+                    No versions have been built yet.
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -266,13 +213,17 @@ export default function TilesetDetailPage() {
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <MetadataBlock
               label="Source type"
-              value={tileset.latestUpload?.validationResult?.format ?? "Overture Maps Foundation - Buildings"}
-              detail={`${formatNumber(tileset.latestUpload?.validationResult?.featureCount)} features`}
+              value={tileset.latestUpload?.validationResult?.format ?? "Unknown"}
+              detail={featureCountDetail(tileset.latestUpload?.validationResult?.featureCount)}
             />
             <MetadataBlock
               label="Build configuration"
-              value={`minZoom ${tileset.minZoom ?? 0}, maxZoom ${tileset.maxZoom ?? 14}`}
-              detail={`format ${currentVersion?.format ?? "pmtiles"}`}
+              value={
+                tileset.minZoom !== null && tileset.maxZoom !== null
+                  ? `minZoom ${tileset.minZoom}, maxZoom ${tileset.maxZoom}`
+                  : "Awaiting build"
+              }
+              detail={currentVersion ? `format ${currentVersion.format}` : "No artifact published"}
             />
           </CardContent>
         </Card>
@@ -293,14 +244,22 @@ export default function TilesetDetailPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(matchingJobs.length > 0 ? matchingJobs : sampleJobs).map((job) => (
-                  <TableRow key={job.id}>
-                    <TableCell className="font-mono text-xs">{job.id}</TableCell>
-                    <TableCell><Badge variant={jobStatusVariant(job.status)}>{job.status}</Badge></TableCell>
-                    <TableCell>{job.progress}%</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{job.output?.storageKey ?? "-"}</TableCell>
+                {matchingJobs.length > 0 ? (
+                  matchingJobs.map((job) => (
+                    <TableRow key={job.id}>
+                      <TableCell className="font-mono text-xs">{job.id}</TableCell>
+                      <TableCell><Badge variant={jobStatusVariant(job.status)}>{job.status}</Badge></TableCell>
+                      <TableCell>{job.progress}%</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{job.output?.storageKey ?? "-"}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-24 text-center text-sm text-muted-foreground">
+                      No build jobs found for this tileset.
+                    </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -309,26 +268,6 @@ export default function TilesetDetailPage() {
     </div>
   )
 }
-
-const sampleJobs: ConsoleProcessingJob[] = [
-  {
-    id: "job_a1b2",
-    accountId: "demo",
-    type: "TILE_BUILD",
-    status: "SUCCEEDED",
-    progress: 100,
-    retryCount: 0,
-    cancelRequestedAt: null,
-    input: { tilesetId: "buildings-usa" },
-    output: { storageKey: "buildings-usa-v3.pmtiles" },
-    errorCode: null,
-    errorMessage: null,
-    createdAt: new Date("2026-06-09T11:00:00.000Z").toISOString(),
-    updatedAt: new Date("2026-06-09T11:42:00.000Z").toISOString(),
-    startedAt: new Date("2026-06-09T11:00:00.000Z").toISOString(),
-    completedAt: new Date("2026-06-09T11:42:00.000Z").toISOString(),
-  },
-]
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
@@ -380,6 +319,12 @@ function formatBytes(value: number | null) {
   return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`
 }
 
-function formatNumber(value?: number) {
-  return typeof value === "number" ? value.toLocaleString() : "Unknown"
+function formatNumber(value: number) {
+  return value.toLocaleString()
+}
+
+function featureCountDetail(value?: number | null) {
+  return typeof value === "number"
+    ? `${formatNumber(value)} features`
+    : "Feature count unavailable"
 }

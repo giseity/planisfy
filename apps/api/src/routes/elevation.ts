@@ -4,7 +4,7 @@ import { env } from "../env";
 
 export const elevationRoute = new Hono<AuthEnv>();
 
-// Open Elevation API (free, self-hostable) or OpenTopoData as fallback
+// Elevation lookup is delegated to a configured local-compatible service.
 const ELEVATION_URL = env.ELEVATION_URL;
 
 interface ElevationResult {
@@ -65,7 +65,7 @@ elevationRoute.get("/elevation/v1/:coords", async (c) => {
     c.header("Cache-Control", "public, max-age=86400");
     return c.json({
       elevations,
-      attribution: "Elevation data from SRTM/ASTER via Open Elevation",
+      attribution: "Elevation data from the configured elevation service",
     });
   } catch (err) {
     console.error("[elevation] Lookup error:", err);
@@ -141,7 +141,7 @@ elevationRoute.get("/elevation/v1/along/:coords", async (c) => {
         totalAscent: Math.round(totalAscent),
         totalDescent: Math.round(totalDescent),
       },
-      attribution: "Elevation data from SRTM/ASTER via Open Elevation",
+      attribution: "Elevation data from the configured elevation service",
     });
   } catch (err) {
     console.error("[elevation] Profile error:", err);

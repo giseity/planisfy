@@ -90,7 +90,7 @@ export default function StyleEditorPage() {
 
   const searchParams = useSearchParams();
 
-  // Load style: from API if UUID, from URL param, or sample fallback
+  // Load style from API, a URL import, or the local starter style for new drafts.
   useEffect(() => {
     const id = params.styleId;
     if (UUID_RE.test(id)) {
@@ -110,10 +110,14 @@ export default function StyleEditorPage() {
           if (json.version === 8 && Array.isArray(json.layers)) {
             loadStyle(json);
           } else {
-            loadStyle(sampleStyle);
+            setLoadError("The URL did not return a MapLibre style document");
           }
         })
-        .catch(() => loadStyle(sampleStyle));
+        .catch((err) => {
+          setLoadError(
+            err instanceof Error ? err.message : "Failed to load style URL",
+          );
+        });
     } else {
       loadStyle(sampleStyle);
     }

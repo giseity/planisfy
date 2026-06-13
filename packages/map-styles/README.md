@@ -18,8 +18,9 @@ Milestone 1/2 includes a small, versioned fixture release for local demo wiring:
 | Regional fixture input | `fixtures/regional/planisfy-streets-fixture.geojson` | Tiny tracked source input for the Planetiler harness. |
 
 The fixture is intentionally lightweight. It does not include binary PMTiles,
-sprites, or glyph PBF files. Local demos default glyph loading to the MapLibre
-demo font endpoint and reserve `sprites/` for future icon releases.
+sprites, or glyph PBF files. Local demos should point `GLYPHS_URL` at a local
+glyph service or storage-backed glyph path; `sprites/` is reserved for future
+icon releases.
 
 ## Local Tileset Assumptions
 

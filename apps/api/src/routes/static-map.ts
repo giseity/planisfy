@@ -4,9 +4,7 @@ import { env } from "../env";
 
 export const staticMapRoute = new Hono<AuthEnv>();
 
-// Static map image generation
-// In production, use @maplibre/maplibre-gl-native or a headless browser
-// For now, proxy to a simple tile composite service
+// Static map image generation is delegated to a configured renderer service.
 
 const STATIC_BASE_URL = env.STATIC_MAP_URL;
 
@@ -45,7 +43,6 @@ staticMapRoute.get("/static/v1/:owner/:style/:center/:size{.+\\.png$}", async (c
     return c.json({ error: { code: "BAD_REQUEST", message: "Maximum dimensions: 2048x2048" } }, 400);
   }
 
-  // If a static map service is configured, proxy to it
   if (STATIC_BASE_URL) {
     try {
       const url = `${STATIC_BASE_URL}/render?` +
@@ -72,16 +69,13 @@ staticMapRoute.get("/static/v1/:owner/:style/:center/:size{.+\\.png$}", async (c
     }
   }
 
-  // No static map service configured — generate a placeholder or return 501
-  // Generate a simple SVG placeholder
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-    <rect width="100%" height="100%" fill="#e5e7eb"/>
-    <text x="50%" y="45%" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" fill="#6b7280">Static Map</text>
-    <text x="50%" y="55%" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#9ca3af">${owner}/${style} @ ${lon.toFixed(4)},${lat.toFixed(4)} z${zoom}</text>
-    <text x="50%" y="65%" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#9ca3af">${width}×${height}</text>
-  </svg>`;
-
-  c.header("Content-Type", "image/svg+xml");
-  c.header("Cache-Control", "public, max-age=60");
-  return c.body(svg);
+  return c.json(
+    {
+      error: {
+        code: "NOT_IMPLEMENTED",
+        message: "Static map rendering is not configured",
+      },
+    },
+    501,
+  );
 });

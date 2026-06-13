@@ -596,6 +596,7 @@ export const usageLogs = pgTable(
     endpoint: varchar("endpoint", { length: 64 }).notNull(),
     method: varchar("method", { length: 8 }).notNull(),
     statusCode: integer("status_code").notNull(),
+    durationMs: integer("duration_ms"),
 
     cost: integer("cost").default(1),
     ipAddress: text("ip_address"),

@@ -48,6 +48,7 @@ async function flushBatch(): Promise<void> {
         endpoint: entry.endpoint,
         method: entry.method,
         statusCode: entry.statusCode,
+        durationMs: entry.durationMs ?? null,
         cost: entry.cost ?? 1,
         ipAddress: entry.ipAddress ?? null,
         referer: entry.referer ?? null,

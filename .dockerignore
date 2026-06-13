@@ -12,3 +12,5 @@ dist
 *.log
 .storage
 credentials
+infra/pelias/metro/.cache
+infra/pelias/metro/data

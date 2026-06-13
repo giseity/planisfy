@@ -60,9 +60,9 @@ services:
       - DEMO_PMTILES_PATH=${DEMO_PMTILES_PATH:-/data/pmtiles/stuttgart.pmtiles}
       - MARTIN_URL=http://martin:3000
       - PELIAS_URL=${CONTAINER_PELIAS_URL:-http://pelias:4000}
-      - GLYPHS_URL=${GLYPHS_URL:-https://demotiles.maplibre.org/font}
+      - GLYPHS_URL=${GLYPHS_URL:-http://api:4000/storage/glyphs}
       - STATIC_MAP_URL=${STATIC_MAP_URL:-}
-      - ELEVATION_URL=${ELEVATION_URL:-https://api.open-elevation.com/api/v1}
+      - ELEVATION_URL=${ELEVATION_URL:-http://elevation:8080/api/v1}
       - VALHALLA_URL=http://valhalla:8002
       - VALHALLA_READINESS_ROUTE=${VALHALLA_READINESS_ROUTE:-}
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}

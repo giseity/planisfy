@@ -17,7 +17,7 @@ export const sampleStyle: StyleSpecification = {
       url: "https://tiles.openfreemap.org/planet",
     },
   },
-  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+  glyphs: "/fonts/v1/{fontstack}/{range}.pbf",
   layers: [
     {
       id: "background",

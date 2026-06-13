@@ -68,7 +68,7 @@
     }
   ],
   "glyphs": {
-    "defaultUrl": "https://demotiles.maplibre.org/font"
+    "defaultUrl": "/fonts/v1"
   },
   "sprites": {
     "status": "placeholder",

@@ -183,7 +183,7 @@ async function buildPreflightChecks(
       warnWhenMissing: true,
       message: env.STATIC_MAP_URL
         ? `Static maps renderer is ${env.STATIC_MAP_URL}.`
-        : "Static maps will return a placeholder.",
+        : "Static maps are unavailable until a renderer is configured.",
       action: "Set STATIC_MAP_URL to enable real static image rendering.",
       value: env.STATIC_MAP_URL ?? null,
     }),

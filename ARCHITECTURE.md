@@ -149,7 +149,7 @@ The compose stack assumes local geospatial data exists under `infra/docker/data/
 
 ## Current Limitations
 
-- Static map generation is a placeholder unless `STATIC_MAP_URL` is configured.
+- Static map generation returns `501` unless `STATIC_MAP_URL` points at a renderer.
 - Geocoding requires a Pelias-compatible service for production quality.
 - Tile delivery through Cloudflare/R2 is planned but not fully wired in this repository.
 - Test coverage is early and focused on core platform contracts.

@@ -35,7 +35,7 @@ usageRoute.get("/usage/summary", async (c) => {
     .select({
       totalRequests: count(),
       totalUnits: sql<number>`coalesce(sum(${usageLogs.cost}), 0)`.as("total_units"),
-      avgResponseTime: sql<number>`0`.as("avg_response_time"), // placeholder
+      avgResponseTime: sql<number>`coalesce(round(avg(${usageLogs.durationMs})), 0)::integer`.as("avg_response_time"),
     })
     .from(usageLogs)
     .where(

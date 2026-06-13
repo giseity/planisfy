@@ -9,6 +9,7 @@ import type { AuthEnv } from "./auth";
  * Non-blocking — never affects request latency.
  */
 export const usageLogMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
+  const startedAt = performance.now();
   await next();
 
   // Log after response
@@ -22,6 +23,7 @@ export const usageLogMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     endpoint: c.req.path,
     method: c.req.method,
     statusCode: c.res.status,
+    durationMs: Math.round(performance.now() - startedAt),
     cost,
     ipAddress:
       c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||

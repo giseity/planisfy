@@ -1,5 +1,5 @@
 # Glyphs
 
-Local demos default to `https://demotiles.maplibre.org/font`. Self-hosted
-production deployments should replace `GLYPHS_URL` with their own glyph endpoint
-and update the style metadata during release.
+Local demos should point `GLYPHS_URL` at a local glyph endpoint. The repository
+does not currently ship generated glyph PBF files, so styles that need labels
+must add a local glyph pack or storage-backed glyph release before validation.

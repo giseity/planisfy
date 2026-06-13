@@ -4,6 +4,7 @@ export interface UsageLogEntry {
   endpoint: string;
   method: string;
   statusCode: number;
+  durationMs?: number | null;
   cost?: number;
   ipAddress?: string | null;
   referer?: string | null;

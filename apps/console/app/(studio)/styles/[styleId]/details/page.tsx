@@ -6,9 +6,8 @@ import { useParams } from "next/navigation"
 import {
   AlertTriangle,
   Download,
-  Eye,
-  EyeOff,
   Globe,
+  Loader2,
   Map,
   MoreHorizontal,
   Pencil,
@@ -39,50 +38,52 @@ import {
   type StudioStyleSummary,
 } from "@/lib/studio/style-workflow"
 
-const fallbackStyle: StudioStyleSummary = {
-  id: "satellite-streets",
-  name: "Satellite Streets",
-  handle: "satellite-streets",
-  description: "Satellite imagery with streets and labels.",
-  isPublic: true,
-  thumbnailUrl: null,
-  version: 3,
-  createdAt: new Date("2026-05-28T15:20:00.000Z"),
-  updatedAt: new Date("2026-06-09T11:42:00.000Z"),
-}
-
-const versions = [
-  { version: 3, published: true, created: "Jun 9, 11:42 AM", layers: 42, sources: 5, size: "48 KB" },
-  { version: 2, published: false, created: "Jun 5, 09:15 AM", layers: 38, sources: 4, size: "44 KB" },
-  { version: 1, published: false, created: "May 28, 03:20 PM", layers: 32, sources: 3, size: "36 KB" },
-]
-
-const layers = [
-  { name: "background", type: "background", visible: true },
-  { name: "water", type: "fill", visible: true },
-  { name: "landuse-park", type: "fill", visible: true },
-  { name: "roads-highway", type: "line", visible: true },
-  { name: "roads-primary", type: "line", visible: true },
-  { name: "buildings-3d", type: "fill-extrusion", visible: true },
-  { name: "poi-labels", type: "symbol", visible: false },
-  { name: "place-labels", type: "symbol", visible: true },
-]
-
 export default function StyleDetailsPage() {
   const params = useParams<{ styleId: string }>()
   const [styles, setStyles] = useState<StudioStyleSummary[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let canceled = false
     api
       .get<ApiEnvelope<StudioStyleSummary[]>>("/styles")
-      .then((res) => setStyles(res.data))
+      .then((res) => {
+        if (!canceled) setStyles(res.data)
+      })
       .catch(() => {})
+      .finally(() => {
+        if (!canceled) setLoading(false)
+      })
+
+    return () => {
+      canceled = true
+    }
   }, [])
 
   const style = useMemo(
-    () => styles.find((item) => item.id === params.styleId || item.handle === params.styleId) ?? fallbackStyle,
+    () => styles.find((item) => item.id === params.styleId || item.handle === params.styleId) ?? null,
     [params.styleId, styles],
   )
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[360px] items-center justify-center rounded-lg border">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!style) {
+    return (
+      <div className="flex min-h-[360px] items-center justify-center rounded-lg border">
+        <div className="text-center">
+          <Map className="mx-auto h-8 w-8 text-muted-foreground" />
+          <h1 className="mt-3 text-lg font-semibold">Style not found</h1>
+          <p className="mt-1 text-sm text-muted-foreground">No style matched this ID or handle.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">
@@ -129,14 +130,14 @@ export default function StyleDetailsPage() {
               <Badge variant="outline">MapLibre compatible</Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Fact label="Owner" value="@alexchen" />
               <Fact label="Created" value={formatDate(style.createdAt)} />
-              <Fact label="Layers" value="42" />
-              <Fact label="Sources" value="5" />
+              <Fact label="Updated" value={formatDate(style.updatedAt)} />
+              <Fact label="Layers" value="Unavailable" />
+              <Fact label="Sources" value="Unavailable" />
             </div>
             <div>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">Style URL</p>
-              <Input readOnly className="font-mono text-xs" value={`https://api.planisfy.com/v1/styles/${style.handle}?key=YOUR_KEY`} />
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Style handle</p>
+              <Input readOnly className="font-mono text-xs" value={style.handle} />
             </div>
           </div>
         </CardContent>
@@ -169,36 +170,34 @@ export default function StyleDetailsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {versions.map((version) => (
-                <TableRow key={version.version}>
-                  <TableCell className="font-medium">v{version.version}</TableCell>
+                <TableRow>
+                  <TableCell className="font-medium">v{style.version}</TableCell>
                   <TableCell>
-                    <Badge variant={version.published ? "success" : "secondary"}>
-                      {version.published ? "Published" : "Draft"}
+                    <Badge variant={style.isPublic ? "success" : "secondary"}>
+                      {style.isPublic ? "Published" : "Draft"}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{version.created}</TableCell>
-                  <TableCell>{version.layers}</TableCell>
-                  <TableCell>{version.sources}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{version.size}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{formatDate(style.updatedAt)}</TableCell>
+                  <TableCell>-</TableCell>
+                  <TableCell>-</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">-</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      {!version.published && (
+                      {!style.isPublic && (
                         <Button variant="outline" size="xs">
                           <Globe className="h-3.5 w-3.5" />
                           Publish
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon-xs" aria-label={`Download v${version.version}`}>
+                      <Button variant="ghost" size="icon-xs" aria-label={`Download v${style.version}`}>
                         <Download className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon-xs" aria-label={`Actions for v${version.version}`}>
+                      <Button variant="ghost" size="icon-xs" aria-label={`Actions for v${style.version}`}>
                         <MoreHorizontal className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
             </TableBody>
           </Table>
         </CardContent>
@@ -208,18 +207,10 @@ export default function StyleDetailsPage() {
         <CardHeader>
           <CardTitle className="text-base">Layer breakdown (v{style.version})</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-2 md:grid-cols-2">
-          {layers.map((layer) => (
-            <div key={layer.name} className="flex items-center gap-3 rounded-md border p-2">
-              {layer.visible ? (
-                <Eye className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <EyeOff className="h-4 w-4 text-muted-foreground" />
-              )}
-              <span className="flex-1 text-sm font-medium">{layer.name}</span>
-              <Badge variant="outline">{layer.type}</Badge>
-            </div>
-          ))}
+        <CardContent>
+          <div className="rounded-md border p-4 text-sm text-muted-foreground">
+            Layer metadata is not available from the style summary API yet.
+          </div>
         </CardContent>
       </Card>
 
