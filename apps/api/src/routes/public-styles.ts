@@ -10,6 +10,7 @@ import {
 import {
   canReadPublishedStyle,
   parseStyleHandleVersion,
+  publishedStyleJson,
   styleCacheControl,
   styleEtag,
 } from "../lib/public-style-contract";
@@ -113,7 +114,12 @@ publicStylesRoute.get("/styles/v1/:owner/:handle", async (c) => {
   c.header("Cache-Control", styleCacheControl(style.isPublic));
   c.header("ETag", styleEtag(style.id, snapshot.version));
 
-  return c.json(snapshot.styleJson);
+  return c.json(
+    publishedStyleJson({
+      draftStyleJson: style.styleJson,
+      snapshotStyleJson: snapshot.styleJson,
+    }),
+  );
 });
 
 publicStylesRoute.get("/styles/v1/:owner/:handle/sprite*", async (c) => {

@@ -30,3 +30,10 @@ export function styleCacheControl(isPublic: boolean) {
 export function styleEtag(styleId: string, version: number) {
   return `"style-${styleId}-v${version}"`;
 }
+
+export function publishedStyleJson(params: {
+  draftStyleJson: unknown;
+  snapshotStyleJson: unknown;
+}) {
+  return params.snapshotStyleJson;
+}

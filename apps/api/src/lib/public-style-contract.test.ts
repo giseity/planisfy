@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   canReadPublishedStyle,
   parseStyleHandleVersion,
+  publishedStyleJson,
   styleCacheControl,
   styleEtag,
 } from "./public-style-contract";
@@ -60,4 +61,24 @@ test("style cache headers encode public and immutable snapshot identity", () => 
   assert.equal(styleCacheControl(true), "public, max-age=300");
   assert.equal(styleCacheControl(false), "private, no-cache");
   assert.equal(styleEtag("style-1", 3), '"style-style-1-v3"');
+});
+
+test("published style JSON resolves from immutable snapshot, not mutable draft", () => {
+  const draftStyleJson = {
+    version: 8,
+    name: "Draft edit",
+    sources: { draft: { type: "vector", url: "draft://tiles" } },
+    layers: [],
+  };
+  const snapshotStyleJson = {
+    version: 8,
+    name: "Published snapshot",
+    sources: { published: { type: "vector", url: "published://tiles" } },
+    layers: [],
+  };
+
+  assert.deepEqual(
+    publishedStyleJson({ draftStyleJson, snapshotStyleJson }),
+    snapshotStyleJson,
+  );
 });
