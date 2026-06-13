@@ -22,6 +22,10 @@ export const overtureImportRequestSchema = z.object({
 
 export type OvertureImportRequest = z.infer<typeof overtureImportRequestSchema>;
 
+export type OvertureReleaseReadiness =
+  | { ok: true; release: string }
+  | { ok: false; code: "OVERTURE_RELEASE_NOT_CONFIGURED"; message: string };
+
 export function parseOvertureImportRequest(
   input: unknown,
   options: { allowExperimental?: boolean } = {},
@@ -49,4 +53,17 @@ export function parseOvertureImportRequest(
     }
     throw err;
   }
+}
+
+export function assertOvertureReleaseConfigured(
+  release: string | null | undefined,
+): OvertureReleaseReadiness {
+  const value = release?.trim();
+  if (value) return { ok: true, release: value };
+  return {
+    ok: false,
+    code: "OVERTURE_RELEASE_NOT_CONFIGURED",
+    message:
+      "OVERTURE_RELEASE is required before DuckDB-backed Overture imports can be queued.",
+  };
 }

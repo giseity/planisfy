@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { UnsupportedOvertureTypeError } from "./overture-catalog";
-import { parseOvertureImportRequest } from "./source-import-requests";
+import {
+  assertOvertureReleaseConfigured,
+  parseOvertureImportRequest,
+} from "./source-import-requests";
 
 const baseRequest = {
   handle: "city-places",
@@ -52,4 +55,23 @@ test("parseOvertureImportRequest keeps experimental custom pairs opt-in", () => 
   assert.equal(experimental.success, true);
   if (!experimental.success) return;
   assert.equal(experimental.catalogEntry, null);
+});
+
+test("assertOvertureReleaseConfigured trims configured releases", () => {
+  const result = assertOvertureReleaseConfigured("  2026-01-14.0  ");
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.release, "2026-01-14.0");
+});
+
+test("assertOvertureReleaseConfigured rejects missing releases before queueing", () => {
+  for (const release of [undefined, null, "", "   "]) {
+    const result = assertOvertureReleaseConfigured(release);
+
+    assert.equal(result.ok, false);
+    if (result.ok) continue;
+    assert.equal(result.code, "OVERTURE_RELEASE_NOT_CONFIGURED");
+    assert.match(result.message, /OVERTURE_RELEASE/);
+  }
 });

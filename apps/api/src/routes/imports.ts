@@ -30,6 +30,7 @@ import {
   overtureCatalogResponse,
 } from "../lib/overture-catalog";
 import {
+  assertOvertureReleaseConfigured,
   parseOvertureImportRequest,
   sourceImportHandleSchema,
   type OvertureImportRequest,
@@ -278,6 +279,18 @@ importsRoute.post("/source-imports/overture", async (c) => {
       );
     }
     return validationError(c, parsed.error);
+  }
+  const releaseReadiness = assertOvertureReleaseConfigured(env.OVERTURE_RELEASE);
+  if (!releaseReadiness.ok) {
+    return c.json(
+      {
+        error: {
+          code: releaseReadiness.code,
+          message: releaseReadiness.message,
+        },
+      },
+      503,
+    );
   }
   const catalogEntry = parsed.catalogEntry;
 
