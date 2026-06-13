@@ -25,15 +25,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@planisfy/ui/components/alert-dialog"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@planisfy/ui/components/dialog"
 import { Input } from "@planisfy/ui/components/input"
 import { Label } from "@planisfy/ui/components/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@planisfy/ui/components/select"
 import { Separator } from "@planisfy/ui/components/separator"
 import { Skeleton } from "@planisfy/ui/components/skeleton"
+import { Switch } from "@planisfy/ui/components/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@planisfy/ui/components/table"
 import { Textarea } from "@planisfy/ui/components/textarea"
-import { Check, KeyRound, Monitor, Server, Trash2, Wand2, X } from "lucide-react"
+import { Check, Chrome, Github, KeyRound, Mail, Monitor, Server, ShieldCheck, Smartphone, Trash2, Wand2, X } from "lucide-react"
 import { toast } from "sonner"
 
 interface ProfileData {
@@ -167,7 +167,7 @@ export function ProfileTab() {
   }
 
   return (
-    <div className="max-w-lg space-y-6">
+    <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold">Profile</h2>
         <p className="text-sm text-muted-foreground">
@@ -175,7 +175,7 @@ export function ProfileTab() {
         </p>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-4">
+      <form onSubmit={handleSave} className="max-w-lg space-y-4">
         <div className="space-y-2">
           <Label htmlFor="displayName">Display name</Label>
           <Input
@@ -235,6 +235,80 @@ export function ProfileTab() {
           {saving ? "Saving..." : "Save changes"}
         </Button>
       </form>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Preferences</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <PreferenceRow
+            title="Theme"
+            description="Choose your preferred color scheme."
+            control={
+              <div className="flex overflow-hidden rounded-md border">
+                {["Light", "Dark", "System"].map((label) => (
+                  <Button
+                    key={label}
+                    type="button"
+                    variant={label === "System" ? "secondary" : "ghost"}
+                    size="sm"
+                    className="rounded-none"
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            }
+          />
+          <PreferenceRow
+            title="Email notifications"
+            description="Receive alerts about quota, failures, and team activity."
+            control={<Switch checked aria-label="Email notifications enabled" />}
+          />
+          <PreferenceRow
+            title="Default view"
+            description="Landing page after sign-in."
+            control={
+              <Select defaultValue="dashboard">
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="dashboard">Dashboard</SelectItem>
+                  <SelectItem value="styles">Styles</SelectItem>
+                  <SelectItem value="operations">Operations</SelectItem>
+                </SelectContent>
+              </Select>
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Connected accounts</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {[
+            { provider: "Email / Password", icon: Mail, connected: true, detail: profile.email },
+            { provider: "GitHub", icon: Github, connected: false, detail: "Not connected" },
+            { provider: "Google", icon: Chrome, connected: true, detail: "Connected via OAuth" },
+          ].map((account) => (
+            <div key={account.provider} className="flex items-center gap-3 rounded-md border p-3">
+              <account.icon className="h-4 w-4 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{account.provider}</p>
+                <p className="truncate text-xs text-muted-foreground">{account.detail}</p>
+              </div>
+              {account.connected ? (
+                <Badge variant="success">Connected</Badge>
+              ) : (
+                <Button variant="outline" size="sm">Connect</Button>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -246,12 +320,47 @@ export function ProfileTab() {
 export function AccountTab() {
   return (
     <div className="space-y-10">
+      <TwoFactorSection />
+      <Separator />
       <ChangePasswordSection />
       <Separator />
       <SessionsSection />
       <Separator />
+      <LoginHistorySection />
+      <Separator />
       <DangerZone />
     </div>
+  )
+}
+
+function TwoFactorSection() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+          Two-factor authentication
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-muted">
+          <Smartphone className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium">Authenticator app</p>
+            <Badge variant="outline">Not enabled</Badge>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Add an extra layer of security by requiring a verification code from your authenticator app when signing in.
+          </p>
+          <Button className="mt-4">
+            <ShieldCheck className="h-4 w-4" />
+            Enable 2FA
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -347,6 +456,26 @@ function ChangePasswordSection() {
           {loading ? "Changing..." : "Change password"}
         </Button>
       </form>
+    </div>
+  )
+}
+
+function PreferenceRow({
+  control,
+  description,
+  title,
+}: {
+  control: React.ReactNode
+  description: string
+  title: string
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-sm font-medium">{title}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      {control}
     </div>
   )
 }
@@ -554,6 +683,50 @@ function SessionsSection() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  )
+}
+
+function LoginHistorySection() {
+  const loginHistory = [
+    { time: "Jun 9, 11:30 AM", method: "Email / Password", ip: "192.168.1.42", status: "success" },
+    { time: "Jun 8, 09:15 AM", method: "Google OAuth", ip: "10.0.0.15", status: "success" },
+    { time: "Jun 7, 02:40 PM", method: "Email / Password", ip: "203.0.113.42", status: "failed" },
+    { time: "Jun 6, 10:00 AM", method: "Email / Password", ip: "192.168.1.42", status: "success" },
+  ]
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">Login history</h2>
+        <p className="text-sm text-muted-foreground">
+          Recent authentication attempts for this account.
+        </p>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Time</TableHead>
+            <TableHead>Method</TableHead>
+            <TableHead>IP address</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loginHistory.map((entry) => (
+            <TableRow key={`${entry.time}-${entry.ip}`}>
+              <TableCell className="text-sm text-muted-foreground">{entry.time}</TableCell>
+              <TableCell>{entry.method}</TableCell>
+              <TableCell className="font-mono text-xs text-muted-foreground">{entry.ip}</TableCell>
+              <TableCell>
+                <Badge variant={entry.status === "success" ? "success" : "destructive"}>
+                  {entry.status}
+                </Badge>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 }
@@ -1691,6 +1864,42 @@ export function BillingTab() {
           )
         })}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Invoice history</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice</TableHead>
+                <TableHead>Period</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[
+                { id: "INV-2026-006", period: "Jun 2026", amount: "$0.00", status: "current" },
+                { id: "INV-2026-005", period: "May 2026", amount: "$0.00", status: "paid" },
+                { id: "INV-2026-004", period: "Apr 2026", amount: "$0.00", status: "paid" },
+              ].map((invoice) => (
+                <TableRow key={invoice.id}>
+                  <TableCell className="font-mono text-xs">{invoice.id}</TableCell>
+                  <TableCell>{invoice.period}</TableCell>
+                  <TableCell className="font-medium">{invoice.amount}</TableCell>
+                  <TableCell>
+                    <Badge variant={invoice.status === "paid" ? "success" : "secondary"}>
+                      {invoice.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   )
 }

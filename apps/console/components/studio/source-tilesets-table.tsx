@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
+import Link from "next/link";
 import type {
   ConsoleProcessingJob,
   ConsoleTileset,
@@ -93,7 +94,11 @@ export function SourceTilesetsTable({
           return (
             <Fragment key={tileset.id}>
               <TableRow>
-                <TableCell className="font-medium">{tileset.name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link href={`/tilesets/${tileset.id}`} className="hover:underline">
+                    {tileset.name}
+                  </Link>
+                </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   {tileset.ownerHandle
                     ? `${tileset.ownerHandle}.${tileset.handle}`

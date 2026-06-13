@@ -72,7 +72,6 @@ export default function StyleEditorPage() {
   const canRedo = useStyleStore((s) => s.canRedo);
   const saveStatus = useStyleStore((s) => s.saveStatus);
   const styleId = useStyleStore((s) => s.styleId);
-  const styleVersion = useStyleStore((s) => s.styleVersion);
   const styleHandle = useStyleStore((s) => s.styleHandle);
   const isPublic = useStyleStore((s) => s.isPublic);
   const publishedVersion = useStyleStore((s) => s.publishedVersion);

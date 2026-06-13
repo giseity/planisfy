@@ -6,7 +6,7 @@ import { StyleActionsMenu } from "@/components/studio/style-actions-menu"
 import { StyleStatusBadge } from "@/components/studio/style-status-badge"
 import {
   formatStyleUpdatedAt,
-  styleEditorHref,
+  styleDetailHref,
   type StudioStyleSummary,
 } from "@/lib/studio/style-workflow"
 
@@ -19,7 +19,7 @@ export function StyleCard({ style, onMutate }: StyleCardProps) {
   const router = useRouter()
 
   const handleOpen = () => {
-    router.push(styleEditorHref(style))
+    router.push(styleDetailHref(style))
   }
 
   return (

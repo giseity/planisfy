@@ -4,6 +4,7 @@ import {
   Building2,
   CreditCard,
   Database,
+  HardDrive,
   Home,
   Key,
   Layers,
@@ -51,7 +52,8 @@ export const consoleNavGroups: ConsoleNavGroup[] = [
     label: "Operations",
     items: [
       { href: "/operations", label: "Operations", icon: ServerCog, match: (pathname) => pathname.startsWith("/operations") },
-      { href: "/platform", label: "Platform", icon: SlidersHorizontal },
+      { href: "/platform", label: "Platform", icon: SlidersHorizontal, match: (pathname) => pathname === "/platform" },
+      { href: "/platform/environment", label: "Environment", icon: HardDrive },
     ],
   },
   {
