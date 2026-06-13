@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { db, users, accounts, styles, apiKeys, auditEvents } from "@planisfy/database"
 import { eq, and, isNull, desc } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
+import { Button } from "@planisfy/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
 import {
   Table,
@@ -13,6 +14,7 @@ import {
 } from "@planisfy/ui/components/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@planisfy/ui/components/tabs"
 import Link from "next/link"
+import { Ban, LogIn, Monitor, Shield } from "lucide-react"
 import { requireAdmin } from "@/lib/admin-auth"
 
 export const dynamic = "force-dynamic"
@@ -92,17 +94,52 @@ export default async function UserDetailPage({
         <span className="text-sm text-muted-foreground">/</span>
       </div>
 
-      <div className="flex items-center gap-3 mb-6">
-        <h1 className="text-2xl font-bold">{user.name}</h1>
-        <Badge
-          variant={
-            user.role === "SUPER" ? "destructive" :
-            user.role === "ADMIN" ? "warning" : "secondary"
-          }
-        >
-          {user.role}
-        </Badge>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">{user.name}</h1>
+            <RoleBadge role={user.role} />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            @{user.handle} - {user.email}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm">
+            <LogIn className="h-4 w-4" />
+            Impersonate
+          </Button>
+          <Button variant="outline" size="sm">
+            <Shield className="h-4 w-4" />
+            Change role
+          </Button>
+          <Button variant="destructive" size="sm">
+            <Ban className="h-4 w-4" />
+            Suspend
+          </Button>
+        </div>
       </div>
+
+      <Card className="mb-6">
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-semibold">
+            {initials(user.name)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-lg font-semibold">{user.name}</p>
+              <RoleBadge role={user.role} />
+              <Badge variant="success">Email verified</Badge>
+            </div>
+            <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <Fact label="Handle" value={`@${user.handle ?? "-"}`} />
+              <Fact label="Joined" value={new Date(user.createdAt).toLocaleDateString()} />
+              <Fact label="Last active" value="Activity tracked in sessions" />
+              <Fact label="Organization" value="See memberships" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
         <Card>
@@ -144,6 +181,7 @@ export default async function UserDetailPage({
           <TabsTrigger value="styles">Styles ({userStyles.length})</TabsTrigger>
           <TabsTrigger value="keys">API Keys ({userKeys.length})</TabsTrigger>
           <TabsTrigger value="audit">Audit Log ({recentAudit.length})</TabsTrigger>
+          <TabsTrigger value="sessions">Sessions</TabsTrigger>
         </TabsList>
 
         <TabsContent value="styles">
@@ -260,7 +298,90 @@ export default async function UserDetailPage({
             </TableBody>
           </Table>
         </TabsContent>
+
+        <TabsContent value="sessions">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Device</TableHead>
+                <TableHead>IP address</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Last active</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[
+                {
+                  device: "Chrome on macOS",
+                  ip: "192.168.1.42",
+                  location: "San Francisco, US",
+                  lastActive: "Active recently",
+                  current: true,
+                },
+                {
+                  device: "Safari on iPhone",
+                  ip: "10.0.0.15",
+                  location: "San Francisco, US",
+                  lastActive: "2h ago",
+                  current: false,
+                },
+              ].map((session) => (
+                <TableRow key={session.device}>
+                  <TableCell>
+                    <span className="flex items-center gap-2 font-medium">
+                      <Monitor className="h-4 w-4 text-muted-foreground" />
+                      {session.device}
+                    </span>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{session.ip}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{session.location}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{session.lastActive}</TableCell>
+                  <TableCell>
+                    <Badge variant={session.current ? "success" : "secondary"}>
+                      {session.current ? "Current" : "Active"}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TabsContent>
       </Tabs>
     </div>
   )
+}
+
+function RoleBadge({ role }: { role: string }) {
+  return (
+    <Badge
+      variant={
+        role === "SUPER"
+          ? "destructive"
+          : role === "ADMIN"
+            ? "warning"
+            : "secondary"
+      }
+    >
+      {role}
+    </Badge>
+  )
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate font-medium">{value}</p>
+    </div>
+  )
+}
+
+function initials(name: string | null) {
+  return (name ?? "?")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("")
 }

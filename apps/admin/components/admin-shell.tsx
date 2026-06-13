@@ -13,6 +13,7 @@ import {
   SidebarProvider,
 } from "@planisfy/ui/components/sidebar"
 import { AdminSidebar, AdminSidebarContent } from "@/components/admin-sidebar"
+import { AdminThemeToggle } from "@/components/admin-theme-toggle"
 import { adminBreadcrumbs } from "@/lib/admin-navigation"
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -34,6 +35,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             items={adminBreadcrumbs(pathname)}
             LinkComponent={Link}
           />
+          <div className="ml-auto">
+            <AdminThemeToggle />
+          </div>
         </AppShellHeader>
         <AppShellContent>{children}</AppShellContent>
       </SidebarInset>

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { db, organizations, members, invitations, accounts, users, styles, apiKeys } from "@planisfy/database"
 import { eq, and, isNull, desc } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
+import { Button } from "@planisfy/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
 import {
   Table,
@@ -13,6 +14,7 @@ import {
 } from "@planisfy/ui/components/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@planisfy/ui/components/tabs"
 import Link from "next/link"
+import { Settings, Trash2 } from "lucide-react"
 import { requireAdmin } from "@/lib/admin-auth"
 
 export const dynamic = "force-dynamic"
@@ -106,11 +108,28 @@ export default async function OrgDetailPage({
         <span className="text-sm text-muted-foreground">/</span>
       </div>
 
-      <div className="flex items-center gap-3 mb-6">
-        <h1 className="text-2xl font-bold">{org.name}</h1>
-        <Badge variant={org.deletedAt ? "destructive" : "success"}>
-          {org.deletedAt ? "Deleted" : "Active"}
-        </Badge>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">{org.name}</h1>
+            <Badge variant={org.deletedAt ? "destructive" : "success"}>
+              {org.deletedAt ? "Deleted" : "Active"}
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            @{org.slug} - Created {new Date(org.createdAt).toLocaleDateString()}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm">
+            <Settings className="h-4 w-4" />
+            Edit
+          </Button>
+          <Button variant="destructive" size="sm">
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
@@ -153,9 +172,9 @@ export default async function OrgDetailPage({
       <Tabs defaultValue="members">
         <TabsList>
           <TabsTrigger value="members">Members ({orgMembers.length})</TabsTrigger>
+          <TabsTrigger value="resources">Resources</TabsTrigger>
+          <TabsTrigger value="usage">Usage</TabsTrigger>
           <TabsTrigger value="invitations">Invitations ({orgInvitations.length})</TabsTrigger>
-          <TabsTrigger value="styles">Styles ({orgStyles.length})</TabsTrigger>
-          <TabsTrigger value="keys">API Keys ({orgKeys.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="members">
@@ -249,91 +268,168 @@ export default async function OrgDetailPage({
           </Table>
         </TabsContent>
 
-        <TabsContent value="styles">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Handle</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Last Modified</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {orgStyles.map((style) => (
-                <TableRow key={style.id}>
-                  <TableCell className="font-medium">{style.name}</TableCell>
-                  <TableCell className="text-muted-foreground font-mono text-xs">{style.handle}</TableCell>
-                  <TableCell>
-                    <Badge variant={style.isPublic ? "success" : "secondary"}>
-                      {style.isPublic ? "Public" : "Draft"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>v{style.version}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {new Date(style.updatedAt).toLocaleDateString()}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {orgStyles.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    No styles
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+        <TabsContent value="resources">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Organization resources</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2">
+                <ResourceSummary
+                  title={`Styles (${orgStyles.length})`}
+                  detail={
+                    orgStyles.length > 0
+                      ? orgStyles.map((style) => style.handle).slice(0, 4).join(", ")
+                      : "No styles"
+                  }
+                />
+                <ResourceSummary
+                  title={`API Keys (${orgKeys.length})`}
+                  detail={
+                    orgKeys.length > 0
+                      ? orgKeys.map((key) => key.name).slice(0, 4).join(", ")
+                      : "No API keys"
+                  }
+                />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Styles</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Handle</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Version</TableHead>
+                      <TableHead>Last Modified</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {orgStyles.map((style) => (
+                      <TableRow key={style.id}>
+                        <TableCell className="font-medium">{style.name}</TableCell>
+                        <TableCell className="text-muted-foreground font-mono text-xs">{style.handle}</TableCell>
+                        <TableCell>
+                          <Badge variant={style.isPublic ? "success" : "secondary"}>
+                            {style.isPublic ? "Public" : "Draft"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>v{style.version}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {new Date(style.updatedAt).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {orgStyles.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          No styles
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">API Keys</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Prefix</TableHead>
+                      <TableHead>Scopes</TableHead>
+                      <TableHead>Last Used</TableHead>
+                      <TableHead>Created</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {orgKeys.map((key) => (
+                      <TableRow key={key.id}>
+                        <TableCell className="font-medium">{key.name}</TableCell>
+                        <TableCell className="font-mono text-xs">{key.id.slice(0, 12)}...</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {(key.scopes as string[]).slice(0, 3).map((scope) => (
+                              <Badge key={scope} variant="secondary" className="text-[10px]">
+                                {scope}
+                              </Badge>
+                            ))}
+                            {(key.scopes as string[]).length > 3 && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                +{(key.scopes as string[]).length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : "Never"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {new Date(key.createdAt).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {orgKeys.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          No API keys
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
-        <TabsContent value="keys">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Prefix</TableHead>
-                <TableHead>Scopes</TableHead>
-                <TableHead>Last Used</TableHead>
-                <TableHead>Created</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {orgKeys.map((key) => (
-                <TableRow key={key.id}>
-                  <TableCell className="font-medium">{key.name}</TableCell>
-                  <TableCell className="font-mono text-xs">{key.id.slice(0, 12)}...</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {(key.scopes as string[]).slice(0, 3).map((s) => (
-                        <Badge key={s} variant="secondary" className="text-[10px]">{s}</Badge>
-                      ))}
-                      {(key.scopes as string[]).length > 3 && (
-                        <Badge variant="secondary" className="text-[10px]">
-                          +{(key.scopes as string[]).length - 3}
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : "Never"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {new Date(key.createdAt).toLocaleDateString()}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {orgKeys.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    No API keys
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+        <TabsContent value="usage">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Requests (30d)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">-</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Units (30d)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">-</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Error rate</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">-</p>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
+
       </Tabs>
+    </div>
+  )
+}
+
+function ResourceSummary({ detail, title }: { detail: string; title: string }) {
+  return (
+    <div className="rounded-md border p-3">
+      <p className="text-sm font-medium">{title}</p>
+      <p className="mt-1 truncate text-xs text-muted-foreground">{detail}</p>
     </div>
   )
 }

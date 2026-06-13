@@ -5,6 +5,7 @@ import { db, eventOutbox, processingJobLogs, processingJobs } from "@planisfy/da
 import { Badge } from "@planisfy/ui/components/badge"
 import { Button } from "@planisfy/ui/components/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
+import { Progress } from "@planisfy/ui/components/progress"
 import {
   Table,
   TableBody,
@@ -14,6 +15,7 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table"
 import { requireAdmin } from "@/lib/admin-auth"
+import { Download, Pause, RefreshCcw, Terminal, X } from "lucide-react"
 import {
   cancelProcessingJobAction,
   retryProcessingJobAction,
@@ -75,6 +77,10 @@ export default async function JobDetailPage({
           <p className="font-mono text-xs text-muted-foreground">{job.id}</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm">
+            <RefreshCcw className="h-4 w-4" />
+            Refresh
+          </Button>
           {canRetry && (
             <form action={retryProcessingJobAction}>
               <input type="hidden" name="id" value={job.id} />
@@ -84,11 +90,42 @@ export default async function JobDetailPage({
           {canCancel && (
             <form action={cancelProcessingJobAction}>
               <input type="hidden" name="id" value={job.id} />
-              <Button type="submit" variant="ghost">Cancel</Button>
+              <Button type="submit" variant="destructive">
+                <X className="h-4 w-4" />
+                Cancel
+              </Button>
             </form>
           )}
         </div>
       </div>
+
+      <Card>
+        <CardContent className="space-y-4 p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className={job.status === "PROCESSING" ? "h-2.5 w-2.5 rounded-full bg-amber-500" : "h-2.5 w-2.5 rounded-full bg-muted-foreground"} />
+              <div>
+                <p className="text-sm font-medium">
+                  {job.status === "PROCESSING"
+                    ? `Processing - ${job.progress}% complete`
+                    : `${job.status} - ${job.progress}% complete`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Started {formatDate(job.startedAt)} - ETA depends on worker profile
+                </p>
+              </div>
+            </div>
+            <Badge variant={statusBadgeVariant(job.status)}>{job.status}</Badge>
+          </div>
+          <Progress value={job.progress} className="h-2" />
+          <div className="grid gap-3 text-sm sm:grid-cols-4">
+            <Fact label="Started" value={formatDate(job.startedAt)} />
+            <Fact label="Worker" value={job.workerProfileId ? shortId(job.workerProfileId) : "default"} />
+            <Fact label="Retries" value={String(job.retryCount)} />
+            <Fact label="Target" value={job.accountId ? shortId(job.accountId) : "-"} />
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -143,7 +180,33 @@ export default async function JobDetailPage({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <JsonCard title="Input" value={job.input} />
-        <JsonCard title="Output" value={job.output} />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Output</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">
+              {stringifyJson(job.output)}
+            </pre>
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Timeline</p>
+              <div className="space-y-2 border-l pl-4">
+                {[
+                  { label: "Job created", value: formatDate(job.createdAt) },
+                  { label: "Worker assigned", value: formatDate(job.startedAt) },
+                  { label: "Last update", value: formatDate(job.updatedAt) },
+                  { label: "Completed", value: formatDate(job.completedAt) },
+                ].map((event) => (
+                  <div key={event.label} className="relative">
+                    <span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-primary" />
+                    <p className="text-sm font-medium">{event.label}</p>
+                    <p className="text-xs text-muted-foreground">{event.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -189,8 +252,21 @@ export default async function JobDetailPage({
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Logs</CardTitle>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <Terminal className="h-4 w-4 text-muted-foreground" />
+            Live logs
+          </CardTitle>
+          <div className="flex gap-1">
+            <Button variant="ghost" size="xs">
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </Button>
+            <Button variant="ghost" size="xs">
+              <Pause className="h-3.5 w-3.5" />
+              Pause
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -246,5 +322,14 @@ function JsonCard({ title, value }: { title: string; value: unknown }) {
         </pre>
       </CardContent>
     </Card>
+  )
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 truncate font-medium">{value}</p>
+    </div>
   )
 }
