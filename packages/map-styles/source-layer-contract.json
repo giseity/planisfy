@@ -5,79 +5,112 @@
   "geometryEncoding": "Mapbox Vector Tile",
   "coordinateSystem": "EPSG:3857",
   "minZoom": 0,
-  "maxZoom": 14,
+  "maxZoom": 13,
   "layers": [
     {
-      "id": "land",
-      "geometry": ["Polygon", "MultiPolygon"],
-      "description": "Low-zoom land polygons for global context.",
-      "requiredProperties": ["class"],
-      "optionalProperties": ["name"],
+      "id": "bathymetry",
+      "geometry": [
+        "Polygon",
+        "MultiPolygon"
+      ],
+      "description": "Water-depth and marine polygons from the local Stuttgart fixture.",
+      "requiredProperties": [],
+      "optionalProperties": [
+        "depth",
+        "cartography"
+      ],
       "minZoom": 0,
-      "maxZoom": 14
+      "maxZoom": 13
     },
     {
-      "id": "landuse",
-      "geometry": ["Polygon", "MultiPolygon"],
-      "description": "Polygon landuse and leisure features used for parks and green areas.",
-      "requiredProperties": ["class"],
-      "optionalProperties": ["name"],
+      "id": "land",
+      "geometry": [
+        "Polygon",
+        "MultiPolygon"
+      ],
+      "description": "Land polygons for the fixture basemap.",
+      "requiredProperties": [
+        "class"
+      ],
+      "optionalProperties": [
+        "subtype",
+        "@name",
+        "names"
+      ],
+      "minZoom": 0,
+      "maxZoom": 13
+    },
+    {
+      "id": "land_cover",
+      "geometry": [
+        "Polygon",
+        "MultiPolygon"
+      ],
+      "description": "Natural land-cover polygons such as vegetation and bare ground.",
+      "requiredProperties": [],
+      "optionalProperties": [
+        "class",
+        "subtype",
+        "cartography"
+      ],
+      "minZoom": 0,
+      "maxZoom": 13
+    },
+    {
+      "id": "land_use",
+      "geometry": [
+        "Polygon",
+        "MultiPolygon"
+      ],
+      "description": "Developed and civic land-use polygons.",
+      "requiredProperties": [],
+      "optionalProperties": [
+        "class",
+        "subtype",
+        "@name",
+        "names"
+      ],
       "minZoom": 6,
-      "maxZoom": 14
+      "maxZoom": 13
     },
     {
       "id": "water",
-      "geometry": ["Polygon", "MultiPolygon"],
+      "geometry": [
+        "Polygon",
+        "MultiPolygon"
+      ],
       "description": "Water polygons.",
-      "requiredProperties": ["class"],
-      "optionalProperties": ["name"],
-      "minZoom": 0,
-      "maxZoom": 14
-    },
-    {
-      "id": "admin_boundary",
-      "geometry": ["LineString", "MultiLineString"],
-      "description": "Administrative boundary lines for country and region context.",
-      "requiredProperties": ["admin_level"],
-      "optionalProperties": ["name", "disputed"],
-      "minZoom": 0,
-      "maxZoom": 14
-    },
-    {
-      "id": "transportation",
-      "geometry": ["LineString", "MultiLineString"],
-      "description": "Road and path line features.",
-      "requiredProperties": ["class"],
-      "optionalProperties": ["subclass", "brunnel", "oneway", "name"],
-      "minZoom": 5,
-      "maxZoom": 14
-    },
-    {
-      "id": "transportation_name",
-      "geometry": ["LineString", "MultiLineString"],
-      "description": "Road label line features.",
-      "requiredProperties": ["name"],
-      "optionalProperties": ["class", "name:en"],
-      "minZoom": 10,
-      "maxZoom": 14
-    },
-    {
-      "id": "building",
-      "geometry": ["Polygon", "MultiPolygon"],
-      "description": "Building polygons visible at neighborhood zooms.",
       "requiredProperties": [],
-      "optionalProperties": ["height", "render_height"],
-      "minZoom": 13,
-      "maxZoom": 14
+      "optionalProperties": [
+        "class",
+        "subtype",
+        "@name",
+        "names",
+        "is_intermittent"
+      ],
+      "minZoom": 0,
+      "maxZoom": 13
     },
     {
-      "id": "place",
-      "geometry": ["Point", "MultiPoint"],
-      "description": "Place points for city and locality labels.",
-      "requiredProperties": ["name"],
-      "optionalProperties": ["name:en", "class", "rank", "population"],
-      "minZoom": 0,
-      "maxZoom": 14
+      "id": "infrastructure",
+      "geometry": [
+        "LineString",
+        "MultiLineString",
+        "Polygon",
+        "MultiPolygon"
+      ],
+      "description": "Road, rail, path, and built infrastructure features in the fixture.",
+      "requiredProperties": [],
+      "optionalProperties": [
+        "class",
+        "subtype",
+        "surface",
+        "height",
+        "@name",
+        "names"
+      ],
+      "minZoom": 13,
+      "maxZoom": 13
     }
   ]
 }

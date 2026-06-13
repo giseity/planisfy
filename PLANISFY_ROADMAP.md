@@ -83,12 +83,12 @@ and tests should preserve:
 the basemap artifact/style contract is reproducible without committing binary
 map data.
 
-**Current state:** Fixture styles, source-layer contract tests, regional
-release metadata, Planetiler regional build tooling, and a default-map smoke
-script exist. When `stuttgart.pmtiles` is present, the smoke verifies the
-PMTiles magic header, Martin TileJSON vector layers, and a non-empty Stuttgart
-vector tile. Full browser-render proof still depends on a WebGL-capable browser
-environment.
+**Current state:** Fixture styles now match the shipped Stuttgart PMTiles
+source-layer contract, source-layer contract tests pass, regional release
+metadata and Planetiler regional build tooling exist, and a default-map smoke
+script verifies the PMTiles magic header, Martin TileJSON vector layers, and a
+non-empty Stuttgart vector tile. Browser QA with WSLg WebGL confirmed the
+seeded default style reaches MapLibre `idle` with no map errors.
 
 **Remaining evidence:**
 
@@ -96,8 +96,8 @@ environment.
   style URLs.
 - Replace the mutable local `stuttgart.pmtiles` fixture story with a polished
   default artifact source that new operators can obtain repeatably.
-- Prove the default map renders in a browser QA environment with WebGL
-  available.
+- Add the browser-render proof to an opt-in automated smoke lane instead of
+  keeping it as a manual QA command.
 
 ### Gate 2 — Upload To Published Tileset
 

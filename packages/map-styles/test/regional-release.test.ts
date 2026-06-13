@@ -69,7 +69,7 @@ describe("regional basemap release builder", () => {
       planetiler: "0.10.2",
     });
     expect(manifest.sourceLayers).toEqual(
-      expect.arrayContaining(["land", "transportation", "place"]),
+      expect.arrayContaining(["land", "land_cover", "land_use", "water"]),
     );
     expect(style.sources["planisfy-streets"]?.url).toBe(
       "https://tiles.example.com/test-region",
