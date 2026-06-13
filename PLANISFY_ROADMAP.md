@@ -106,8 +106,9 @@ tileset, and understand failures before dead URLs leak to production.
 
 **Current state:** Upload validation, smoke fixtures for GeoJSON, CSV, zipped
 Shapefile, PMTiles, and MBTiles, worker builds, API-owned tile delivery,
-published artifact checks, retry cleanup, rebuild guards, and public TileJSON
-delivery are implemented for the core QA path.
+published artifact checks, retry cleanup, rebuild guards, public TileJSON
+delivery, and Console artifact-availability feedback are implemented for the
+core QA path.
 
 **Remaining evidence:**
 
@@ -115,8 +116,6 @@ delivery are implemented for the core QA path.
   integration coverage for GeoJSON, CSV, zipped Shapefile, PMTiles, and MBTiles.
 - Exercise API, Redis, worker, and storage restarts during build/retry/cancel
   flows.
-- Surface missing published artifacts and missing original uploads directly in
-  Console/Operations, not only through API errors.
 - Add browser coverage for retry, cancel, rebuild, promotion, and degraded
   artifact states.
 
@@ -127,13 +126,11 @@ source import, get a dataset artifact with provenance, and tile it without
 hidden cost surprises.
 
 **Current state:** Catalog validation, SSRF-oriented source URL policy,
-DuckDB-backed import execution, and sizing estimates exist. Missing
-`OVERTURE_RELEASE` is still too easy to discover only after queueing.
+DuckDB-backed import execution, sizing estimates, and a pre-queue
+`OVERTURE_RELEASE` guard exist.
 
 **Remaining evidence:**
 
-- Block or clearly gate Overture import when required release configuration is
-  missing.
 - Add temp-space checks, cancellation checkpoints, cleanup assertions, and
   timeout coverage for long imports.
 - Expand provenance assertions for feature counts, bounds, schema summaries,
@@ -148,15 +145,14 @@ style, copy URLs, and load the published style in MapLibre.
 
 **Current state:** The style editor panel layout and published-style version
 state have been fixed. Manual QA has proven a clean uploaded tileset can be
-added to a style and published to stable/versioned public URLs.
+added to a style and published to stable/versioned public URLs. Upload required
+fields now have explicit affordances, and icon-only Operations/Delivery actions
+have accessible names.
 
 **Remaining evidence:**
 
 - Add browser tests for upload/import -> Studio source -> layer -> publish.
 - Add browser coverage for copied stable/versioned style and TileJSON URLs.
-- Improve upload dialog required-field affordances so placeholders do not look
-  like submitted defaults.
-- Add accessibility names for ambiguous row actions in Operations/Delivery.
 
 ### Gate 5 — Publishing, Rollback, Rebuild, And URL Stability
 
@@ -166,11 +162,11 @@ remain trustworthy.
 
 **Current state:** Style publication state, versioned style URLs, versioned
 TileJSON, published asset auth, tileset promotion, audit metadata, object
-storage alias registration, artifact checks, and rebuild guards exist.
+storage alias registration, artifact checks, rebuild guards, and published style
+snapshot immutability regression coverage exist.
 
 **Remaining evidence:**
 
-- Add API regression tests for published style immutability after draft edits.
 - Add integration coverage for tileset promote, rollback, republish, rebuild,
   and URL stability.
 - Add Console/browser coverage for version restore and tileset version
