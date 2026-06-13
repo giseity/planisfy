@@ -44,6 +44,8 @@ Required local services:
 
 Optional providers:
 
+- Local glyph serving through Martin via `GLYPHS_URL`
+- Local SRTM elevation service via `ELEVATION_URL`
 - Static map renderer via `STATIC_MAP_URL`
 - Email provider via `RESEND_API_KEY`
 - Storage provider via local disk, S3, or Cloudflare R2-compatible settings

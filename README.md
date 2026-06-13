@@ -40,7 +40,12 @@ Still in progress or externally dependent:
   health/preflight report Valhalla as degraded when the process is up but the
   route-readiness probe cannot route
 - Geocoding requires a Pelias-compatible service; no Nominatim fallback is used
-- Static maps return `501` unless `STATIC_MAP_URL` points at a real renderer
+- Glyphs are served locally through Martin when `scripts/fonts-dev.sh download`
+  has hydrated `infra/docker/data/fonts`
+- Elevation is served locally from SRTM HGT data when
+  `scripts/elevation-dev.sh download-portland` has hydrated
+  `infra/docker/data/elevation`
+- Static maps use the local MapLibre static renderer in Docker Compose
 - Billing uses Dodo Payments-oriented surfaces; it is optional for self-host and
   required for managed
 - Email delivery is optional/dry-run for self-host and required through Resend
@@ -294,6 +299,13 @@ Required production hardening:
 
 More detail is available in [docs/self-hosting.md](./docs/self-hosting.md) and
 [docs/deployment-modes.md](./docs/deployment-modes.md).
+
+Hydrate local map support data before running the full Docker stack:
+
+```bash
+scripts/fonts-dev.sh download
+scripts/elevation-dev.sh download-portland
+```
 
 ## API Surface
 

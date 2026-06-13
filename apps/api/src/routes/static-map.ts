@@ -53,7 +53,8 @@ staticMapRoute.get("/static/v1/:owner/:style/:center/:size{.+\\.png$}", async (c
         `&width=${width}` +
         `&height=${height}`;
 
-      const res = await fetch(url);
+      const headers = forwardedRenderHeaders(c.req.raw.headers);
+      const res = await fetch(url, { headers });
 
       if (!res.ok) {
         return c.json({ error: { code: "UPSTREAM_ERROR", message: "Static map render failed" } }, 502);
@@ -79,3 +80,14 @@ staticMapRoute.get("/static/v1/:owner/:style/:center/:size{.+\\.png$}", async (c
     501,
   );
 });
+
+function forwardedRenderHeaders(headers: Headers) {
+  const forwarded: Record<string, string> = {};
+
+  for (const name of ["x-api-key", "authorization", "cookie"]) {
+    const value = headers.get(name);
+    if (value) forwarded[name] = value;
+  }
+
+  return forwarded;
+}

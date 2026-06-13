@@ -7,16 +7,17 @@ export const fontsRoute = new Hono<AuthEnv>();
 // Glyphs URL pattern used by MapLibre:
 // /fonts/v1/{fontstack}/{range}.pbf
 //
-// In production, glyphs are served from R2/S3 or a CDN.
-// For now, proxy to a known public glyph source as a fallback.
+// Glyphs are served by the configured local glyph service. Martin's font
+// endpoint expects ranges without the MapLibre ".pbf" suffix, so normalize it.
 
 const GLYPHS_BASE_URL = env.GLYPHS_URL;
 
 fontsRoute.get("/fonts/v1/:fontstack/:range", async (c) => {
   const { fontstack, range } = c.req.param();
+  const glyphRange = range.replace(/\.pbf$/, "");
 
   try {
-    const url = `${GLYPHS_BASE_URL}/${encodeURIComponent(fontstack)}/${range}`;
+    const url = `${GLYPHS_BASE_URL}/${encodeURIComponent(fontstack)}/${glyphRange}`;
     const res = await fetch(url);
 
     if (!res.ok) {

@@ -22,6 +22,12 @@ support-bundles/
 infra/docker/data/minio/*
 !infra/docker/data/minio/
 !infra/docker/data/minio/README.md
+infra/docker/data/elevation/*
+!infra/docker/data/elevation/
+!infra/docker/data/elevation/README.md
+infra/docker/data/fonts/*
+!infra/docker/data/fonts/
+!infra/docker/data/fonts/README.md
 
 # Turbo
 .turbo

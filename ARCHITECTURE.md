@@ -62,8 +62,8 @@ Public route categories:
 - Styles, sprites, glyphs, and fonts
 - Geocoding via a required Pelias-compatible service
 - Directions, isochrones, matching, matrices, and optimized trips via Valhalla
-- Elevation via external elevation provider
-- Static maps via optional render service
+- Elevation via the local SRTM-backed elevation service in Docker Compose
+- Static maps via the local MapLibre static renderer in Docker Compose
 
 Console routes under `/console/*` require a session cookie.
 
@@ -145,11 +145,11 @@ The console uses a hybrid model:
 - Valhalla
 - Optional Traefik profile
 
-The compose stack assumes local geospatial data exists under `infra/docker/data/*`. Without that data, Martin and Valhalla may start but will not serve useful map/routing results.
+The compose stack assumes local geospatial data exists under `infra/docker/data/*`. Without that data, Martin, Valhalla, glyph serving, and elevation may start but will not serve useful map/routing results. Use `scripts/fonts-dev.sh download` and `scripts/elevation-dev.sh download-portland` to hydrate the small local glyph/elevation fixtures.
 
 ## Current Limitations
 
-- Static map generation returns `501` unless `STATIC_MAP_URL` points at a renderer.
+- Static map generation depends on the `static-renderer` service and published styles/tiles that the renderer can fetch.
 - Geocoding requires a Pelias-compatible service for production quality.
 - Tile delivery through Cloudflare/R2 is planned but not fully wired in this repository.
 - Test coverage is early and focused on core platform contracts.

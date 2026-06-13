@@ -12,5 +12,7 @@ dist
 *.log
 .storage
 credentials
+infra/docker/data/elevation/*.hgt
+infra/docker/data/fonts/*.ttf
 infra/pelias/metro/.cache
 infra/pelias/metro/data

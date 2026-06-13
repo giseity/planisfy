@@ -1,6 +1,10 @@
 # Ignore runtime and downloaded geodata while keeping tiny demo mount docs.
 data/**
 !data/
+!data/elevation/
+!data/elevation/README.md
+!data/fonts/
+!data/fonts/README.md
 !data/pmtiles/
 !data/pmtiles/README.md
 !data/pelias/

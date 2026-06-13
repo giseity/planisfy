@@ -18,6 +18,8 @@
 #   - redis:      Redis for rate limiting (port 6379)
 #   - martin:     Vector tile server (port 3005)
 #   - valhalla:   Routing engine (port 3007)
+#   - elevation:  Local SRTM-backed elevation API (port 4011)
+#   - static-renderer: MapLibre PNG renderer for static maps (port 4300)
 #   - pelias:     Pelias geocoder API (port 3100)
 #
 # Note: The bundled Pelias services are for dev smoke coverage with a small
@@ -60,8 +62,8 @@ services:
       - DEMO_PMTILES_PATH=${DEMO_PMTILES_PATH:-/data/pmtiles/stuttgart.pmtiles}
       - MARTIN_URL=http://martin:3000
       - PELIAS_URL=${CONTAINER_PELIAS_URL:-http://pelias:4000}
-      - GLYPHS_URL=${GLYPHS_URL:-http://api:4000/storage/glyphs}
-      - STATIC_MAP_URL=${STATIC_MAP_URL:-}
+      - GLYPHS_URL=${GLYPHS_URL:-http://martin:3000/font}
+      - STATIC_MAP_URL=${STATIC_MAP_URL:-http://static-renderer:4300}
       - ELEVATION_URL=${ELEVATION_URL:-http://elevation:8080/api/v1}
       - VALHALLA_URL=http://valhalla:8002
       - VALHALLA_READINESS_ROUTE=${VALHALLA_READINESS_ROUTE:-}
@@ -110,6 +112,8 @@ services:
       redis:
         condition: service_healthy
       pelias:
+        condition: service_healthy
+      elevation:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -374,7 +378,7 @@ services:
   # ============================================
 
   martin:
-    image: ${MARTIN_IMAGE:-maplibre/martin:v0.8.0}
+    image: ${MARTIN_IMAGE:-ghcr.io/maplibre/martin:v0.13.0}
     ports:
       - "3005:3000"
     environment:
@@ -382,7 +386,8 @@ services:
     volumes:
       - ./configs/martin.yaml:/config/config.yaml:ro
       - ./data/pmtiles:/data:ro
-    command: [ "--config", "/config/config.yaml" ]
+      - ./data/fonts:/fonts:ro
+    command: [ "--config", "/config/config.yaml", "--font", "/fonts" ]
     restart: unless-stopped
     networks:
       - planisfy-network
@@ -399,6 +404,55 @@ services:
       - ./data/valhalla_data:/custom_files
       - ./configs/valhalla.json:/etc/valhalla/valhalla.json:ro
     command: [ "valhalla_service", "/etc/valhalla/valhalla.json", "1" ]
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  elevation:
+    build:
+      context: ../../
+      dockerfile: apps/elevation/Dockerfile
+    image: planisfy/elevation:${PLANISFY_IMAGE_TAG:-dev}
+    ports:
+      - "127.0.0.1:4011:8080"
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - ELEVATION_DEM_DIR=/data/elevation
+      - NODE_ENV=production
+    volumes:
+      - ./data/elevation:/data/elevation:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  static-renderer:
+    build:
+      context: ../../
+      dockerfile: apps/static-renderer/Dockerfile
+    image: planisfy/static-renderer:${PLANISFY_IMAGE_TAG:-dev}
+    ports:
+      - "127.0.0.1:4300:4300"
+    environment:
+      - PORT=4300
+      - HOST=0.0.0.0
+      - PLANISFY_API_URL=http://api:4000
+      - NODE_ENV=production
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4300/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
     networks:
       - planisfy-network

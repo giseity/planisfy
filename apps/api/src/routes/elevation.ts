@@ -8,7 +8,7 @@ export const elevationRoute = new Hono<AuthEnv>();
 const ELEVATION_URL = env.ELEVATION_URL;
 
 interface ElevationResult {
-  elevation: number;
+  elevation: number | null;
 }
 
 interface ElevationResponse {
@@ -17,7 +17,7 @@ interface ElevationResponse {
 
 interface ProfilePoint {
   distance: number;
-  elevation: number;
+  elevation: number | null;
   longitude: number;
   latitude: number;
 }
@@ -119,7 +119,10 @@ elevationRoute.get("/elevation/v1/along/:coords", async (c) => {
       };
     });
 
-    const elevations = profile.map((p) => p.elevation).filter((e) => e != null);
+    const elevations = profile.map((p) => p.elevation).filter((e): e is number => typeof e === "number");
+    if (elevations.length === 0) {
+      return c.json({ error: { code: "NO_ELEVATION_DATA", message: "No elevation data found for this route" } }, 404);
+    }
     const totalDistance = cumulativeDistance;
     const minElevation = Math.min(...elevations);
     const maxElevation = Math.max(...elevations);
