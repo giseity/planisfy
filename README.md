@@ -236,6 +236,8 @@ Local demo assets:
   Compose `with-minio` profile
 - Dev geocoding: pinned Pelias API and Elasticsearch in the default Compose
   stack
+- Production-like metro geocoding: `infra/pelias/metro` plus
+  `scripts/pelias-metro.sh`
 
 Health checks:
 

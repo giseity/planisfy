@@ -1,0 +1,147 @@
+{
+  "logger": {
+    "level": "info",
+    "timestamp": false
+  },
+  "esclient": {
+    "apiVersion": "7.x",
+    "hosts": [
+      {
+        "host": "elasticsearch",
+        "port": 9200
+      }
+    ],
+    "connection": {
+      "url": "http://elasticsearch:9200"
+    }
+  },
+  "elasticsearch": {
+    "settings": {
+      "index": {
+        "refresh_interval": "10s",
+        "number_of_replicas": "0",
+        "number_of_shards": "1"
+      }
+    }
+  },
+  "acceptance-tests": {
+    "endpoints": {
+      "docker": "http://api:4000/v1/"
+    }
+  },
+  "api": {
+    "indexName": "pelias",
+    "services": {
+      "placeholder": { "url": "http://placeholder:4100" },
+      "pip": { "url": "http://pip:4200" },
+      "interpolation": { "url": "http://interpolation:4300" },
+      "libpostal": { "url": "http://libpostal:4400" }
+    },
+    "defaultParameters": {
+      "focus.point.lat": 45.52,
+      "focus.point.lon": -122.67
+    }
+  },
+  "imports": {
+    "adminLookup": {
+      "enabled": true
+    },
+    "blacklist": {
+      "files": [
+        "/data/blacklist/osm.txt"
+      ]
+    },
+    "csv": {
+      "datapath": "/data/csv",
+      "files": [],
+      "download": []
+    },
+    "geonames": {
+      "datapath": "/data/geonames",
+      "countryCode": "US"
+    },
+    "openstreetmap": {
+      "download": [
+        {
+          "sourceURL": "https://data.geocode.earth/archive/portland-metro/2022-06-20/portland_oregon.osm.pbf"
+        }
+      ],
+      "leveldbpath": "/tmp",
+      "datapath": "/data/openstreetmap",
+      "import": [
+        {
+          "filename": "portland_oregon.osm.pbf"
+        }
+      ]
+    },
+    "openaddresses": {
+      "datapath": "/data/openaddresses",
+      "files": [
+        "us/or/portland_metro",
+        "us/or/city_of_salem",
+        "us/or/marion_and_polk",
+        "us/or/marion",
+        "us/or/hood_river",
+        "us/wa/city_of_richland",
+        "us/wa/clark"
+      ]
+    },
+    "polyline": {
+      "datapath": "/data/polylines",
+      "files": [
+        "extract.0sv"
+      ]
+    },
+    "whosonfirst": {
+      "datapath": "/data/whosonfirst",
+      "importPostalcodes": true,
+      "countryCode": "US",
+      "importPlace": [
+        "85688513",
+        "85688623"
+      ]
+    },
+    "transit": {
+      "datapath": "/data/transit",
+      "feeds": [
+        {
+          "layerId": "bikeshare",
+          "url": "https://gbfs.biketownpdx.com/gbfs/en/station_information.json",
+          "filename": "BIKETOWN-hubs.json",
+          "agencyId": "BIKETOWN",
+          "agencyName": "BIKETOWN",
+          "layerName": "bikeshare"
+        },
+        {
+          "layerId": "stops",
+          "url": "http://developer.trimet.org/schedule/gtfs.zip",
+          "filename": "TRIMET-stops.txt",
+          "agencyId": "TRIMET",
+          "agencyName": "TriMet",
+          "layerName": "Stop"
+        },
+        {
+          "layerId": "stops",
+          "url": "https://data.geocode.earth/archive/portland-metro/2022-06-20/C-TRAN.zip",
+          "filename": "C-TRAN-stops.txt",
+          "agencyId": "C-TRAN",
+          "agencyName": "C-TRAN",
+          "layerName": "Stop"
+        }
+      ]
+    },
+    "interpolation": {
+      "download": {
+        "tiger": {
+          "datapath": "/data/tiger",
+          "states": [
+            { "state_code": 41, "county_code": 67, "name": "Washington County, OR" },
+            { "state_code": 41, "county_code": 51, "name": "Multnomah County, OR" },
+            { "state_code": 41, "county_code": 5, "name": "Clackamas County, OR" },
+            { "state_code": 53, "county_code": 11, "name": "Clark County, WA" }
+          ]
+        }
+      }
+    }
+  }
+}

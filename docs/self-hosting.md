@@ -223,6 +223,40 @@ through to Pelias's built-in parser for the tiny CSV fixture. Production or
 larger regional Pelias stacks should run the normal Pelias services instead of
 using this shim.
 
+## Official Pelias Metro
+
+For production-like geocoder behavior, use the separate official-style metro
+project at `infra/pelias/metro`. It keeps the fast Stuttgart CSV fixture out of
+the critical dev loop while still giving you a real Pelias import path with
+libpostal, Placeholder, PIP, Who's On First, OpenStreetMap, OpenAddresses,
+transit, polylines, and pinned Pelias service images.
+
+The metro project defaults to the official Portland metro starter data because
+Pelias recommends it for first-time small builds. It is suitable for validating
+real parsing, admin lookup, source priority, ranking, and service integration.
+It is not a planet import.
+
+```bash
+scripts/pelias-metro.sh bootstrap
+scripts/pelias-metro.sh pull
+scripts/pelias-metro.sh build-core
+scripts/pelias-metro.sh up
+curl "http://localhost:34100/v1/search?text=Powell%27s%20Books"
+```
+
+The default laptop profile is designed for a 12GB WSL limit:
+
+- `PELIAS_ES_HEAP=2g`
+- `OPENADDRESSES_PARALLELISM=1`
+- `ENABLE_GEONAMES=false`
+- interpolation is a separate `scripts/pelias-metro.sh build-interpolation`
+  step
+
+When pointing the Planisfy API at this stack, use
+`PELIAS_URL=http://localhost:34100` for host-run API development or
+`CONTAINER_PELIAS_URL=http://host.docker.internal:34100` for the Planisfy API
+container.
+
 ## First Account
 
 After the stack is running and migrations have completed, create the first local

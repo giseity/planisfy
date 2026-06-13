@@ -1,0 +1,151 @@
+networks:
+  default:
+    driver: bridge
+
+x-code-volume: &code-volume
+  - ./pelias.json:/code/pelias.json:ro
+
+x-data-volumes: &data-volumes
+  - ./pelias.json:/code/pelias.json:ro
+  - ${DATA_DIR:-./data}:/data
+  - ./blacklist:/data/blacklist:ro
+
+services:
+  libpostal:
+    image: ${PELIAS_LIBPOSTAL_IMAGE:-pelias/libpostal-service:master-2026-03-25-c5ef1445bb62341b072c947613053966bbce152e}
+    container_name: planisfy_pelias_metro_libpostal
+    user: "${DOCKER_USER:-1000:1000}"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PELIAS_METRO_LIBPOSTAL_PORT:-34400}:4400"
+
+  schema:
+    image: ${PELIAS_SCHEMA_IMAGE:-pelias/schema:v9.1.0}
+    container_name: planisfy_pelias_metro_schema
+    user: "${DOCKER_USER:-1000:1000}"
+    volumes: *code-volume
+
+  api:
+    image: ${PELIAS_API_IMAGE:-pelias/api:v7.8.0}
+    container_name: planisfy_pelias_metro_api
+    user: "${DOCKER_USER:-1000:1000}"
+    restart: unless-stopped
+    environment:
+      - PORT=4000
+    ports:
+      - "127.0.0.1:${PELIAS_METRO_API_PORT:-34100}:4000"
+    volumes: *code-volume
+    depends_on:
+      - elasticsearch
+      - libpostal
+      - placeholder
+      - pip
+
+  placeholder:
+    image: ${PELIAS_PLACEHOLDER_IMAGE:-pelias/placeholder:v5.5.0}
+    container_name: planisfy_pelias_metro_placeholder
+    user: "${DOCKER_USER:-1000:1000}"
+    restart: unless-stopped
+    environment:
+      - PORT=4100
+    ports:
+      - "127.0.0.1:${PELIAS_METRO_PLACEHOLDER_PORT:-34101}:4100"
+    volumes: *data-volumes
+
+  pip:
+    image: ${PELIAS_PIP_SERVICE_IMAGE:-pelias/pip-service:v4.3.0}
+    container_name: planisfy_pelias_metro_pip
+    user: "${DOCKER_USER:-1000:1000}"
+    restart: unless-stopped
+    environment:
+      - PORT=4200
+    ports:
+      - "127.0.0.1:${PELIAS_METRO_PIP_PORT:-34201}:4200"
+    volumes: *data-volumes
+
+  interpolation:
+    image: ${PELIAS_INTERPOLATION_IMAGE:-pelias/interpolation:v4.2.0}
+    container_name: planisfy_pelias_metro_interpolation
+    user: "${DOCKER_USER:-1000:1000}"
+    restart: unless-stopped
+    environment:
+      - PORT=4300
+    ports:
+      - "127.0.0.1:${PELIAS_METRO_INTERPOLATION_PORT:-34300}:4300"
+    volumes: *data-volumes
+
+  whosonfirst:
+    image: ${PELIAS_WOF_IMAGE:-pelias/whosonfirst:v8.4.0}
+    container_name: planisfy_pelias_metro_whosonfirst
+    user: "${DOCKER_USER:-1000:1000}"
+    volumes: *data-volumes
+
+  openstreetmap:
+    image: ${PELIAS_OPENSTREETMAP_IMAGE:-pelias/openstreetmap:v8.4.2}
+    container_name: planisfy_pelias_metro_openstreetmap
+    user: "${DOCKER_USER:-1000:1000}"
+    volumes: *data-volumes
+
+  openaddresses:
+    image: ${PELIAS_OPENADDRESSES_IMAGE:-pelias/openaddresses:v6.5.0}
+    container_name: planisfy_pelias_metro_openaddresses
+    user: "${DOCKER_USER:-1000:1000}"
+    volumes: *data-volumes
+
+  geonames:
+    image: ${PELIAS_GEONAMES_IMAGE:-pelias/geonames:v6.4.0}
+    container_name: planisfy_pelias_metro_geonames
+    user: "${DOCKER_USER:-1000:1000}"
+    volumes: *data-volumes
+
+  transit:
+    image: ${PELIAS_TRANSIT_IMAGE:-pelias/transit:v5.4.0}
+    container_name: planisfy_pelias_metro_transit
+    user: "${DOCKER_USER:-1000:1000}"
+    volumes: *data-volumes
+
+  csv-importer:
+    image: ${PELIAS_CSV_IMPORTER_IMAGE:-pelias/csv-importer:v5.4.0}
+    container_name: planisfy_pelias_metro_csv_importer
+    user: "${DOCKER_USER:-1000:1000}"
+    volumes: *data-volumes
+
+  polylines:
+    image: ${PELIAS_POLYLINES_IMAGE:-pelias/polylines:v5.3.0}
+    container_name: planisfy_pelias_metro_polylines
+    user: "${DOCKER_USER:-1000:1000}"
+    volumes: *data-volumes
+
+  elasticsearch:
+    image: ${PELIAS_ELASTICSEARCH_IMAGE:-pelias/elasticsearch:7.17.27-2025-01-22-66b2b704398cecb3f0bccede4286a840972c57f8}
+    container_name: planisfy_pelias_metro_elasticsearch
+    user: "${DOCKER_USER:-1000:1000}"
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.ml.enabled=false
+      - ES_JAVA_OPTS=-Xms${PELIAS_ES_HEAP:-2g} -Xmx${PELIAS_ES_HEAP:-2g}
+    ports:
+      - "127.0.0.1:${PELIAS_METRO_ES_PORT:-34200}:9200"
+    volumes:
+      - ${DATA_DIR:-./data}/elasticsearch:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    cap_add:
+      - IPC_LOCK
+
+  fuzzy-tester:
+    image: ${PELIAS_FUZZY_TESTER_IMAGE:-pelias/fuzzy-tester:v3.3.0}
+    container_name: planisfy_pelias_metro_fuzzy_tester
+    user: "${DOCKER_USER:-1000:1000}"
+    restart: "no"
+    command: "--help"
+    volumes:
+      - ./pelias.json:/code/pelias.json:ro
+      - ./test_cases:/code/pelias/fuzzy-tester/test_cases:ro
