@@ -19,6 +19,7 @@ import { getMonthlyUsagePeriod, getMonthlyUsageUnits } from "../lib/usage-quota"
 import { db, styles, tilesets, apiKeys } from "@planisfy/database";
 import { eq, and, isNull, count } from "drizzle-orm";
 import { env } from "../env";
+import { requireOrgMinRole } from "../middleware/auth";
 
 const checkoutSchema = z.object({
   planId: z.enum(["pro", "enterprise"]),
@@ -26,6 +27,9 @@ const checkoutSchema = z.object({
 
 export const billingRoute = new Hono<AuthEnv>();
 export const billingWebhookRoute = new Hono();
+
+billingRoute.use("/billing/checkout", requireOrgMinRole("admin"));
+billingRoute.use("/billing/portal", requireOrgMinRole("admin"));
 
 // ── GET /billing — Current plan, usage, and limits ──────────────────────────
 

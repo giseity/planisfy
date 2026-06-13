@@ -40,8 +40,19 @@ import {
   ExecutionRuntimeSelectionError,
   resolveExecutionRuntimeSelection,
 } from "../lib/execution-runtime";
+import { requireOrgMutationRole } from "../middleware/auth";
 
 export const importsRoute = new Hono<AuthEnv>();
+
+importsRoute.use("/regions", requireOrgMutationRole("member"));
+importsRoute.use("/regions/*", requireOrgMutationRole("member"));
+importsRoute.use("/source-imports", requireOrgMutationRole("member"));
+importsRoute.use("/source-imports/*", requireOrgMutationRole("member"));
+importsRoute.use("/datasets/*", requireOrgMutationRole("member"));
+importsRoute.use("/source-credentials", requireOrgMutationRole("admin"));
+importsRoute.use("/source-credentials/*", requireOrgMutationRole("admin"));
+importsRoute.use("/source-connections", requireOrgMutationRole("admin"));
+importsRoute.use("/source-connections/*", requireOrgMutationRole("admin"));
 
 const handleSchema = sourceImportHandleSchema;
 const bboxSchema = z

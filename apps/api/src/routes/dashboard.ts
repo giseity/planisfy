@@ -42,6 +42,7 @@ import {
   serializePlanLimits,
 } from "../lib/billing";
 import { getMonthlyUsagePeriod } from "../lib/usage-quota";
+import { isPeliasConfigured } from "../lib/geocoding-config";
 import { probeValhallaReadiness } from "../lib/valhalla-readiness";
 import type { AuthEnv } from "../middleware/auth";
 import { env, redisConnection } from "../env";
@@ -428,7 +429,7 @@ async function fetchDashboardHealth(now: Date): Promise<DashboardHealthEntry[]> 
       probeConfiguredOnly(
         "geocoding",
         "Geocoding",
-        !env.PELIAS_URL.includes("api.planisfy.localhost/geocoding"),
+        isPeliasConfigured(env.PELIAS_URL),
         checkedAt,
       ),
       probeStorage(checkedAt),

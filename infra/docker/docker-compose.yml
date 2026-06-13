@@ -18,8 +18,11 @@
 #   - redis:      Redis for rate limiting (port 6379)
 #   - martin:     Vector tile server (port 3005)
 #   - valhalla:   Routing engine (port 3007)
+#   - pelias:     Pelias geocoder API (port 3100)
 #
-# Note: Geocoding (Pelias) runs as a separate project.
+# Note: The bundled Pelias services are for dev smoke coverage with a small
+# prepared index. For real imports and larger regions, use the official Pelias
+# Docker project and point PELIAS_URL/CONTAINER_PELIAS_URL at it.
 
 name: planisfy
 
@@ -56,7 +59,7 @@ services:
       - SOURCE_IMPORT_TIMEOUT_MS=${SOURCE_IMPORT_TIMEOUT_MS:-900000}
       - DEMO_PMTILES_PATH=${DEMO_PMTILES_PATH:-/data/pmtiles/stuttgart.pmtiles}
       - MARTIN_URL=http://martin:3000
-      - PELIAS_URL=${PELIAS_URL:-http://api:4000/geocoding}
+      - PELIAS_URL=${CONTAINER_PELIAS_URL:-http://pelias:4000}
       - GLYPHS_URL=${GLYPHS_URL:-https://demotiles.maplibre.org/font}
       - STATIC_MAP_URL=${STATIC_MAP_URL:-}
       - ELEVATION_URL=${ELEVATION_URL:-https://api.open-elevation.com/api/v1}
@@ -105,6 +108,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      pelias:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -398,6 +403,83 @@ services:
     networks:
       - planisfy-network
 
+  pelias-elasticsearch:
+    image: ${PELIAS_ELASTICSEARCH_IMAGE:-pelias/elasticsearch:7.17.27-2025-01-22-66b2b704398cecb3f0bccede4286a840972c57f8}
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.ml.enabled=false
+      - ES_JAVA_OPTS=${PELIAS_ES_JAVA_OPTS:--Xms2g -Xmx2g}
+    volumes:
+      - pelias_elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS 'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=1s' >/dev/null || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  pelias:
+    image: ${PELIAS_API_IMAGE:-pelias/api:v7.8.0}
+    user: root
+    ports:
+      - "3100:4000"
+    environment:
+      - PELIAS_CONFIG=/config/pelias.json
+      - PORT=4000
+    volumes:
+      - ./configs/pelias.json:/config/pelias.json:ro
+    command: [ "sh", "-c", "sed -i \"/req.errors.push( _.get(err, 'message', err) );/i\\        if (_.get(err, 'message', err) === 'libpostal service disabled') { return next(); }\" controller/libpostal.js && ./bin/start" ]
+    depends_on:
+      pelias-elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:4000/v1', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  pelias-schema:
+    image: ${PELIAS_SCHEMA_IMAGE:-pelias/schema:v9.1.0}
+    environment:
+      - PELIAS_CONFIG=/config/pelias.json
+    volumes:
+      - ./configs/pelias.json:/config/pelias.json:ro
+    command: [ "./bin/create_index" ]
+    depends_on:
+      pelias-elasticsearch:
+        condition: service_healthy
+    networks:
+      - planisfy-network
+    profiles:
+      - pelias-fixture
+
+  pelias-csv-importer:
+    image: ${PELIAS_CSV_IMPORTER_IMAGE:-pelias/csv-importer:v5.4.0}
+    user: root
+    environment:
+      - PELIAS_CONFIG=/config/pelias.json
+    volumes:
+      - ./configs/pelias.json:/config/pelias.json:ro
+      - ./data/pelias/csv:/data/csv:ro
+    command: [ "sh", "-c", "sed -i '/adminLookup.create()/d' lib/importPipeline.js && ./bin/start" ]
+    depends_on:
+      pelias-elasticsearch:
+        condition: service_healthy
+    networks:
+      - planisfy-network
+    profiles:
+      - pelias-fixture
+
   # ============================================
   # Optional: Reverse Proxy (Traefik)
   # ============================================
@@ -431,6 +513,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  pelias_elasticsearch_data:
     driver: local
 
 # ============================================

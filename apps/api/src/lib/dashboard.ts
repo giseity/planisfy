@@ -544,10 +544,10 @@ export function buildReadiness(params: {
     }),
     readinessItem({
       id: "geocoding",
-      label: "Geocoding provider",
-      description: "Search endpoints are configured or intentionally unavailable.",
-      complete: isHealthy("geocoding") || optional("geocoding"),
-      required: false,
+      label: "Pelias geocoder",
+      description: "Search endpoints have a Pelias-compatible backend.",
+      complete: isHealthy("geocoding"),
+      required: true,
     }),
     readinessItem({
       id: "static-maps",

@@ -12,9 +12,9 @@ pnpm -F @planisfy/database db:migrate
 ```
 
 The default mode is `DEPLOYMENT_MODE=self_host`. The stack should produce a
-useful product without cloud credentials, billing, email, routing data, or
-geocoding. Missing map/routing data should degrade to a clear fixture state
-rather than blocking application startup.
+useful product without cloud credentials, billing, email, or imported
+map/routing/geocoding data. Missing map/routing/geocoding data should degrade to
+a clear fixture state rather than blocking application startup.
 
 ## Current Services
 
@@ -28,6 +28,8 @@ rather than blocking application startup.
 - Redis
 - Martin
 - Valhalla
+- Pelias
+- Pelias Elasticsearch
 - local artifact storage bind mount configured by `LOCAL_STORAGE_HOST_PATH`
 - recommended MinIO S3-compatible storage profile for production-like artifact
   storage
@@ -174,6 +176,53 @@ For an all-Compose stack, `S3_ENDPOINT=http://minio:9000` also works. The
 `CONTAINER_S3_ENDPOINT` override keeps mixed host+Docker development aligned
 when the API runs on the host and workers run in Docker.
 
+## Dev Pelias
+
+The default Compose stack starts a pinned Pelias API container and a single-node
+Pelias Elasticsearch container for local end-to-end geocoding smoke coverage:
+
+```bash
+docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
+```
+
+The bundled services are intended for a tiny prepared development index, not
+for planet-scale imports. Pelias indexing is RAM- and disk-heavy, so keep the
+local data scope small. The pinned defaults are:
+
+```bash
+PELIAS_API_IMAGE=pelias/api:v7.8.0
+PELIAS_ELASTICSEARCH_IMAGE=pelias/elasticsearch:7.17.27-2025-01-22-66b2b704398cecb3f0bccede4286a840972c57f8
+PELIAS_SCHEMA_IMAGE=pelias/schema:v9.1.0
+PELIAS_CSV_IMPORTER_IMAGE=pelias/csv-importer:v5.4.0
+PELIAS_ES_JAVA_OPTS="-Xms2g -Xmx2g"
+```
+
+In the bundled Compose network, the API container uses
+`CONTAINER_PELIAS_URL=http://pelias:4000`. When running Pelias outside the
+Planisfy Compose network, set `CONTAINER_PELIAS_URL` to the container-reachable
+URL, such as `http://host.docker.internal:3100`.
+
+The Pelias API is available on the host at `http://localhost:3100`. It will only
+return useful geocoding results after Elasticsearch contains a Pelias index.
+Seed the tracked Stuttgart CSV fixture with:
+
+```bash
+scripts/pelias-dev-fixture.sh --reset
+```
+
+The fixture is intentionally tiny and lives at
+`infra/docker/data/pelias/csv/stuttgart.csv`. It is enough for local
+end-to-end checks such as searching for `Schlossplatz` or `Stuttgart
+Hauptbahnhof`. For first-time imports or larger regional builds, use the
+official Pelias Docker project and then point `PELIAS_URL`/`CONTAINER_PELIAS_URL`
+at the resulting API.
+
+The bundled dev API command includes a startup shim that skips the libpostal
+controller when the libpostal service is absent, allowing `/v1/search` to fall
+through to Pelias's built-in parser for the tiny CSV fixture. Production or
+larger regional Pelias stacks should run the normal Pelias services instead of
+using this shim.
+
 ## First Account
 
 After the stack is running and migrations have completed, create the first local
@@ -212,6 +261,7 @@ webhook secret, and the Pro product ID are required readiness capabilities.
 | Path                                        | Purpose                                                                                                            |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `infra/docker/data/pmtiles/`                | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `planisfy.basic` source used by Planisfy Streets.    |
+| `infra/docker/data/pelias/csv/`             | Tiny Pelias CSV fixture imported by `scripts/pelias-dev-fixture.sh`.                                               |
 | `infra/docker/data/valhalla_data/`          | Valhalla graph/runtime data mounted at `/custom_files`.                                                            |
 | `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/uploads/`        | Local upload/object storage area.                                                                                  |
 | `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/styles/`         | Demo and published style JSON. The setup script seeds the legacy, light, and dark Planisfy Streets fixture styles. |

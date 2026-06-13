@@ -15,6 +15,7 @@ import {
 } from "@planisfy/platform-policy";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
+import { isPeliasConfigured } from "../lib/geocoding-config";
 import { probeValhallaReadiness } from "../lib/valhalla-readiness";
 
 export const setupRoute = new Hono<AuthEnv>();
@@ -163,14 +164,14 @@ async function buildPreflightChecks(
     check({
       id: "geocoding",
       group: "Geospatial engines",
-      label: "Geocoding provider",
-      severity: "optional",
-      ok: !env.PELIAS_URL.includes("api.planisfy.localhost/geocoding"),
+      label: "Pelias geocoder",
+      severity: "required",
+      ok: isPeliasConfigured(env.PELIAS_URL),
       warnWhenMissing: true,
-      message: env.PELIAS_URL.includes("api.planisfy.localhost/geocoding")
-        ? "Geocoding is using the development fallback URL."
-        : `Geocoding provider is ${env.PELIAS_URL}.`,
-      action: "Set PELIAS_URL for production-quality geocoding.",
+      message: isPeliasConfigured(env.PELIAS_URL)
+        ? `Pelias-compatible geocoder is ${env.PELIAS_URL}.`
+        : "Pelias-compatible geocoder is not configured.",
+      action: "Set PELIAS_URL to a Pelias-compatible geocoding service.",
       value: env.PELIAS_URL,
     }),
     check({

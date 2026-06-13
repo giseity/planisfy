@@ -1,0 +1,7 @@
+id,name,source,layer,lat,lon,street,housenumber,postalcode,category
+stuttgart-locality,Stuttgart,planisfy_fixture,locality,48.775846,9.182932,,,,
+schlossplatz,Schlossplatz,planisfy_fixture,venue,48.778448,9.180013,Schlossplatz,1,70173,landmark
+hauptbahnhof,Stuttgart Hauptbahnhof,planisfy_fixture,venue,48.783333,9.181667,Arnulf-Klett-Platz,2,70173,transport
+koenigstrasse,Konigstrasse,planisfy_fixture,street,48.78008,9.18044,Konigstrasse,,,
+rathaus,Stuttgart Rathaus,planisfy_fixture,venue,48.775332,9.177859,Marktplatz,1,70173,government
+stadtbibliothek,Stadtbibliothek am Mailander Platz,planisfy_fixture,venue,48.79058,9.18383,Mailander Platz,1,70173,library

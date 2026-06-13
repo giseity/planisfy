@@ -60,7 +60,7 @@ Public route categories:
 
 - Tiles and TileJSON via Martin
 - Styles, sprites, glyphs, and fonts
-- Geocoding via Pelias with development fallback to Nominatim
+- Geocoding via a required Pelias-compatible service
 - Directions, isochrones, matching, matrices, and optimized trips via Valhalla
 - Elevation via external elevation provider
 - Static maps via optional render service

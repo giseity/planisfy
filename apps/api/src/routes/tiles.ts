@@ -639,8 +639,9 @@ class StorageSource implements Source {
   async getBytes(
     offset: number,
     length: number,
-    _signal?: AbortSignal,
+    signal?: AbortSignal,
   ): Promise<RangeResponse> {
+    void signal;
     const data = await this.storage.readRange(this.object.key, offset, length);
     return { data: toExactArrayBuffer(data) };
   }

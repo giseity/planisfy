@@ -9,7 +9,10 @@ import {
   executionTargets,
   workerProfiles,
 } from "@planisfy/database";
-import type { AuthEnv } from "../middleware/auth";
+import {
+  requireOrgMutationRole,
+  type AuthEnv,
+} from "../middleware/auth";
 import { env } from "../env";
 import { customerComputeMutationGate } from "../lib/platform-gates";
 import {
@@ -21,6 +24,23 @@ import {
 } from "../lib/execution-targets";
 
 export const executionTargetsRoute = new Hono<AuthEnv>();
+
+executionTargetsRoute.use(
+  "/execution-targets",
+  requireOrgMutationRole("admin"),
+);
+executionTargetsRoute.use(
+  "/execution-targets/*",
+  requireOrgMutationRole("admin"),
+);
+executionTargetsRoute.use(
+  "/worker-profiles",
+  requireOrgMutationRole("admin"),
+);
+executionTargetsRoute.use(
+  "/worker-profiles/*",
+  requireOrgMutationRole("admin"),
+);
 
 const providerSchema = z.enum(["local", "aws_batch", "gcp_batch"]);
 const authModeSchema = z.enum(["federated", "static", "external"]);

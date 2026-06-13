@@ -22,7 +22,10 @@ import {
   WORKER_GEODATA_HEARTBEAT_STALE_MS,
 } from "@planisfy/geodata-contracts";
 import { getStorage } from "@planisfy/storage";
-import type { AuthEnv } from "../middleware/auth";
+import {
+  requireOrgMutationRole,
+  type AuthEnv,
+} from "../middleware/auth";
 import { redisConnection } from "../env";
 import { enqueueOutboxEvent } from "../lib/outbox";
 import {
@@ -31,6 +34,8 @@ import {
 } from "../lib/notification-adapters";
 
 export const operationsRoute = new Hono<AuthEnv>();
+
+operationsRoute.use("/operations/*", requireOrgMutationRole("admin"));
 
 const notificationSchema = z.object({
   name: z.string().min(1).max(128),

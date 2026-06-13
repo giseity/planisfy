@@ -10,11 +10,17 @@ import {
   normalizeAllowedDomains,
 } from "../lib/api-key";
 import { checkResourceLimit } from "../lib/plan-check";
-import type { AuthEnv } from "../middleware/auth";
+import {
+  requireOrgMutationRole,
+  type AuthEnv,
+} from "../middleware/auth";
 import { env } from "../env";
 import { apiKeyMutationGate } from "../lib/platform-gates";
 
 export const keysRoute = new Hono<AuthEnv>();
+
+keysRoute.use("/keys", requireOrgMutationRole("admin"));
+keysRoute.use("/keys/*", requireOrgMutationRole("admin"));
 
 function getClientIp(req: Request): string | undefined {
   return (

@@ -39,8 +39,14 @@ import {
   ExecutionRuntimeSelectionError,
   resolveExecutionRuntimeSelection,
 } from "../lib/execution-runtime";
+import { requireOrgMutationRole } from "../middleware/auth";
 
 export const resourcesRoute = new Hono<AuthEnv>();
+
+resourcesRoute.use("/uploads", requireOrgMutationRole("member"));
+resourcesRoute.use("/uploads/*", requireOrgMutationRole("member"));
+resourcesRoute.use("/tilesets/*", requireOrgMutationRole("member"));
+resourcesRoute.use("/jobs/*", requireOrgMutationRole("member"));
 
 const MAX_UPLOAD_SIZE = 250 * 1024 * 1024;
 

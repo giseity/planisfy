@@ -70,7 +70,7 @@ import {
 } from "@planisfy/ui/components/table-toolbar"
 import { cn } from "@planisfy/ui/lib/utils"
 
-type DataTableFilter<TData> = {
+type DataTableFilter = {
   column: string
   title: string
   options: {
@@ -94,13 +94,14 @@ function DataTable<TData, TValue>({
   filterColumn?: string
   filterPlaceholder?: string
   emptyText?: string
-  filters?: DataTableFilter<TData>[]
+  filters?: DataTableFilter[]
   enableViewOptions?: boolean
 }) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,
@@ -315,7 +316,7 @@ function DataTableFacetedFilter<TData, TValue>({
 }: {
   column?: Column<TData, TValue>
   title: string
-  options: DataTableFilter<TData>["options"]
+  options: DataTableFilter["options"]
 }) {
   const facets = column?.getFacetedUniqueValues()
   const selectedValues = new Set(column?.getFilterValue() as string[] | undefined)

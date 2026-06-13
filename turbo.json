@@ -5,7 +5,7 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "lint": {
       "dependsOn": ["^lint"],
@@ -39,6 +39,16 @@
         "LOG_LEVEL",
         "MARTIN_SOURCES_PATH",
         "MARTIN_SOURCES_PREFIX",
+        "TILE_ALIAS_STORAGE_PREFIX",
+        "PELIAS_URL",
+        "CONTAINER_PELIAS_URL",
+        "PELIAS_API_IMAGE",
+        "PELIAS_ELASTICSEARCH_IMAGE",
+        "PELIAS_SCHEMA_IMAGE",
+        "PELIAS_CSV_IMPORTER_IMAGE",
+        "PELIAS_ES_JAVA_OPTS",
+        "VALHALLA_URL",
+        "VALHALLA_READINESS_ROUTE",
         "OVERTURE_RELEASE",
         "OGR2OGR_PATH",
         "PLANISFY_RELEASE_MANIFEST",

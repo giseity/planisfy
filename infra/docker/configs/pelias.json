@@ -1,0 +1,56 @@
+{
+  "esclient": {
+    "apiVersion": "7.x",
+    "hosts": [
+      {
+        "env": "development",
+        "protocol": "http",
+        "host": "pelias-elasticsearch",
+        "port": 9200
+      }
+    ],
+    "connection": {
+      "url": "http://pelias-elasticsearch:9200"
+    }
+  },
+  "logger": {
+    "level": "info"
+  },
+  "elasticsearch": {
+    "indexPrefix": "pelias",
+    "settings": {
+      "index": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0
+      }
+    }
+  },
+  "api": {
+    "indexName": "pelias",
+    "basePath": "/v1",
+    "targets": {
+      "planisfy_fixture": [
+        "address",
+        "locality",
+        "street",
+        "venue"
+      ]
+    }
+  },
+  "apis": {
+    "autocomplete": {},
+    "placeholder": {},
+    "reverse": {},
+    "search": {}
+  },
+  "imports": {
+    "csv": {
+      "datapath": "/data/csv",
+      "files": [
+        "stuttgart.csv"
+      ],
+      "adminLookup": false,
+      "deduplicate": false
+    }
+  }
+}

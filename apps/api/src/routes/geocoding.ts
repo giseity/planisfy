@@ -1,8 +1,7 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
-// If Pelias is not available, we'll use Nominatim as a fallback for basic geocoding
-const NOMINATIM_URL = "https://nominatim.openstreetmap.org";
+import { isPeliasConfigured } from "../lib/geocoding-config";
 
 export const geocodingRoute = new Hono<AuthEnv>();
 
@@ -22,9 +21,12 @@ geocodingRoute.get("/geocoding/v1/forward", async (c) => {
   const lang = c.req.query("language") || "en";
   const countryCode = c.req.query("country");
 
+  if (!isPeliasConfigured(env.PELIAS_URL)) {
+    return geocoderNotConfigured(c);
+  }
+
   try {
-    // Try Pelias first
-    const pelias = await tryPelias("search", {
+    const pelias = await requestPelias("search", {
       text: q,
       size: String(limit),
       lang,
@@ -32,40 +34,11 @@ geocodingRoute.get("/geocoding/v1/forward", async (c) => {
       ...(countryCode ? { "boundary.country": countryCode } : {}),
     });
 
-    if (pelias) {
-      c.header("Cache-Control", "public, max-age=3600");
-      return c.json(pelias);
-    }
-
-    // Fallback to Nominatim
-    const params = new URLSearchParams({
-      q,
-      format: "geojson",
-      limit: String(limit),
-      "accept-language": lang,
-      addressdetails: "1",
-    });
-    if (countryCode) params.set("countrycodes", countryCode);
-    if (bbox) {
-      const [minLon, minLat, maxLon, maxLat] = bbox.split(",");
-      params.set("viewbox", `${minLon},${minLat},${maxLon},${maxLat}`);
-      params.set("bounded", "1");
-    }
-
-    const res = await fetch(`${NOMINATIM_URL}/search?${params}`, {
-      headers: { "User-Agent": "Planisfy/1.0 (https://planisfy.com)" },
-    });
-
-    if (!res.ok) {
-      return c.json({ error: { code: "UPSTREAM_ERROR", message: "Geocoding service error" } }, 502);
-    }
-
-    const data = await res.json();
     c.header("Cache-Control", "public, max-age=3600");
-    return c.json(normalizeGeocodingResult(data));
+    return c.json(pelias);
   } catch (err) {
     console.error("[geocoding] Forward error:", err);
-    return c.json({ error: { code: "INTERNAL_ERROR", message: "Geocoding service unavailable" } }, 503);
+    return peliasError(c, err);
   }
 });
 
@@ -85,44 +58,23 @@ geocodingRoute.get("/geocoding/v1/reverse", async (c) => {
   const lang = c.req.query("language") || "en";
   const limit = Math.min(Number(c.req.query("limit")) || 1, 10);
 
+  if (!isPeliasConfigured(env.PELIAS_URL)) {
+    return geocoderNotConfigured(c);
+  }
+
   try {
-    // Try Pelias first
-    const pelias = await tryPelias("reverse", {
+    const pelias = await requestPelias("reverse", {
       "point.lon": String(lon),
       "point.lat": String(lat),
       size: String(limit),
       lang,
     });
 
-    if (pelias) {
-      c.header("Cache-Control", "public, max-age=3600");
-      return c.json(pelias);
-    }
-
-    // Fallback to Nominatim
-    const params = new URLSearchParams({
-      lon: String(lon),
-      lat: String(lat),
-      format: "geojson",
-      "accept-language": lang,
-      addressdetails: "1",
-      zoom: "18",
-    });
-
-    const res = await fetch(`${NOMINATIM_URL}/reverse?${params}`, {
-      headers: { "User-Agent": "Planisfy/1.0 (https://planisfy.com)" },
-    });
-
-    if (!res.ok) {
-      return c.json({ error: { code: "UPSTREAM_ERROR", message: "Geocoding service error" } }, 502);
-    }
-
-    const data = await res.json();
     c.header("Cache-Control", "public, max-age=3600");
-    return c.json(normalizeGeocodingResult(data));
+    return c.json(pelias);
   } catch (err) {
     console.error("[geocoding] Reverse error:", err);
-    return c.json({ error: { code: "INTERNAL_ERROR", message: "Geocoding service unavailable" } }, 503);
+    return peliasError(c, err);
   }
 });
 
@@ -142,8 +94,12 @@ geocodingRoute.get("/geocoding/v1/autocomplete", async (c) => {
   const focusLon = c.req.query("focus.lon");
   const focusLat = c.req.query("focus.lat");
 
+  if (!isPeliasConfigured(env.PELIAS_URL)) {
+    return geocoderNotConfigured(c);
+  }
+
   try {
-    const pelias = await tryPelias("autocomplete", {
+    const pelias = await requestPelias("autocomplete", {
       text,
       size: String(limit),
       lang,
@@ -151,109 +107,76 @@ geocodingRoute.get("/geocoding/v1/autocomplete", async (c) => {
       ...(focusLat ? { "focus.point.lat": focusLat } : {}),
     });
 
-    if (pelias) {
-      c.header("Cache-Control", "public, max-age=60");
-      return c.json(pelias);
-    }
-
-    // Nominatim doesn't have autocomplete, use search with small limit
-    const params = new URLSearchParams({
-      q: text,
-      format: "geojson",
-      limit: String(limit),
-      "accept-language": lang,
-      addressdetails: "1",
-    });
-
-    const res = await fetch(`${NOMINATIM_URL}/search?${params}`, {
-      headers: { "User-Agent": "Planisfy/1.0 (https://planisfy.com)" },
-    });
-
-    if (!res.ok) {
-      return c.json({ error: { code: "UPSTREAM_ERROR", message: "Geocoding service error" } }, 502);
-    }
-
-    const data = await res.json();
     c.header("Cache-Control", "public, max-age=60");
-    return c.json(normalizeGeocodingResult(data));
+    return c.json(pelias);
   } catch (err) {
     console.error("[geocoding] Autocomplete error:", err);
-    return c.json({ error: { code: "INTERNAL_ERROR", message: "Geocoding service unavailable" } }, 503);
+    return peliasError(c, err);
   }
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function tryPelias(
+async function requestPelias(
   endpoint: string,
   params: Record<string, string>
-): Promise<unknown | null> {
+): Promise<unknown> {
+  const url = new URL(`/v1/${endpoint}`, env.PELIAS_URL);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+
   try {
-    const url = new URL(`/v1/${endpoint}`, env.PELIAS_URL);
-    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-
     const res = await fetch(url.toString(), { signal: controller.signal });
-    clearTimeout(timeout);
+    if (!res.ok) {
+      throw new PeliasUpstreamError(res.status);
+    }
 
-    if (res.ok) return await res.json();
-    return null;
-  } catch {
-    return null;
+    return await res.json();
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
-interface NominatimFeature {
-  geometry: unknown;
-  properties?: {
-    display_name?: string;
-    label?: string;
-    name?: string;
-    importance?: number;
-    address?: {
-      house_number?: string;
-      road?: string;
-      postcode?: string;
-      city?: string;
-      town?: string;
-      village?: string;
-      state?: string;
-      country?: string;
-      country_code?: string;
-    };
-  };
-}
-
-interface NominatimResponse {
-  features?: NominatimFeature[];
-}
-
-function normalizeGeocodingResult(geojson: NominatimResponse | NominatimFeature) {
-  const features = "features" in geojson && geojson.features
-    ? geojson.features
-    : [geojson as NominatimFeature];
-
-  return {
-    type: "FeatureCollection",
-    features: features.filter(Boolean).map((f) => ({
-      type: "Feature",
-      geometry: f.geometry,
-      properties: {
-        label: f.properties?.display_name || f.properties?.label || "",
-        name: f.properties?.name || f.properties?.display_name?.split(",")[0] || "",
-        housenumber: f.properties?.address?.house_number,
-        street: f.properties?.address?.road,
-        postalcode: f.properties?.address?.postcode,
-        city: f.properties?.address?.city || f.properties?.address?.town || f.properties?.address?.village,
-        state: f.properties?.address?.state,
-        country: f.properties?.address?.country,
-        country_code: f.properties?.address?.country_code,
-        confidence: f.properties?.importance ? Math.round(f.properties.importance * 10) / 10 : undefined,
-        source: "nominatim",
+function geocoderNotConfigured(c: Context<AuthEnv>) {
+  return c.json(
+    {
+      error: {
+        code: "GEOCODER_NOT_CONFIGURED",
+        message: "Configure PELIAS_URL with a Pelias-compatible geocoding service.",
       },
-    })),
-    attribution: "Data © OpenStreetMap contributors, ODbL 1.0",
-  };
+    },
+    503,
+  );
+}
+
+function peliasError(c: Context<AuthEnv>, err: unknown) {
+  if (err instanceof PeliasUpstreamError) {
+    return c.json(
+      {
+        error: {
+          code: "UPSTREAM_ERROR",
+          message: `Pelias geocoding service returned HTTP ${err.status}.`,
+        },
+      },
+      502,
+    );
+  }
+
+  return c.json(
+    {
+      error: {
+        code: "GEOCODER_UNAVAILABLE",
+        message: "Pelias geocoding service unavailable.",
+      },
+    },
+    503,
+  );
+}
+
+class PeliasUpstreamError extends Error {
+  constructor(readonly status: number) {
+    super(`Pelias returned HTTP ${status}`);
+  }
 }

@@ -3,6 +3,9 @@ data/**
 !data/
 !data/pmtiles/
 !data/pmtiles/README.md
+!data/pelias/
+!data/pelias/csv/
+!data/pelias/csv/stuttgart.csv
 !data/valhalla_data/
 !data/valhalla_data/README.md
 !data/storage/

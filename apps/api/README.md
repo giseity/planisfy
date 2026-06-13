@@ -37,18 +37,24 @@ Required local services:
 - PostgreSQL via `DATABASE_URL`
 - Redis via `REDIS_URL` or `REDIS_HOST`/`REDIS_PORT`
 - Martin via `MARTIN_URL`
+- Pelias-compatible geocoder via `PELIAS_URL`
 - Valhalla via `VALHALLA_URL`; health/preflight also run a small route probe.
   Set `VALHALLA_READINESS_ROUTE=lon,lat;lon,lat` when the default Stuttgart
   probe is outside your graph.
 
 Optional providers:
 
-- Pelias-compatible geocoder via `GEOCODING_URL`
 - Static map renderer via `STATIC_MAP_URL`
 - Email provider via `RESEND_API_KEY`
 - Storage provider via local disk, S3, or Cloudflare R2-compatible settings
 - Dodo Payments via `DODO_PAYMENTS_API_KEY`, `DODO_PRO_PRODUCT_ID`, and
   `DODO_PAYMENTS_WEBHOOK_SECRET`
+
+Seed the local Pelias dev index with:
+
+```bash
+scripts/pelias-dev-fixture.sh --reset
+```
 
 Local self-host compose serves local artifacts from `/storage/*` and records artifact metadata in `storage_objects`.
 

@@ -1,18 +1,31 @@
 import { createMiddleware } from "hono/factory";
-import { db, sessions } from "@planisfy/database";
+import type { Context } from "hono";
+import { db, members, sessions } from "@planisfy/database";
 import { eq, and, gt } from "drizzle-orm";
 import { getCookie } from "hono/cookie";
+
+const ORG_ROLE_RANK: Record<string, number> = {
+  viewer: 0,
+  member: 1,
+  admin: 2,
+  owner: 3,
+};
+
+export type OrgRole = keyof typeof ORG_ROLE_RANK;
+
+type SessionContext = {
+  id: string;
+  userId: string;
+  token: string;
+  activeOrganizationId: string | null;
+};
 
 export type AuthEnv = {
   Variables: {
     userId: string;
     ownerId: string;
-    session: {
-      id: string;
-      userId: string;
-      token: string;
-      activeOrganizationId: string | null;
-    };
+    orgRole: string | null;
+    session: SessionContext;
     // API key context (set by apiKeyMiddleware, may be null)
     apiKeyId: string | null;
     apiKeyOwnerId: string | null;
@@ -51,9 +64,20 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     );
   }
 
-  c.set("userId", session.userId);
-  c.set("session", session);
-  c.set("ownerId", session.activeOrganizationId ?? session.userId);
+  const ownerContext = await resolveSessionOwnerContext(session);
+  if (!ownerContext.ok) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: ownerContext.message,
+        },
+      },
+      403,
+    );
+  }
+
+  setSessionContext(c, session, ownerContext);
 
   await next();
 });
@@ -77,6 +101,7 @@ export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
       token: "",
       activeOrganizationId: null,
     });
+    c.set("orgRole", null);
     await next();
     return;
   }
@@ -105,9 +130,20 @@ export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     );
   }
 
-  c.set("userId", session.userId);
-  c.set("session", session);
-  c.set("ownerId", session.activeOrganizationId ?? session.userId);
+  const ownerContext = await resolveSessionOwnerContext(session);
+  if (!ownerContext.ok) {
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: ownerContext.message,
+        },
+      },
+      403,
+    );
+  }
+
+  setSessionContext(c, session, ownerContext);
 
   await next();
 });
@@ -128,6 +164,7 @@ export const optionalAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) 
       token: "",
       activeOrganizationId: null,
     });
+    c.set("orgRole", null);
     await next();
     return;
   }
@@ -138,14 +175,67 @@ export const optionalAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) 
   if (rawToken) {
     const session = await findValidSession(rawToken);
     if (session) {
-      c.set("userId", session.userId);
-      c.set("session", session);
-      c.set("ownerId", session.activeOrganizationId ?? session.userId);
+      const ownerContext = await resolveSessionOwnerContext(session);
+      if (ownerContext.ok) {
+        setSessionContext(c, session, ownerContext);
+      } else {
+        setSessionContext(c, { ...session, activeOrganizationId: null }, {
+          ownerId: session.userId,
+          orgRole: null,
+        });
+      }
     }
   }
 
   await next();
 });
+
+export function isOrgRoleAtLeast(role: string | null, minRole: OrgRole) {
+  if (!role) return false;
+  const minimumRank = ORG_ROLE_RANK[minRole] ?? Number.POSITIVE_INFINITY;
+  return (ORG_ROLE_RANK[role] ?? -1) >= minimumRank;
+}
+
+export function requireOrgMinRole(minRole: OrgRole) {
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    const session = c.get("session");
+    if (!session?.activeOrganizationId) {
+      await next();
+      return;
+    }
+
+    if (!isOrgRoleAtLeast(c.get("orgRole"), minRole)) {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: `Requires ${minRole} access to this organization.`,
+          },
+        },
+        403,
+      );
+    }
+
+    await next();
+  });
+}
+
+export function requireOrgMutationRole(
+  minRole: OrgRole,
+  methods = ["POST", "PUT", "PATCH", "DELETE"],
+) {
+  const methodSet = new Set(methods);
+  const requireRole = requireOrgMinRole(minRole);
+
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    if (!methodSet.has(c.req.method.toUpperCase())) {
+      await next();
+      return;
+    }
+
+    return requireRole(c, next);
+  });
+}
 
 export function getBetterAuthSessionCookie(c: Parameters<typeof getCookie>[0]) {
   return (
@@ -172,4 +262,51 @@ async function findValidSession(rawToken: string) {
     .limit(1);
 
   return session ?? null;
+}
+
+export async function resolveSessionOwnerContext(
+  session: SessionContext,
+  findRole: (userId: string, orgId: string) => Promise<string | null> = findMembershipRole,
+): Promise<
+  | { ok: true; ownerId: string; orgRole: string | null }
+  | { ok: false; message: string }
+> {
+  if (!session.activeOrganizationId) {
+    return { ok: true, ownerId: session.userId, orgRole: null };
+  }
+
+  const role = await findRole(session.userId, session.activeOrganizationId);
+  if (!role) {
+    return {
+      ok: false,
+      message: "Active organization access is no longer available.",
+    };
+  }
+
+  return {
+    ok: true,
+    ownerId: session.activeOrganizationId,
+    orgRole: role,
+  };
+}
+
+async function findMembershipRole(userId: string, orgId: string) {
+  const [membership] = await db
+    .select({ role: members.role })
+    .from(members)
+    .where(and(eq(members.userId, userId), eq(members.organizationId, orgId)))
+    .limit(1);
+
+  return membership?.role ?? null;
+}
+
+function setSessionContext(
+  c: Context<AuthEnv>,
+  session: SessionContext,
+  ownerContext: { ownerId: string; orgRole: string | null },
+) {
+  c.set("userId", session.userId);
+  c.set("session", session);
+  c.set("ownerId", ownerContext.ownerId);
+  c.set("orgRole", ownerContext.orgRole);
 }

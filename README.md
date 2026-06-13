@@ -39,7 +39,7 @@ Still in progress or externally dependent:
 - Routing requires Valhalla graph data under `infra/docker/data/valhalla_data`;
   health/preflight report Valhalla as degraded when the process is up but the
   route-readiness probe cannot route
-- Geocoding prefers Pelias and falls back to Nominatim for basic development use
+- Geocoding requires a Pelias-compatible service; no Nominatim fallback is used
 - Static maps return a placeholder unless `STATIC_MAP_URL` is configured
 - Billing uses Dodo Payments-oriented surfaces; it is optional for self-host and
   required for managed
@@ -218,6 +218,7 @@ Default service URLs:
 - API: <http://localhost:4000>
 - Martin: <http://localhost:3005>
 - Valhalla: <http://localhost:3007>
+- Pelias: <http://localhost:3100>
 
 Local demo assets:
 
@@ -229,9 +230,12 @@ Local demo assets:
 - Martin PMTiles mount: `infra/docker/data/pmtiles`; the default fixture expects `stuttgart.pmtiles`
 - Optional PMTiles preflight/download controls: `DEMO_PMTILES_PATH`, `DEMO_PMTILES_URL`, and `DEMO_PMTILES_SHA256`
 - Regional basemap build harness: `pnpm -F @planisfy/map-styles build:planetiler-regional`
+- Pelias Stuttgart CSV fixture: `infra/docker/data/pelias/csv/stuttgart.csv`
 - Local object storage mount: `infra/docker/data/storage`
 - Recommended self-host artifact storage: MinIO/S3-compatible storage via the
   Compose `with-minio` profile
+- Dev geocoding: pinned Pelias API and Elasticsearch in the default Compose
+  stack
 
 Health checks:
 
@@ -240,6 +244,7 @@ curl http://localhost:4000/health
 curl http://localhost:4000/health/detailed
 curl http://localhost:4000/setup/preflight
 curl http://localhost:3005/catalog
+curl "http://localhost:3100/v1/search?text=Schlossplatz&sources=planisfy_fixture"
 ```
 
 Valhalla readiness is route-backed, not just process-backed. Set
