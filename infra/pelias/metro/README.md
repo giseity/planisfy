@@ -25,6 +25,35 @@ local posture:
 Provision at least 30-80GB of free Docker/WSL disk space for data, images, and
 the Elasticsearch index.
 
+## Docker Pull Reliability
+
+`pelias/libpostal-service` includes the real libpostal model data in a single
+large image layer. If Docker Hub pulls fail with TLS timeouts, short reads, or
+long silent stalls, configure Docker Desktop's Linux daemon with one concurrent
+download and restart Docker Desktop:
+
+```json
+{
+  "builder": {
+    "gc": {
+      "defaultKeepStorage": "20GB",
+      "enabled": true
+    }
+  },
+  "experimental": false,
+  "max-concurrent-downloads": 1
+}
+```
+
+On Windows with Docker Desktop, that daemon file is usually
+`%USERPROFILE%\.docker\daemon.json`.
+
+After restart, rerun:
+
+```bash
+scripts/pelias-metro.sh pull
+```
+
 ## First Run
 
 ```bash

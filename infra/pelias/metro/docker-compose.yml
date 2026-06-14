@@ -12,7 +12,7 @@ x-data-volumes: &data-volumes
 
 services:
   libpostal:
-    image: ${PELIAS_LIBPOSTAL_IMAGE:-pelias/libpostal-service:master-2026-03-25-c5ef1445bb62341b072c947613053966bbce152e}
+    image: ${PELIAS_LIBPOSTAL_IMAGE:-pelias/libpostal-service:master-2023-07-04-b02f6f14cfe2dbf2dfee9e458a372f0aca13caa4}
     container_name: planisfy_pelias_metro_libpostal
     user: "${DOCKER_USER:-1000:1000}"
     restart: unless-stopped
@@ -64,7 +64,7 @@ services:
     volumes: *data-volumes
 
   interpolation:
-    image: ${PELIAS_INTERPOLATION_IMAGE:-pelias/interpolation:v4.2.0}
+    image: ${PELIAS_INTERPOLATION_IMAGE:-pelias/interpolation:better-sqlite3-v2-plus-libpostal-service-2025-03-11-77f8209aadcd046312128f9b3fb37254c4081c84-classic}
     container_name: planisfy_pelias_metro_interpolation
     user: "${DOCKER_USER:-1000:1000}"
     restart: unless-stopped
