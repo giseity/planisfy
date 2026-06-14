@@ -42,6 +42,24 @@ export function stylePublicUrl(params: {
   return `${params.origin.replace(/\/$/, "")}/styles/v1/${params.ownerHandle}/${params.style.handle}`;
 }
 
+export function mapLibreEmbedSnippet(params: {
+  styleUrl: string;
+  container?: string;
+  center?: [number, number];
+  zoom?: number;
+}) {
+  const container = params.container ?? "map";
+  const center = params.center ?? [0, 0];
+  const zoom = params.zoom ?? 2;
+
+  return `const map = new maplibregl.Map({
+  container: "${container}",
+  style: "${params.styleUrl}",
+  center: [${center[0]}, ${center[1]}],
+  zoom: ${zoom}
+});`;
+}
+
 export function styleJsonFilename(style: Pick<StudioStyleSummary, "name">) {
   return `${style.name || "style"}.json`;
 }

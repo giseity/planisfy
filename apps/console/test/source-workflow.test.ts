@@ -31,6 +31,10 @@ import {
   sourceImportSummary,
 } from "@/lib/studio/import-workflow";
 import { buildSourceWorkflowGuide } from "@/lib/studio/source-workflow-guide";
+import {
+  mapLibreEmbedSnippet,
+  stylePublicUrl,
+} from "@/lib/studio/style-workflow";
 
 describe("Studio source workflow", () => {
   it("creates stable source IDs and vector sources from published tilesets", () => {
@@ -54,7 +58,8 @@ describe("Studio source workflow", () => {
     const raster = tilesetFixture({
       type: "RASTER",
       isPublished: true,
-      tilejsonUrl: "https://api.planisfy.localhost/tiles/v1/acme/satellite.json",
+      tilejsonUrl:
+        "https://api.planisfy.localhost/tiles/v1/acme/satellite.json",
     });
     const pending = tilesetFixture({
       isPublished: false,
@@ -140,18 +145,43 @@ describe("Studio source workflow", () => {
   });
 
   it("offers layer modes based on source type", () => {
-    expect(layerTypesForSource({ type: "vector", url: "https://x.test" })).toEqual([
-      "circle",
-      "line",
-      "fill",
-      "symbol",
-    ]);
     expect(
-      layerTypesForSource({ type: "raster", tiles: ["https://x.test/{z}/{x}/{y}"] }),
+      layerTypesForSource({ type: "vector", url: "https://x.test" }),
+    ).toEqual(["circle", "line", "fill", "symbol"]);
+    expect(
+      layerTypesForSource({
+        type: "raster",
+        tiles: ["https://x.test/{z}/{x}/{y}"],
+      }),
     ).toEqual(["raster"]);
     expect(layerTypesForSource({ type: "raster-dem", tiles: [] })).toEqual([
       "hillshade",
     ]);
+  });
+});
+
+describe("Published style browser integration", () => {
+  it("builds a MapLibre embed from the stable published style URL", () => {
+    const styleUrl = stylePublicUrl({
+      origin: "https://api.planisfy.localhost/",
+      ownerHandle: "acme",
+      style: { handle: "roads" },
+    });
+    const snippet = mapLibreEmbedSnippet({
+      styleUrl,
+      center: [-74.006, 40.7128],
+      zoom: 12,
+    });
+
+    expect(styleUrl).toBe(
+      "https://api.planisfy.localhost/styles/v1/acme/roads",
+    );
+    expect(snippet).toContain("new maplibregl.Map");
+    expect(snippet).toContain(
+      'style: "https://api.planisfy.localhost/styles/v1/acme/roads"',
+    );
+    expect(snippet).not.toContain("access_token");
+    expect(snippet).not.toContain("X-API-Key");
   });
 });
 
@@ -212,7 +242,10 @@ describe("Console tileset workflow", () => {
     );
     expect(
       tilesetWorkflowMessage(
-        tilesetFixture({ currentVersionId: null, latestVersion: versionFixture() }),
+        tilesetFixture({
+          currentVersionId: null,
+          latestVersion: versionFixture(),
+        }),
       ),
     ).toBe("Review and publish a processed version");
     expect(jobStateMessage("PROCESSING", "2026-01-01T00:00:00.000Z")).toBe(

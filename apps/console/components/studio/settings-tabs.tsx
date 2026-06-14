@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import type React from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   api,
   type ConsoleExecutionTarget,
@@ -10,11 +10,35 @@ import {
   type ConsoleWorkerProfile,
   type ExecutionTargetAuthMode,
   type ExecutionTargetProvider,
-} from "@/lib/api"
-import { authClient, useSession } from "@planisfy/auth/client"
-import { Badge } from "@planisfy/ui/components/badge"
-import { Button } from "@planisfy/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
+} from "@/lib/api";
+import {
+  EXECUTION_PROVIDER_PRESETS,
+  billingStatusLabel,
+  billingStatusVariant,
+  coerceProviderValue,
+  formatJson,
+  formatLimit,
+  numberOrUndefined,
+  parseJsonObject,
+  parseLooseJsonObject,
+  parseUserAgent,
+  splitShellList,
+  targetLabel,
+  timeAgo,
+  type BillingInfo,
+  type PlanInfo,
+  type ProfileData,
+  type SessionData,
+} from "@/components/studio/settings-tabs-model";
+import { authClient, useSession } from "@planisfy/auth/client";
+import { Badge } from "@planisfy/ui/components/badge";
+import { Button } from "@planisfy/ui/components/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@planisfy/ui/components/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,133 +48,91 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@planisfy/ui/components/alert-dialog"
-import { Input } from "@planisfy/ui/components/input"
-import { Label } from "@planisfy/ui/components/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@planisfy/ui/components/select"
-import { Separator } from "@planisfy/ui/components/separator"
-import { Skeleton } from "@planisfy/ui/components/skeleton"
-import { Switch } from "@planisfy/ui/components/switch"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@planisfy/ui/components/table"
-import { Textarea } from "@planisfy/ui/components/textarea"
-import { Check, Chrome, Github, KeyRound, Mail, Monitor, Server, ShieldCheck, Smartphone, Trash2, Wand2, X } from "lucide-react"
-import { toast } from "sonner"
-
-interface ProfileData {
-  id: string
-  handle: string
-  displayName: string
-  avatarUrl: string | null
-  bio: string | null
-  email: string
-  emailVerified: boolean
-  createdAt: string
-}
-
-interface BillingInfo {
-  deploymentMode: "self_host" | "managed"
-  billingStatus:
-    | "configured"
-    | "checkout_unavailable"
-    | "active_subscription"
-    | "trialing"
-    | "past_due"
-    | "canceled"
-    | "free_plan"
-  plan: string
-  planName: string
-  price: number
-  limits: {
-    monthlyUnits: number | null
-    requestsPerMinute: number
-    maxStyles: number | null
-    maxSources: number | null
-    maxApiKeys: number | null
-  }
-  usage: {
-    monthlyUnits: number
-    styles: number
-    sources: number
-    apiKeys: number
-  }
-  quotaPercent: number
-  billingConfigured: boolean
-  portalAvailable: boolean
-}
-
-interface PlanInfo {
-  id: string
-  productId: string
-  name: string
-  price: number
-  checkoutAvailable: boolean
-  monthlyUnits: string | number
-  requestsPerMinute: number
-  maxStyles: string | number
-  maxSources: string | number
-  maxApiKeys: string | number
-}
-
-interface SessionData {
-  id: string
-  token: string
-  userAgent: string | null
-  ipAddress: string | null
-  createdAt: string
-  updatedAt: string
-  expiresAt: string
-}
-
-function formatLimit(limit: number | null): string {
-  return limit === null ? "\u221e" : limit.toLocaleString()
-}
+} from "@planisfy/ui/components/alert-dialog";
+import { Input } from "@planisfy/ui/components/input";
+import { Label } from "@planisfy/ui/components/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@planisfy/ui/components/select";
+import { Separator } from "@planisfy/ui/components/separator";
+import { Skeleton } from "@planisfy/ui/components/skeleton";
+import { Switch } from "@planisfy/ui/components/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@planisfy/ui/components/table";
+import { Textarea } from "@planisfy/ui/components/textarea";
+import {
+  Check,
+  Chrome,
+  Github,
+  KeyRound,
+  Mail,
+  Monitor,
+  Server,
+  ShieldCheck,
+  Smartphone,
+  Trash2,
+  Wand2,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
 
 export function ProfileTab() {
-  const [profile, setProfile] = useState<ProfileData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [error, setError] = useState("")
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
 
-  const [displayName, setDisplayName] = useState("")
-  const [handle, setHandle] = useState("")
-  const [bio, setBio] = useState("")
+  const [displayName, setDisplayName] = useState("");
+  const [handle, setHandle] = useState("");
+  const [bio, setBio] = useState("");
 
   useEffect(() => {
     api
       .get<{ data: ProfileData }>("/profile")
       .then((res) => {
-        setProfile(res.data)
-        setDisplayName(res.data.displayName)
-        setHandle(res.data.handle)
-        setBio(res.data.bio ?? "")
+        setProfile(res.data);
+        setDisplayName(res.data.displayName);
+        setHandle(res.data.handle);
+        setBio(res.data.bio ?? "");
       })
       .catch(() => setError("Failed to load profile"))
-      .finally(() => setLoading(false))
-  }, [])
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
-    setError("")
-    setSuccess(false)
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    setSuccess(false);
 
     try {
       const res = await api.put<{ data: ProfileData }>("/profile", {
         displayName,
         handle,
         bio,
-      })
-      setProfile({ ...profile!, ...res.data })
-      setSuccess(true)
-      setTimeout(() => setSuccess(false), 3000)
+      });
+      setProfile({ ...profile!, ...res.data });
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to update profile"
-      setError(message)
+      const message =
+        err instanceof Error ? err.message : "Failed to update profile";
+      setError(message);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -159,11 +141,15 @@ export function ProfileTab() {
           <Skeleton key={i} className="h-16 rounded-lg" />
         ))}
       </div>
-    )
+    );
   }
 
   if (!profile) {
-    return <p className="text-sm text-destructive">{error || "Failed to load profile"}</p>
+    return (
+      <p className="text-sm text-destructive">
+        {error || "Failed to load profile"}
+      </p>
+    );
   }
 
   return (
@@ -263,7 +249,9 @@ export function ProfileTab() {
           <PreferenceRow
             title="Email notifications"
             description="Receive alerts about quota, failures, and team activity."
-            control={<Switch checked aria-label="Email notifications enabled" />}
+            control={
+              <Switch checked aria-label="Email notifications enabled" />
+            }
           />
           <PreferenceRow
             title="Default view"
@@ -290,27 +278,49 @@ export function ProfileTab() {
         </CardHeader>
         <CardContent className="space-y-2">
           {[
-            { provider: "Email / Password", icon: Mail, connected: true, detail: profile.email },
-            { provider: "GitHub", icon: Github, connected: false, detail: "Not connected" },
-            { provider: "Google", icon: Chrome, connected: true, detail: "Connected via OAuth" },
+            {
+              provider: "Email / Password",
+              icon: Mail,
+              connected: true,
+              detail: profile.email,
+            },
+            {
+              provider: "GitHub",
+              icon: Github,
+              connected: false,
+              detail: "Not connected",
+            },
+            {
+              provider: "Google",
+              icon: Chrome,
+              connected: true,
+              detail: "Connected via OAuth",
+            },
           ].map((account) => (
-            <div key={account.provider} className="flex items-center gap-3 rounded-md border p-3">
+            <div
+              key={account.provider}
+              className="flex items-center gap-3 rounded-md border p-3"
+            >
               <account.icon className="h-4 w-4 text-muted-foreground" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{account.provider}</p>
-                <p className="truncate text-xs text-muted-foreground">{account.detail}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {account.detail}
+                </p>
               </div>
               {account.connected ? (
                 <Badge variant="success">Connected</Badge>
               ) : (
-                <Button variant="outline" size="sm">Connect</Button>
+                <Button variant="outline" size="sm">
+                  Connect
+                </Button>
               )}
             </div>
           ))}
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -330,7 +340,7 @@ export function AccountTab() {
       <Separator />
       <DangerZone />
     </div>
-  )
+  );
 }
 
 function TwoFactorSection() {
@@ -352,7 +362,8 @@ function TwoFactorSection() {
             <Badge variant="outline">Not enabled</Badge>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            Add an extra layer of security by requiring a verification code from your authenticator app when signing in.
+            Add an extra layer of security by requiring a verification code from
+            your authenticator app when signing in.
           </p>
           <Button className="mt-4">
             <ShieldCheck className="h-4 w-4" />
@@ -361,50 +372,50 @@ function TwoFactorSection() {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function ChangePasswordSection() {
-  const [currentPassword, setCurrentPassword] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setSuccess(false)
+    e.preventDefault();
+    setError("");
+    setSuccess(false);
 
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match")
-      return
+      setError("Passwords do not match");
+      return;
     }
 
     if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters")
-      return
+      setError("Password must be at least 8 characters");
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
     try {
       await authClient.changePassword({
         currentPassword,
         newPassword,
         revokeOtherSessions: false,
-      })
-      setSuccess(true)
-      setCurrentPassword("")
-      setNewPassword("")
-      setConfirmPassword("")
-      setTimeout(() => setSuccess(false), 3000)
+      });
+      setSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setSuccess(false), 3000);
     } catch {
-      setError("Failed to change password. Check your current password.")
+      setError("Failed to change password. Check your current password.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="max-w-lg space-y-4">
@@ -457,7 +468,7 @@ function ChangePasswordSection() {
         </Button>
       </form>
     </div>
-  )
+  );
 }
 
 function PreferenceRow({
@@ -465,9 +476,9 @@ function PreferenceRow({
   description,
   title,
 }: {
-  control: React.ReactNode
-  description: string
-  title: string
+  control: React.ReactNode;
+  description: string;
+  title: string;
 }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -477,83 +488,57 @@ function PreferenceRow({
       </div>
       {control}
     </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Sessions Section
-// ---------------------------------------------------------------------------
-
-function parseUserAgent(ua: string | null): string {
-  if (!ua) return "Unknown device"
-  if (ua.includes("Firefox")) return "Firefox"
-  if (ua.includes("Edg/")) return "Edge"
-  if (ua.includes("Chrome")) return "Chrome"
-  if (ua.includes("Safari")) return "Safari"
-  if (ua.includes("curl")) return "curl"
-  return "Unknown browser"
-}
-
-function timeAgo(date: string): string {
-  const diff = Date.now() - new Date(date).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return "Just now"
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}d ago`
-  return new Date(date).toLocaleDateString()
+  );
 }
 
 function SessionsSection() {
-  const { data: session } = useSession()
-  const [sessions, setSessions] = useState<SessionData[]>([])
-  const [loading, setLoading] = useState(true)
-  const [revokeId, setRevokeId] = useState<string | null>(null)
-  const [revokeAllOpen, setRevokeAllOpen] = useState(false)
+  const { data: session } = useSession();
+  const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [revokeId, setRevokeId] = useState<string | null>(null);
+  const [revokeAllOpen, setRevokeAllOpen] = useState(false);
 
-  const currentToken = session?.session?.token
+  const currentToken = session?.session?.token;
 
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await authClient.listSessions()
+      const res = await authClient.listSessions();
       if (res.data) {
-        setSessions(res.data as unknown as SessionData[])
+        setSessions(res.data as unknown as SessionData[]);
       }
     } catch {
       // ignore
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    fetchSessions()
-  }, [fetchSessions])
+    fetchSessions();
+  }, [fetchSessions]);
 
   const handleRevoke = async () => {
-    if (!revokeId) return
-    const sessionToRevoke = sessions.find((s) => s.id === revokeId)
-    if (!sessionToRevoke) return
+    if (!revokeId) return;
+    const sessionToRevoke = sessions.find((s) => s.id === revokeId);
+    if (!sessionToRevoke) return;
     try {
-      await authClient.revokeSession({ token: sessionToRevoke.token })
-      setRevokeId(null)
-      await fetchSessions()
+      await authClient.revokeSession({ token: sessionToRevoke.token });
+      setRevokeId(null);
+      await fetchSessions();
     } catch {
       // ignore
     }
-  }
+  };
 
   const handleRevokeAll = async () => {
     try {
-      await authClient.revokeOtherSessions()
-      setRevokeAllOpen(false)
-      await fetchSessions()
+      await authClient.revokeOtherSessions();
+      setRevokeAllOpen(false);
+      await fetchSessions();
     } catch {
       // ignore
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -562,10 +547,10 @@ function SessionsSection() {
           <Skeleton key={i} className="h-16 rounded-lg" />
         ))}
       </div>
-    )
+    );
   }
 
-  const otherSessions = sessions.filter((s) => s.token !== currentToken)
+  const otherSessions = sessions.filter((s) => s.token !== currentToken);
 
   return (
     <div className="space-y-6">
@@ -599,7 +584,7 @@ function SessionsSection() {
         </TableHeader>
         <TableBody>
           {sessions.map((s) => {
-            const isCurrent = s.token === currentToken
+            const isCurrent = s.token === currentToken;
             return (
               <TableRow key={s.id}>
                 <TableCell>
@@ -636,7 +621,7 @@ function SessionsSection() {
                   )}
                 </TableCell>
               </TableRow>
-            )
+            );
           })}
         </TableBody>
       </Table>
@@ -684,16 +669,36 @@ function SessionsSection() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
+  );
 }
 
 function LoginHistorySection() {
   const loginHistory = [
-    { time: "Jun 9, 11:30 AM", method: "Email / Password", ip: "192.168.1.42", status: "success" },
-    { time: "Jun 8, 09:15 AM", method: "Google OAuth", ip: "10.0.0.15", status: "success" },
-    { time: "Jun 7, 02:40 PM", method: "Email / Password", ip: "203.0.113.42", status: "failed" },
-    { time: "Jun 6, 10:00 AM", method: "Email / Password", ip: "192.168.1.42", status: "success" },
-  ]
+    {
+      time: "Jun 9, 11:30 AM",
+      method: "Email / Password",
+      ip: "192.168.1.42",
+      status: "success",
+    },
+    {
+      time: "Jun 8, 09:15 AM",
+      method: "Google OAuth",
+      ip: "10.0.0.15",
+      status: "success",
+    },
+    {
+      time: "Jun 7, 02:40 PM",
+      method: "Email / Password",
+      ip: "203.0.113.42",
+      status: "failed",
+    },
+    {
+      time: "Jun 6, 10:00 AM",
+      method: "Email / Password",
+      ip: "192.168.1.42",
+      status: "success",
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -715,11 +720,19 @@ function LoginHistorySection() {
         <TableBody>
           {loginHistory.map((entry) => (
             <TableRow key={`${entry.time}-${entry.ip}`}>
-              <TableCell className="text-sm text-muted-foreground">{entry.time}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {entry.time}
+              </TableCell>
               <TableCell>{entry.method}</TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">{entry.ip}</TableCell>
+              <TableCell className="font-mono text-xs text-muted-foreground">
+                {entry.ip}
+              </TableCell>
               <TableCell>
-                <Badge variant={entry.status === "success" ? "success" : "destructive"}>
+                <Badge
+                  variant={
+                    entry.status === "success" ? "success" : "destructive"
+                  }
+                >
                   {entry.status}
                 </Badge>
               </TableCell>
@@ -728,7 +741,7 @@ function LoginHistorySection() {
         </TableBody>
       </Table>
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -736,33 +749,34 @@ function LoginHistorySection() {
 // ---------------------------------------------------------------------------
 
 function DangerZone() {
-  const router = useRouter()
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [confirmation, setConfirmation] = useState("")
-  const [deleting, setDeleting] = useState(false)
-  const [error, setError] = useState("")
-  const [profile, setProfile] = useState<ProfileData | null>(null)
+  const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+  const [profile, setProfile] = useState<ProfileData | null>(null);
 
   useEffect(() => {
     api
       .get<{ data: ProfileData }>("/profile")
       .then((res) => setProfile(res.data))
-      .catch(() => {})
-  }, [])
+      .catch(() => {});
+  }, []);
 
   const handleDelete = async () => {
-    setError("")
-    setDeleting(true)
+    setError("");
+    setDeleting(true);
     try {
-      await api.delete("/profile", { confirmation })
-      router.push("/sign-in")
+      await api.delete("/profile", { confirmation });
+      router.push("/sign-in");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to delete account"
-      setError(message)
+      const message =
+        err instanceof Error ? err.message : "Failed to delete account";
+      setError(message);
     } finally {
-      setDeleting(false)
+      setDeleting(false);
     }
-  }
+  };
 
   return (
     <div className="space-y-4">
@@ -796,13 +810,15 @@ function DangerZone() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete your account?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action is permanent. All your styles, API keys, tilesets, and data
-              will be deleted. This cannot be undone.
+              This action is permanent. All your styles, API keys, tilesets, and
+              data will be deleted. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-2">
             <Label>
-              Type <span className="font-mono font-semibold">{profile?.email}</span> to confirm
+              Type{" "}
+              <span className="font-mono font-semibold">{profile?.email}</span>{" "}
+              to confirm
             </Label>
             <Input
               value={confirmation}
@@ -826,156 +842,81 @@ function DangerZone() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Execution Tab
-// ---------------------------------------------------------------------------
-
-type JsonValue = string | number | boolean | Record<string, unknown> | unknown[]
-
-const EXECUTION_PROVIDER_PRESETS: Record<
-  ExecutionTargetProvider,
-  {
-    authMode: ExecutionTargetAuthMode
-    region: string
-    config: Record<string, JsonValue>
-    credentials: Record<string, JsonValue>
-    profile: {
-      image: string
-      cpu: string
-      memory: string
-      timeout: string
-      concurrency: string
-    }
-  }
-> = {
-  local: {
-    authMode: "federated",
-    region: "local",
-    config: {
-      queue: "geodata",
-      maxConcurrentJobs: 2,
-      workingDirectory: "/data/storage",
-    },
-    credentials: {},
-    profile: {
-      image: "",
-      cpu: "2",
-      memory: "4096",
-      timeout: "900",
-      concurrency: "2",
-    },
-  },
-  aws_batch: {
-    authMode: "federated",
-    region: "us-east-1",
-    config: {
-      jobQueue: "planisfy-geodata",
-      jobDefinition: "planisfy-geodata-worker",
-      retryAttempts: 1,
-    },
-    credentials: {
-      roleArn: "",
-    },
-    profile: {
-      image: "ghcr.io/planisfy/worker-geodata:latest",
-      cpu: "4",
-      memory: "8192",
-      timeout: "3600",
-      concurrency: "4",
-    },
-  },
-  gcp_batch: {
-    authMode: "federated",
-    region: "us-central1",
-    config: {
-      projectId: "",
-      location: "us-central1",
-      jobNamePrefix: "planisfy-geodata",
-    },
-    credentials: {
-      serviceAccountEmail: "",
-    },
-    profile: {
-      image: "ghcr.io/planisfy/worker-geodata:latest",
-      cpu: "4",
-      memory: "8192",
-      timeout: "3600",
-      concurrency: "4",
-    },
-  },
+  );
 }
 
 export function ExecutionTab() {
-  const [targets, setTargets] = useState<ConsoleExecutionTarget[]>([])
-  const [profiles, setProfiles] = useState<ConsoleWorkerProfile[]>([])
-  const [envByTarget, setEnvByTarget] = useState<Record<string, ConsoleExecutionTargetEnvVar[]>>({})
-  const [selectedTargetId, setSelectedTargetId] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [savingTarget, setSavingTarget] = useState(false)
-  const [savingEnv, setSavingEnv] = useState(false)
-  const [savingProfile, setSavingProfile] = useState(false)
+  const [targets, setTargets] = useState<ConsoleExecutionTarget[]>([]);
+  const [profiles, setProfiles] = useState<ConsoleWorkerProfile[]>([]);
+  const [envByTarget, setEnvByTarget] = useState<
+    Record<string, ConsoleExecutionTargetEnvVar[]>
+  >({});
+  const [selectedTargetId, setSelectedTargetId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [savingTarget, setSavingTarget] = useState(false);
+  const [savingEnv, setSavingEnv] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
 
-  const [targetName, setTargetName] = useState("")
-  const [targetProvider, setTargetProvider] = useState<ExecutionTargetProvider>("local")
-  const [targetAuthMode, setTargetAuthMode] = useState<ExecutionTargetAuthMode>("federated")
-  const [targetRegion, setTargetRegion] = useState("")
-  const [targetConfig, setTargetConfig] = useState("{}")
-  const [targetCredentials, setTargetCredentials] = useState("{}")
+  const [targetName, setTargetName] = useState("");
+  const [targetProvider, setTargetProvider] =
+    useState<ExecutionTargetProvider>("local");
+  const [targetAuthMode, setTargetAuthMode] =
+    useState<ExecutionTargetAuthMode>("federated");
+  const [targetRegion, setTargetRegion] = useState("");
+  const [targetConfig, setTargetConfig] = useState("{}");
+  const [targetCredentials, setTargetCredentials] = useState("{}");
 
-  const [envName, setEnvName] = useState("")
-  const [envValue, setEnvValue] = useState("")
-  const [envDescription, setEnvDescription] = useState("")
+  const [envName, setEnvName] = useState("");
+  const [envValue, setEnvValue] = useState("");
+  const [envDescription, setEnvDescription] = useState("");
 
-  const [profileName, setProfileName] = useState("")
-  const [profileImage, setProfileImage] = useState("")
-  const [profileCommand, setProfileCommand] = useState("")
-  const [profileArgs, setProfileArgs] = useState("")
-  const [profileCpu, setProfileCpu] = useState("")
-  const [profileMemory, setProfileMemory] = useState("")
-  const [profileTimeout, setProfileTimeout] = useState("")
-  const [profileConcurrency, setProfileConcurrency] = useState("")
+  const [profileName, setProfileName] = useState("");
+  const [profileImage, setProfileImage] = useState("");
+  const [profileCommand, setProfileCommand] = useState("");
+  const [profileArgs, setProfileArgs] = useState("");
+  const [profileCpu, setProfileCpu] = useState("");
+  const [profileMemory, setProfileMemory] = useState("");
+  const [profileTimeout, setProfileTimeout] = useState("");
+  const [profileConcurrency, setProfileConcurrency] = useState("");
 
   function applyTargetPreset(provider = targetProvider) {
-    const preset = EXECUTION_PROVIDER_PRESETS[provider]
-    setTargetAuthMode(preset.authMode)
-    setTargetRegion(preset.region)
-    setTargetConfig(formatJson(preset.config))
-    setTargetCredentials(formatJson(preset.credentials))
-    if (!profileImage) setProfileImage(preset.profile.image)
-    if (!profileCpu) setProfileCpu(preset.profile.cpu)
-    if (!profileMemory) setProfileMemory(preset.profile.memory)
-    if (!profileTimeout) setProfileTimeout(preset.profile.timeout)
-    if (!profileConcurrency) setProfileConcurrency(preset.profile.concurrency)
+    const preset = EXECUTION_PROVIDER_PRESETS[provider];
+    setTargetAuthMode(preset.authMode);
+    setTargetRegion(preset.region);
+    setTargetConfig(formatJson(preset.config));
+    setTargetCredentials(formatJson(preset.credentials));
+    if (!profileImage) setProfileImage(preset.profile.image);
+    if (!profileCpu) setProfileCpu(preset.profile.cpu);
+    if (!profileMemory) setProfileMemory(preset.profile.memory);
+    if (!profileTimeout) setProfileTimeout(preset.profile.timeout);
+    if (!profileConcurrency) setProfileConcurrency(preset.profile.concurrency);
   }
 
   function handleTargetProviderChange(value: ExecutionTargetProvider) {
-    setTargetProvider(value)
-    const preset = EXECUTION_PROVIDER_PRESETS[value]
-    setTargetAuthMode(preset.authMode)
-    setTargetRegion(preset.region)
-    setTargetConfig(formatJson(preset.config))
-    setTargetCredentials(formatJson(preset.credentials))
+    setTargetProvider(value);
+    const preset = EXECUTION_PROVIDER_PRESETS[value];
+    setTargetAuthMode(preset.authMode);
+    setTargetRegion(preset.region);
+    setTargetConfig(formatJson(preset.config));
+    setTargetCredentials(formatJson(preset.credentials));
   }
 
   function updateTargetConfigField(key: string, value: string) {
     setTargetConfig((current) => {
-      const parsed = parseLooseJsonObject(current)
-      if (value.trim()) parsed[key] = coerceProviderValue(value)
-      else delete parsed[key]
-      return formatJson(parsed)
-    })
+      const parsed = parseLooseJsonObject(current);
+      if (value.trim()) parsed[key] = coerceProviderValue(value);
+      else delete parsed[key];
+      return formatJson(parsed);
+    });
   }
 
   function updateTargetCredentialField(key: string, value: string) {
     setTargetCredentials((current) => {
-      const parsed = parseLooseJsonObject(current)
-      if (value.trim()) parsed[key] = value
-      else delete parsed[key]
-      return formatJson(parsed)
-    })
+      const parsed = parseLooseJsonObject(current);
+      if (value.trim()) parsed[key] = value;
+      else delete parsed[key];
+      return formatJson(parsed);
+    });
   }
 
   const fetchExecutionSettings = useCallback(async () => {
@@ -983,44 +924,56 @@ export function ExecutionTab() {
       const [targetsRes, profilesRes] = await Promise.all([
         api.listExecutionTargets(),
         api.listWorkerProfiles(),
-      ])
-      setTargets(targetsRes.data)
-      setProfiles(profilesRes.data)
-      const nextSelected = selectedTargetId || targetsRes.data[0]?.id || ""
-      setSelectedTargetId(nextSelected)
+      ]);
+      setTargets(targetsRes.data);
+      setProfiles(profilesRes.data);
+      const nextSelected = selectedTargetId || targetsRes.data[0]?.id || "";
+      setSelectedTargetId(nextSelected);
       if (nextSelected) {
-        const envRes = await api.listExecutionTargetEnv(nextSelected)
-        setEnvByTarget((current) => ({ ...current, [nextSelected]: envRes.data }))
+        const envRes = await api.listExecutionTargetEnv(nextSelected);
+        setEnvByTarget((current) => ({
+          ...current,
+          [nextSelected]: envRes.data,
+        }));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load execution settings")
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to load execution settings",
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [selectedTargetId])
+  }, [selectedTargetId]);
 
   useEffect(() => {
-    fetchExecutionSettings()
-  }, [fetchExecutionSettings])
+    fetchExecutionSettings();
+  }, [fetchExecutionSettings]);
 
   useEffect(() => {
-    if (!selectedTargetId || envByTarget[selectedTargetId]) return
+    if (!selectedTargetId || envByTarget[selectedTargetId]) return;
     api
       .listExecutionTargetEnv(selectedTargetId)
       .then((res) =>
-        setEnvByTarget((current) => ({ ...current, [selectedTargetId]: res.data })),
+        setEnvByTarget((current) => ({
+          ...current,
+          [selectedTargetId]: res.data,
+        })),
       )
       .catch((err) =>
-        toast.error(err instanceof Error ? err.message : "Failed to load target env"),
-      )
-  }, [envByTarget, selectedTargetId])
+        toast.error(
+          err instanceof Error ? err.message : "Failed to load target env",
+        ),
+      );
+  }, [envByTarget, selectedTargetId]);
 
   async function handleCreateTarget(e: React.FormEvent) {
-    e.preventDefault()
-    setSavingTarget(true)
+    e.preventDefault();
+    setSavingTarget(true);
     try {
-      const config = parseJsonObject(targetConfig, "Target config")
-      const credentials = parseJsonObject(targetCredentials, "Credentials")
+      const config = parseJsonObject(targetConfig, "Target config");
+      const credentials = parseJsonObject(targetCredentials, "Credentials");
       const res = await api.createExecutionTarget({
         name: targetName,
         provider: targetProvider,
@@ -1028,79 +981,87 @@ export function ExecutionTab() {
         region: targetRegion || undefined,
         config,
         credentials,
-      })
-      setTargets((current) => [res.data, ...current])
-      setSelectedTargetId(res.data.id)
-      setTargetName("")
-      setTargetProvider("local")
-      setTargetAuthMode("federated")
-      setTargetRegion("")
-      setTargetConfig("{}")
-      setTargetCredentials("{}")
-      toast.success("Execution target created")
+      });
+      setTargets((current) => [res.data, ...current]);
+      setSelectedTargetId(res.data.id);
+      setTargetName("");
+      setTargetProvider("local");
+      setTargetAuthMode("federated");
+      setTargetRegion("");
+      setTargetConfig("{}");
+      setTargetCredentials("{}");
+      toast.success("Execution target created");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create target")
+      toast.error(
+        err instanceof Error ? err.message : "Failed to create target",
+      );
     } finally {
-      setSavingTarget(false)
+      setSavingTarget(false);
     }
   }
 
   async function handleDeleteTarget(id: string) {
     try {
-      await api.deleteExecutionTarget(id)
-      setTargets((current) => current.filter((target) => target.id !== id))
-      if (selectedTargetId === id) setSelectedTargetId("")
-      toast.success("Execution target deleted")
+      await api.deleteExecutionTarget(id);
+      setTargets((current) => current.filter((target) => target.id !== id));
+      if (selectedTargetId === id) setSelectedTargetId("");
+      toast.success("Execution target deleted");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete target")
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete target",
+      );
     }
   }
 
   async function handleCreateEnv(e: React.FormEvent) {
-    e.preventDefault()
-    if (!selectedTargetId) return
-    setSavingEnv(true)
+    e.preventDefault();
+    if (!selectedTargetId) return;
+    setSavingEnv(true);
     try {
       const res = await api.createExecutionTargetEnv(selectedTargetId, {
         name: envName,
         value: envValue,
         description: envDescription || undefined,
         isSecret: true,
-      })
+      });
       setEnvByTarget((current) => ({
         ...current,
         [selectedTargetId]: [...(current[selectedTargetId] ?? []), res.data],
-      }))
-      setEnvName("")
-      setEnvValue("")
-      setEnvDescription("")
-      toast.success("Environment variable saved")
+      }));
+      setEnvName("");
+      setEnvValue("");
+      setEnvDescription("");
+      toast.success("Environment variable saved");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save env variable")
+      toast.error(
+        err instanceof Error ? err.message : "Failed to save env variable",
+      );
     } finally {
-      setSavingEnv(false)
+      setSavingEnv(false);
     }
   }
 
   async function handleDeleteEnv(name: string) {
-    if (!selectedTargetId) return
+    if (!selectedTargetId) return;
     try {
-      await api.deleteExecutionTargetEnv(selectedTargetId, name)
+      await api.deleteExecutionTargetEnv(selectedTargetId, name);
       setEnvByTarget((current) => ({
         ...current,
         [selectedTargetId]: (current[selectedTargetId] ?? []).filter(
           (envVar) => envVar.name !== name,
         ),
-      }))
-      toast.success("Environment variable deleted")
+      }));
+      toast.success("Environment variable deleted");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete env variable")
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete env variable",
+      );
     }
   }
 
   async function handleCreateProfile(e: React.FormEvent) {
-    e.preventDefault()
-    setSavingProfile(true)
+    e.preventDefault();
+    setSavingProfile(true);
     try {
       const res = await api.createWorkerProfile({
         name: profileName,
@@ -1111,31 +1072,35 @@ export function ExecutionTab() {
         memoryMb: numberOrUndefined(profileMemory),
         timeoutSeconds: numberOrUndefined(profileTimeout),
         concurrency: numberOrUndefined(profileConcurrency),
-      })
-      setProfiles((current) => [res.data, ...current])
-      setProfileName("")
-      setProfileImage("")
-      setProfileCommand("")
-      setProfileArgs("")
-      setProfileCpu("")
-      setProfileMemory("")
-      setProfileTimeout("")
-      setProfileConcurrency("")
-      toast.success("Worker profile created")
+      });
+      setProfiles((current) => [res.data, ...current]);
+      setProfileName("");
+      setProfileImage("");
+      setProfileCommand("");
+      setProfileArgs("");
+      setProfileCpu("");
+      setProfileMemory("");
+      setProfileTimeout("");
+      setProfileConcurrency("");
+      toast.success("Worker profile created");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create profile")
+      toast.error(
+        err instanceof Error ? err.message : "Failed to create profile",
+      );
     } finally {
-      setSavingProfile(false)
+      setSavingProfile(false);
     }
   }
 
   async function handleDeleteProfile(id: string) {
     try {
-      await api.deleteWorkerProfile(id)
-      setProfiles((current) => current.filter((profile) => profile.id !== id))
-      toast.success("Worker profile deleted")
+      await api.deleteWorkerProfile(id);
+      setProfiles((current) => current.filter((profile) => profile.id !== id));
+      toast.success("Worker profile deleted");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete profile")
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete profile",
+      );
     }
   }
 
@@ -1146,10 +1111,12 @@ export function ExecutionTab() {
           <Skeleton key={i} className="h-20 rounded-lg" />
         ))}
       </div>
-    )
+    );
   }
 
-  const selectedEnv = selectedTargetId ? envByTarget[selectedTargetId] ?? [] : []
+  const selectedEnv = selectedTargetId
+    ? (envByTarget[selectedTargetId] ?? [])
+    : [];
 
   return (
     <div className="space-y-10">
@@ -1159,10 +1126,17 @@ export function ExecutionTab() {
             <Server className="h-5 w-5 text-muted-foreground" />
             <h2 className="text-lg font-semibold">Execution targets</h2>
           </div>
-          <form onSubmit={handleCreateTarget} className="grid gap-3 md:grid-cols-2">
+          <form
+            onSubmit={handleCreateTarget}
+            className="grid gap-3 md:grid-cols-2"
+          >
             <div className="space-y-2">
               <Label>Name</Label>
-              <Input value={targetName} onChange={(e) => setTargetName(e.target.value)} required />
+              <Input
+                value={targetName}
+                onChange={(e) => setTargetName(e.target.value)}
+                required
+              />
             </div>
             <div className="space-y-2">
               <Label>Provider</Label>
@@ -1186,7 +1160,9 @@ export function ExecutionTab() {
               <Label>Auth mode</Label>
               <Select
                 value={targetAuthMode}
-                onValueChange={(value) => setTargetAuthMode(value as ExecutionTargetAuthMode)}
+                onValueChange={(value) =>
+                  setTargetAuthMode(value as ExecutionTargetAuthMode)
+                }
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -1200,7 +1176,10 @@ export function ExecutionTab() {
             </div>
             <div className="space-y-2">
               <Label>Region</Label>
-              <Input value={targetRegion} onChange={(e) => setTargetRegion(e.target.value)} />
+              <Input
+                value={targetRegion}
+                onChange={(e) => setTargetRegion(e.target.value)}
+              />
             </div>
             <div className="md:col-span-2">
               <ProviderConfigFields
@@ -1244,17 +1223,22 @@ export function ExecutionTab() {
                     <div>
                       <div className="font-medium">{target.name}</div>
                       <div className="text-sm text-muted-foreground">
-                        {targetLabel(target.provider)} {target.region ? `- ${target.region}` : ""}
+                        {targetLabel(target.provider)}{" "}
+                        {target.region ? `- ${target.region}` : ""}
                       </div>
                     </div>
-                    <Badge variant={target.hasCredentials ? "success" : "secondary"}>
+                    <Badge
+                      variant={target.hasCredentials ? "success" : "secondary"}
+                    >
                       {target.authMode}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <Button
                       type="button"
-                      variant={selectedTargetId === target.id ? "secondary" : "outline"}
+                      variant={
+                        selectedTargetId === target.id ? "secondary" : "outline"
+                      }
                       size="sm"
                       onClick={() => setSelectedTargetId(target.id)}
                     >
@@ -1282,7 +1266,10 @@ export function ExecutionTab() {
             <h2 className="text-lg font-semibold">Target env</h2>
           </div>
           <form onSubmit={handleCreateEnv} className="space-y-3">
-            <Select value={selectedTargetId} onValueChange={setSelectedTargetId}>
+            <Select
+              value={selectedTargetId}
+              onValueChange={setSelectedTargetId}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Target" />
               </SelectTrigger>
@@ -1296,17 +1283,30 @@ export function ExecutionTab() {
             </Select>
             <div className="space-y-2">
               <Label>Name</Label>
-              <Input value={envName} onChange={(e) => setEnvName(e.target.value.toUpperCase())} />
+              <Input
+                value={envName}
+                onChange={(e) => setEnvName(e.target.value.toUpperCase())}
+              />
             </div>
             <div className="space-y-2">
               <Label>Value</Label>
-              <Input type="password" value={envValue} onChange={(e) => setEnvValue(e.target.value)} />
+              <Input
+                type="password"
+                value={envValue}
+                onChange={(e) => setEnvValue(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <Input value={envDescription} onChange={(e) => setEnvDescription(e.target.value)} />
+              <Input
+                value={envDescription}
+                onChange={(e) => setEnvDescription(e.target.value)}
+              />
             </div>
-            <Button type="submit" disabled={!selectedTargetId || !envName || !envValue || savingEnv}>
+            <Button
+              type="submit"
+              disabled={!selectedTargetId || !envName || !envValue || savingEnv}
+            >
               {savingEnv ? "Saving..." : "Save variable"}
             </Button>
           </form>
@@ -1321,7 +1321,9 @@ export function ExecutionTab() {
             <TableBody>
               {selectedEnv.map((envVar) => (
                 <TableRow key={envVar.id}>
-                  <TableCell className="font-mono text-xs">{envVar.name}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {envVar.name}
+                  </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
                     {envVar.value}
                   </TableCell>
@@ -1349,38 +1351,74 @@ export function ExecutionTab() {
           <Monitor className="h-5 w-5 text-muted-foreground" />
           <h2 className="text-lg font-semibold">Worker profiles</h2>
         </div>
-        <form onSubmit={handleCreateProfile} className="grid gap-3 md:grid-cols-4">
+        <form
+          onSubmit={handleCreateProfile}
+          className="grid gap-3 md:grid-cols-4"
+        >
           <div className="space-y-2">
             <Label>Name</Label>
-            <Input value={profileName} onChange={(e) => setProfileName(e.target.value)} required />
+            <Input
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              required
+            />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Image</Label>
-            <Input value={profileImage} onChange={(e) => setProfileImage(e.target.value)} />
+            <Input
+              value={profileImage}
+              onChange={(e) => setProfileImage(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label>CPU</Label>
-            <Input type="number" min={1} value={profileCpu} onChange={(e) => setProfileCpu(e.target.value)} />
+            <Input
+              type="number"
+              min={1}
+              value={profileCpu}
+              onChange={(e) => setProfileCpu(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label>Memory MB</Label>
-            <Input type="number" min={128} value={profileMemory} onChange={(e) => setProfileMemory(e.target.value)} />
+            <Input
+              type="number"
+              min={128}
+              value={profileMemory}
+              onChange={(e) => setProfileMemory(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label>Timeout seconds</Label>
-            <Input type="number" min={1} value={profileTimeout} onChange={(e) => setProfileTimeout(e.target.value)} />
+            <Input
+              type="number"
+              min={1}
+              value={profileTimeout}
+              onChange={(e) => setProfileTimeout(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label>Concurrency</Label>
-            <Input type="number" min={1} value={profileConcurrency} onChange={(e) => setProfileConcurrency(e.target.value)} />
+            <Input
+              type="number"
+              min={1}
+              value={profileConcurrency}
+              onChange={(e) => setProfileConcurrency(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label>Command</Label>
-            <Input value={profileCommand} onChange={(e) => setProfileCommand(e.target.value)} />
+            <Input
+              value={profileCommand}
+              onChange={(e) => setProfileCommand(e.target.value)}
+            />
           </div>
           <div className="space-y-2 md:col-span-3">
             <Label>Args</Label>
-            <Input value={profileArgs} onChange={(e) => setProfileArgs(e.target.value)} />
+            <Input
+              value={profileArgs}
+              onChange={(e) => setProfileArgs(e.target.value)}
+            />
           </div>
           <div className="md:col-span-4">
             <Button type="submit" disabled={!profileName || savingProfile}>
@@ -1407,8 +1445,12 @@ export function ExecutionTab() {
                   {profile.image ?? "-"}
                 </TableCell>
                 <TableCell>{profile.cpu ?? "-"}</TableCell>
-                <TableCell>{profile.memoryMb ? `${profile.memoryMb} MB` : "-"}</TableCell>
-                <TableCell>{profile.timeoutSeconds ? `${profile.timeoutSeconds}s` : "-"}</TableCell>
+                <TableCell>
+                  {profile.memoryMb ? `${profile.memoryMb} MB` : "-"}
+                </TableCell>
+                <TableCell>
+                  {profile.timeoutSeconds ? `${profile.timeoutSeconds}s` : "-"}
+                </TableCell>
                 <TableCell>
                   <Button
                     type="button"
@@ -1425,13 +1467,7 @@ export function ExecutionTab() {
         </Table>
       </section>
     </div>
-  )
-}
-
-function targetLabel(provider: ExecutionTargetProvider) {
-  if (provider === "aws_batch") return "AWS Batch"
-  if (provider === "gcp_batch") return "Google Cloud Batch"
-  return "Local"
+  );
 }
 
 function ProviderConfigFields({
@@ -1442,15 +1478,17 @@ function ProviderConfigFields({
   onCredentialChange,
   onApplyPreset,
 }: {
-  provider: ExecutionTargetProvider
-  config: Record<string, unknown>
-  credentials: Record<string, unknown>
-  onConfigChange: (key: string, value: string) => void
-  onCredentialChange: (key: string, value: string) => void
-  onApplyPreset: () => void
+  provider: ExecutionTargetProvider;
+  config: Record<string, unknown>;
+  credentials: Record<string, unknown>;
+  onConfigChange: (key: string, value: string) => void;
+  onCredentialChange: (key: string, value: string) => void;
+  onApplyPreset: () => void;
 }) {
   const text = (source: Record<string, unknown>, key: string) =>
-    source[key] === undefined || source[key] === null ? "" : String(source[key])
+    source[key] === undefined || source[key] === null
+      ? ""
+      : String(source[key]);
 
   return (
     <div className="rounded-md border bg-muted/20 p-3">
@@ -1461,7 +1499,12 @@ function ProviderConfigFields({
             Fill the common provider fields, then use JSON for advanced options.
           </p>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={onApplyPreset}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onApplyPreset}
+        >
           <Wand2 className="mr-1.5 h-4 w-4" />
           Preset
         </Button>
@@ -1481,13 +1524,17 @@ function ProviderConfigFields({
               type="number"
               min={1}
               value={text(config, "maxConcurrentJobs")}
-              onChange={(e) => onConfigChange("maxConcurrentJobs", e.target.value)}
+              onChange={(e) =>
+                onConfigChange("maxConcurrentJobs", e.target.value)
+              }
             />
           </Field>
           <Field label="Working directory">
             <Input
               value={text(config, "workingDirectory")}
-              onChange={(e) => onConfigChange("workingDirectory", e.target.value)}
+              onChange={(e) =>
+                onConfigChange("workingDirectory", e.target.value)
+              }
               placeholder="/data/storage"
             />
           </Field>
@@ -1563,60 +1610,22 @@ function ProviderConfigFields({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function Field({
   label,
   children,
 }: {
-  label: string
-  children: React.ReactNode
+  label: string;
+  children: React.ReactNode;
 }) {
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
       {children}
     </div>
-  )
-}
-
-function parseJsonObject(value: string, label: string) {
-  const parsed = JSON.parse(value || "{}") as unknown
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new Error(`${label} must be a JSON object`)
-  }
-  return parsed as Record<string, unknown>
-}
-
-function parseLooseJsonObject(value: string) {
-  try {
-    const parsed = JSON.parse(value || "{}") as unknown
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
-    return parsed as Record<string, unknown>
-  } catch {
-    return {}
-  }
-}
-
-function formatJson(value: Record<string, unknown>) {
-  return JSON.stringify(value, null, 2)
-}
-
-function coerceProviderValue(value: string) {
-  const trimmed = value.trim()
-  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed)
-  if (trimmed === "true") return true
-  if (trimmed === "false") return false
-  return value
-}
-
-function splitShellList(value: string) {
-  return value.trim() ? value.trim().split(/\s+/) : []
-}
-
-function numberOrUndefined(value: string) {
-  return value.trim() ? Number(value) : undefined
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1624,9 +1633,9 @@ function numberOrUndefined(value: string) {
 // ---------------------------------------------------------------------------
 
 export function BillingTab() {
-  const [billing, setBilling] = useState<BillingInfo | null>(null)
-  const [plans, setPlans] = useState<PlanInfo[]>([])
-  const [loading, setLoading] = useState(true)
+  const [billing, setBilling] = useState<BillingInfo | null>(null);
+  const [plans, setPlans] = useState<PlanInfo[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
@@ -1634,12 +1643,12 @@ export function BillingTab() {
       api.get<PlanInfo[]>("/billing/plans"),
     ])
       .then(([b, p]) => {
-        setBilling(b)
-        setPlans(p)
+        setBilling(b);
+        setPlans(p);
       })
       .catch(console.error)
-      .finally(() => setLoading(false))
-  }, [])
+      .finally(() => setLoading(false));
+  }, []);
 
   if (loading || !billing) {
     return (
@@ -1648,7 +1657,7 @@ export function BillingTab() {
           <Skeleton key={i} className="h-24 rounded-lg" />
         ))}
       </div>
-    )
+    );
   }
 
   const quotaColor =
@@ -1656,7 +1665,7 @@ export function BillingTab() {
       ? "bg-red-500"
       : billing.quotaPercent >= 70
         ? "bg-yellow-500"
-        : "bg-green-500"
+        : "bg-green-500";
 
   return (
     <div className="space-y-6">
@@ -1699,8 +1708,7 @@ export function BillingTab() {
                 {billing.usage.monthlyUnits.toLocaleString()}
                 <span className="text-sm font-normal text-muted-foreground">
                   {" "}
-                  /{" "}
-                  {formatLimit(billing.limits.monthlyUnits)}
+                  / {formatLimit(billing.limits.monthlyUnits)}
                 </span>
               </p>
               <div className="h-2 bg-muted rounded-full mt-1">
@@ -1718,8 +1726,7 @@ export function BillingTab() {
                 {billing.usage.styles}
                 <span className="text-sm font-normal text-muted-foreground">
                   {" "}
-                  /{" "}
-                  {formatLimit(billing.limits.maxStyles)}
+                  / {formatLimit(billing.limits.maxStyles)}
                 </span>
               </p>
             </div>
@@ -1729,8 +1736,7 @@ export function BillingTab() {
                 {billing.usage.sources}
                 <span className="text-sm font-normal text-muted-foreground">
                   {" "}
-                  /{" "}
-                  {formatLimit(billing.limits.maxSources)}
+                  / {formatLimit(billing.limits.maxSources)}
                 </span>
               </p>
             </div>
@@ -1740,8 +1746,7 @@ export function BillingTab() {
                 {billing.usage.apiKeys}
                 <span className="text-sm font-normal text-muted-foreground">
                   {" "}
-                  /{" "}
-                  {formatLimit(billing.limits.maxApiKeys)}
+                  / {formatLimit(billing.limits.maxApiKeys)}
                 </span>
               </p>
             </div>
@@ -1760,11 +1765,11 @@ export function BillingTab() {
               onClick={async () => {
                 try {
                   const { url } = await api.get<{ url: string }>(
-                    "/billing/portal"
-                  )
-                  window.open(url, "_blank")
+                    "/billing/portal",
+                  );
+                  window.open(url, "_blank");
                 } catch {
-                  toast.error("Billing portal is not available")
+                  toast.error("Billing portal is not available");
                 }
               }}
             >
@@ -1778,7 +1783,7 @@ export function BillingTab() {
       <h2 className="text-lg font-semibold">Plans</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {plans.map((plan) => {
-          const isCurrent = plan.id === billing.plan
+          const isCurrent = plan.id === billing.plan;
           return (
             <Card key={plan.id} className={isCurrent ? "border-primary" : ""}>
               <CardHeader>
@@ -1839,18 +1844,18 @@ export function BillingTab() {
                     onClick={async () => {
                       if (!plan.checkoutAvailable) {
                         toast.info(
-                          "Billing is not configured yet. Set Dodo Payments credentials to enable payments."
-                        )
-                        return
+                          "Billing is not configured yet. Set Dodo Payments credentials to enable payments.",
+                        );
+                        return;
                       }
                       try {
                         const { url } = await api.post<{ url: string }>(
                           "/billing/checkout",
-                          { planId: plan.id }
-                        )
-                        window.open(url, "_blank")
+                          { planId: plan.id },
+                        );
+                        window.open(url, "_blank");
                       } catch {
-                        toast.error("Unable to start checkout")
+                        toast.error("Unable to start checkout");
                       }
                     }}
                   >
@@ -1861,7 +1866,7 @@ export function BillingTab() {
                 )}
               </CardContent>
             </Card>
-          )
+          );
         })}
       </div>
 
@@ -1881,16 +1886,39 @@ export function BillingTab() {
             </TableHeader>
             <TableBody>
               {[
-                { id: "INV-2026-006", period: "Jun 2026", amount: "$0.00", status: "current" },
-                { id: "INV-2026-005", period: "May 2026", amount: "$0.00", status: "paid" },
-                { id: "INV-2026-004", period: "Apr 2026", amount: "$0.00", status: "paid" },
+                {
+                  id: "INV-2026-006",
+                  period: "Jun 2026",
+                  amount: "$0.00",
+                  status: "current",
+                },
+                {
+                  id: "INV-2026-005",
+                  period: "May 2026",
+                  amount: "$0.00",
+                  status: "paid",
+                },
+                {
+                  id: "INV-2026-004",
+                  period: "Apr 2026",
+                  amount: "$0.00",
+                  status: "paid",
+                },
               ].map((invoice) => (
                 <TableRow key={invoice.id}>
-                  <TableCell className="font-mono text-xs">{invoice.id}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {invoice.id}
+                  </TableCell>
                   <TableCell>{invoice.period}</TableCell>
-                  <TableCell className="font-medium">{invoice.amount}</TableCell>
+                  <TableCell className="font-medium">
+                    {invoice.amount}
+                  </TableCell>
                   <TableCell>
-                    <Badge variant={invoice.status === "paid" ? "success" : "secondary"}>
+                    <Badge
+                      variant={
+                        invoice.status === "paid" ? "success" : "secondary"
+                      }
+                    >
                       {invoice.status}
                     </Badge>
                   </TableCell>
@@ -1901,20 +1929,5 @@ export function BillingTab() {
         </CardContent>
       </Card>
     </div>
-  )
-}
-
-function billingStatusLabel(status: BillingInfo["billingStatus"]) {
-  if (status === "checkout_unavailable") return "Checkout unavailable"
-  if (status === "active_subscription") return "Active subscription"
-  if (status === "free_plan") return "Free plan"
-  if (status === "past_due") return "Past due"
-  return status.charAt(0).toUpperCase() + status.slice(1)
-}
-
-function billingStatusVariant(status: BillingInfo["billingStatus"]) {
-  if (status === "active_subscription" || status === "trialing") return "success"
-  if (status === "checkout_unavailable" || status === "past_due") return "warning"
-  if (status === "canceled") return "destructive"
-  return "secondary"
+  );
 }
