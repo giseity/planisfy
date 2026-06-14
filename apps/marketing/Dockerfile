@@ -21,6 +21,11 @@ WORKDIR /app
 COPY --from=deps /app ./
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
+ENV BETTER_AUTH_SECRET=change-this-secret-in-production-min-32-chars
+ENV NEXT_PUBLIC_API_URL=http://localhost:4000
+ENV NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3000
+ENV NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
 RUN pnpm --filter marketing build
 
 FROM base AS runner

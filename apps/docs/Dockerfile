@@ -7,6 +7,8 @@ FROM base AS deps
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/docs/package.json apps/docs/
+COPY apps/docs/source.config.ts apps/docs/
+COPY apps/docs/content apps/docs/content
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter docs...
 
@@ -15,6 +17,12 @@ WORKDIR /app
 COPY --from=deps /app ./
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
+ENV BETTER_AUTH_SECRET=change-this-secret-in-production-min-32-chars
+ENV INTERNAL_API_SECRET=change-this-internal-secret
+ENV NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3002
+ENV NEXT_PUBLIC_API_URL=http://localhost:4000
+ENV NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
 RUN pnpm --filter docs build
 
 FROM base AS runner

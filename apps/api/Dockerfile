@@ -40,6 +40,7 @@ USER hono
 
 COPY --from=build --chown=hono:nodejs /app/node_modules /app/node_modules
 COPY --from=build --chown=hono:nodejs /app/packages /app/packages
+COPY --from=build --chown=hono:nodejs /app/scripts /app/scripts
 COPY --from=build --chown=hono:nodejs /app/apps/api/node_modules ./node_modules
 COPY --from=build --chown=hono:nodejs /app/apps/api/dist ./dist
 COPY --from=build --chown=hono:nodejs /app/apps/api/package.json ./
