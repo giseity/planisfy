@@ -32,6 +32,11 @@ and tests should preserve:
   `@planisfy/platform-policy`.
 - Console, Marketing, Docs, Admin, API, worker-geodata, Postgres, Redis,
   Martin, Valhalla, and optional MinIO/supervisor Compose services exist.
+- The local Docker stack has been smoke-verified with Stuttgart fixtures across
+  API, web apps, worker-geodata, Martin PMTiles, Martin glyphs, Pelias
+  geocoding, Valhalla routing, elevation, and the static renderer. The latest
+  observed `/setup/preflight` summary was `17 pass`, `7 warn`, `0 fail`,
+  `0 blocking`.
 - Self-host setup creates local mount points, seeds fixture styles, validates
   source-layer contracts, and exposes `/setup/preflight`.
 - API sessions, API keys, scopes, rate limits, usage logging, billing status,
@@ -52,6 +57,9 @@ and tests should preserve:
 - Valhalla readiness is graph-aware: health/preflight submit a small route
   probe and report degraded when the service is up but no matching graph is
   mounted.
+- The default Valhalla readiness probe targets Stuttgart coordinates, matching
+  the local Stuttgart PMTiles and the documented Stuttgart Valhalla dev graph
+  fixture.
 - Published TileJSON verifies the promoted PMTiles object before advertising
   tile URLs.
 - Rebuild from original upload refuses early when the original upload artifact
@@ -182,7 +190,8 @@ internal tables or logs.
 
 **Current state:** Operations surfaces, schedules, notifications, backups,
 restore, health, support bundle scripts, worker heartbeat, SSE operation
-updates, Valhalla route readiness, and artifact sickness checks exist.
+updates, Valhalla route readiness, local static rendering, local Pelias
+geocoding, and artifact sickness checks exist.
 
 **Remaining evidence:**
 
@@ -202,8 +211,9 @@ updates, Valhalla route readiness, and artifact sickness checks exist.
 that exists, not the product we intend to have later.
 
 **Current state:** README, API tile docs, self-host storage docs, and Valhalla
-readiness docs now reflect the current tile delivery and health contracts in the
-core paths. Several public docs still read like future marketing copy.
+readiness docs now reflect the current tile delivery, local service, and health
+contracts in the core paths. Several public docs still read like future
+marketing copy.
 
 **Remaining evidence:**
 

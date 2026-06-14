@@ -36,9 +36,10 @@ Still in progress or externally dependent:
   GeoParquet access; larger import UX and managed data releases are still in progress
 - Basemap generation now has a Planetiler regional harness, but global basemap
   releases and managed data packages remain later work
-- Routing requires Valhalla graph data under `infra/docker/data/valhalla_data`;
-  health/preflight report Valhalla as degraded when the process is up but the
-  route-readiness probe cannot route
+- Routing uses Valhalla with graph data under `infra/docker/data/valhalla_data`;
+  the documented Stuttgart dev graph fixture matches the default route-readiness
+  probe, and health/preflight report Valhalla as degraded when the process is up
+  but the probe cannot route
 - Geocoding requires a Pelias-compatible service; no Nominatim fallback is used
 - Glyphs are served locally through Martin when `scripts/fonts-dev.sh download`
   has hydrated `infra/docker/data/fonts`
@@ -236,6 +237,8 @@ Local demo assets:
 - Optional PMTiles preflight/download controls: `DEMO_PMTILES_PATH`, `DEMO_PMTILES_URL`, and `DEMO_PMTILES_SHA256`
 - Regional basemap build harness: `pnpm -F @planisfy/map-styles build:planetiler-regional`
 - Pelias Stuttgart CSV fixture: `infra/docker/data/pelias/csv/stuttgart.csv`
+- Valhalla Stuttgart graph fixture: `infra/docker/data/valhalla_data/Stuttgart.osm.pbf`
+  plus generated `valhalla_tiles.tar`
 - Local object storage mount: `infra/docker/data/storage`
 - Recommended self-host artifact storage: MinIO/S3-compatible storage via the
   Compose `with-minio` profile
@@ -256,7 +259,22 @@ curl "http://localhost:3100/v1/search?text=Schlossplatz&sources=planisfy_fixture
 
 Valhalla readiness is route-backed, not just process-backed. Set
 `VALHALLA_READINESS_ROUTE=lon,lat;lon,lat` when the default Stuttgart probe is
-outside the mounted routing graph.
+outside the mounted routing graph. The default Stuttgart probe is:
+
+```text
+9.1829,48.7758;9.1901,48.7784
+```
+
+Generate a local Stuttgart Valhalla graph after downloading
+`Stuttgart.osm.pbf` into `infra/docker/data/valhalla_data/`:
+
+```bash
+docker run --rm \
+  -v "$PWD/infra/docker/data/valhalla_data:/custom_files" \
+  -v "$PWD/infra/docker/configs/valhalla.json:/etc/valhalla/valhalla.json:ro" \
+  ghcr.io/valhalla/valhalla:3.7.0 \
+  sh -lc 'rm -rf /custom_files/valhalla_tiles /custom_files/valhalla_tiles.tar && mkdir -p /custom_files/valhalla_tiles && valhalla_build_tiles -c /etc/valhalla/valhalla.json /custom_files/Stuttgart.osm.pbf && valhalla_build_extract -c /etc/valhalla/valhalla.json -v'
+```
 
 Run the Docker Compose smoke test:
 

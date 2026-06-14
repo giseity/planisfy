@@ -54,6 +54,22 @@ scripts/self-host-default-map-smoke.mjs
 It verifies the PMTiles magic header, Martin TileJSON vector layer metadata,
 and a non-empty vector tile around Stuttgart.
 
+For full local service smoke after the stack is already running, verify the
+graph-backed and browser-backed services explicitly:
+
+```bash
+curl "http://localhost:3100/v1/search?text=Stuttgart&size=1"
+curl -X POST http://localhost:3007/route \
+  -H 'content-type: application/json' \
+  --data '{"locations":[{"lon":9.1829,"lat":48.7758},{"lon":9.1901,"lat":48.7784}],"costing":"auto","units":"kilometers"}'
+curl http://localhost:4300/health
+```
+
+`/setup/preflight` should have no blocking failures for a local full-stack
+dev run. Production readiness can still warn about release manifests,
+credential encryption, Overture release selection, email, billing, and other
+operator choices.
+
 Upload-format smoke coverage lives in `apps/worker-geodata`: the fast worker
 tests validate GeoJSON, CSV, zipped Shapefile, PMTiles, and MBTiles fixtures
 without requiring GDAL, Tippecanoe, Redis, Postgres, or object storage.
@@ -73,4 +89,5 @@ The trust gate now includes:
 - Docker image builds for API, Console, Admin, Docs, Marketing,
   worker-geodata, and self-host supervisor
 - non-binary Compose smoke
-- optional/manual PMTiles demo-data and browser render smoke
+- optional/manual PMTiles, Pelias, Valhalla routing, and browser/static-renderer
+  smoke

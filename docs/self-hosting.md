@@ -101,6 +101,48 @@ scripts/self-host-default-map-smoke.mjs
 The smoke verifies the PMTiles magic header, Martin TileJSON vector layer
 metadata, and a real non-empty vector tile around Stuttgart.
 
+## Valhalla Dev Graph
+
+Valhalla readiness is route-backed. A container that answers `/status` but has
+no graph for the readiness coordinates is reported as degraded by
+`/setup/preflight`.
+
+The default readiness probe uses Stuttgart:
+
+```text
+9.1829,48.7758;9.1901,48.7784
+```
+
+For local full-stack coverage, use a Stuttgart OSM PBF extract, such as the
+BBBike Stuttgart Protocolbuffer extract, and keep it under the ignored runtime
+data mount:
+
+```bash
+mkdir -p infra/docker/data/valhalla_data
+curl -L --fail \
+  -o infra/docker/data/valhalla_data/Stuttgart.osm.pbf \
+  https://download.bbbike.org/osm/bbbike/Stuttgart/Stuttgart.osm.pbf
+```
+
+Then build Valhalla graph tiles and the runtime tile extract:
+
+```bash
+docker run --rm \
+  -v "$PWD/infra/docker/data/valhalla_data:/custom_files" \
+  -v "$PWD/infra/docker/configs/valhalla.json:/etc/valhalla/valhalla.json:ro" \
+  ghcr.io/valhalla/valhalla:3.7.0 \
+  sh -lc 'rm -rf /custom_files/valhalla_tiles /custom_files/valhalla_tiles.tar && mkdir -p /custom_files/valhalla_tiles && valhalla_build_tiles -c /etc/valhalla/valhalla.json /custom_files/Stuttgart.osm.pbf && valhalla_build_extract -c /etc/valhalla/valhalla.json -v'
+```
+
+Restart Valhalla and confirm routing:
+
+```bash
+docker compose --env-file .env -f infra/docker/docker-compose.yml up -d valhalla
+curl -X POST http://localhost:3007/route \
+  -H 'content-type: application/json' \
+  --data '{"locations":[{"lon":9.1829,"lat":48.7758},{"lon":9.1901,"lat":48.7784}],"costing":"auto","units":"kilometers"}'
+```
+
 Optional flags:
 
 ```bash
@@ -296,7 +338,7 @@ webhook secret, and the Pro product ID are required readiness capabilities.
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `infra/docker/data/pmtiles/`                | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `planisfy.basic` source used by Planisfy Streets.    |
 | `infra/docker/data/pelias/csv/`             | Tiny Pelias CSV fixture imported by `scripts/pelias-dev-fixture.sh`.                                               |
-| `infra/docker/data/valhalla_data/`          | Valhalla graph/runtime data mounted at `/custom_files`.                                                            |
+| `infra/docker/data/valhalla_data/`          | Valhalla graph/runtime data mounted at `/custom_files`; the Stuttgart dev fixture uses `Stuttgart.osm.pbf` plus generated `valhalla_tiles.tar`. |
 | `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/uploads/`        | Local upload/object storage area.                                                                                  |
 | `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/styles/`         | Demo and published style JSON. The setup script seeds the legacy, light, and dark Planisfy Streets fixture styles. |
 | `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/martin-sources/` | Local aliases for published PMTiles/MBTiles artifacts when using filesystem storage. Published PMTiles are served by the API from storage. |
@@ -448,8 +490,9 @@ Expected notes:
   process uptime, and build info.
 - Martin can start without `stuttgart.pmtiles`, but tile requests for
   `planisfy.basic` or `planisfy.basic@1` require that local file.
-- Valhalla starts with the mounted data directory, but routing quality depends
-  on graph tiles placed in `infra/docker/data/valhalla_data/`.
+- Valhalla starts with the mounted data directory, and `/setup/preflight`
+  reports it as passing only when the configured route-readiness probe can
+  route through the mounted graph.
 
 ## Default Service URLs
 
@@ -462,11 +505,14 @@ Expected notes:
 | API       | <http://localhost:4000> |
 | Martin    | <http://localhost:3005> |
 | Valhalla  | <http://localhost:3007> |
+| Pelias    | <http://localhost:3100> |
+| Static renderer | <http://localhost:4300> |
 
 ## Target Additions
 
 - PostGIS-enabled database image.
-- broader demo-data smoke coverage with real PMTiles fixtures.
+- broader automated demo-data smoke coverage for PMTiles, Valhalla routing,
+  Pelias geocoding, and static PNG rendering.
 
 ## Acceptance
 
@@ -475,7 +521,9 @@ Expected notes:
   published tile alias storage, and PMTiles readiness.
 - Console shows a real map when compatible PMTiles are supplied.
 - Demo style, source metadata, and sample tiles agree.
-- Health reports API, database, Redis, Martin, Valhalla, and worker-geodata heartbeat state.
+- Health/preflight reports API, database, Redis, Martin, Valhalla, Pelias,
+  static rendering, and worker-geodata state without blocking on optional
+  managed billing or email.
 - New developers can complete setup from the README and docs.
 
 ## Console Navigation Notes
