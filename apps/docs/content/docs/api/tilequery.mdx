@@ -3,14 +3,18 @@ title: Tilequery API
 description: Retrieve data about features from vector tilesets based on a given latitude and longitude.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+import { Callout } from "fumadocs-ui/components/callout";
 
 # Tilequery API
 
 The **Planisfy Tilequery API** allows you to retrieve data about specific features from vector tilesets, based on a given latitude and longitude. Our API is drop-in compatible with Mapbox Tilequery v1, powered by open-source vector tile technology.
 
 <Callout type="info" title="Data Source">
-Tilequery queries are powered by <a href="https://maplibre.org/martin/" target="_blank">Martin</a>, serving vector tiles from PMTiles or PostgreSQL with PostGIS.
+  Tilequery queries are powered by{" "}
+  <a href="https://maplibre.org/martin/" target="_blank">
+    Martin
+  </a>
+  , serving vector tiles from PMTiles or PostgreSQL with PostGIS.
 </Callout>
 
 ---
@@ -21,10 +25,10 @@ Tilequery queries are powered by <a href="https://maplibre.org/martin/" target="
 GET https://api.planisfy.com/v4/{tileset_id}/tilequery/{lon},{lat}.json
 ```
 
-| Component | Description |
-|-----------|-------------|
-| `tileset_id` | The ID of the map/tileset being queried. Use a comma-separated list for up to 25 tilesets |
-| `{lon},{lat}` | The longitude and latitude coordinates to query |
+| Component     | Description                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| `tileset_id`  | The ID of the map/tileset being queried. Use a comma-separated list for up to 25 tilesets |
+| `{lon},{lat}` | The longitude and latitude coordinates to query                                           |
 
 ---
 
@@ -32,25 +36,27 @@ GET https://api.planisfy.com/v4/{tileset_id}/tilequery/{lon},{lat}.json
 
 ### Required Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `tileset_id` | `string` | The ID of the tileset to query. To query multiple tilesets, use comma-separated values (max 25) |
-| `{lon},{lat}` | `number` | The longitude and latitude coordinates to query |
+| Parameter     | Type     | Description                                                                                     |
+| ------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `tileset_id`  | `string` | The ID of the tileset to query. To query multiple tilesets, use comma-separated values (max 25) |
+| `{lon},{lat}` | `number` | The longitude and latitude coordinates to query                                                 |
 
 ### Optional Parameters
 
 #### Vector Tileset Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `radius` | `number` | `0` | Distance in meters to search for features. `0` = point-in-polygon query. Required for point/line features |
-| `limit` | `integer` | `5` | Number of features to return (1-50). Returns closest features first |
-| `dedupe` | `boolean` | `true` | Deduplicate features with same layer, geometry type, ID, and properties |
-| `geometry` | `string` | `all` | Filter by geometry type: `polygon`, `linestring`, or `point` |
-| `layers` | `string` | `all` | Comma-separated list of layers to query (skips non-existent layers) |
+| Parameter  | Type      | Default | Description                                                                                               |
+| ---------- | --------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `radius`   | `number`  | `0`     | Distance in meters to search for features. `0` = point-in-polygon query. Required for point/line features |
+| `limit`    | `integer` | `5`     | Number of features to return (1-50). Returns closest features first                                       |
+| `dedupe`   | `boolean` | `true`  | Deduplicate features with same layer, geometry type, ID, and properties                                   |
+| `geometry` | `string`  | `all`   | Filter by geometry type: `polygon`, `linestring`, or `point`                                              |
+| `layers`   | `string`  | `all`   | Comma-separated list of layers to query (skips non-existent layers)                                       |
 
 <Callout type="tip" title="Radius Behavior">
-When using a radius, queries search tiles at the tileset's maximum zoom level, including the intersecting tile plus eight surrounding tiles. Large radii with large point/line datasets may not return all possible features.
+  When using a radius, queries search tiles at the tileset's maximum zoom level,
+  including the intersecting tile plus eight surrounding tiles. Large radii with
+  large point/line datasets may not return all possible features.
 </Callout>
 
 ---
@@ -63,35 +69,35 @@ When using a radius, queries search tiles at the tileset's maximum zoom level, i
 
 ```bash
 # Query which polygon contains a point
-curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json"
 ```
 
 #### Radius Query
 
 ```bash
 # Find features within 100 meters
-curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?radius=100&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?radius=100"
 ```
 
 #### Multiple Tilesets
 
 ```bash
 # Query multiple tilesets at once
-curl "https://api.planisfy.com/v4/mapbox.places,mapbox.streets/tilequery/-122.4194,37.7749.json?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places,mapbox.streets/tilequery/-122.4194,37.7749.json"
 ```
 
 #### Layer Filtering
 
 ```bash
 # Query specific layers only
-curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?layers=poi,landuse&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?layers=poi,landuse"
 ```
 
 #### Geometry Filtering
 
 ```bash
 # Return only polygons
-curl "https://api.planisfy.com/v4/mapbox.buildings/tilequery/-122.4194,37.7749.json?geometry=polygon&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.buildings/tilequery/-122.4194,37.7749.json?geometry=polygon"
 ```
 
 ### JavaScript (Fetch)
@@ -100,7 +106,7 @@ curl "https://api.planisfy.com/v4/mapbox.buildings/tilequery/-122.4194,37.7749.j
 // Point-in-polygon query
 async function queryPointInPolygon(lng, lat) {
   const response = await fetch(
-    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?access_token=YOUR_KEY`
+    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json`,
   );
   const data = await response.json();
   return data;
@@ -109,16 +115,16 @@ async function queryPointInPolygon(lng, lat) {
 // Radius query
 async function queryNearbyFeatures(lng, lat, radiusMeters = 100) {
   const response = await fetch(
-    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?radius=${radiusMeters}&limit=10&access_token=YOUR_KEY`
+    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?radius=${radiusMeters}&limit=10`,
   );
   const data = await response.json();
   return data;
 }
 
 // Query specific layers
-async function queryLayers(lng, lat, layers = ['poi', 'transit']) {
+async function queryLayers(lng, lat, layers = ["poi", "transit"]) {
   const response = await fetch(
-    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?layers=${layers.join(',')}&access_token=YOUR_KEY`
+    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?layers=${layers.join(",")}`,
   );
   const data = await response.json();
   return data;
@@ -129,35 +135,35 @@ async function queryLayers(lng, lat, layers = ['poi', 'transit']) {
 
 ```javascript
 const map = new maplibregl.Map({
-  container: 'map',
-  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY',
+  container: "map",
+  style: "https://api.planisfy.com/styles/v1/planisfy/basic",
   center: [-122.4194, 37.7749],
-  zoom: 14
+  zoom: 14,
 });
 
 // Click to query features
-map.on('click', async (e) => {
+map.on("click", async (e) => {
   const { lng, lat } = e.lngLat;
 
   const response = await fetch(
-    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?radius=50&limit=5&access_token=YOUR_KEY`
+    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?radius=50&limit=5`,
   );
   const data = await response.json();
 
-  console.log('Found features:', data.features.length);
+  console.log("Found features:", data.features.length);
 
   // Add results to map
   map.addLayer({
-    id: 'query-results',
-    type: 'circle',
+    id: "query-results",
+    type: "circle",
     source: {
-      type: 'geojson',
-      data: data
+      type: "geojson",
+      data: data,
     },
     paint: {
-      'circle-radius': 6,
-      'circle-color': '#ff0000'
-    }
+      "circle-radius": 6,
+      "circle-color": "#ff0000",
+    },
   });
 });
 ```
@@ -171,12 +177,12 @@ def query_tileset(lng, lat, radius=0, tileset_id="mapbox.places"):
     """Query features from a tileset at a location."""
     url = f"https://api.planisfy.com/v4/{tileset_id}/tilequery/{lng},{lat}.json"
     params = {
-        "access_token": "pk.your-key-here",
+        headers: { "X-API-Key": "pk_your_key_here" },
         "radius": radius,
         "limit": 10
     }
 
-    response = requests.get(url, params=params)
+    response = requests.get(url, headers=headers)
     response.raise_for_status()
     return response.json()
 
@@ -189,10 +195,10 @@ nearby = query_tileset(-122.4194, 37.7749, radius=100)
 # Query specific layers
 url = "https://api.planisfy.com/v4/mapbox.places/tilequery/{lng},{lat}.json"
 params = {
-    "access_token": "pk.your-key-here",
+    headers: { "X-API-Key": "pk_your_key_here" },
     "layers": "poi,landuse"
 }
-response = requests.get(url.format(lng=-122.4194, lat=37.7749), params=params)
+response = requests.get(url.format(lng=-122.4194, lat=37.7749), headers=headers)
 features = response.json()
 
 for feature in features['features']:
@@ -204,43 +210,39 @@ for feature in features['features']:
 ### Node.js
 
 ```javascript
-import axios from 'axios';
+import axios from "axios";
 
 const queryTileset = async (lng, lat, options = {}) => {
   const {
-    tilesetId = 'mapbox.places',
+    tilesetId = "mapbox.places",
     radius = 0,
     limit = 5,
     layers,
-    geometry
+    geometry,
   } = options;
 
   const params = {
-    access_token: process.env.PLANISFY_API_KEY,
+    "X-API-Key": process.env.PLANISFY_API_KEY,
     ...(radius !== undefined && { radius }),
     ...(limit !== undefined && { limit }),
-    ...(layers && { layers: layers.join(',') }),
-    ...(geometry && { geometry })
+    ...(layers && { layers: layers.join(",") }),
+    ...(geometry && { geometry }),
   };
 
   const response = await axios.get(
     `https://api.planisfy.com/v4/${tilesetId}/tilequery/${lng},${lat}.json`,
-    { params }
+    { params },
   );
 
   return response.data;
 };
 
 // Example usage
-const features = await queryTileset(
-  -122.4194,
-  37.7749,
-  {
-    radius: 50,
-    limit: 10,
-    layers: ['poi', 'places']
-  }
-);
+const features = await queryTileset(-122.4194, 37.7749, {
+  radius: 50,
+  limit: 10,
+  layers: ["poi", "places"],
+});
 
 console.log(`Found ${features.features.length} features`);
 ```
@@ -278,19 +280,21 @@ console.log(`Found ${features.features.length} features`);
 
 ### Response Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `type` | `string` | Always `"Feature"` |
-| `id` | `string` | The feature identifier from the tileset |
-| `geometry.type` | `string` | Always `"Point"` - returns closest point on feature |
-| `geometry.coordinates` | `array` | `[longitude, latitude]` coordinates of result |
-| `properties` | `object` | Feature properties from tileset |
-| `properties.tilequery.distance` | `number` | Distance from query point in meters (0 = point-in-polygon) |
+| Property                        | Type     | Description                                                 |
+| ------------------------------- | -------- | ----------------------------------------------------------- |
+| `type`                          | `string` | Always `"Feature"`                                          |
+| `id`                            | `string` | The feature identifier from the tileset                     |
+| `geometry.type`                 | `string` | Always `"Point"` - returns closest point on feature         |
+| `geometry.coordinates`          | `array`  | `[longitude, latitude]` coordinates of result               |
+| `properties`                    | `object` | Feature properties from tileset                             |
+| `properties.tilequery.distance` | `number` | Distance from query point in meters (0 = point-in-polygon)  |
 | `properties.tilequery.geometry` | `string` | Original geometry type: `point`, `linestring`, or `polygon` |
-| `properties.tilequery.layer` | `string` | Tile layer name |
+| `properties.tilequery.layer`    | `string` | Tile layer name                                             |
 
 <Callout type="info" title="Geometry Reference">
-The API returns Point geometry for all results. For polygons, this is the query point location if inside, or the closest point on the edge if outside. For lines, it's the closest interpolated point.
+  The API returns Point geometry for all results. For polygons, this is the
+  query point location if inside, or the closest point on the edge if outside.
+  For lines, it's the closest interpolated point.
 </Callout>
 
 ---
@@ -302,10 +306,11 @@ The API returns Point geometry for all results. For polygons, this is the query 
 Set `radius=0` (or omit the parameter) to check which polygon(s) contain a point:
 
 ```bash
-curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json"
 ```
 
 **Behavior:**
+
 - Returns only polygons that contain the query point
 - Points directly on polygon edges are not returned
 - Useful for: "what neighborhood is this?", "what borough is this?"
@@ -316,10 +321,11 @@ Specify `radius` in meters to find features within a distance:
 
 ```bash
 # Find POIs within 250 meters
-curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?radius=250&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?radius=250"
 ```
 
 **Behavior:**
+
 - Returns features within the specified radius
 - Results sorted by proximity (closest first)
 - Useful for: "what's nearby?", "find nearest restaurants"
@@ -330,10 +336,11 @@ Query specific layers to narrow results:
 
 ```bash
 # Only POI and transit layers
-curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?layers=poi,transit&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?layers=poi,transit"
 ```
 
 **Benefits:**
+
 - Faster queries (fewer layers to search)
 - More relevant results
 - Specify exact layer names from your tileset
@@ -344,10 +351,10 @@ Return only specific geometry types:
 
 ```bash
 # Only polygons
-curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?geometry=polygon&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?geometry=polygon"
 
 # Only points
-curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?geometry=point&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?geometry=point"
 ```
 
 ### Multiple Tilesets
@@ -355,7 +362,7 @@ curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json
 Query up to 25 tilesets simultaneously:
 
 ```bash
-curl "https://api.planisfy.com/v4/mapbox.places,mapbox.streets,mapbox.buildings/tilequery/-122.4194,37.7749.json?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places,mapbox.streets,mapbox.buildings/tilequery/-122.4194,37.7749.json"
 ```
 
 **Use case:** Combine results from different data sources
@@ -366,10 +373,10 @@ Control duplicate feature removal with `dedupe`:
 
 ```bash
 # Keep all features (even duplicates)
-curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?dedupe=false&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?dedupe=false"
 
 # Remove duplicates (default)
-curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?dedupe=true&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json?dedupe=true"
 ```
 
 **Deduplication criteria:** Same layer + geometry type + ID/properties
@@ -382,12 +389,12 @@ curl "https://api.planisfy.com/v4/mapbox.places/tilequery/-122.4194,37.7749.json
 
 ```javascript
 // User clicks on map
-map.on('click', async (e) => {
+map.on("click", async (e) => {
   const { lng, lat } = e.lngLat;
 
   // Get containing polygon
   const response = await fetch(
-    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?layers=neighborhoods,boroughs&access_token=YOUR_KEY`
+    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?layers=neighborhoods,boroughs`,
   );
   const data = await response.json();
 
@@ -404,14 +411,14 @@ map.on('click', async (e) => {
 // Find nearby POIs
 async function findNearby(lng, lat) {
   const response = await fetch(
-    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?radius=200&limit=10&layers=poi&access_token=YOUR_KEY`
+    `https://api.planisfy.com/v4/mapbox.places/tilequery/${lng},${lat}.json?radius=200&limit=10&layers=poi`,
   );
   const data = await response.json();
 
-  return data.features.map(f => ({
+  return data.features.map((f) => ({
     name: f.properties.name,
     distance: f.properties.tilequery.distance,
-    category: f.properties.category
+    category: f.properties.category,
   }));
 }
 ```
@@ -422,7 +429,7 @@ async function findNearby(lng, lat) {
 // Check if point is in your custom polygons
 async function checkServiceArea(lng, lat) {
   const response = await fetch(
-    `https://api.planisfy.com/v4/your.custom.delivery_zones/tilequery/${lng},${lat}.json?access_token=YOUR_KEY`
+    `https://api.planisfy.com/v4/your.custom.delivery_zones/tilequery/${lng},${lat}.json`,
   );
   const data = await response.json();
 
@@ -436,7 +443,7 @@ async function checkServiceArea(lng, lat) {
 // Get parcel/property information
 async function getPropertyInfo(lng, lat) {
   const response = await fetch(
-    `https://api.planisfy.com/v4/your.custom.parcels/tilequery/${lng},${lat}.json?geometry=polygon&access_token=YOUR_KEY`
+    `https://api.planisfy.com/v4/your.custom.parcels/tilequery/${lng},${lat}.json?geometry=polygon`,
   );
   const data = await response.json();
 
@@ -453,26 +460,28 @@ async function getPropertyInfo(lng, lat) {
 
 Tilequery responses are cached for performance:
 
-| Cache Type | Duration | Description |
-|------------|----------|-------------|
-| **Browser/Client** | 12 hours | Per `Cache-Control: max-age=43200` |
-| **CDN/Edge** | 5 minutes | Per `Cache-Control: s-maxage=300` |
-| **Origin** | 12 hours | Planisfy servers |
+| Cache Type         | Duration  | Description                        |
+| ------------------ | --------- | ---------------------------------- |
+| **Browser/Client** | 12 hours  | Per `Cache-Control: max-age=43200` |
+| **CDN/Edge**       | 5 minutes | Per `Cache-Control: s-maxage=300`  |
+| **Origin**         | 12 hours  | Planisfy servers                   |
 
 <Callout type="info" title="Cache Key">
-Cache keys include coordinates, tileset ID, radius, layers, and geometry parameters. Different layer/radius combinations create different cache entries.
+  Cache keys include coordinates, tileset ID, radius, layers, and geometry
+  parameters. Different layer/radius combinations create different cache
+  entries.
 </Callout>
 
 ---
 
 ## Rate Limits
 
-| Plan | Requests per Minute | Requests per Day |
-|------|---------------------|------------------|
-| Free | 100 | 5,000 |
-| Starter | 300 | 30,000 |
-| Pro | 600 | 100,000 |
-| Enterprise | Custom | Custom |
+| Plan       | Requests per Minute | Requests per Day |
+| ---------- | ------------------- | ---------------- |
+| Free       | 100                 | 5,000            |
+| Starter    | 300                 | 30,000           |
+| Pro        | 600                 | 100,000          |
+| Enterprise | Custom              | Custom           |
 
 Exceeding limits returns HTTP `429 Too Many Requests`.
 
@@ -480,16 +489,16 @@ Exceeding limits returns HTTP `429 Too Many Requests`.
 
 ## Error Codes
 
-| HTTP Code | Error | Description | Solution |
-|-----------|-------|-------------|------------|
-| `200` | Empty FeatureCollection | No features found at location; verify layers exist |
-| `400` | Bad Request | Invalid parameters; check coordinates and radius |
-| `401` | Unauthorized | Missing or invalid API key |
-| `403` | Forbidden | Account issue or URL restrictions on token |
-| `404` | Not Found | Tileset doesn't exist or no tile at location |
-| `422` | Unprocessable Entity | Invalid parameter value |
-| `429` | Too Many Requests | Rate limit exceeded |
-| `500` | Server Error | Internal server error |
+| HTTP Code | Error                   | Description                                        | Solution |
+| --------- | ----------------------- | -------------------------------------------------- | -------- |
+| `200`     | Empty FeatureCollection | No features found at location; verify layers exist |
+| `400`     | Bad Request             | Invalid parameters; check coordinates and radius   |
+| `401`     | Unauthorized            | Missing or invalid API key                         |
+| `403`     | Forbidden               | Account issue or URL restrictions on token         |
+| `404`     | Not Found               | Tileset doesn't exist or no tile at location       |
+| `422`     | Unprocessable Entity    | Invalid parameter value                            |
+| `429`     | Too Many Requests       | Rate limit exceeded                                |
+| `500`     | Server Error            | Internal server error                              |
 
 ### Error Response Format
 
@@ -504,11 +513,13 @@ Exceeding limits returns HTTP `429 Too Many Requests`.
 ### Common Errors
 
 **"Tileset does not exist"**
+
 ```
 Check tileset ID in URL. Use `mapbox.places` for hosted tilesets.
 ```
 
 **"Invalid lon/lat value"**
+
 ```
 Ensure coordinates are valid:
 - Longitude: -180 to 180
@@ -516,6 +527,7 @@ Ensure coordinates are valid:
 ```
 
 **"options.limit must be between 1 and 50"**
+
 ```
 Reduce limit parameter to 50 or less.
 ```
@@ -535,20 +547,21 @@ const url = `https://api.mapbox.com/v4/${tilesetId}/tilequery/${lng},${lat}.json
 ### After (Planisfy)
 
 ```javascript
-const url = `https://api.planisfy.com/v4/${tilesetId}/tilequery/${lng},${lat}.json?radius=${radius}&access_token=${planisfyKey}`;
+const url = `https://api.planisfy.com/v4/${tilesetId}/tilequery/${lng},${lat}.json?radius=${radius}`;
 ```
 
 ### URL Pattern Changes
 
-| Component | Mapbox | Planisfy |
-|------------|-----------|------------|
-| Domain | `api.mapbox.com` | `api.planisfy.com` |
-| Path | Same (`/v4/{tileset_id}/tilequery/{lon},{lat}.json`) | Same |
-| Parameters | Same | Same |
-| Response format | GeoJSON FeatureCollection | GeoJSON FeatureCollection |
+| Component       | Mapbox                                               | Planisfy                  |
+| --------------- | ---------------------------------------------------- | ------------------------- |
+| Domain          | `api.mapbox.com`                                     | `api.planisfy.com`        |
+| Path            | Same (`/v4/{tileset_id}/tilequery/{lon},{lat}.json`) | Same                      |
+| Parameters      | Same                                                 | Same                      |
+| Response format | GeoJSON FeatureCollection                            | GeoJSON FeatureCollection |
 
 <Callout type="tip" title="Drop-in Replacement">
-Planisfy Tilequery API uses the same endpoint structure, parameters, and response format as Mapbox Tilequery v1. No code changes required beyond URL.
+  Planisfy Tilequery API uses the same endpoint structure, parameters, and
+  response format as Mapbox Tilequery v1. No code changes required beyond URL.
 </Callout>
 
 ---
@@ -583,7 +596,7 @@ const data = await response.json();
 
 if (data.features.length === 0) {
   // No features found - inform user
-  showNotification('No features found at this location');
+  showNotification("No features found at this location");
   return;
 }
 ```
@@ -612,17 +625,15 @@ async function cachedQuery(lng, lat, radius) {
 // Fetch larger area, filter client-side
 const features = await queryTilequery(lng, lat, {
   radius: 200,
-  limit: 50
+  limit: 50,
 });
 
 // Filter by properties
-const restaurants = features.filter(f =>
-  f.properties.category === 'restaurant'
+const restaurants = features.filter(
+  (f) => f.properties.category === "restaurant",
 );
 
-const openNow = features.filter(f =>
-  f.properties.opening_hours === 'open'
-);
+const openNow = features.filter((f) => f.properties.opening_hours === "open");
 ```
 
 ---
@@ -644,4 +655,5 @@ const openNow = features.filter(f =>
 ---
 
 Sources:
+
 - [Tilequery API | Mapbox API Docs](https://docs.mapbox.com/api/maps/tilequery/)

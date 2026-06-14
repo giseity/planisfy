@@ -3,14 +3,16 @@ title: Glyphs API
 description: Retrieve font glyphs for text rendering in MapLibre GL JS, Mapbox GL JS, and other compatible libraries.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+import { Callout } from "fumadocs-ui/components/callout";
 
 # Glyphs API
 
 The **Planisfy Glyphs API** serves font glyphs as Protocol Buffer (PBF) files for rendering text labels on maps. Our fonts use **Signed Distance Field (SDF)** rendering, which enables crisp, resolution-independent text at any zoom level.
 
 <Callout type="info" title="What Are Glyphs?">
-Glyphs are individual character shapes from fonts, stored as SDF data in PBF format. MapLibre/Mapbox use SDF rendering for sharp text that scales smoothly without pixelation.
+  Glyphs are individual character shapes from fonts, stored as SDF data in PBF
+  format. MapLibre/Mapbox use SDF rendering for sharp text that scales smoothly
+  without pixelation.
 </Callout>
 
 ---
@@ -23,10 +25,10 @@ https://api.planisfy.com/fonts/v1/{fontstack}/{range}.pbf
 
 The glyphs URL in a style is a **URL template** that MapLibre/Mapbox automatically expands:
 
-| Token | Description | Example |
-|-------|-------------|---------|
-| `{fontstack}` | Font family and weight | `Open Sans Regular`, `Roboto Medium` |
-| `{range}` | Character range (256 chars) | `0-255`, `256-511`, `65536-65791` |
+| Token         | Description                 | Example                              |
+| ------------- | --------------------------- | ------------------------------------ |
+| `{fontstack}` | Font family and weight      | `Open Sans Regular`, `Roboto Medium` |
+| `{range}`     | Character range (256 chars) | `0-255`, `256-511`, `65536-65791`    |
 
 For example, with `"glyphs": "https://api.planisfy.com/fonts/v1/{fontstack}/{range}.pbf"`:
 
@@ -38,25 +40,25 @@ For example, with `"glyphs": "https://api.planisfy.com/fonts/v1/{fontstack}/{ran
 
 ## Request Parameters
 
-| Component | Description |
-|-----------|-------------|
-| `fontstack` | URL-encoded font name (e.g., `Open%20Sans%20Regular`) |
-| `range` | Character range in format `{start}-{end}` (multiples of 256) |
+| Component   | Description                                                  |
+| ----------- | ------------------------------------------------------------ |
+| `fontstack` | URL-encoded font name (e.g., `Open%20Sans%20Regular`)        |
+| `range`     | Character range in format `{start}-{end}` (multiples of 256) |
 
 ### Character Ranges
 
 Glyphs are served in blocks of 256 characters for efficient loading:
 
-| Range | Characters Included |
-|-------|---------------------|
-| `0-255` | ASCII (basic Latin, numbers, symbols) |
-| `256-511` | Latin-1 Supplement (accented characters) |
-| `512-767` | Latin Extended-A |
-| `768-1023` | Combining diacritics |
-| `...` | ... |
-| `65536-65791` | Arabic |
-| `131072-131327` | Emoji |
-| `...` | ... |
+| Range           | Characters Included                      |
+| --------------- | ---------------------------------------- |
+| `0-255`         | ASCII (basic Latin, numbers, symbols)    |
+| `256-511`       | Latin-1 Supplement (accented characters) |
+| `512-767`       | Latin Extended-A                         |
+| `768-1023`      | Combining diacritics                     |
+| `...`           | ...                                      |
+| `65536-65791`   | Arabic                                   |
+| `131072-131327` | Emoji                                    |
+| `...`           | ...                                      |
 
 MapLibre only requests ranges needed for visible text labels.
 
@@ -64,23 +66,22 @@ MapLibre only requests ranges needed for visible text labels.
 
 ## Authentication
 
-Include your API key in one of two ways:
-
-### Query Parameter
-
-```bash
-GET https://api.planisfy.com/fonts/v1/Open%20Sans%20Regular/0-255.pbf?access_token=pk.your-key-here
-```
-
-### Bearer Token
+Published glyph assets are normally loaded as public map assets:
 
 ```bash
 GET https://api.planisfy.com/fonts/v1/Open%20Sans%20Regular/0-255.pbf
-Authorization: Bearer pk.your-key-here
+```
+
+If your deployment protects glyph reads, send the API key with `X-API-Key`:
+
+```bash
+GET https://api.planisfy.com/fonts/v1/Open%20Sans%20Regular/0-255.pbf
+X-API-Key: pk_your_key_here
 ```
 
 <Callout type="warn" title="Self-Hosted Mode">
-When self-hosting, fonts are typically served publicly without authentication. Configure your tile server to serve fonts from a public directory.
+  When self-hosting, fonts are typically served publicly without authentication.
+  Configure your tile server to serve fonts from a public directory.
 </Callout>
 
 ---
@@ -91,11 +92,11 @@ When self-hosting, fonts are typically served publicly without authentication. C
 
 ```bash
 # Fetch ASCII glyphs for Open Sans Regular
-curl "https://api.planisfy.com/fonts/v1/Open%20Sans%20Regular/0-255.pbf?access_token=pk.your-key-here" \
+curl "https://api.planisfy.com/fonts/v1/Open%20Sans%20Regular/0-255.pbf" \
   --output glyphs.pbf
 
 # Fetch Arabic glyphs
-curl "https://api.planisfy.com/fonts/v1/Noto%20Sans%20Arabic/65536-65791.pbf?access_token=pk.your-key-here" \
+curl "https://api.planisfy.com/fonts/v1/Noto%20Sans%20Arabic/65536-65791.pbf" \
   --output arabic.pbf
 ```
 
@@ -105,8 +106,8 @@ Glyphs are automatically loaded when you use a Planisfy style:
 
 ```javascript
 const map = new maplibregl.Map({
-  container: 'map',
-  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY'
+  container: "map",
+  style: "https://api.planisfy.com/styles/v1/planisfy/basic",
 });
 
 // Glyphs are automatically fetched from:
@@ -117,9 +118,9 @@ const map = new maplibregl.Map({
 
 ```javascript
 // Monitor glyph loading
-map.on('data', (e) => {
-  if (e.sourceDataType === 'metadata') {
-    console.log('Glyphs loaded:', map.style.glyphManager);
+map.on("data", (e) => {
+  if (e.sourceDataType === "metadata") {
+    console.log("Glyphs loaded:", map.style.glyphManager);
   }
 });
 ```
@@ -134,9 +135,9 @@ range_start = 0
 range_end = 255
 
 url = f"https://api.planisfy.com/fonts/v1/{fontstack}/{range_start}-{range_end}.pbf"
-params = {"access_token": "pk.your-key-here"}
+headers = {"X-API-Key": "pk_your_key_here"}
 
-response = requests.get(url, params=params)
+response = requests.get(url, headers=headers)
 
 if response.status_code == 200:
     with open("glyphs.pbf", "wb") as f:
@@ -152,34 +153,36 @@ Planisfy supports a range of fonts optimized for map labels:
 
 ### Latin Fonts
 
-| Font Stack | Weight | Style | Best For |
-|------------|--------|-------|----------|
-| `Open Sans Regular` | 400 | Normal | General labels, places |
-| `Open Sans Medium` | 500 | Medium | Emphasized labels |
-| `Open Sans Bold` | 700 | Bold | Important features |
-| `Roboto Regular` | 400 | Normal | Alternative to Open Sans |
-| `Roboto Medium` | 500 | Medium | High-contrast maps |
+| Font Stack          | Weight | Style  | Best For                 |
+| ------------------- | ------ | ------ | ------------------------ |
+| `Open Sans Regular` | 400    | Normal | General labels, places   |
+| `Open Sans Medium`  | 500    | Medium | Emphasized labels        |
+| `Open Sans Bold`    | 700    | Bold   | Important features       |
+| `Roboto Regular`    | 400    | Normal | Alternative to Open Sans |
+| `Roboto Medium`     | 500    | Medium | High-contrast maps       |
 
 ### CJK Fonts
 
-| Font Stack | Script | Best For |
-|------------|--------|----------|
-| `Noto Sans CJK Regular` | Chinese, Japanese, Korean | East Asian maps |
-| `Noto Sans SC Regular` | Simplified Chinese | China-specific maps |
-| `Noto Sans TC Regular` | Traditional Chinese | Taiwan, Hong Kong |
-| `Noto Sans Japanese Regular` | Japanese | Japan-specific maps |
+| Font Stack                   | Script                    | Best For            |
+| ---------------------------- | ------------------------- | ------------------- |
+| `Noto Sans CJK Regular`      | Chinese, Japanese, Korean | East Asian maps     |
+| `Noto Sans SC Regular`       | Simplified Chinese        | China-specific maps |
+| `Noto Sans TC Regular`       | Traditional Chinese       | Taiwan, Hong Kong   |
+| `Noto Sans Japanese Regular` | Japanese                  | Japan-specific maps |
 
 ### Other Scripts
 
-| Font Stack | Script | Best For |
-|------------|--------|----------|
-| `Noto Sans Arabic Regular` | Arabic | Middle East, North Africa |
-| `Noto Sans Hebrew Regular` | Hebrew | Israel, Hebrew text |
-| `Noto Sans Thai Regular` | Thai | Thailand |
-| `Noto Sans Devanagari Regular` | Devanagari | India, Nepal |
+| Font Stack                     | Script     | Best For                  |
+| ------------------------------ | ---------- | ------------------------- |
+| `Noto Sans Arabic Regular`     | Arabic     | Middle East, North Africa |
+| `Noto Sans Hebrew Regular`     | Hebrew     | Israel, Hebrew text       |
+| `Noto Sans Thai Regular`       | Thai       | Thailand                  |
+| `Noto Sans Devanagari Regular` | Devanagari | India, Nepal              |
 
 <Callout type="tip" title="Font Stacking">
-Font stacks can list fallback fonts: <code>"Open Sans Regular", "Arial Unicode MS Regular"</code>. MapLibre tries each font until one supports the required characters.
+  Font stacks can list fallback fonts:{" "}
+  <code>"Open Sans Regular", "Arial Unicode MS Regular"</code>. MapLibre tries
+  each font until one supports the required characters.
 </Callout>
 
 ---
@@ -201,15 +204,15 @@ Access-Control-Allow-Origin: *
 
 Each glyph in the PBF contains:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `integer` | Unicode codepoint |
-| `bitmap` | `bytes` | SDF bitmap data |
-| `width` | `integer` | Glyph width in pixels |
-| `height` | `integer` | Glyph height in pixels |
-| `left` | `integer` | Left bearing |
-| `top` | `integer` | Top bearing |
-| `advance` | `integer` | Advance width |
+| Field     | Type      | Description            |
+| --------- | --------- | ---------------------- |
+| `id`      | `integer` | Unicode codepoint      |
+| `bitmap`  | `bytes`   | SDF bitmap data        |
+| `width`   | `integer` | Glyph width in pixels  |
+| `height`  | `integer` | Glyph height in pixels |
+| `left`    | `integer` | Left bearing           |
+| `top`     | `integer` | Top bearing            |
+| `advance` | `integer` | Advance width          |
 
 ### SDF (Signed Distance Field) Rendering
 
@@ -222,13 +225,15 @@ Value  > 0     → Outside the glyph
 ```
 
 This enables:
+
 - **Crisp edges** at any zoom level
 - **Smooth scaling** without pixelation
 - **Outline effects** (halos, strokes)
 - **Dynamic coloring** via shaders
 
 <Callout type="info" title="SDF Resolution">
-Glyphs are typically rendered at 24×24 to 48×48 SDF resolution. The GPU samples this data and applies a threshold to produce the final text.
+  Glyphs are typically rendered at 24×24 to 48×48 SDF resolution. The GPU
+  samples this data and applies a threshold to produce the final text.
 </Callout>
 
 ---
@@ -262,23 +267,23 @@ Glyphs are typically rendered at 24×24 to 48×48 SDF resolution. The GPU sample
 
 ```javascript
 // Set a specific font
-map.setLayoutProperty('labels', 'text-font', ['Open Sans Regular']);
+map.setLayoutProperty("labels", "text-font", ["Open Sans Regular"]);
 
 // Use multiple fonts (fallback chain)
-map.setLayoutProperty('labels', 'text-font', [
-  'Noto Sans Arabic Regular',
-  'Open Sans Regular'
+map.setLayoutProperty("labels", "text-font", [
+  "Noto Sans Arabic Regular",
+  "Open Sans Regular",
 ]);
 
 // Change font weight based on zoom
-map.setLayoutProperty('labels', 'text-font', [
-  'step',
-  ['zoom'],
-  ['Open Sans Regular'],
+map.setLayoutProperty("labels", "text-font", [
+  "step",
+  ["zoom"],
+  ["Open Sans Regular"],
   12,
-  ['Open Sans Medium'],
+  ["Open Sans Medium"],
   14,
-  ['Open Sans Bold']
+  ["Open Sans Bold"],
 ]);
 ```
 
@@ -286,22 +291,24 @@ map.setLayoutProperty('labels', 'text-font', [
 
 ```javascript
 // Basic text label
-map.setLayoutProperty('labels', 'text-field', ['get', 'name']);
+map.setLayoutProperty("labels", "text-field", ["get", "name"]);
 
 // Multi-line text
-map.setLayoutProperty('labels', 'text-field', ['format',
-  ['get', 'name'],
-  { 'font-scale': 1.2 },
-  '\n',
-  ['get', 'description'],
-  { 'font-scale': 0.8 }
+map.setLayoutProperty("labels", "text-field", [
+  "format",
+  ["get", "name"],
+  { "font-scale": 1.2 },
+  "\n",
+  ["get", "description"],
+  { "font-scale": 0.8 },
 ]);
 
 // Icon + text combination
-map.setLayoutProperty('poi-labels', 'text-field', ['format',
-  ['image', ['get', 'icon']],
-  '\n',
-  ['get', 'name']
+map.setLayoutProperty("poi-labels", "text-field", [
+  "format",
+  ["image", ["get", "icon"]],
+  "\n",
+  ["get", "name"],
 ]);
 ```
 
@@ -311,18 +318,20 @@ map.setLayoutProperty('poi-labels', 'text-field', ['format',
 
 ### Unicode Ranges by Script
 
-| Script | Range | Example |
-|--------|-------|---------|
-| Latin Basic | `0-255` | A-Z, a-z, 0-9 |
-| Latin Extended | `256-767` | À, Ö, ø, ß |
-| Cyrillic | `1024-1279` | А, Б, В, Г |
-| Greek | `880-1023` | α, β, γ, δ |
-| Arabic | `65280-65535` | ا, ب, ت, ث |
-| CJK | `19968-40959` | 中, 国, 日, 本 |
-| Emoji | `127744-128511` | 😀, 🗺️, 📍 |
+| Script         | Range           | Example        |
+| -------------- | --------------- | -------------- |
+| Latin Basic    | `0-255`         | A-Z, a-z, 0-9  |
+| Latin Extended | `256-767`       | À, Ö, ø, ß     |
+| Cyrillic       | `1024-1279`     | А, Б, В, Г     |
+| Greek          | `880-1023`      | α, β, γ, δ     |
+| Arabic         | `65280-65535`   | ا, ب, ت, ث     |
+| CJK            | `19968-40959`   | 中, 国, 日, 本 |
+| Emoji          | `127744-128511` | 😀, 🗺️, 📍     |
 
 <Callout type="tip" title="Lazy Loading">
-MapLibre only loads glyph ranges needed for currently visible text. As you pan to new areas with different characters, additional ranges are requested automatically.
+  MapLibre only loads glyph ranges needed for currently visible text. As you pan
+  to new areas with different characters, additional ranges are requested
+  automatically.
 </Callout>
 
 ---
@@ -331,44 +340,48 @@ MapLibre only loads glyph ranges needed for currently visible text. As you pan t
 
 Glyphs are cached very aggressively since they never change:
 
-| Cache Type | Duration | Description |
-|------------|----------|-------------|
-| **Browser/Client** | 1 year | Long-term local cache |
-| **CDN/Edge** | 1 year | Cloudflare edge locations |
-| **Origin** | 1 year | Planisfy servers |
+| Cache Type         | Duration | Description               |
+| ------------------ | -------- | ------------------------- |
+| **Browser/Client** | 1 year   | Long-term local cache     |
+| **CDN/Edge**       | 1 year   | Cloudflare edge locations |
+| **Origin**         | 1 year   | Planisfy servers          |
 
 <Callout type="tip" title="Cache Efficiency">
-Since fonts are static, the 1-year cache is safe. Use versioned URLs if you ever update fonts:<br/>
-`"glyphs": ".../v1/{fontstack}/{range}.pbf"`
+  Since fonts are static, the 1-year cache is safe. Use versioned URLs if you
+  ever update fonts:
+  <br />
+  `"glyphs": ".../v1/{fontstack}/{range}.pbf"`
 </Callout>
 
 ---
 
 ## Rate Limits
 
-| Plan | Requests per Minute | Requests per Day |
-|------|---------------------|------------------|
-| Free | 1,000 | 50,000 |
-| Starter | 10,000 | 500,000 |
-| Pro | 100,000 | 5,000,000 |
-| Enterprise | Custom | Custom |
+| Plan       | Requests per Minute | Requests per Day |
+| ---------- | ------------------- | ---------------- |
+| Free       | 1,000               | 50,000           |
+| Starter    | 10,000              | 500,000          |
+| Pro        | 100,000             | 5,000,000        |
+| Enterprise | Custom              | Custom           |
 
 <Callout type="info" title="Low Request Volume">
-Due to aggressive caching (1 year), glyph requests quickly become minimal after initial map load. Most apps only request a few hundred glyph ranges total.
+  Due to aggressive caching (1 year), glyph requests quickly become minimal
+  after initial map load. Most apps only request a few hundred glyph ranges
+  total.
 </Callout>
 
 ---
 
 ## Error Codes
 
-| HTTP Code | Error | Description |
-|-----------|-------|-------------|
-| `400` | Bad Request | Invalid fontstack or range format |
-| `401` | Unauthorized | Missing or invalid API key |
-| `403` | Forbidden | API key suspended or over quota |
-| `404` | Not Found | Font or character range not available |
-| `429` | Too Many Requests | Rate limit exceeded |
-| `500` | Server Error | Internal server error |
+| HTTP Code | Error             | Description                           |
+| --------- | ----------------- | ------------------------------------- |
+| `400`     | Bad Request       | Invalid fontstack or range format     |
+| `401`     | Unauthorized      | Missing or invalid API key            |
+| `403`     | Forbidden         | API key suspended or over quota       |
+| `404`     | Not Found         | Font or character range not available |
+| `429`     | Too Many Requests | Rate limit exceeded                   |
+| `500`     | Server Error      | Internal server error                 |
 
 ### Error Response Format
 
@@ -451,7 +464,8 @@ Reference your custom glyphs in the style JSON:
 ```
 
 <Callout type="warn" title="File Size Considerations">
-Full Unicode coverage (all scripts) requires hundreds of MB. Consider serving only the scripts you need to reduce bandwidth and storage.
+  Full Unicode coverage (all scripts) requires hundreds of MB. Consider serving
+  only the scripts you need to reduce bandwidth and storage.
 </Callout>
 
 ---
@@ -480,7 +494,7 @@ If your data uses a limited character set, preload specific ranges:
 
 ```javascript
 // Preload ASCII only
-map.style.loadGlyphs('Open Sans Regular', '0-255');
+map.style.loadGlyphs("Open Sans Regular", "0-255");
 ```
 
 ### Use Font Subsetting
@@ -531,7 +545,9 @@ const map = new mapboxgl.Map({
 ```
 
 <Callout type="tip" title="Font Compatibility">
-Planisfy uses <code>Open Sans</code> and <code>Noto Sans</code> fonts, which are open-source alternatives to Mapbox's proprietary fonts. Map styles should render correctly with minimal adjustments.
+  Planisfy uses <code>Open Sans</code> and <code>Noto Sans</code> fonts, which
+  are open-source alternatives to Mapbox's proprietary fonts. Map styles should
+  render correctly with minimal adjustments.
 </Callout>
 
 ---
@@ -555,5 +571,6 @@ Planisfy uses <code>Open Sans</code> and <code>Noto Sans</code> fonts, which are
 ---
 
 Sources:
+
 - [Root | Mapbox Style Spec](https://docs.mapbox.com/style-spec/reference/root/)
 - [Spec Reference | Mapbox Style Spec](https://docs.mapbox.com/style-spec/reference/)

@@ -1,126 +1,126 @@
 ---
 title: Quick Start Guide
-description: Get up and running with Planisfy in 5 minutes
+description: Render a published Planisfy style with MapLibre GL JS.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 # Quick Start Guide
 
-Get your first Planisfy map running in under 5 minutes. This guide will walk you through creating an account, getting an API key, and rendering your first interactive map.
+This guide gets a browser map on screen using Planisfy's current published
+style contract. For local self-hosting, use the seeded Planisfy Streets fixture.
+For your own data, publish a style in Console and swap in its public style URL.
 
 ---
 
-## Step 1: Get Your API Key
+## Step 1: Choose A Style URL
 
-### Sign Up
+Published public styles are loaded directly by MapLibre:
 
-1. Go to [planisfy.com](https://planisfy.com) and create a free account
-2. Check your email for a verification link
-3. Log in to access your dashboard
+```text
+https://api.planisfy.com/styles/v1/{owner}/{style}
+https://api.planisfy.com/styles/v1/{owner}/{style}@{version}
+```
 
-### Create an API Key
+For a local self-host demo after running the setup flow, use:
 
-1. In your dashboard, click **"Create API Key"**
-2. Give your key a descriptive name (e.g., "Development")
-3. Choose the appropriate scopes for your use case
-4. Copy your new API key — it starts with `pk.`
+```text
+http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1
+```
 
-<Callout type="warn" title="Keep Your Key Secret">
-Treat your API key like a password. Never commit it to version control. Use environment variables or `.env` files in development.
+<Callout type="info" title="API keys">
+  Planisfy API keys start with <code>pk_</code>. Published public map assets can
+  load anonymously, while protected service APIs and private resources use the
+  <code>X-API-Key</code> header.
 </Callout>
 
 ---
 
-## Step 2: Choose Your Library
+## Step 2: Create An HTML Page
 
-Planisfy works with both MapLibre GL JS (recommended) and Mapbox GL JS. Choose based on your needs:
+<Tabs items={['local self-host', 'published style']}>
 
-| Library | Recommended | License | Notes |
-|---------|-------------|---------|-------|
-| **MapLibre GL JS** | ✅ Yes | BSD-2-Clause | Open-source fork, actively maintained |
-| **Mapbox GL JS** | ⚠️ Legacy | Proprietary | Original library, restricted terms |
-
----
-
-## Step 3: Set Up Your HTML Page
-
-Create an `index.html` file with the following structure:
-
-<Tabs items={['maplibre', 'mapbox']}>
-
-  <Tab value="maplibre">
+  <Tab value="local self-host">
 
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My First Planisfy Map</title>
-  <!-- MapLibre GL JS CSS -->
-  <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
-  <style>
-    #map {
-      width: 100%;
-      height: 100vh;
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Planisfy Local Map</title>
+    <link
+      href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+      }
+      #map {
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+    <script>
+      const map = new maplibregl.Map({
+        container: "map",
+        style:
+          "http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1",
+        center: [9.1829, 48.7758],
+        zoom: 12,
+      });
 
-  <!-- MapLibre GL JS JavaScript -->
-  <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
-  <script>
-    const map = new maplibregl.Map({
-      container: 'map',
-      // Replace YOUR_KEY with your actual API key
-      style: 'https://api.planisfy.com/styles/v1/planisfy/streets?access_token=YOUR_KEY',
-      center: [-74.006, 40.7128], // New York City
-      zoom: 12
-    });
-  </script>
-</body>
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
+    </script>
+  </body>
 </html>
 ```
 
   </Tab>
 
-  <Tab value="mapbox">
+  <Tab value="published style">
 
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My First Planisfy Map</title>
-  <!-- Mapbox GL JS CSS -->
-  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
-  <style>
-    #map {
-      width: 100%;
-      height: 100vh;
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Planisfy Published Map</title>
+    <link
+      href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+      }
+      #map {
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+    <script>
+      const map = new maplibregl.Map({
+        container: "map",
+        style: "https://api.planisfy.com/styles/v1/acme/roads",
+        center: [-74.006, 40.7128],
+        zoom: 12,
+      });
 
-  <!-- Mapbox GL JS JavaScript -->
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-  <script>
-    const map = new mapboxgl.Map({
-      container: 'map',
-      // Replace YOUR_KEY with your actual API key
-      style: 'https://api.planisfy.com/styles/v1/planisfy/streets?access_token=YOUR_KEY',
-      center: [-74.006, 40.7128], // New York City
-      zoom: 12
-    });
-  </script>
-</body>
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
+    </script>
+  </body>
 </html>
 ```
 
@@ -128,169 +128,50 @@ Create an `index.html` file with the following structure:
 
 </Tabs>
 
-<Callout type="tip" title="Local Development">
-If you're using VS Code, install the "Live Server" extension. Right-click `index.html` and select "Open with Live Server" to view your map.
+---
+
+## Step 3: Verify The Style
+
+Before wiring a style into an app, check that the published URL returns JSON:
+
+```bash
+curl "http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1" \
+  -H "Accept: application/json"
+```
+
+For protected Console and service APIs, pass the API key as a header:
+
+```bash
+curl "http://localhost:4000/geocoding/v1/search?text=Stuttgart" \
+  -H "X-API-Key: pk_your_key_here"
+```
+
+<Callout type="warn" title="Local fixture data">
+  The local Planisfy Streets fixture needs the Stuttgart PMTiles demo artifact.
+  If the artifact is missing, the stack can boot, but the default map will
+  report fixture-data readiness warnings until compatible PMTiles are supplied.
 </Callout>
 
 ---
 
-## Step 4: Customize Your Map
+## Step 4: Publish Your Own Style
 
-Now that your map is rendering, let's customize it with common features.
+1. Upload or import source data in Console.
+2. Build and publish a tileset.
+3. Add the tileset source to a style.
+4. Publish the style.
+5. Use the stable URL, or pin an immutable `@version` URL for production.
 
-### Change the Style
-
-Planisfy offers several pre-built styles:
-
-| Style ID | Description | Preview |
-|----------|-------------|---------|
-| `basic` | Clean, minimalist | <img src="https://via.placeholder.com/100x60/f0f0f0/999?text=basic" alt="basic" /> |
-| `streets` | Detailed street map | <img src="https://via.placeholder.com/100x60/e0e0e0/999?text=streets" alt="streets" /> |
-| `dark` | Dark theme | <img src="https://via.placeholder.com/100x60/333/fff?text=dark" alt="dark" /> |
-| `satellite` | Satellite imagery | <img src="https://via.placeholder.com/100x60/228B22/fff?text=sat" alt="satellite" /> |
-
-```javascript
-// Switch to dark theme
-map.setStyle('https://api.planisfy.com/styles/v1/planisfy/dark?access_token=YOUR_KEY');
-```
-
-### Add a Marker
-
-```javascript
-// Create a marker
-const marker = new maplibregl.Marker()
-  .setLngLat([-74.006, 40.7128]) // New York City coordinates
-  .addTo(map);
-
-// Or with a popup
-const markerWithPopup = new maplibregl.Marker()
-  .setLngLat([-74.006, 40.7128])
-  .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Hello, Planisfy!'))
-  .addTo(map);
-```
-
-### Add Navigation Controls
-
-```javascript
-// Add zoom and rotation controls
-map.addControl(new maplibregl.NavigationControl(), 'top-right');
-
-// Add a scale bar
-map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left');
-```
-
-### Add a Fullscreen Button
-
-```javascript
-map.addControl(new maplibregl.FullscreenControl());
+```text
+https://api.planisfy.com/styles/v1/{owner}/{style}
+https://api.planisfy.com/styles/v1/{owner}/{style}@{version}
 ```
 
 ---
 
-## Step 5: Next Steps
+## Next Steps
 
-Your map is now fully functional! Here are some common next steps:
-
-### Explore API Reference
-
-- [Vector Tiles API](/docs/api/tiles) — Understanding tile requests
-- [Styles API](/docs/api/styles) — Custom map styles
-- [Geocoding API](/docs/api/geocoding) — Search for places
-- [Directions API](/docs/api/directions) — Routing between points
-
-### Learn Best Practices
-
-- [Authentication Guide](/docs/guides/authentication) — Secure API key usage
-- [Caching Strategies](/docs/guides/caching) — Optimize performance
-- [Error Handling](/docs/guides/error-handling) — Handle API errors
-
-### Migrate from Mapbox
-
-Already using Mapbox? Switch in minutes:
-
-- [Migration Guide](/docs/migration) — Step-by-step instructions
-
----
-
-## Complete Example
-
-Here's a complete example with all the features we've covered:
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Planisfy Map Example</title>
-  <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
-  <style>
-    body { margin: 0; padding: 0; }
-    #map { width: 100%; height: 100vh; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-
-  <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
-  <script>
-    const map = new maplibregl.Map({
-      container: 'map',
-      style: 'https://api.planisfy.com/styles/v1/planisfy/streets?access_token=YOUR_KEY',
-      center: [-74.006, 40.7128],
-      zoom: 12
-    });
-
-    // Add navigation controls
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
-
-    // Add scale bar
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: 100 }), 'bottom-left');
-
-    // Add fullscreen button
-    map.addControl(new maplibregl.FullscreenControl());
-
-    // Add marker with popup
-    new maplibregl.Marker()
-      .setLngLat([-74.006, 40.7128])
-      .setPopup(new maplibregl.Popup().setHTML('<h1>New York City</h1><p>The Big Apple</p>'))
-      .addTo(map);
-  </script>
-</body>
-</html>
-```
-
----
-
-## Using with Frameworks
-
-Planisfy works seamlessly with modern frameworks. See our framework-specific guides:
-
-| Framework | Guide |
-|-----------|-------|
-| **React** | [Planisfy + React Guide](/docs/guides/react) |
-| **Vue** | [Planisfy + Vue Guide](/docs/guides/vue) |
-| **Next.js** | [Planisfy + Next.js Guide](/docs/guides/nextjs) |
-| **Svelte** | [Planisfy + Svelte Guide](/docs/guides/svelte) |
-
----
-
-## Self-Hosting Option
-
-Want full control over your data? Planisfy can be self-hosted on your own infrastructure:
-
-<Callout type="info" title="Self-Hosting">
-See the <a href="/docs/self-hosting/overview">Self-Hosting Guide</a> to deploy Planisfy on your own servers using Docker, Kubernetes, or bare metal.
-</Callout>
-
----
-
-## Getting Help
-
-- **GitHub**: [github.com/cruzor-blade/planisfy](https://github.com/cruzor-blade/planisfy)
-- **Discord**: Join our community for real-time help
-- **Email**: support@planisfy.com
-
-<Callout type="tip" title="Community Examples">
-Check out our <a href="https://github.com/cruzor-blade/planisfy/tree/main/examples">example repository</a> for more code samples and integrations.
-</Callout>
+- [Self-Hosting Overview](/docs/self-hosting/overview)
+- [Vector Tiles API](/docs/api/tiles)
+- [Styles API](/docs/api/styles)
+- [Authentication Guide](/docs/guides/authentication)

@@ -3,7 +3,7 @@ title: Best Practices
 description: Recommended patterns and practices for building production applications with Planisfy APIs.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+import { Callout } from "fumadocs-ui/components/callout";
 
 # Best Practices Guide
 
@@ -21,8 +21,8 @@ Load map libraries only when needed:
 // Lazy load MapLibre GL JS
 function loadMapLibre() {
   return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js';
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js";
     script.onload = resolve;
     script.onerror = reject;
     document.head.appendChild(script);
@@ -34,8 +34,8 @@ async function initializeMap() {
   await loadMapLibre();
 
   const map = new maplibregl.Map({
-    container: 'map',
-    style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY'
+    container: "map",
+    style: "https://api.planisfy.com/styles/v1/planisfy/basic",
   });
 }
 ```
@@ -47,7 +47,7 @@ Initialize maps after other critical resources:
 ```html
 <!-- Defer map loading -->
 <script defer>
-  window.addEventListener('load', () => {
+  window.addEventListener("load", () => {
     initializeMap();
   });
 </script>
@@ -59,12 +59,20 @@ Multiple maps increase memory usage:
 
 ```javascript
 // ❌ Bad - Multiple full map instances
-const map1 = new maplibregl.Map({ /* ... */ });
-const map2 = new maplibregl.Map({ /* ... */ });
-const map3 = new maplibregl.Map({ /* ... */ });
+const map1 = new maplibregl.Map({
+  /* ... */
+});
+const map2 = new maplibregl.Map({
+  /* ... */
+});
+const map3 = new maplibregl.Map({
+  /* ... */
+});
 
 // ✅ Good - Use one map, change viewport
-const map = new maplibregl.Map({ /* ... */ });
+const map = new maplibregl.Map({
+  /* ... */
+});
 
 // Change view as needed
 function showLocation(center, zoom) {
@@ -78,13 +86,13 @@ Handle window resize properly:
 
 ```javascript
 const map = new maplibregl.Map({
-  container: 'map',
-  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY'
+  container: "map",
+  style: "https://api.planisfy.com/styles/v1/planisfy/basic",
 });
 
 // Resize map on window resize
 let resizeTimeout;
-window.addEventListener('resize', () => {
+window.addEventListener("resize", () => {
   clearTimeout(resizeTimeout);
   resizeTimeout = setTimeout(() => {
     map.resize();
@@ -104,7 +112,7 @@ Reduce unnecessary tile loading:
 // Limit visible zoom levels
 map.setMaxBounds([
   [-122.5, 37.7], // Southwest
-  [-122.3, 37.8]  // Northeast
+  [-122.3, 37.8], // Northeast
 ]);
 
 // Set min/max zoom
@@ -116,16 +124,16 @@ map.setMaxZoom(16);
 
 Vector tiles are more efficient:
 
-| Aspect | Vector Tiles | Raster Tiles |
-|--------|--------------|--------------|
-| **File size** | 10-50 KB | 100-500 KB |
-| **Styling** | Client-side (1 style) | Server-side (multiple styles) |
-| **Bandwidth** | Lower | Higher |
-| **Flexibility** | High (dynamic) | Low (static) |
+| Aspect          | Vector Tiles          | Raster Tiles                  |
+| --------------- | --------------------- | ----------------------------- |
+| **File size**   | 10-50 KB              | 100-500 KB                    |
+| **Styling**     | Client-side (1 style) | Server-side (multiple styles) |
+| **Bandwidth**   | Lower                 | Higher                        |
+| **Flexibility** | High (dynamic)        | Low (static)                  |
 
 ```javascript
 // ✅ Use vector tiles
-const style = 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY';
+const style = "https://api.planisfy.com/styles/v1/planisfy/basic";
 ```
 
 ### 3. Optimize Layer Rendering
@@ -134,25 +142,25 @@ Control which layers are rendered:
 
 ```javascript
 // Remove unnecessary layers
-map.on('load', () => {
+map.on("load", () => {
   const style = map.getStyle();
 
-  style.layers.forEach(layer => {
+  style.layers.forEach((layer) => {
     // Remove POI layers at low zoom
-    if (layer.id.includes('poi') && map.getZoom() < 12) {
+    if (layer.id.includes("poi") && map.getZoom() < 12) {
       map.removeLayer(layer.id);
     }
   });
 });
 
 // Show/hide layers based on zoom
-map.on('zoomend', () => {
+map.on("zoomend", () => {
   const zoom = map.getZoom();
 
   if (zoom < 12) {
-    map.setLayoutProperty('places', 'visibility', 'none');
+    map.setLayoutProperty("places", "visibility", "none");
   } else {
-    map.setLayoutProperty('places', 'visibility', 'visible');
+    map.setLayoutProperty("places", "visibility", "visible");
   }
 });
 ```
@@ -163,30 +171,22 @@ Cluster many points for better performance:
 
 ```javascript
 map.addLayer({
-  id: 'clusters',
-  type: 'circle',
-  source: 'places',
-  filter: ['has', 'point_count'],
+  id: "clusters",
+  type: "circle",
+  source: "places",
+  filter: ["has", "point_count"],
   paint: {
-    'circle-color': [
-      'step',
-      ['get', 'point_count'],
-      '#51bbd6',
+    "circle-color": [
+      "step",
+      ["get", "point_count"],
+      "#51bbd6",
       100,
-      '#f1f075',
+      "#f1f075",
       750,
-      '#f28cb1'
+      "#f28cb1",
     ],
-    'circle-radius': [
-      'step',
-      ['get', 'point_count'],
-      20,
-      100,
-      30,
-      750,
-      40
-    ]
-  }
+    "circle-radius": ["step", ["get", "point_count"], 20, 100, 30, 750, 40],
+  },
 });
 ```
 
@@ -210,7 +210,7 @@ function debounce(func, wait) {
 // Debounce geocoding
 const debouncedGeocode = debounce(geocodeAddress, 300);
 
-searchInput.addEventListener('input', (e) => {
+searchInput.addEventListener("input", (e) => {
   debouncedGeocode(e.target.value);
 });
 ```
@@ -219,16 +219,16 @@ searchInput.addEventListener('input', (e) => {
 
 ## Security Considerations
 
-### 1. Never Expose Secret Tokens
+### 1. Never Expose Unrestricted API Keys
 
-Use public tokens only in frontend:
+Use scoped, domain-restricted API keys in frontend code:
 
 ```javascript
 // ❌ Never do this
-const SECRET_KEY = 'sk.your-secret-key-here';
+const API_KEY = "pk_unrestricted_production_key";
 
 // ✅ Use environment variables
-const PUBLIC_KEY = process.env.PLANISFY_PUBLIC_KEY;
+const API_KEY = process.env.PLANISFY_API_KEY;
 ```
 
 ### 2. Use Domain Restrictions
@@ -246,11 +246,13 @@ Allowed Domains:
 Add CSP headers to prevent XSS:
 
 ```html
-<meta http-equiv="Content-Security-Policy"
-      content="default-src 'self';
+<meta
+  http-equiv="Content-Security-Policy"
+  content="default-src 'self';
                script-src 'self' 'unsafe-inline' https://unpkg.com;
                style-src 'self' 'unsafe-inline';
-               img-src 'self' data: https://api.planisfy.com;">
+               img-src 'self' data: https://api.planisfy.com;"
+/>
 ```
 
 ### 4. Validate User Input
@@ -262,11 +264,11 @@ function sanitizeCoordinate(value) {
   const num = parseFloat(value);
 
   if (isNaN(num)) {
-    throw new Error('Invalid coordinate');
+    throw new Error("Invalid coordinate");
   }
 
   if (num < -180 || num > 180) {
-    throw new Error('Coordinate out of range');
+    throw new Error("Coordinate out of range");
   }
 
   return num;
@@ -283,7 +285,7 @@ Never make API requests over HTTP:
 
 ```javascript
 // ✅ Always use HTTPS
-const apiUrl = 'https://api.planisfy.com/styles/v1/planisfy/basic';
+const apiUrl = "https://api.planisfy.com/styles/v1/planisfy/basic";
 ```
 
 ### 6. Implement Rate Limiting on Client
@@ -303,7 +305,7 @@ class RateLimiter {
 
     // Remove old requests outside the time window
     this.requests = this.requests.filter(
-      time => now - time < this.perMilliseconds
+      (time) => now - time < this.perMilliseconds,
     );
 
     return this.requests.length < this.maxRequests;
@@ -319,7 +321,7 @@ const geocodeLimiter = new RateLimiter(10, 60000); // 10 per minute
 
 async function rateLimitedGeocode(address) {
   if (!geocodeLimiter.canMakeRequest()) {
-    throw new Error('Rate limit exceeded. Please wait.');
+    throw new Error("Rate limit exceeded. Please wait.");
   }
 
   geocodeLimiter.recordRequest();
@@ -351,9 +353,9 @@ val apiKey = BuildConfig.PLANISFY_API_KEY
 
 ```javascript
 // Use .env file (don't commit it)
-import { PLANISFY_API_KEY } from '@env';
+import { PLANISFY_API_KEY } from "@env";
 
-const mapStyle = `https://api.planisfy.com/styles/v1/planisfy/basic?access_token=${PLANISFY_API_KEY}`;
+const mapStyle = `https://api.planisfy.com/styles/v1/planisfy/basic`;
 ```
 
 ### 2. Optimize for Mobile Data
@@ -363,14 +365,14 @@ Reduce bandwidth usage:
 ```javascript
 // Use lower zoom levels on initial load
 const map = new maplibregl.Map({
-  container: 'map',
+  container: "map",
   style: mapStyle,
   zoom: 10, // Start with lower detail
-  pitch: 0   // Disable 3D initially (saves bandwidth)
+  pitch: 0, // Disable 3D initially (saves bandwidth)
 });
 
 // Enable detail only on demand
-map.on('load', () => {
+map.on("load", () => {
   if (isHighBandwidthConnection()) {
     map.setPitch(60);
   }
@@ -382,7 +384,7 @@ map.on('load', () => {
 Pause tile loading when app is backgrounded:
 
 ```javascript
-document.addEventListener('visibilitychange', () => {
+document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     // App backgrounded - pause updates
     map.setStyle(map.getStyle(), { diff: true });
@@ -399,19 +401,19 @@ Enable offline maps:
 ```javascript
 // MapLibre GL JS offline support
 const offlinePack = {
-  name: 'san-francisco',
+  name: "san-francisco",
   styleURL: mapStyle,
   minZoom: 10,
   maxZoom: 14,
   bounds: [
     [-122.5, 37.7],
-    [-122.3, 37.8]
-  ]
+    [-122.3, 37.8],
+  ],
 };
 
 map.offlineManager.createPack(offlinePack, (progress, error) => {
   if (error) {
-    console.error('Offline pack error:', error);
+    console.error("Offline pack error:", error);
   } else {
     console.log(`Offline pack progress: ${progress.percentage}%`);
   }
@@ -426,11 +428,11 @@ map.offlineManager.createPack(offlinePack, (progress, error) => {
 
 Select a style appropriate for your use case:
 
-| Style | Best For |
-|-------|----------|
-| `basic` | Data visualization, dashboards |
-| `streets` | Navigation, local search |
-| `dark` | Night mode, embedded maps |
+| Style       | Best For                       |
+| ----------- | ------------------------------ |
+| `basic`     | Data visualization, dashboards |
+| `streets`   | Navigation, local search       |
+| `dark`      | Night mode, embedded maps      |
 | `satellite` | Terrain visualization, outdoor |
 
 ### 2. Use Color Purposefully
@@ -439,16 +441,16 @@ Choose colors for meaning:
 
 ```javascript
 // ✅ Good - Semantic colors
-map.setPaintProperty('places', 'circle-color', [
-  'match',
-  ['get', 'category'],
-  'restaurant',
-  '#FF5733',
-  'gas-station',
-  '#FFC300',
-  'parking',
-  '#C70039',
-  '#900C3F'  // Default
+map.setPaintProperty("places", "circle-color", [
+  "match",
+  ["get", "category"],
+  "restaurant",
+  "#FF5733",
+  "gas-station",
+  "#FFC300",
+  "parking",
+  "#C70039",
+  "#900C3F", // Default
 ]);
 ```
 
@@ -458,20 +460,20 @@ Ensure text is readable:
 
 ```javascript
 // Set appropriate text size based on zoom
-map.setLayoutProperty('places', 'text-size', [
-  'interpolate',
-  ['linear'],
-  ['zoom'],
+map.setLayoutProperty("places", "text-size", [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
   10,
   12,
   15,
-  14
+  14,
 ]);
 
 // Use high contrast colors
-map.setPaintProperty('places', 'text-color', '#000000');
-map.setPaintProperty('places', 'text-halo-color', '#FFFFFF');
-map.setPaintProperty('places', 'text-halo-width', 2);
+map.setPaintProperty("places", "text-color", "#000000");
+map.setPaintProperty("places", "text-halo-color", "#FFFFFF");
+map.setPaintProperty("places", "text-halo-width", 2);
 ```
 
 ### 4. Progressive Disclosure
@@ -480,21 +482,21 @@ Show more detail as user zooms:
 
 ```javascript
 // Show place labels only at higher zoom
-map.setLayoutProperty('places', 'text-field', [
-  'step',
-  ['zoom'],
-  '',
+map.setLayoutProperty("places", "text-field", [
+  "step",
+  ["zoom"],
+  "",
   12,
-  ['get', 'name']
+  ["get", "name"],
 ]);
 
 // Show POI icons only at high zoom
-map.setLayoutProperty('pois', 'icon-image', [
-  'step',
-  ['zoom'],
-  '',
+map.setLayoutProperty("pois", "icon-image", [
+  "step",
+  ["zoom"],
+  "",
   14,
-  ['get', 'icon']
+  ["get", "icon"],
 ]);
 ```
 
@@ -526,11 +528,11 @@ async function loadMapWithFallback(styleId) {
     const style = await fetchStyle(styleId);
     map.setStyle(style);
   } catch (error) {
-    console.error('Failed to load style:', error);
+    console.error("Failed to load style:", error);
 
     // Use cached or fallback style
     map.setStyle(getFallbackStyle());
-    showNotification('Using offline map. Some features unavailable.');
+    showNotification("Using offline map. Some features unavailable.");
   }
 }
 ```
@@ -540,13 +542,13 @@ async function loadMapWithFallback(styleId) {
 Inform users about errors:
 
 ```javascript
-map.on('error', (error) => {
-  console.error('Map error:', error);
+map.on("error", (error) => {
+  console.error("Map error:", error);
 
   // Show user-friendly message
   showNotification({
-    type: 'error',
-    message: 'Unable to load map. Please check your connection.'
+    type: "error",
+    message: "Unable to load map. Please check your connection.",
   });
 });
 ```
@@ -566,8 +568,8 @@ async function loadStyleWithRetry(styleId, maxRetries = 3) {
       }
 
       // Exponential backoff
-      await new Promise(resolve =>
-        setTimeout(resolve, Math.pow(2, attempt) * 1000)
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.pow(2, attempt) * 1000),
       );
     }
   }
@@ -592,12 +594,12 @@ Use browser dev tools:
 
 ```javascript
 // Log performance metrics
-map.on('render', () => {
+map.on("render", () => {
   const fps = map.getPainter().fps;
   const frameTime = map.getPainter().frameTime;
 
   if (fps < 30) {
-    console.warn('Low frame rate:', fps, 'fps');
+    console.warn("Low frame rate:", fps, "fps");
   }
 });
 ```
@@ -609,9 +611,9 @@ Use MapLibre Inspector:
 ```javascript
 // Enable debug mode
 const map = new maplibregl.Map({
-  container: 'map',
+  container: "map",
   style: mapStyle,
-  debug: true  // Shows tile boundaries, collision boxes
+  debug: true, // Shows tile boundaries, collision boxes
 });
 
 // Or use the browser extension
@@ -685,7 +687,7 @@ Before deploying to production:
 
 ```javascript
 // ❌ Never commit this
-const API_KEY = 'pk.your-hardcoded-key';
+const API_KEY = "pk_your_hardcoded_key";
 
 // ✅ Use environment variables
 const API_KEY = process.env.PLANISFY_API_KEY;
@@ -695,17 +697,17 @@ const API_KEY = process.env.PLANISFY_API_KEY;
 
 ```javascript
 // ❌ Silent failures
-fetch(url).then(response => response.json());
+fetch(url).then((response) => response.json());
 
 // ✅ Proper error handling
 fetch(url)
-  .then(response => {
+  .then((response) => {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
     return response.json();
   })
-  .catch(error => console.error('Fetch error:', error));
+  .catch((error) => console.error("Fetch error:", error));
 ```
 
 ### 3. Over-Fetching Data
@@ -723,7 +725,7 @@ const visiblePlaces = await fetchPlacesInView(bounds);
 ```javascript
 // ❌ No caching
 async function getStyle(styleId) {
-  return await fetch(`https://api.planisfy.com/styles/v1/planisfy/${styleId}?access_token=KEY`);
+  return await fetch(`https://api.planisfy.com/styles/v1/planisfy/${styleId}`);
 }
 
 // ✅ With caching
@@ -742,7 +744,7 @@ async function getCachedStyle(styleId) {
 ```javascript
 // ❌ Blocking the main thread
 function processLargeDataset(data) {
-  data.forEach(item => {
+  data.forEach((item) => {
     // Heavy computation blocks UI
     processItem(item);
   });
@@ -779,6 +781,7 @@ async function processLargeDataset(data) {
 ---
 
 Sources:
+
 - [Map design and styles - Mapbox Help](https://docs.mapbox.com/help/dive-deeper/map-design/)
 - [The Guide to Map Design - Mapbox PDF](https://go.mapbox.com/rs/117-NXK-490/images/the-guide-to-map-design.pdf)
 - [Best Practices for Store Locator - Mapbox Blog](https://www.mapbox.com/blog/best-practices-store-locator/)

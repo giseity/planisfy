@@ -3,14 +3,16 @@ title: Static Images API
 description: Generate static map images from any MapLibre-compatible style for use in emails, documents, and more.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+import { Callout } from "fumadocs-ui/components/callout";
 
 # Static Images API
 
 The **Planisfy Static Images API** serves standalone, static map images generated from vector map styles. These images can be displayed on web and mobile devices without the aid of a mapping library or API. They look like an embedded map, but do not have interactivity or controls.
 
 <Callout type="info" title="Drop-in Compatible">
-Planisfy's Static Images API is fully compatible with Mapbox Static Images API. Simply replace <code>api.mapbox.com</code> with <code>api.planisfy.com</code>.
+  Planisfy's Static Images API is fully compatible with Mapbox Static Images
+  API. Simply replace <code>api.mapbox.com</code> with{" "}
+  <code>api.planisfy.com</code>.
 </Callout>
 
 ---
@@ -23,20 +25,20 @@ GET https://api.planisfy.com/styles/v1/{username}/{style_id}/static/{overlay}/{l
 
 The position of the map is represented by either the word `auto`, a bounding box, or by five numbers: longitude, latitude, zoom, bearing, and pitch. The last two numbers, bearing and pitch, are optional.
 
-| Component | Description |
-|-----------|-------------|
-| `username` | Account username or `planisfy` for public styles |
-| `style_id` | The ID of the style from which to create a static map |
-| `overlay` | Optional overlays: markers, paths, or GeoJSON features |
-| `lon, lat` | Center coordinates of the map |
-| `zoom` | Zoom level (0-22) |
-| `bearing` | Optional rotation (0-360°) |
-| `pitch` | Optional tilt (0-60°) |
-| `bbox` | Alternative: bounding box `[min_lon,min_lat,max_lon,max_lat]` |
-| `auto` | Alternative: auto-fit to overlay bounds |
-| `width` | Image width in pixels (1-1280) |
-| `height` | Image height in pixels (1-1280) |
-| `@2x` | Optional: render at 2x scale for high-DPI displays |
+| Component  | Description                                                   |
+| ---------- | ------------------------------------------------------------- |
+| `username` | Account username or `planisfy` for public styles              |
+| `style_id` | The ID of the style from which to create a static map         |
+| `overlay`  | Optional overlays: markers, paths, or GeoJSON features        |
+| `lon, lat` | Center coordinates of the map                                 |
+| `zoom`     | Zoom level (0-22)                                             |
+| `bearing`  | Optional rotation (0-360°)                                    |
+| `pitch`    | Optional tilt (0-60°)                                         |
+| `bbox`     | Alternative: bounding box `[min_lon,min_lat,max_lon,max_lat]` |
+| `auto`     | Alternative: auto-fit to overlay bounds                       |
+| `width`    | Image width in pixels (1-1280)                                |
+| `height`   | Image height in pixels (1-1280)                               |
+| `@2x`      | Optional: render at 2x scale for high-DPI displays            |
 
 ---
 
@@ -51,35 +53,35 @@ The position of the map is represented by either the word `auto`, a bounding box
 
 ### Required Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `username` | `string` | The username of the account to which the style belongs. Use `planisfy` for public styles. |
-| `style_id` | `string` | The ID of the style from which to create a static map |
-| `overlay` | `string` | One or more comma-separated features to apply on top of the map. Can include `geojson`, `marker`, `path`, or `custom` markers. |
-| `lon` | `number` | Longitude for the center point; between `-180` and `180` |
-| `lat` | `number` | Latitude for the center point; between `-85.0511` and `85.0511` |
-| `zoom` | `number` | Zoom level; between `0` and `22`. Fractional zoom levels are supported (rounded to 2 decimal places) |
-| `width` | `number` | Width of the image in pixels; between `1` and `1280` |
-| `height` | `number` | Height of the image in pixels; between `1` and `1280` |
+| Parameter  | Type     | Description                                                                                                                    |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `username` | `string` | The username of the account to which the style belongs. Use `planisfy` for public styles.                                      |
+| `style_id` | `string` | The ID of the style from which to create a static map                                                                          |
+| `overlay`  | `string` | One or more comma-separated features to apply on top of the map. Can include `geojson`, `marker`, `path`, or `custom` markers. |
+| `lon`      | `number` | Longitude for the center point; between `-180` and `180`                                                                       |
+| `lat`      | `number` | Latitude for the center point; between `-85.0511` and `85.0511`                                                                |
+| `zoom`     | `number` | Zoom level; between `0` and `22`. Fractional zoom levels are supported (rounded to 2 decimal places)                           |
+| `width`    | `number` | Width of the image in pixels; between `1` and `1280`                                                                           |
+| `height`   | `number` | Height of the image in pixels; between `1` and `1280`                                                                          |
 
 **OR** use `bbox` or `auto`:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `bbox` | `array` | Four coordinates: `[min_lon,min_lat,max_lon,max_lat]`. Zoom is calculated automatically. |
-| `auto` | `string` | Automatically fits the viewport to overlay bounds. Replaces `lon,lat,zoom,bearing,pitch`. |
+| Parameter | Type     | Description                                                                               |
+| --------- | -------- | ----------------------------------------------------------------------------------------- |
+| `bbox`    | `array`  | Four coordinates: `[min_lon,min_lat,max_lon,max_lat]`. Zoom is calculated automatically.  |
+| `auto`    | `string` | Automatically fits the viewport to overlay bounds. Replaces `lon,lat,zoom,bearing,pitch`. |
 
 ### Optional Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `bearing` | `number` | `0` | Rotates the map around its center. Between `0` and `360` degrees. |
-| `pitch` | `number` | `0` | Tilts the map for a 3D perspective. Between `0` and `60` degrees. |
-| `@2x` | `string` | - | Renders at 2x scale for high-DPI/Retina displays. |
-| `attribution` | `boolean` | `true` | Controls whether attribution appears on the image. |
-| `logo` | `boolean` | `true` | Controls whether the Planisfy logo appears on the image. |
-| `padding` | `string` | Auto-calculated | Minimum padding per side. CSS-like syntax: `5` (all sides) or `5,10,5,10` (top,right,bottom,left). |
-| `before_layer` | `string` | - | Controls where overlays are inserted in the layer stack. |
+| Parameter      | Type      | Default         | Description                                                                                        |
+| -------------- | --------- | --------------- | -------------------------------------------------------------------------------------------------- |
+| `bearing`      | `number`  | `0`             | Rotates the map around its center. Between `0` and `360` degrees.                                  |
+| `pitch`        | `number`  | `0`             | Tilts the map for a 3D perspective. Between `0` and `60` degrees.                                  |
+| `@2x`          | `string`  | -               | Renders at 2x scale for high-DPI/Retina displays.                                                  |
+| `attribution`  | `boolean` | `true`          | Controls whether attribution appears on the image.                                                 |
+| `logo`         | `boolean` | `true`          | Controls whether the Planisfy logo appears on the image.                                           |
+| `padding`      | `string`  | Auto-calculated | Minimum padding per side. CSS-like syntax: `5` (all sides) or `5,10,5,10` (top,right,bottom,left). |
+| `before_layer` | `string`  | -               | Controls where overlays are inserted in the layer stack.                                           |
 
 ---
 
@@ -112,7 +114,9 @@ auto
 ```
 
 <Callout type="tip" title="Auto-Fit Behavior">
-When using <code>auto</code> without specifying <code>padding</code>, automatic padding is applied: 5% of the smallest image dimension, up to 12 pixels maximum.
+  When using <code>auto</code> without specifying <code>padding</code>,
+  automatic padding is applied: 5% of the smallest image dimension, up to 12
+  pixels maximum.
 </Callout>
 
 ---
@@ -125,30 +129,30 @@ When using <code>auto</code> without specifying <code>padding</code>, automatic 
 
 ```bash
 # 600x400 map centered on San Francisco
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,12,0,0/600x400?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,12,0,0/600x400"
 
 # With bearing and pitch
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,12,45,30/600x400?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,12,45,30/600x400"
 
 # High-DPI (Retina) display
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,12,0,0/600x400@2x?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,12,0,0/600x400@2x"
 ```
 
 #### Using Bounding Box
 
 ```bash
 # Fit to bounding box
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/[-122.424,37.774,-122.406,37.795]/600x400?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/[-122.424,37.774,-122.406,37.795]/600x400"
 
 # With padding
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/[-122.424,37.774,-122.406,37.795]/600x400?padding=50&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/[-122.424,37.774,-122.406,37.795]/600x400?padding=50"
 ```
 
 #### Auto-Fit to Overlay
 
 ```bash
 # Automatically fit to markers
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/auto/600x400?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/auto/600x400"
 ```
 
 ### HTML Example
@@ -156,18 +160,18 @@ curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/auto/600x400?acce
 ```html
 <!DOCTYPE html>
 <html>
-<head>
-  <title>Static Map Example</title>
-</head>
-<body>
-  <h1>San Francisco</h1>
-  <img
-    src="https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,12,0,0/600x400?access_token=pk.your-key-here"
-    alt="Map of San Francisco"
-    width="600"
-    height="400"
-  />
-</body>
+  <head>
+    <title>Static Map Example</title>
+  </head>
+  <body>
+    <h1>San Francisco</h1>
+    <img
+      src="https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,12,0,0/600x400"
+      alt="Map of San Francisco"
+      width="600"
+      height="400"
+    />
+  </body>
 </html>
 ```
 
@@ -178,7 +182,7 @@ async function getStaticMap(center, zoom, width, height) {
   const { lng, lat } = center;
 
   const response = await fetch(
-    `https://api.planisfy.com/styles/v1/planisfy/basic/static/${lng},${lat},${zoom},0,0/${width}x${height}?access_token=YOUR_KEY`
+    `https://api.planisfy.com/styles/v1/planisfy/basic/static/${lng},${lat},${zoom},0,0/${width}x${height}`,
   );
 
   if (!response.ok) {
@@ -193,11 +197,11 @@ const mapImage = await getStaticMap(
   { lng: -122.4194, lat: 37.7749 },
   12,
   600,
-  400
+  400,
 );
 
 // Display in an img element
-const img = document.createElement('img');
+const img = document.createElement("img");
 img.src = URL.createObjectURL(mapImage);
 document.body.appendChild(img);
 ```
@@ -216,17 +220,18 @@ function exportMapAsStatic() {
   const width = 800;
   const height = 600;
 
-  const staticUrl = `https://api.planisfy.com/styles/v1/planisfy/basic/static/` +
+  const staticUrl =
+    `https://api.planisfy.com/styles/v1/planisfy/basic/static/` +
     `${center.lng.toFixed(4)},${center.lat.toFixed(4)},${zoom.toFixed(1)},${bearing.toFixed(0)},${pitch.toFixed(0)}/` +
-    `${width}x${height}?access_token=YOUR_KEY`;
+    `${width}x${height}`;
 
   // Open in new tab
-  window.open(staticUrl, '_blank');
+  window.open(staticUrl, "_blank");
 }
 
 // Add button to map
-const btn = document.createElement('button');
-btn.textContent = 'Export as Static Image';
+const btn = document.createElement("button");
+btn.textContent = "Export as Static Image";
 btn.onclick = exportMapAsStatic;
 document.body.appendChild(btn);
 ```
@@ -241,10 +246,10 @@ def get_static_map(lon, lat, zoom, width, height, style='planisfy/basic'):
     url = f"https://api.planisfy.com/styles/v1/{style}/static/{lon},{lat},{zoom},0,0/{width}x{height}"
 
     params = {
-        "access_token": "pk.your-key-here"
+        "X-API-Key": "pk_your_key_here"
     }
 
-    response = requests.get(url.format(style=style, lon=lon, lat=lat, zoom=zoom), params=params)
+    response = requests.get(url.format(style=style, lon=lon, lat=lat, zoom=zoom), headers=headers)
 
     if response.status_code == 200:
         # Save to file
@@ -263,24 +268,24 @@ image_data = get_static_map(-122.4194, 37.7749, 12, 600, 400)
 ### Node.js
 
 ```javascript
-import axios from 'axios';
-import fs from 'fs';
+import axios from "axios";
+import fs from "fs";
 
 const getStaticMap = async (lon, lat, zoom, width, height) => {
   const response = await axios.get(
-    'https://api.planisfy.com/styles/v1/planisfy/basic/static/' +
-    `${lon},${lat},${zoom},0,0/${width}x${height}`,
+    "https://api.planisfy.com/styles/v1/planisfy/basic/static/" +
+      `${lon},${lat},${zoom},0,0/${width}x${height}`,
     {
-      responseType: 'arraybuffer',
+      responseType: "arraybuffer",
       params: {
-        access_token: process.env.PLANISFY_API_KEY
-      }
-    }
+        "X-API-Key": process.env.PLANISFY_API_KEY,
+      },
+    },
   );
 
   // Save to file
-  fs.writeFileSync('map.png', response.data);
-  console.log('Map saved as map.png');
+  fs.writeFileSync("map.png", response.data);
+  console.log("Map saved as map.png");
 
   return response.data;
 };
@@ -299,21 +304,23 @@ Overlays allow you to add markers, paths, and custom GeoJSON on top of static ma
 
 Add GeoJSON features with simplestyle-spec styling:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter | Type     | Description                                                            |
+| --------- | -------- | ---------------------------------------------------------------------- |
 | `geojson` | `object` | A valid GeoJSON object, URI-encoded. Supports simplestyle-spec styles. |
 
 <Callout type="warn" title="URL Encoding">
-GeoJSON overlays must be URI-encoded. Replace <code>#</code> with <code>%23</code> (for example, <code>"fill":"%23FF0000"</code>).
+  GeoJSON overlays must be URI-encoded. Replace <code>#</code> with{" "}
+  <code>%23</code> (for example, <code>"fill":"%23FF0000"</code>).
 </Callout>
 
 #### Example: GeoJSON Point
 
 ```bash
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/geojson(%7B%22type%22%3A%22Point%22%2C%22coordinates%22%3A%5B-122.4194%2C37.7749%5D%7D)/-122.4194,37.7749,12,0,0/600x400?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/geojson(%7B%22type%22%3A%22Point%22%2C%22coordinates%22%3A%5B-122.4194%2C37.7749%5D%7D)/-122.4194,37.7749,12,0,0/600x400"
 ```
 
 Decoded GeoJSON:
+
 ```json
 {
   "type": "Point",
@@ -325,20 +332,20 @@ Decoded GeoJSON:
 
 ```javascript
 const geojson = {
-  "type": "Feature",
-  "properties": {
+  type: "Feature",
+  properties: {
     "marker-color": "#FF0000",
     "marker-size": "large",
-    "marker-symbol": "warehouse"
+    "marker-symbol": "warehouse",
   },
-  "geometry": {
-    "type": "Point",
-    "coordinates": [-122.4194, 37.7749]
-  }
+  geometry: {
+    type: "Point",
+    coordinates: [-122.4194, 37.7749],
+  },
 };
 
 const encoded = encodeURIComponent(JSON.stringify(geojson));
-const url = `https://api.planisfy.com/styles/v1/planisfy/basic/static/geojson(${encoded})/auto/600x400?access_token=YOUR_KEY`;
+const url = `https://api.planisfy.com/styles/v1/planisfy/basic/static/geojson(${encoded})/auto/600x400`;
 ```
 
 ### Marker Overlay
@@ -349,25 +356,25 @@ Add built-in markers to the map:
 {name}-{label}+{color}({lon},{lat})
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `name` | `string` | Marker shape and size: `pin-s` (small) or `pin-l` (large) |
-| `label` | `string` | Optional marker symbol: `a`-`z`, `0`-`99`, or Maki icon name |
-| `color` | `string` | Optional 3- or 6-digit hex color (e.g., `#FF0000`) |
-| `lon, lat` | `number` | Marker location |
+| Parameter  | Type     | Description                                                  |
+| ---------- | -------- | ------------------------------------------------------------ |
+| `name`     | `string` | Marker shape and size: `pin-s` (small) or `pin-l` (large)    |
+| `label`    | `string` | Optional marker symbol: `a`-`z`, `0`-`99`, or Maki icon name |
+| `color`    | `string` | Optional 3- or 6-digit hex color (e.g., `#FF0000`)           |
+| `lon, lat` | `number` | Marker location                                              |
 
 #### Example: Single Marker
 
 ```bash
 # Red pin with 'A' label
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/pin-s-a+ff0000(-122.4194,37.7749)/-122.4194,37.7749,12,0,0/600x400?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/pin-s-a+ff0000(-122.4194,37.7749)/-122.4194,37.7749,12,0,0/600x400"
 ```
 
 #### Example: Multiple Markers
 
 ```bash
 # Multiple markers
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/pin-s-a+ff0000(-122.4194,37.7749),pin-l-b+00ff00(-122.4294,37.7062)/auto/600x400?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/pin-s-a+ff0000(-122.4194,37.7749),pin-l-b+00ff00(-122.4294,37.7062)/auto/600x400"
 ```
 
 ### Custom Marker
@@ -378,20 +385,22 @@ Use your own marker image:
 url-{url}({lon},{lat})
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `url` | `string` | Percent-encoded URL to a PNG or JPG image (max 1024×1024px) |
-| `lon, lat` | `number` | Marker location |
+| Parameter  | Type     | Description                                                 |
+| ---------- | -------- | ----------------------------------------------------------- |
+| `url`      | `string` | Percent-encoded URL to a PNG or JPG image (max 1024×1024px) |
+| `lon, lat` | `number` | Marker location                                             |
 
 <Callout type="info" title="Custom Marker Requirements">
-Custom marker images must have proper <code>Content-Type</code> headers (<code>image/png</code> or <code>image/jpeg</code>) and <code>Expires</code>/<code>Cache-Control</code> headers for caching.
+  Custom marker images must have proper <code>Content-Type</code> headers (
+  <code>image/png</code> or <code>image/jpeg</code>) and <code>Expires</code>/
+  <code>Cache-Control</code> headers for caching.
 </Callout>
 
 #### Example: Custom Marker
 
 ```bash
 # Custom marker hosted on your server
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/url-https%3A%2F%2Fexample.com%2Fmarker.png(-122.4194,37.7749)/-122.4194,37.7749,12,0,0/600x400?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/url-https%3A%2F%2Fexample.com%2Fmarker.png(-122.4194,37.7749)/-122.4194,37.7749,12,0,0/600x400"
 ```
 
 ### Path Overlay
@@ -402,14 +411,14 @@ Draw encoded polylines on the map:
 path({strokeWidth}:{strokeColor}:{strokeOpacity}:{fillColor}:{fillOpacity}:{polyline})
 ```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `strokeWidth` | `number` | Optional line stroke width in pixels |
-| `strokeColor` | `string` | Optional 3- or 6-digit hex color |
-| `strokeOpacity` | `number` | Optional opacity (0-1) |
-| `fillColor` | `string` | Optional fill hex color |
-| `fillOpacity` | `number` | Optional fill opacity (0-1) |
-| `polyline` | `string` | Encoded polyline with 5 decimal precision |
+| Parameter       | Type     | Description                               |
+| --------------- | -------- | ----------------------------------------- |
+| `strokeWidth`   | `number` | Optional line stroke width in pixels      |
+| `strokeColor`   | `string` | Optional 3- or 6-digit hex color          |
+| `strokeOpacity` | `number` | Optional opacity (0-1)                    |
+| `fillColor`     | `string` | Optional fill hex color                   |
+| `fillOpacity`   | `number` | Optional fill opacity (0-1)               |
+| `polyline`      | `string` | Encoded polyline with 5 decimal precision |
 
 #### Example: Path Overlay
 
@@ -418,13 +427,13 @@ path({strokeWidth}:{strokeColor}:{strokeOpacity}:{fillColor}:{fillOpacity}:{poly
 const path = [
   [-122.4194, 37.7749],
   [-122.4094, 37.7849],
-  [-122.3994, 37.7949]
+  [-122.3994, 37.7949],
 ];
 
 // Encode polyline (simplified - you'd use a polyline encoding library)
-const encoded = 'path_encoding_here';
+const encoded = "path_encoding_here";
 
-const url = `https://api.planisfy.com/styles/v1/planisfy/basic/static/path(3:%23ff0000:1:)%7Bencoded%7D/auto/600x400?access_token=YOUR_KEY`;
+const url = `https://api.planisfy.com/styles/v1/planisfy/basic/static/path(3:%23ff0000:1:)%7Bencoded%7D/auto/600x400`;
 ```
 
 ---
@@ -435,11 +444,12 @@ You can combine multiple overlays by comma-separating them:
 
 ```bash
 # GeoJSON + marker + path
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/geojson({...}),pin-s+ff0000(-122.4194,37.7749),path(...)/auto/600x400?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/geojson({...}),pin-s+ff0000(-122.4194,37.7749),path(...)/auto/600x400"
 ```
 
 <Callout type="info" title="Z-Order">
-Overlays are rendered in the order specified. The last overlay in the list has the highest Z-order (renders on top).
+  Overlays are rendered in the order specified. The last overlay in the list has
+  the highest Z-order (renders on top).
 </Callout>
 
 ---
@@ -476,28 +486,28 @@ const coord = [-122.419412, 37.774912];
 
 Add a new style layer to the static image:
 
-| Parameter | Description |
-|-----------|-------------|
-| `addlayer` | JSON object defining a MapLibre style layer to add |
+| Parameter      | Description                                                |
+| -------------- | ---------------------------------------------------------- |
+| `addlayer`     | JSON object defining a MapLibre style layer to add         |
 | `before_layer` | Layer ID to insert the new layer before (controls z-index) |
 
 ```bash
 # Add a circle layer
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/auto/600x400?addlayer=%7B%22id%22%3A%22circle-overlay%22%2C%22type%22%3A%22circle%22%2C%22source%22%3A%7B%22type%22%3A%22geojson%22%2C%22data%22%3A%7B%22type%22%3A%22Point%22%2C%22coordinates%22%3A%5B-122.4194%2C37.7749%5D%7D%7D%7D&before_layer=road-label&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/auto/600x400?addlayer=%7B%22id%22%3A%22circle-overlay%22%2C%22type%22%3A%22circle%22%2C%22source%22%3A%7B%22type%22%3A%22geojson%22%2C%22data%22%3A%7B%22type%22%3A%22Point%22%2C%22coordinates%22%3A%5B-122.4194%2C37.7749%5D%7D%7D%7D&before_layer=road-label"
 ```
 
 ### Filter Existing Layers
 
 Apply a filter to an existing style layer:
 
-| Parameter | Description |
-|-----------|-------------|
-| `setfilter` | Filter expression to apply |
-| `layer_id` | Target layer ID for the filter |
+| Parameter   | Description                    |
+| ----------- | ------------------------------ |
+| `setfilter` | Filter expression to apply     |
+| `layer_id`  | Target layer ID for the filter |
 
 ```bash
 # Filter to show only 'Canada'
-curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/auto/600x400?setfilter=%5B%22match%22%2C%5B%22get%22%2C%22name%22%5D%2C%22Canada%22%5D&layer_id=country-label&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/auto/600x400?setfilter=%5B%22match%22%2C%5B%22get%22%2C%22name%22%5D%2C%22Canada%22%5D&layer_id=country-label"
 ```
 
 ---
@@ -506,26 +516,27 @@ curl "https://api.planisfy.com/styles/v1/planisfy/basic/static/auto/600x400?setf
 
 Static images have aggressive caching to improve performance:
 
-| Cache Type | Duration |
-|-------------|------------|
-| **Browser/Client** | 12 hours |
-| **CDN/Edge** | 12 hours (`s-maxage=43200`) |
-| **Origin** | 12 hours (`max-age=43200`) |
+| Cache Type         | Duration                    |
+| ------------------ | --------------------------- |
+| **Browser/Client** | 12 hours                    |
+| **CDN/Edge**       | 12 hours (`s-maxage=43200`) |
+| **Origin**         | 12 hours (`max-age=43200`)  |
 
 <Callout type="info" title="Cache Propagation">
-Changes to a style may take up to 12 hours to propagate to all edge nodes. Plan updates accordingly.
+  Changes to a style may take up to 12 hours to propagate to all edge nodes.
+  Plan updates accordingly.
 </Callout>
 
 ---
 
 ## Rate Limits
 
-| Plan | Requests per Minute | Requests per Day |
-|------|---------------------|------------------|
-| Free | 600 | 10,000 |
-| Starter | 1,000 | 50,000 |
-| Pro | 2,500 | 200,000 |
-| Enterprise | Custom | Custom |
+| Plan       | Requests per Minute | Requests per Day |
+| ---------- | ------------------- | ---------------- |
+| Free       | 600                 | 10,000           |
+| Starter    | 1,000               | 50,000           |
+| Pro        | 2,500               | 200,000          |
+| Enterprise | Custom              | Custom           |
 
 If you exceed the rate limit, you'll receive an **HTTP 429 Too Many Requests** response.
 
@@ -533,27 +544,27 @@ If you exceed the rate limit, you'll receive an **HTTP 429 Too Many Requests** r
 
 ## Error Codes
 
-| HTTP Code | Error | Description |
-|-----------|-------|-------------|
-| `400` | Bad Request | Invalid parameters, incompatible sources |
-| `401` | Unauthorized | Invalid or missing access token |
-| `403` | Forbidden | Account issue, token restrictions, or quota exceeded |
-| `404` | Not Found | Style ID does not exist |
-| `410` | Gone | Classic raster styles no longer supported |
-| `422` | Unprocessable Entity | Invalid zoom, pitch, bbox, padding, or other parameter |
-| `429` | Too Many Requests | Rate limit exceeded |
+| HTTP Code | Error                | Description                                            |
+| --------- | -------------------- | ------------------------------------------------------ |
+| `400`     | Bad Request          | Invalid parameters, incompatible sources               |
+| `401`     | Unauthorized         | Invalid or missing access token                        |
+| `403`     | Forbidden            | Account issue, token restrictions, or quota exceeded   |
+| `404`     | Not Found            | Style ID does not exist                                |
+| `410`     | Gone                 | Classic raster styles no longer supported              |
+| `422`     | Unprocessable Entity | Invalid zoom, pitch, bbox, padding, or other parameter |
+| `429`     | Too Many Requests    | Rate limit exceeded                                    |
 
 ### Common Error Messages
 
-| Message | Cause | Solution |
-|----------|-------|------------|
-| `Style not found` | Invalid `style_id` | Verify style ID in your dashboard |
-| `Zoom level must be between 0-22` | Invalid zoom value | Use zoom between 0-22 |
-| `Width/Height must be between 1-1280` | Invalid dimensions | Check width/height are within limits |
-| `Auto extent cannot be determined when GeoJSON has no features` | Empty GeoJSON with `auto` | Provide coordinates instead of `auto` |
-| `Overlay bounds are out of range` | Coordinates invalid | Verify lon is -180 to 180, lat is -85 to 85 |
-| `Auto cannot be used with bearing/pitch` | Conflicting parameters | Remove bearing/pitch when using `auto` |
-| `The new layer source url must be a properly formatted url` | Invalid source in `addlayer` | Check source URL format |
+| Message                                                         | Cause                        | Solution                                    |
+| --------------------------------------------------------------- | ---------------------------- | ------------------------------------------- |
+| `Style not found`                                               | Invalid `style_id`           | Verify style ID in your dashboard           |
+| `Zoom level must be between 0-22`                               | Invalid zoom value           | Use zoom between 0-22                       |
+| `Width/Height must be between 1-1280`                           | Invalid dimensions           | Check width/height are within limits        |
+| `Auto extent cannot be determined when GeoJSON has no features` | Empty GeoJSON with `auto`    | Provide coordinates instead of `auto`       |
+| `Overlay bounds are out of range`                               | Coordinates invalid          | Verify lon is -180 to 180, lat is -85 to 85 |
+| `Auto cannot be used with bearing/pitch`                        | Conflicting parameters       | Remove bearing/pitch when using `auto`      |
+| `The new layer source url must be a properly formatted url`     | Invalid source in `addlayer` | Check source URL format                     |
 
 ---
 
@@ -564,7 +575,10 @@ If you exceed the rate limit, you'll receive an **HTTP 429 Too Many Requests** r
 Include maps in promotional emails:
 
 ```html
-<img src="https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,13,0,0/600x300?access_token=pk.your-key-here" alt="Find us here!" />
+<img
+  src="https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,13,0,0/600x300"
+  alt="Find us here!"
+/>
 ```
 
 ### 2. PDF Reports
@@ -574,11 +588,11 @@ Embed maps in generated reports:
 ```javascript
 // Generate PDF with map
 const doc = new jsPDF();
-const mapUrl = `https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,12,0,0/800x600?access_token=${KEY}`;
+const mapUrl = `https://api.planisfy.com/styles/v1/planisfy/basic/static/-122.4194,37.7749,12,0,0/800x600`;
 
-const imgData = await fetch(mapUrl).then(r => r.blob());
-doc.addImage(imgData, 'map', 0, 0, 800, 600);
-doc.save('report.pdf');
+const imgData = await fetch(mapUrl).then((r) => r.blob());
+doc.addImage(imgData, "map", 0, 0, 800, 600);
+doc.save("report.pdf");
 ```
 
 ### 3. Social Media Sharing
@@ -587,10 +601,10 @@ Generate shareable map images:
 
 ```javascript
 function shareLocation(lon, lat, label) {
-  const url = `https://api.planisfy.com/styles/v1/planisfy/basic/static/pin-s-${label}+ff0000(${lon},${lat})/${lon},${lat},14,0,0/600x400?access_token=${KEY}`;
+  const url = `https://api.planisfy.com/styles/v1/planisfy/basic/static/pin-s-${label}+ff0000(${lon},${lat})/${lon},${lat},14,0,0/600x400`;
 
   navigator.clipboard.writeText(url);
-  alert('Map URL copied to clipboard!');
+  alert("Map URL copied to clipboard!");
 }
 ```
 
@@ -600,9 +614,9 @@ Generate preview images for locations:
 
 ```javascript
 async function generateThumbnail(location) {
-  const url = `https://api.planisfy.com/styles/v1/planisfy/basic/static/${location.lng},${location.lat},15,0,0/300x200?access_token=${KEY}`;
+  const url = `https://api.planisfy.com/styles/v1/planisfy/basic/static/${location.lng},${location.lat},15,0,0/300x200`;
 
-  const blob = await fetch(url).then(r => r.blob());
+  const blob = await fetch(url).then((r) => r.blob());
   return URL.createObjectURL(blob);
 }
 ```
@@ -613,7 +627,7 @@ Create high-resolution maps for print:
 
 ```bash
 # 300 DPI for print (2000x2000 @ 2x scale)
-curl "https://api.planisfy.com/styles/v1/planisfy/print/static/-122.4194,37.7749,13,0,30/2000x2000@2x?access_token=pk.your-key-here" \
+curl "https://api.planisfy.com/styles/v1/planisfy/print/static/-122.4194,37.7749,13,0,30/2000x2000@2x" \
   --output sf-map.png
 ```
 
@@ -623,14 +637,14 @@ curl "https://api.planisfy.com/styles/v1/planisfy/print/static/-122.4194,37.7749
 
 ### 1. Use Appropriate Image Sizes
 
-| Use Case | Recommended Size |
-|-----------|----------------|
-| Email signature | 300×200 or 400×300 |
-| Social media (Twitter) | 1200×675 |
-| Social media (Instagram) | 1080×1080 |
-| Web thumbnails | 200×150 |
-| Presentation slides | 1280×720 or 1920×1080 |
-| Print (300 DPI) | Calculate: (inches × 300) |
+| Use Case                 | Recommended Size          |
+| ------------------------ | ------------------------- |
+| Email signature          | 300×200 or 400×300        |
+| Social media (Twitter)   | 1200×675                  |
+| Social media (Instagram) | 1080×1080                 |
+| Web thumbnails           | 200×150                   |
+| Presentation slides      | 1280×720 or 1920×1080     |
+| Print (300 DPI)          | Calculate: (inches × 300) |
 
 ### 2. Optimize for Different Devices
 
@@ -640,9 +654,9 @@ const isMobile = window.innerWidth < 768;
 const isRetina = window.devicePixelRatio > 1;
 
 const width = isMobile ? 400 : 800;
-const scale = isRetina ? '@2x' : '';
+const scale = isRetina ? "@2x" : "";
 
-const url = `https://api.planisfy.com/styles/v1/planisfy/basic/static/${lng},${lat},${zoom},0,0/${width}x${height}${scale}?access_token=${KEY}`;
+const url = `https://api.planisfy.com/styles/v1/planisfy/basic/static/${lng},${lat},${zoom},0,0/${width}x${height}${scale}`;
 ```
 
 ### 3. Cache Generated Images
@@ -656,7 +670,7 @@ async function getCachedStaticMap(url) {
     return cache.get(url);
   }
 
-  const blob = await fetch(url).then(r => r.blob());
+  const blob = await fetch(url).then((r) => r.blob());
   cache.set(url, blob);
   return blob;
 }
@@ -678,7 +692,7 @@ async function getCachedStaticMap(url) {
 
 ```html
 <img
-  src="https://api.planisfy.com/.../600x400?access_token=..."
+  src="https://api.planisfy.com/.../600x400"
   loading="lazy"
   decoding="async"
   alt="Map location"
@@ -700,7 +714,7 @@ const url = `https://api.mapbox.com/styles/v1/{username}/{style_id}/static/${lng
 ### After (Planisfy)
 
 ```javascript
-const url = `https://api.planisfy.com/styles/v1/${username}/${style_id}/static/${lng},${lat},${zoom},0,0/${width}x${height}?access_token=${planisfyKey}`;
+const url = `https://api.planisfy.com/styles/v1/${username}/${style_id}/static/${lng},${lat},${zoom},0,0/${width}x${height}`;
 ```
 
 That's it! All parameters, overlays, and options remain the same.
@@ -724,5 +738,6 @@ That's it! All parameters, overlays, and options remain the same.
 ---
 
 Sources:
+
 - [Static Images API | Mapbox API Docs](https://docs.mapbox.com/api/maps/static-images/)
 - [Static Images API troubleshooting | Mapbox Help](https://docs.mapbox.com/help/troubleshooting/static-image-api/)

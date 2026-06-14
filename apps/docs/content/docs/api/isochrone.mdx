@@ -3,14 +3,19 @@ title: Isochrone API
 description: Generate polygons representing areas reachable within a specified time or distance from a starting point.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+import { Callout } from "fumadocs-ui/components/callout";
 
 # Isochrone API
 
 The **Planisfy Isochrone API** calculates areas that are reachable within a specified time or distance from a starting point. Our API is drop-in compatible with Mapbox Isochrone v1, powered by open-source routing engines.
 
 <Callout type="info" title="Data Source">
-Isochrone calculations are powered by <a href="https://valhalla.readthedocs.io/" target="_blank">Valhalla</a>, an open-source routing engine using Overture Maps and OpenStreetMap road networks.
+  Isochrone calculations are powered by{" "}
+  <a href="https://valhalla.readthedocs.io/" target="_blank">
+    Valhalla
+  </a>
+  , an open-source routing engine using Overture Maps and OpenStreetMap road
+  networks.
 </Callout>
 
 ---
@@ -18,23 +23,23 @@ Isochrone calculations are powered by <a href="https://valhalla.readthedocs.io/"
 ## Endpoint Overview
 
 ```
-GET https://api.planisfy.com/isochrone/v1/{profile}/{coordinates}?contours_minutes={minutes}&access_token=YOUR_KEY
+GET https://api.planisfy.com/isochrone/v1/{profile}/{coordinates}?contours_minutes={minutes}
 ```
 
-| Component | Description |
-|-----------|-------------|
-| `profile` | Routing mode: `driving`, `walking`, `cycling` |
-| `coordinates` | Starting point: `{longitude},{latitude}` |
+| Component     | Description                                   |
+| ------------- | --------------------------------------------- |
+| `profile`     | Routing mode: `driving`, `walking`, `cycling` |
+| `coordinates` | Starting point: `{longitude},{latitude}`      |
 
 ---
 
 ## Routing Profiles
 
-| Profile | Description | Use Case |
-|---------|-------------|----------|
-| `driving` | Car/truck accessible areas | Driving distance analysis |
-| `walking` | Pedestrian accessible areas | Walkability analysis |
-| `cycling` | Bike accessible areas | Cycling catchment areas |
+| Profile   | Description                 | Use Case                  |
+| --------- | --------------------------- | ------------------------- |
+| `driving` | Car/truck accessible areas  | Driving distance analysis |
+| `walking` | Pedestrian accessible areas | Walkability analysis      |
+| `cycling` | Bike accessible areas       | Cycling catchment areas   |
 
 ---
 
@@ -42,22 +47,22 @@ GET https://api.planisfy.com/isochrone/v1/{profile}/{coordinates}?contours_minut
 
 ### Required Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `profile` | `string` | Routing profile: `driving`, `walking`, `cycling` |
-| `coordinates` | `string` | Starting point `{longitude},{latitude}` |
-| `contours_minutes` | `string` OR | Comma-separated time contours in minutes |
-| `contours_meters` | `string` | Comma-separated distance contours in meters |
+| Parameter          | Type        | Description                                      |
+| ------------------ | ----------- | ------------------------------------------------ |
+| `profile`          | `string`    | Routing profile: `driving`, `walking`, `cycling` |
+| `coordinates`      | `string`    | Starting point `{longitude},{latitude}`          |
+| `contours_minutes` | `string` OR | Comma-separated time contours in minutes         |
+| `contours_meters`  | `string`    | Comma-separated distance contours in meters      |
 
 ### Optional Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `contours_colors` | `string` | Auto | Semicolon-separated hex colors for contours |
-| `polygons` | `boolean` | `true` | Return polygons (if `false`, returns lines) |
-| `denoise` | `float` | `1.0` | Remove smaller disconnected areas (0.0-1.0) |
-| `generalize` | `float` | `0.5` | Simplification tolerance in meters |
-| `smoothing` | `float` | `1.0` | Smoothing factor for isochrone shapes (0.0-1.0) |
+| Parameter         | Type      | Default | Description                                     |
+| ----------------- | --------- | ------- | ----------------------------------------------- |
+| `contours_colors` | `string`  | Auto    | Semicolon-separated hex colors for contours     |
+| `polygons`        | `boolean` | `true`  | Return polygons (if `false`, returns lines)     |
+| `denoise`         | `float`   | `1.0`   | Remove smaller disconnected areas (0.0-1.0)     |
+| `generalize`      | `float`   | `0.5`   | Simplification tolerance in meters              |
+| `smoothing`       | `float`   | `1.0`   | Smoothing factor for isochrone shapes (0.0-1.0) |
 
 ---
 
@@ -69,40 +74,40 @@ GET https://api.planisfy.com/isochrone/v1/{profile}/{coordinates}?contours_minut
 
 ```bash
 # 5-minute driving isochrone
-curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=5&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=5"
 
 # Multiple time contours (5, 10, 15 minutes)
-curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=5,10,15&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=5,10,15"
 
 # Walking isochrone (10 minutes)
-curl "https://api.planisfy.com/isochrone/v1/walking/-0.1278,51.5074?contours_minutes=10&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/isochrone/v1/walking/-0.1278,51.5074?contours_minutes=10"
 ```
 
 #### Distance-Based Isochrone
 
 ```bash
 # 1km driving distance
-curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_meters=1000&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_meters=1000"
 
 # Multiple distance contours (1km, 2km, 5km)
-curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_meters=1000,2000,5000&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_meters=1000,2000,5000"
 ```
 
 #### Custom Colors
 
 ```bash
 # Custom contour colors
-curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=5,10,15&contours_colors=%236706d3;%233887be;%2300326f&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=5,10,15&contours_colors=%236706d3;%233887be;%2300326f"
 ```
 
 #### Denoising
 
 ```bash
 # Remove small disconnected areas
-curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=10&denoise=0.5&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=10&denoise=0.5"
 
 # More aggressive denoising
-curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=10&denoise=0.8&access_token=pk.your-key-here"
+curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=10&denoise=0.8"
 ```
 
 ### JavaScript (Fetch)
@@ -111,14 +116,14 @@ curl "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_m
 // Get 10-minute driving isochrone
 async function getIsochrone(lng, lat, minutes = 10) {
   const response = await fetch(
-    `https://api.planisfy.com/isochrone/v1/driving/${lng},${lat}?contours_minutes=${minutes}&polygons=true&access_token=YOUR_KEY`
+    `https://api.planisfy.com/isochrone/v1/driving/${lng},${lat}?contours_minutes=${minutes}&polygons=true`,
   );
   const data = await response.json();
   return data;
 }
 
 const isochrone = await getIsochrone(-122.4194, 37.7749, 10);
-console.log('Isochrone area:', isochrone.features[0].properties.area);
+console.log("Isochrone area:", isochrone.features[0].properties.area);
 ```
 
 ### JavaScript (MapLibre GL JS)
@@ -126,15 +131,15 @@ console.log('Isochrone area:', isochrone.features[0].properties.area);
 ```javascript
 // Display isochrone on map
 const map = new maplibregl.Map({
-  container: 'map',
-  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY',
+  container: "map",
+  style: "https://api.planisfy.com/styles/v1/planisfy/basic",
   center: [-122.4194, 37.7749],
-  zoom: 11
+  zoom: 11,
 });
 
 async function showIsochrone(lng, lat) {
   const response = await fetch(
-    `https://api.planisfy.com/isochrone/v1/driving/${lng},${lat}?contours_minutes=5,10,15&contours_colors=%236706d3;%233887be;%2300326f&access_token=YOUR_KEY`
+    `https://api.planisfy.com/isochrone/v1/driving/${lng},${lat}?contours_minutes=5,10,15&contours_colors=%236706d3;%233887be;%2300326f`,
   );
   const data = await response.json();
 
@@ -142,34 +147,34 @@ async function showIsochrone(lng, lat) {
   data.features.forEach((feature, index) => {
     map.addLayer({
       id: `isochrone-${index}`,
-      type: 'fill',
+      type: "fill",
       source: {
-        type: 'geojson',
-        data: feature
+        type: "geojson",
+        data: feature,
       },
       paint: {
-        'fill-color': feature.properties.color,
-        'fill-opacity': 0.3
-      }
+        "fill-color": feature.properties.color,
+        "fill-opacity": 0.3,
+      },
     });
 
     // Add outline
     map.addLayer({
       id: `isochrone-outline-${index}`,
-      type: 'line',
+      type: "line",
       source: {
-        type: 'geojson',
-        data: feature
+        type: "geojson",
+        data: feature,
       },
       paint: {
-        'line-color': feature.properties.color,
-        'line-width': 2
-      }
+        "line-color": feature.properties.color,
+        "line-width": 2,
+      },
     });
   });
 }
 
-map.on('load', () => {
+map.on("load", () => {
   showIsochrone(-122.4194, 37.7749);
 });
 ```
@@ -178,24 +183,24 @@ map.on('load', () => {
 
 ```javascript
 // Mapbox GL JS compatibility
-map.on('load', async () => {
+map.on("load", async () => {
   const response = await fetch(
-    'https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=5,10,15&access_token=YOUR_KEY'
+    "https://api.planisfy.com/isochrone/v1/driving/-122.4194,37.7749?contours_minutes=5,10,15",
   );
   const data = await response.json();
 
   data.features.forEach((feature, index) => {
     map.addLayer({
       id: `isochrone-${index}`,
-      type: 'fill',
+      type: "fill",
       source: {
-        type: 'geojson',
-        data: feature
+        type: "geojson",
+        data: feature,
       },
       paint: {
-        'fill-color': feature.properties.color,
-        'fill-opacity': 0.3
-      }
+        "fill-color": feature.properties.color,
+        "fill-opacity": 0.3,
+      },
     });
   });
 });
@@ -209,12 +214,12 @@ import requests
 def get_isochrone(lng, lat, minutes, profile='driving'):
     url = f"https://api.planisfy.com/isochrone/v1/{profile}/{lng},{lat}"
     params = {
-        "access_token": "pk.your-key-here",
+        headers: { "X-API-Key": "pk_your_key_here" },
         "contours_minutes": minutes,
         "polygons": "true"
     }
 
-    response = requests.get(url, params=params)
+    response = requests.get(url, headers=headers)
     return response.json()
 
 # Example usage
@@ -229,28 +234,29 @@ for feature in isochrone['features']:
 ### Node.js
 
 ```javascript
-import axios from 'axios';
+import axios from "axios";
 
-const getIsochrone = async (lng, lat, minutes, profile = 'driving') => {
+const getIsochrone = async (lng, lat, minutes, profile = "driving") => {
   const response = await axios.get(
     `https://api.planisfy.com/isochrone/v1/${profile}/${lng},${lat}`,
     {
+      headers: { "X-API-Key": process.env.PLANISFY_API_KEY },
       params: {
-        access_token: process.env.PLANISFY_API_KEY,
-        contours_minutes: minutes.join(','),
+        contours_minutes: minutes.join(","),
         polygons: true,
-        denoise: 0.5
-      }
-    }
+        denoise: 0.5,
+      },
+    },
   );
 
   return response.data;
 };
 
 const isochrone = await getIsochrone(
-  -122.4194, 37.7749,
+  -122.4194,
+  37.7749,
   [5, 10, 15],
-  'driving'
+  "driving",
 );
 
 console.log(`Found ${isochrone.features.length} contours`);
@@ -276,12 +282,14 @@ console.log(`Found ${isochrone.features.length} contours`);
       },
       "geometry": {
         "type": "Polygon",
-        "coordinates": [[
-          [-122.5, 37.7],
-          [-122.4, 37.8],
-          [-122.3, 37.75],
-          [-122.5, 37.7]
-        ]]
+        "coordinates": [
+          [
+            [-122.5, 37.7],
+            [-122.4, 37.8],
+            [-122.3, 37.75],
+            [-122.5, 37.7]
+          ]
+        ]
       }
     }
   ]
@@ -294,14 +302,14 @@ console.log(`Found ${isochrone.features.length} contours`);
 
 ### Feature Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `metric` | `string` | Contour type: `"time"` or `"distance"` |
-| `value` | `number` | Contour value (seconds or meters) |
-| `opacity` | `number` | Suggested fill opacity (0-1) |
-| `color` | `string` | Hex color for the contour |
-| `contour` | `number` | Contour index |
-| `area` | `number` | Area in square meters |
+| Property  | Type     | Description                            |
+| --------- | -------- | -------------------------------------- |
+| `metric`  | `string` | Contour type: `"time"` or `"distance"` |
+| `value`   | `number` | Contour value (seconds or meters)      |
+| `opacity` | `number` | Suggested fill opacity (0-1)           |
+| `color`   | `string` | Hex color for the contour              |
+| `contour` | `number` | Contour index                          |
+| `area`    | `number` | Area in square meters                  |
 
 ### Geometry
 
@@ -357,10 +365,10 @@ curl "...?contours_minutes=5,10,15&contours_colors=%23ff0000;%2300ff00;%230000ff
 
 Remove smaller disconnected areas:
 
-| Value | Effect |
-|-------|--------|
-| `0.0` | No denoising (all areas included) |
-| `0.5` | Moderate denoising |
+| Value | Effect                                |
+| ----- | ------------------------------------- |
+| `0.0` | No denoising (all areas included)     |
+| `0.5` | Moderate denoising                    |
 | `1.0` | Aggressive denoising (only main area) |
 
 ```bash
@@ -369,17 +377,18 @@ curl "...?contours_minutes=10&denoise=0.7&..."
 ```
 
 <Callout type="tip" title="When to Denoise">
-Use denoising for cleaner visualizations in urban areas. Lower values (0.3-0.5) preserve more detail for analysis.
+  Use denoising for cleaner visualizations in urban areas. Lower values
+  (0.3-0.5) preserve more detail for analysis.
 </Callout>
 
 ### Smoothing
 
 Control the smoothness of isochrone boundaries:
 
-| Value | Effect |
-|-------|--------|
-| `0.0` | No smoothing ( jagged edges) |
-| `0.5` | Light smoothing (default) |
+| Value | Effect                           |
+| ----- | -------------------------------- |
+| `0.0` | No smoothing ( jagged edges)     |
+| `0.5` | Light smoothing (default)        |
 | `1.0` | Heavy smoothing (rounded shapes) |
 
 ```bash
@@ -410,14 +419,14 @@ Analyze customer reach for store locations:
 ```javascript
 // Display 5, 10, 15-minute driving catchment
 const contours = [5, 10, 15];
-const colors = ['#6706d3', '#3887be', '#00326f'];
+const colors = ["#6706d3", "#3887be", "#00326f"];
 
 const storeLocation = { lng: -122.4194, lat: 37.7749 };
 
 const isochrone = await getIsochrone(
   storeLocation.lng,
   storeLocation.lat,
-  contours.join(',')
+  contours.join(","),
 );
 ```
 
@@ -427,20 +436,10 @@ Evaluate walkability or bikeability:
 
 ```javascript
 // 10-minute walk from transit station
-const walkIsochrone = await getIsochrone(
-  stationLng,
-  stationLat,
-  10,
-  'walking'
-);
+const walkIsochrone = await getIsochrone(stationLng, stationLat, 10, "walking");
 
 // 5-minute bike ride
-const bikeIsochrone = await getIsochrone(
-  stationLng,
-  stationLat,
-  5,
-  'cycling'
-);
+const bikeIsochrone = await getIsochrone(stationLng, stationLat, 5, "cycling");
 ```
 
 ### 4. Service Area Planning
@@ -454,7 +453,7 @@ const coverage = await getIsochrone(
   fireStation.lng,
   fireStation.lat,
   5,
-  'driving'
+  "driving",
 );
 
 const areaSqKm = coverage.features[0].properties.area / 1_000_000;
@@ -467,44 +466,46 @@ console.log(`Fire station covers ${areaSqKm.toFixed(1)} km²`);
 
 Isochrone responses are moderately cached:
 
-| Cache Type | Duration | Description |
-|------------|----------|-------------|
-| **Browser/Client** | 5 minutes | Short-term cache |
-| **CDN/Edge** | 5 minutes | Cloudflare edge locations |
-| **Origin** | 5 minutes | Planisfy servers |
+| Cache Type         | Duration  | Description               |
+| ------------------ | --------- | ------------------------- |
+| **Browser/Client** | 5 minutes | Short-term cache          |
+| **CDN/Edge**       | 5 minutes | Cloudflare edge locations |
+| **Origin**         | 5 minutes | Planisfy servers          |
 
 <Callout type="info" title="Cache Key">
-Cache keys include coordinates, profile, and contour values. Different denoising or smoothing values create different cache entries.
+  Cache keys include coordinates, profile, and contour values. Different
+  denoising or smoothing values create different cache entries.
 </Callout>
 
 ---
 
 ## Rate Limits
 
-| Plan | Requests per Minute | Requests per Day |
-|------|---------------------|------------------|
-| Free | 50 | 2,000 |
-| Starter | 200 | 20,000 |
-| Pro | 1,000 | 200,000 |
-| Enterprise | Custom | Custom |
+| Plan       | Requests per Minute | Requests per Day |
+| ---------- | ------------------- | ---------------- |
+| Free       | 50                  | 2,000            |
+| Starter    | 200                 | 20,000           |
+| Pro        | 1,000               | 200,000          |
+| Enterprise | Custom              | Custom           |
 
 <Callout type="warn" title="Computationally Intensive">
-Isochrone calculations are more expensive than simple routing. Rate limits are lower than Directions API.
+  Isochrone calculations are more expensive than simple routing. Rate limits are
+  lower than Directions API.
 </Callout>
 
 ---
 
 ## Error Codes
 
-| HTTP Code | Error | Description |
-|-----------|-------|-------------|
-| `400` | Bad Request | Invalid coordinates or parameters |
-| `401` | Unauthorized | Missing or invalid API key |
-| `403` | Forbidden | API key suspended or over quota |
-| `404` | Not Found | No road network near location |
-| `422` | Unprocessable Entity | Invalid contour values |
-| `429` | Too Many Requests | Rate limit exceeded |
-| `500` | Server Error | Internal routing error |
+| HTTP Code | Error                | Description                       |
+| --------- | -------------------- | --------------------------------- |
+| `400`     | Bad Request          | Invalid coordinates or parameters |
+| `401`     | Unauthorized         | Missing or invalid API key        |
+| `403`     | Forbidden            | API key suspended or over quota   |
+| `404`     | Not Found            | No road network near location     |
+| `422`     | Unprocessable Entity | Invalid contour values            |
+| `429`     | Too Many Requests    | Rate limit exceeded               |
+| `500`     | Server Error         | Internal routing error            |
 
 ### Error Response Format
 
@@ -531,20 +532,21 @@ const url = `https://api.mapbox.com/isochrone/v1/mapbox/driving/${lng},${lat}?co
 ### After (Planisfy)
 
 ```javascript
-const url = `https://api.planisfy.com/isochrone/v1/driving/${lng},${lat}?contours_minutes=10&access_token=${planisfyKey}`;
+const url = `https://api.planisfy.com/isochrone/v1/driving/${lng},${lat}?contours_minutes=10`;
 ```
 
 ### Profile Migration
 
-| Mapbox Profile | Planisfy Profile | Notes |
-|----------------|------------------|-------|
-| `mapbox/driving` | `driving` | Direct replacement |
-| `mapbox/driving-traffic` | `driving` | Falls back to standard driving |
-| `mapbox/walking` | `walking` | Direct replacement |
-| `mapbox/cycling` | `cycling` | Direct replacement |
+| Mapbox Profile           | Planisfy Profile | Notes                          |
+| ------------------------ | ---------------- | ------------------------------ |
+| `mapbox/driving`         | `driving`        | Direct replacement             |
+| `mapbox/driving-traffic` | `driving`        | Falls back to standard driving |
+| `mapbox/walking`         | `walking`        | Direct replacement             |
+| `mapbox/cycling`         | `cycling`        | Direct replacement             |
 
 <Callout type="tip" title="Response Compatibility">
-Planisfy returns the same GeoJSON FeatureCollection format as Mapbox Isochrone v1.
+  Planisfy returns the same GeoJSON FeatureCollection format as Mapbox Isochrone
+  v1.
 </Callout>
 
 ---
@@ -565,13 +567,13 @@ const contours = [5, 10, 15]; // 5, 10, 15 minutes
 
 ```javascript
 // Urban area: moderate denoising
-const isochrone = await getIsochrone(lng, lat, 10, 'driving', {
-  denoise: 0.5
+const isochrone = await getIsochrone(lng, lat, 10, "driving", {
+  denoise: 0.5,
 });
 
 // Rural area: less denoising (preserve detail)
-const isochrone = await getIsochrone(lng, lat, 10, 'driving', {
-  denoise: 0.2
+const isochrone = await getIsochrone(lng, lat, 10, "driving", {
+  denoise: 0.2,
 });
 ```
 
@@ -579,21 +581,21 @@ const isochrone = await getIsochrone(lng, lat, 10, 'driving', {
 
 ```javascript
 // Compare driving vs walking access
-const drivingIsochrone = await getIsochrone(lng, lat, 10, 'driving');
-const walkingIsochrone = await getIsochrone(lng, lat, 10, 'walking');
+const drivingIsochrone = await getIsochrone(lng, lat, 10, "driving");
+const walkingIsochrone = await getIsochrone(lng, lat, 10, "walking");
 
 map.addLayer({
-  id: 'driving',
-  type: 'fill',
-  source: { type: 'geojson', data: drivingIsochrone.features[0] },
-  paint: { 'fill-color': '#3887be', 'fill-opacity': 0.3 }
+  id: "driving",
+  type: "fill",
+  source: { type: "geojson", data: drivingIsochrone.features[0] },
+  paint: { "fill-color": "#3887be", "fill-opacity": 0.3 },
 });
 
 map.addLayer({
-  id: 'walking',
-  type: 'fill',
-  source: { type: 'geojson', data: walkingIsochrone.features[0] },
-  paint: { 'fill-color': '#6706d3', 'fill-opacity': 0.3 }
+  id: "walking",
+  type: "fill",
+  source: { type: "geojson", data: walkingIsochrone.features[0] },
+  paint: { "fill-color": "#6706d3", "fill-opacity": 0.3 },
 });
 ```
 
@@ -605,7 +607,7 @@ const feature = isochrone.features[0];
 const areaSqKm = feature.properties.area / 1_000_000;
 
 if (areaSqKm < 0.1) {
-  console.warn('Isochrone mostly covers water (insufficient road network)');
+  console.warn("Isochrone mostly covers water (insufficient road network)");
 }
 ```
 
@@ -613,27 +615,27 @@ if (areaSqKm < 0.1) {
 
 ```javascript
 // Click to show isochrone at location
-map.on('click', async (e) => {
+map.on("click", async (e) => {
   // Clear existing isochrone layers
-  ['isochrone', 'isochrone-outline'].forEach(id => {
+  ["isochrone", "isochrone-outline"].forEach((id) => {
     if (map.getLayer(id)) map.removeLayer(id);
     if (map.getSource(id)) map.removeSource(id);
   });
 
   // Fetch and display new isochrone
   const response = await fetch(
-    `https://api.planisfy.com/isochrone/v1/driving/${e.lngLat.lng},${e.lngLat.lat}?contours_minutes=10&access_token=YOUR_KEY`
+    `https://api.planisfy.com/isochrone/v1/driving/${e.lngLat.lng},${e.lngLat.lat}?contours_minutes=10`,
   );
   const data = await response.json();
 
   map.addLayer({
-    id: 'isochrone',
-    type: 'fill',
-    source: { type: 'geojson', data: data.features[0] },
+    id: "isochrone",
+    type: "fill",
+    source: { type: "geojson", data: data.features[0] },
     paint: {
-      'fill-color': '#3887be',
-      'fill-opacity': 0.3
-    }
+      "fill-color": "#3887be",
+      "fill-opacity": 0.3,
+    },
   });
 });
 ```
@@ -658,5 +660,6 @@ map.on('click', async (e) => {
 ---
 
 Sources:
+
 - [Isochrone API | API Docs](https://docs.mapbox.com/api/navigation/isochrone/)
 - [Get started with the Isochrone API](https://docs.mapbox.com/help/tutorials/get-started-isochrone-api/)

@@ -3,7 +3,7 @@ title: Vector Tiles API
 description: Request vector tiles for rendering with MapLibre GL JS, Mapbox GL JS, and other compatible libraries.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+import { Callout } from "fumadocs-ui/components/callout";
 
 # Vector Tiles API
 
@@ -11,8 +11,10 @@ The **Planisfy Vector Tiles API** serves MapLibre-compatible vector tiles from
 published tilesets and configured static sources. Tile coordinates stay in the
 standard z/x/y shape used by MapLibre and Mapbox clients.
 
-<Callout type="info" title="Data Source">
-Tiles are generated from <a href="https://overturemaps.org/" target="_blank">Overture Maps</a> — a free, open-source map data updated monthly from OpenStreetMap and other sources.
+<Callout type="info" title="Data sources">
+  Tiles can come from uploaded tilesets, configured static PMTiles sources, or
+  future managed basemap releases. The local self-host fixture uses a Stuttgart
+  PMTiles artifact; production data sources depend on the tilesets you publish.
 </Callout>
 
 ---
@@ -24,13 +26,12 @@ GET https://api.planisfy.com/tiles/v1/{tileset}.json
 GET https://api.planisfy.com/tiles/v1/{tileset}/{z}/{x}/{y}
 ```
 
-| Component | Description |
-|-----------|-------------|
-| `tileset` | A Martin source or published tileset alias, such as `basic` or `acme.roads` |
-| `z` | Zoom level (0-22) |
-| `x` | Tile column |
-| `y` | Tile row |
-| `access_token` | Optional API key for private or metered deployments |
+| Component | Description                                                                          |
+| --------- | ------------------------------------------------------------------------------------ |
+| `tileset` | A Martin source or published tileset alias, such as `stuttgart-base` or `acme.roads` |
+| `z`       | Zoom level (0-22)                                                                    |
+| `x`       | Tile column                                                                          |
+| `y`       | Tile row                                                                             |
 
 The tile coordinate system follows the [OSM slippy map tilename specification](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames).
 
@@ -38,12 +39,12 @@ The tile coordinate system follows the [OSM slippy map tilename specification](h
 
 Uploaded tilesets support stable and immutable aliases:
 
-| URL | Resolves to |
-|-----|-------------|
-| `/tiles/v1/{owner}.{tileset}.json` | TileJSON for the current published version |
-| `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}` | Tiles for the current published version |
-| `/tiles/v1/{owner}.{tileset}@{version}.json` | TileJSON for an immutable published version |
-| `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | Tiles for an immutable published version |
+| URL                                                 | Resolves to                                 |
+| --------------------------------------------------- | ------------------------------------------- |
+| `/tiles/v1/{owner}.{tileset}.json`                  | TileJSON for the current published version  |
+| `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}`           | Tiles for the current published version     |
+| `/tiles/v1/{owner}.{tileset}@{version}.json`        | TileJSON for an immutable published version |
+| `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | Tiles for an immutable published version    |
 
 These API URLs are the public contract for uploaded tilesets. When artifact
 storage is S3/R2/MinIO, the API reads PMTiles ranges from the configured object
@@ -62,19 +63,18 @@ ARTIFACT_MISSING` instead of advertising tile URLs that cannot work.
 
 ### Required Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `tileset` | `string` | Tileset identifier or published alias |
-| `z` | `integer` | Zoom level (0-22). Higher = closer, more detail |
-| `x` | `integer` | Tile column (0 to 2<sup>z</sup>-1) |
-| `y` | `integer` | Tile row (0 to 2<sup>z</sup>-1) |
-| `access_token` | `string` | Optional API key for deployments that require key-authenticated tile access |
+| Parameter | Type      | Description                                     |
+| --------- | --------- | ----------------------------------------------- |
+| `tileset` | `string`  | Tileset identifier or published alias           |
+| `z`       | `integer` | Zoom level (0-22). Higher = closer, more detail |
+| `x`       | `integer` | Tile column (0 to 2<sup>z</sup>-1)              |
+| `y`       | `integer` | Tile row (0 to 2<sup>z</sup>-1)                 |
 
 ### Optional Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `secure` | `boolean` | Force HTTPS (default: `true`) |
+| Parameter | Type      | Description                   |
+| --------- | --------- | ----------------------------- |
+| `secure`  | `boolean` | Force HTTPS (default: `true`) |
 
 ---
 
@@ -84,26 +84,17 @@ Published public tilesets can be loaded anonymously by MapLibre and other tile
 clients. API keys are still accepted and may be required by managed/private
 deployments or non-asset service APIs.
 
-When an API key is required, include it in one of two ways:
-
-### Query Parameter
-
-```bash
-GET https://api.planisfy.com/tiles/v1/basic/0/0/0.mvt?access_token=pk.your-key-here
-GET https://api.planisfy.com/tiles/v1/acme.roads@3/0/0/0.mvt?access_token=pk.your-key-here
-```
-
-### Bearer Token
+When an API key is required, include it in the `X-API-Key` header:
 
 ```bash
 GET https://api.planisfy.com/tiles/v1/basic/0/0/0.mvt
-Authorization: Bearer pk.your-key-here
+X-API-Key: pk_your_key_here
 ```
 
 <Callout type="info" title="Published Asset Access">
-Published map assets under `/tiles/*`, `/styles/v1/*`, and `/fonts/*` are
-designed to be browser-loadable. Non-asset APIs such as geocoding, directions,
-matrix, and static maps still require API key or session auth.
+  Published map assets under `/tiles/*`, `/styles/v1/*`, and `/fonts/*` are
+  designed to be browser-loadable. Non-asset APIs such as geocoding, directions,
+  matrix, and static maps still require API key or session auth.
 </Callout>
 
 ---
@@ -114,7 +105,7 @@ matrix, and static maps still require API key or session auth.
 
 ```bash
 # Fetch a tile at zoom 10, coordinates (517, 353)
-curl "https://api.planisfy.com/tiles/v1/basic/10/517/353.mvt?access_token=pk.your-key-here" \
+curl "https://api.planisfy.com/tiles/v1/acme.roads/10/517/353.mvt" \
   --output tile.mvt
 ```
 
@@ -123,10 +114,10 @@ curl "https://api.planisfy.com/tiles/v1/basic/10/517/353.mvt?access_token=pk.you
 ```javascript
 // Replace Mapbox with Planisfy — just change the URL
 const map = new maplibregl.Map({
-  container: 'map',
-  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY',
+  container: "map",
+  style: "https://api.planisfy.com/styles/v1/acme/roads",
   center: [-74.006, 40.7128], // New York
-  zoom: 12
+  zoom: 12,
 });
 ```
 
@@ -135,8 +126,8 @@ const map = new maplibregl.Map({
 ```javascript
 // Planisfy tiles work with Mapbox GL JS too
 const map = new mapboxgl.Map({
-  container: 'map',
-  style: 'https://api.planisfy.com/styles/v1/planisfy/basic?access_token=YOUR_KEY'
+  container: "map",
+  style: "https://api.planisfy.com/styles/v1/acme/roads",
 });
 ```
 
@@ -146,7 +137,7 @@ const map = new mapboxgl.Map({
 import requests
 
 url = "https://api.planisfy.com/tiles/v1/basic/12/1171/1566.mvt"
-headers = {"Authorization": "Bearer pk.your-key-here"}
+headers = {"X-API-Key": "pk_your_key_here"}
 
 response = requests.get(url, headers=headers)
 
@@ -170,27 +161,12 @@ Access-Control-Allow-Origin: *
 
 ### Tile Layers
 
-Each tile contains vector layers based on Overture Maps data:
+Tile layers are determined by the published PMTiles artifact. For the local
+Planisfy Streets fixture, inspect TileJSON first:
 
-| Layer | Description | Zoom Range |
-|-------|-------------|------------|
-| `roads` | Streets, highways, paths | 4+ |
-| `buildings` | Building footprints | 12+ |
-| `landuse` | Parks, water, urban areas | 0+ |
-| `places` | Cities, towns, neighborhoods | 4+ |
-| `pois` | Points of interest | 14+ |
-| `boundaries` | Administrative borders | 0+ |
-
----
-
-## Available Styles
-
-| Style ID | Description | Best For |
-|----------|-------------|----------|
-| `basic` | Clean, minimalist design | Data visualization, dashboards |
-| `streets` | Detailed street map | Navigation, local search |
-| `dark` | Dark theme with muted colors | Night mode, embedded maps |
-| `satellite` | Satellite imagery overlay | Terrain visualization |
+```bash
+curl "http://localhost:4000/tiles/v1/stuttgart-base.json"
+```
 
 ---
 
@@ -198,26 +174,28 @@ Each tile contains vector layers based on Overture Maps data:
 
 Tiles are heavily cached for performance:
 
-| Cache Type | Duration | Description |
-|------------|----------|-------------|
-| **Browser/Client** | 12 hours | Local cache in your app |
-| **CDN/Edge** | 5 minutes | Cloudflare edge locations |
-| **Origin** | 5 minutes | Planisfy servers |
+| Cache Type         | Duration  | Description               |
+| ------------------ | --------- | ------------------------- |
+| **Browser/Client** | 12 hours  | Local cache in your app   |
+| **CDN/Edge**       | 5 minutes | Cloudflare edge locations |
+| **Origin**         | 5 minutes | Planisfy servers          |
 
 <Callout type="tip" title="Cache Headers">
-Responses include <code>Cache-Control</code> and <code>ETag</code> headers. Implement conditional requests with <code>If-None-Match</code> for bandwidth savings.
+  Responses include <code>Cache-Control</code> and <code>ETag</code> headers.
+  Implement conditional requests with <code>If-None-Match</code> for bandwidth
+  savings.
 </Callout>
 
 ---
 
 ## Rate Limits
 
-| Plan | Requests per Minute | Requests per Day |
-|------|---------------------|------------------|
-| Free | 1,000 | 50,000 |
-| Starter | 10,000 | 500,000 |
-| Pro | 100,000 | 5,000,000 |
-| Enterprise | Custom | Custom |
+| Plan       | Requests per Minute | Requests per Day |
+| ---------- | ------------------- | ---------------- |
+| Free       | 1,000               | 50,000           |
+| Starter    | 10,000              | 500,000          |
+| Pro        | 100,000             | 5,000,000        |
+| Enterprise | Custom              | Custom           |
 
 Exceeding limits returns `HTTP 429` with a `Retry-After` header.
 
@@ -225,14 +203,14 @@ Exceeding limits returns `HTTP 429` with a `Retry-After` header.
 
 ## Error Codes
 
-| HTTP Code | Error | Description |
-|-----------|-------|-------------|
-| `400` | Bad Request | Invalid coordinates or zoom level |
-| `401` | Unauthorized | Missing or invalid API key |
-| `403` | Forbidden | API key suspended or over quota |
-| `404` | Not Found | Tile coordinates out of range |
-| `429` | Too Many Requests | Rate limit exceeded |
-| `500` | Server Error | Internal server error |
+| HTTP Code | Error             | Description                       |
+| --------- | ----------------- | --------------------------------- |
+| `400`     | Bad Request       | Invalid coordinates or zoom level |
+| `401`     | Unauthorized      | Missing or invalid API key        |
+| `403`     | Forbidden         | API key suspended or over quota   |
+| `404`     | Not Found         | Tile coordinates out of range     |
+| `429`     | Too Many Requests | Rate limit exceeded               |
+| `500`     | Server Error      | Internal server error             |
 
 ### Error Response Format
 
@@ -248,14 +226,14 @@ Exceeding limits returns `HTTP 429` with a `Retry-After` header.
 
 ## Zoom Levels by Use Case
 
-| Zoom | Use Case | Tile Coverage |
-|------|----------|---------------|
-| 0-3 | Country/continent overview | ~1-8 tiles |
-| 4-7 | Regional view | ~16-1,024 tiles |
-| 8-10 | Metropolitan area | ~4,000-16,000 tiles |
-| 11-14 | City/district | ~64,000-4M tiles |
-| 15-17 | Street detail | ~16M-256M tiles |
-| 18+ | Building-level precision | Extremely localized |
+| Zoom  | Use Case                   | Tile Coverage       |
+| ----- | -------------------------- | ------------------- |
+| 0-3   | Country/continent overview | ~1-8 tiles          |
+| 4-7   | Regional view              | ~16-1,024 tiles     |
+| 8-10  | Metropolitan area          | ~4,000-16,000 tiles |
+| 11-14 | City/district              | ~64,000-4M tiles    |
+| 15-17 | Street detail              | ~16M-256M tiles     |
+| 18+   | Building-level precision   | Extremely localized |
 
 ---
 
@@ -265,14 +243,15 @@ Replace your Mapbox tile URL:
 
 ```javascript
 // Before (Mapbox)
-url: 'https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/{z}/{x}/{y}.vector.pbf?access_token=YOUR_MAPBOX_KEY'
+url: "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/{z}/{x}/{y}.vector.pbf?access_token=YOUR_MAPBOX_KEY";
 
 // After (Planisfy)
-url: 'https://api.planisfy.com/tiles/v1/streets/{z}/{x}/{y}.mvt?access_token=YOUR_PLANISFY_KEY'
+url: "https://api.planisfy.com/tiles/v1/streets/{z}/{x}/{y}.mvt";
 ```
 
 <Callout type="info" title="Compatible Tools">
-Planisfy tiles work with any Mapbox Vector Tile (MVT) compatible renderer: MapLibre GL JS, Mapbox GL JS, Leaflet with VectorGrid, QGIS, and more.
+  Planisfy tiles work with any Mapbox Vector Tile (MVT) compatible renderer:
+  MapLibre GL JS, Mapbox GL JS, Leaflet with VectorGrid, QGIS, and more.
 </Callout>
 
 ---

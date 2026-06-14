@@ -3,7 +3,7 @@ title: Authentication Guide
 description: Learn how to securely use and manage your Planisfy API keys across different applications.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+import { Callout } from "fumadocs-ui/components/callout";
 
 # Authentication Guide
 
@@ -13,122 +13,104 @@ This guide covers how to securely authenticate with the Planisfy API using API k
 
 ## API Key Overview
 
-Planisfy uses API keys (also called access tokens) to authenticate requests and associate them with your account. Every API request must include a valid API key.
+Planisfy uses API keys to authenticate protected service APIs and associate
+requests with your account. Published public map assets can load anonymously;
+private resources and service endpoints require a valid API key.
 
 ### API Key Format
 
-Planisfy API keys start with `pk.` for public tokens:
+Planisfy API keys start with `pk_`:
 
 ```
-pk.eyJ1IjoicGxhbmlzZnkiLCJhIjoiY2xvY2F0aW9uIiwic2NvcGVzIjpbInRpbGVzIl9fQ.xyz123
+pk_0123456789abcdef_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 
 <Callout type="info" title="Key Format">
-Planisfy API keys follow the same format as Mapbox for compatibility: <code>pk.</code> prefix, base64-encoded metadata, and a signature.
+  The Console shows the full key only once when it is created. Store it
+  securely, then use it in the <code>X-API-Key</code> header for protected
+  requests.
 </Callout>
 
 ---
 
 ## Token Types
 
-### Public Tokens
+### Publishable API Keys
 
-**Prefix:** `pk.`
+**Prefix:** `pk_`
 
 **Purpose:** Client-side applications (web, mobile)
 
 **Use cases:**
+
 - Rendering maps in a browser
 - Mobile app map display
 - Public API requests
 
 **Limitations:**
+
 - Cannot access account management endpoints
 - Should be used for read operations only
 - Visible to users in the browser/app
 
 **Example:**
+
 ```
-pk.eyJ1IjoicGxhbmlzZnkiLCJhIjoiY2xvY2F0aW9uIiwic2NvcGVzIjpbInRpbGVzIl9fQ.xyz123
-```
-
-### Secret Tokens
-
-**Prefix:** `sk.`
-
-**Purpose:** Server-side applications only
-
-**Use cases:**
-- Managing styles on your server
-- Batch geocoding jobs
-- Creating and deleting resources
-- Administrative operations
-
-**Security:**
-- **Never** expose in frontend code
-- **Never** commit to version control
-- Store in environment variables only
-
-**Example:**
-```
-sk.eyJ1IjoicGxhbmlzZnktYWRtaW4iLCJhIjoic2VjcmV0Iiwic2NvcGVzIjpbImFkbWluIl19.abc456
+pk_0123456789abcdef_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 
 <Callout type="warn" title="Security Warning">
-Secret tokens provide full account access. If leaked, rotate them immediately in your account dashboard.
+  API keys are secrets. If a key is leaked, revoke it immediately in your
+  account dashboard and create a replacement key.
 </Callout>
 
 ---
 
 ## Using API Keys in Requests
 
-### Query Parameter (Recommended for SDKs)
+### Public Map Asset URLs
 
-The most common method for client-side applications:
+Published public styles can be loaded directly by MapLibre:
 
 ```javascript
 // MapLibre GL JS
 const map = new maplibregl.Map({
-  container: 'map',
-  style: `https://api.planisfy.com/styles/v1/planisfy/basic?access_token=${apiKey}`,
+  container: "map",
+  style: `https://api.planisfy.com/styles/v1/planisfy/basic`,
   center: [-122.4194, 37.7749],
-  zoom: 12
+  zoom: 12,
 });
 ```
 
 ```bash
 # cURL
-curl "https://api.planisfy.com/styles/v1/planisfy/basic?access_token=pk.your-key-here"
+curl "https://api.planisfy.com/styles/v1/planisfy/basic"
 ```
 
-**Advantages:**
-- Simple and straightforward
-- Compatible with all Mapbox SDKs
-- Works well with static resources
+### API Key Header
 
-### Bearer Token
-
-HTTP Authorization header for programmatic requests:
+Use the `X-API-Key` header for protected Console and service APIs:
 
 ```javascript
 // Fetch API
-fetch('https://api.planisfy.com/styles/v1/planisfy/basic', {
+fetch("https://api.planisfy.com/geocoding/v1/search?text=Stuttgart", {
   headers: {
-    'Authorization': 'Bearer pk.your-key-here'
-  }
+    "X-API-Key": "pk_your_key_here",
+  },
 });
 ```
 
 ```bash
 # cURL
-curl "https://api.planisfy.com/styles/v1/planisfy/basic" \
-  -H "Authorization: Bearer pk.your-key-here"
+curl "https://api.planisfy.com/geocoding/v1/search?text=Stuttgart" \
+  -H "X-API-Key: pk_your_key_here"
 ```
 
 **Advantages:**
-- More secure for HTTPS requests
+
 - Cleaner URLs (no long query strings)
 - Standard HTTP authentication pattern
+- Matches the Planisfy API key middleware
 
 ### Environment Variables
 
@@ -136,17 +118,18 @@ Store API keys in environment variables for server-side apps:
 
 ```bash
 # .env file
-PLANISFY_API_KEY=pk.your-key-here
-PLANISFY_SECRET_KEY=sk.your-secret-here
+PLANISFY_API_KEY=pk_your_key_here
 ```
 
 ```javascript
 // Node.js
-import 'dotenv/config';
+import "dotenv/config";
 
 const apiKey = process.env.PLANISFY_API_KEY;
 
-fetch(`https://api.planisfy.com/styles/v1/planisfy/basic?access_token=${apiKey}`);
+fetch("https://api.planisfy.com/geocoding/v1/search?text=Stuttgart", {
+  headers: { "X-API-Key": apiKey },
+});
 ```
 
 ```python
@@ -160,7 +143,8 @@ api_key = os.getenv('PLANISFY_API_KEY')
 ```
 
 <Callout type="tip" title="Never Commit .env Files">
-Add <code>.env</code> to your <code>.gitignore</code> file to prevent accidentally committing secrets.
+  Add <code>.env</code> to your <code>.gitignore</code> file to prevent
+  accidentally committing secrets.
 </Callout>
 
 ---
@@ -171,19 +155,19 @@ Scopes restrict what a token can do. Assign only the scopes needed for your appl
 
 ### Available Scopes
 
-| Scope | Description | Use Case |
-|-------|-------------|----------|
-| `tiles` | Access vector tiles | Map rendering |
-| `styles` | Read style JSON | Custom style loading |
-| `fonts` | Access font glyphs | Text rendering |
-| `sprites` | Access sprite images | Icon rendering |
-| `geocoding` | Forward/reverse geocoding | Address search |
-| `directions` | Turn-by-turn routing | Navigation |
-| `optimization` | Route optimization | Multi-stop routing |
-| `isochrone` | Reachability analysis | Service areas |
-| `dataset` | Read datasets | Custom data access |
-| `dataset:write` | Modify datasets | Data management |
-| `styles:write` | Create/update styles | Style management |
+| Scope           | Description               | Use Case             |
+| --------------- | ------------------------- | -------------------- |
+| `tiles`         | Access vector tiles       | Map rendering        |
+| `styles`        | Read style JSON           | Custom style loading |
+| `fonts`         | Access font glyphs        | Text rendering       |
+| `sprites`       | Access sprite images      | Icon rendering       |
+| `geocoding`     | Forward/reverse geocoding | Address search       |
+| `directions`    | Turn-by-turn routing      | Navigation           |
+| `optimization`  | Route optimization        | Multi-stop routing   |
+| `isochrone`     | Reachability analysis     | Service areas        |
+| `dataset`       | Read datasets             | Custom data access   |
+| `dataset:write` | Modify datasets           | Data management      |
+| `styles:write`  | Create/update styles      | Style management     |
 
 **Default scopes:** Public tokens include `tiles`, `styles`, `fonts`, `sprites`, `geocoding`, `directions`
 
@@ -192,7 +176,7 @@ Scopes restrict what a token can do. Assign only the scopes needed for your appl
 Create a token for a geocoding-only application:
 
 ```bash
-curl "https://api.planisfy.com/tokens/v2?access_token=$SECRET_KEY" \
+curl "https://api.planisfy.com/tokens/v2" \
   -X POST \
   -H "Content-Type: application/json" \
   -d '{
@@ -203,32 +187,33 @@ curl "https://api.planisfy.com/tokens/v2?access_token=$SECRET_KEY" \
 
 ---
 
-## Securing Tokens in Frontend Applications
+## Securing API Keys in Frontend Applications
 
-### 1. Use Public Tokens Only
+### 1. Keep Keys Scoped And Restricted
 
-Frontend code is publicly visible. Only use `pk.` tokens:
+Frontend code is publicly visible. Use narrowly scoped `pk_` keys and domain
+restrictions for browser applications:
 
 ```javascript
 // ✅ Correct - Public token
-const apiKey = 'pk.your-public-key-here';
+const apiKey = "pk_your_key_here";
 
 // ❌ Wrong - Never use secret tokens in frontend
-const apiKey = 'sk.your-secret-key-here';
+const apiKey = "pk_unrestricted_production_key";
 ```
 
 ### 2. Domain Restrictions
 
-Restrict tokens to specific domains in your account dashboard:
+Restrict API keys to specific domains in your account dashboard:
 
-| Token | Allowed Domains |
-|-------|-----------------|
-| Production token | `https://yourapp.com`, `https://www.yourapp.com` |
-| Development token | `http://localhost:3000`, `http://127.0.0.1:8080` |
+| Key             | Allowed Domains                                  |
+| --------------- | ------------------------------------------------ |
+| Production key  | `https://yourapp.com`, `https://www.yourapp.com` |
+| Development key | `http://localhost:3000`, `http://127.0.0.1:8080` |
 
 If a request comes from an unauthorized domain, it will be rejected.
 
-### 3. URL Token Referer Limiting
+### 3. Referer Limiting
 
 When you can't use domain restrictions, use URL referer checking:
 
@@ -238,24 +223,25 @@ When you can't use domain restrictions, use URL referer checking:
 ```
 
 <Callout type="warn" title="Referer Headers Can Be Spoofed">
-Referer restrictions are a first line of defense, not a complete security solution. Always combine with other measures.
+  Referer restrictions are a first line of defense, not a complete security
+  solution. Always combine with other measures.
 </Callout>
 
-### 4. Separate Tokens per Environment
+### 4. Separate Keys Per Environment
 
-Use different tokens for development, staging, and production:
+Use different API keys for development, staging, and production:
 
-| Environment | Token | Scopes | Domain Restrictions |
-|-------------|-------|--------|-------------------|
-| Development | `pk.dev....` | All scopes | `localhost` |
-| Staging | `pk.staging....` | All scopes | `staging.yourapp.com` |
-| Production | `pk.prod....` | Limited scopes | `yourapp.com` |
+| Environment | Key              | Scopes         | Domain Restrictions   |
+| ----------- | ---------------- | -------------- | --------------------- |
+| Development | `pk_dev_key`     | All scopes     | `localhost`           |
+| Staging     | `pk_staging_key` | All scopes     | `staging.yourapp.com` |
+| Production  | `pk_prod_key`    | Limited scopes | `yourapp.com`         |
 
-This limits the impact if one token is compromised.
+This limits the impact if one key is compromised.
 
 ---
 
-## Securing Tokens in Backend Applications
+## Securing API Keys in Backend Applications
 
 ### 1. Environment Variables
 
@@ -263,10 +249,10 @@ Store secrets in environment variables, not in code:
 
 ```javascript
 // ❌ Wrong - Hardcoded secret
-const secretKey = 'sk.eyJ1Ijoic...';
+const apiKey = "pk_your_key_here";
 
 // ✅ Correct - Environment variable
-const secretKey = process.env.PLANISFY_SECRET_KEY;
+const apiKey = process.env.PLANISFY_API_KEY;
 ```
 
 ### 2. Secret Management Services
@@ -306,70 +292,71 @@ fi
 
 ---
 
-## Token Rotation Best Practices
+## API Key Rotation Best Practices
 
 ### Regular Rotation Schedule
 
-Rotate tokens periodically to limit exposure:
+Rotate API keys periodically to limit exposure:
 
-| Token Type | Rotation Frequency |
-|------------|-------------------|
-| Production tokens | Every 90 days |
-| Development tokens | Every 30 days |
-| Compromised tokens | Immediately |
+| Key Type         | Rotation Frequency |
+| ---------------- | ------------------ |
+| Production keys  | Every 90 days      |
+| Development keys | Every 30 days      |
+| Compromised keys | Immediately        |
 
 ### Rotation Steps
 
-1. **Create a new token** in your account dashboard
-2. **Update your application** with the new token
+1. **Create a new key** in your account dashboard
+2. **Update your application** with the new key
 3. **Deploy the update** to all environments
 4. **Monitor for errors** for 24-48 hours
-5. **Delete the old token** once everything is working
+5. **Delete the old key** once everything is working
 
 ### Zero-Downtime Rotation
 
 For production systems, use a rotation window:
 
 ```javascript
-// Support multiple tokens during rotation
-const tokens = {
-  current: 'pk.new-token-here',
-  legacy: 'pk.old-token-here' // Keep for fallback
+// Support multiple keys during rotation
+const keys = {
+  current: "pk_new_key_here",
+  legacy: "pk_old_key_here", // Keep for fallback
 };
 
 async function makeRequest(url) {
   // Try current token first
   try {
-    return await fetch(`${url}?access_token=${tokens.current}`);
+    return await fetch(url, { headers: { "X-API-Key": keys.current } });
   } catch (error) {
-    // Fallback to legacy token
-    return await fetch(`${url}?access_token=${tokens.legacy}`);
+    // Fallback to legacy key
+    return await fetch(url, { headers: { "X-API-Key": keys.legacy } });
   }
 }
 ```
 
 ### Automated Rotation Alerts
 
-Set up monitoring to alert you when tokens need rotation:
+Set up monitoring to alert you when keys need rotation:
 
 ```javascript
-// Check token age
-const tokenCreatedAt = new Date('2025-01-01');
+// Check key age
+const keyCreatedAt = new Date("2025-01-01");
 const maxAge = 90 * 24 * 60 * 60 * 1000; // 90 days in ms
 
-if (Date.now() - tokenCreatedAt.getTime() > maxAge) {
-  console.warn('Token needs rotation!');
+if (Date.now() - keyCreatedAt.getTime() > maxAge) {
+  console.warn("API key needs rotation!");
   // Send alert to your monitoring system
 }
 ```
 
 ---
 
-## Monitoring Token Usage
+## Monitoring API Key Usage
 
 ### View Usage Statistics
 
 Check your account dashboard for:
+
 - Requests per day
 - Requests per minute
 - Breakdown by API endpoint
@@ -378,6 +365,7 @@ Check your account dashboard for:
 ### Identify Abnormal Patterns
 
 Look for:
+
 - **Spikes in usage** → Possible token leak or abuse
 - **Requests from unknown IPs** → Token may be compromised
 - **Requests to unused endpoints** → Unauthorized access
@@ -385,6 +373,7 @@ Look for:
 ### Set Up Alerts
 
 Configure alerts for:
+
 - Daily quota exceeded (80%, 90%, 100%)
 - Rate limit hit (more than X times per hour)
 - New requesting IP addresses
@@ -412,19 +401,19 @@ Implement custom authentication:
 
 ```javascript
 // Express.js middleware
-const validKeys = new Set(['pk.key1', 'pk.key2']);
+const validKeys = new Set(["pk_key_1", "pk_key_2"]);
 
 function validateApiKey(req, res, next) {
-  const key = req.query.access_token || req.headers.authorization?.replace('Bearer ', '');
+  const key = req.headers["x-api-key"];
 
   if (!validKeys.has(key)) {
-    return res.status(401).json({ error: 'Invalid API key' });
+    return res.status(401).json({ error: "Invalid API key" });
   }
 
   next();
 }
 
-app.use('/tiles', validateApiKey);
+app.use("/tiles", validateApiKey);
 ```
 
 ### 3. OAuth 2.0 / JWT
@@ -433,17 +422,17 @@ For enterprise deployments:
 
 ```javascript
 // JWT validation
-const jwt = require('jsonwebtoken');
+const jwt = require("jsonwebtoken");
 
 function validateJwt(req, res, next) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
+  const token = req.headers.authorization?.replace("Bearer ", "");
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
+    res.status(401).json({ error: "Invalid token" });
   }
 }
 ```
@@ -469,14 +458,15 @@ location = /auth {
 
 ## Troubleshooting
 
-### "Invalid Token" Error
+### "Invalid API Key" Error
 
 **Problem:** API returns 401 Unauthorized
 
 **Solutions:**
-1. Verify the token starts with `pk.` or `sk.`
-2. Check for typos in the token
-3. Ensure the token hasn't been deleted
+
+1. Verify the key starts with `pk_`
+2. Check for typos in the key
+3. Ensure the key hasn't been deleted
 4. Verify domain restrictions (if configured)
 
 ### "Forbidden" Error
@@ -484,15 +474,17 @@ location = /auth {
 **Problem:** API returns 403 Forbidden
 
 **Solutions:**
-1. Check if token has required scopes
+
+1. Check if the API key has required scopes
 2. Verify rate limits haven't been exceeded
 3. Ensure account is in good standing
 
-### Token Not Working in Production
+### API Key Not Working in Production
 
-**Problem:** Token works locally but fails in production
+**Problem:** API key works locally but fails in production
 
 **Solutions:**
+
 1. Check domain restrictions (add production domain)
 2. Verify environment variables are set
 3. Check for HTTPS requirements (some tokens require HTTPS)
@@ -502,12 +494,12 @@ location = /auth {
 
 ## Security Checklist
 
-- [ ] Using `pk.` tokens for frontend, `sk.` for backend
+- [ ] API keys use the current `pk_` format
 - [ ] API keys stored in environment variables
 - [ ] `.env` files in `.gitignore`
-- [ ] Domain restrictions configured for production tokens
-- [ ] Separate tokens for each environment
-- [ ] Token rotation schedule established
+- [ ] Domain restrictions configured for production keys
+- [ ] Separate API keys for each environment
+- [ ] API key rotation schedule established
 - [ ] Monitoring and alerts configured
 - [ ] Secret management in place for production
 - [ ] Pre-commit hooks to prevent secret commits
@@ -532,6 +524,7 @@ location = /auth {
 ---
 
 Sources:
+
 - [Access Tokens | Mapbox Help](https://docs.mapbox.com/help/dive-deeper/access-tokens/)
 - [Tokens API | Mapbox API Docs](https://docs.mapbox.com/api/accounts/tokens/)
 - [How to use Mapbox securely](https://docs.mapbox.com/help/dive-deeper/how-to-use-mapbox-securely/)

@@ -3,7 +3,7 @@ title: Error Handling Guide
 description: Learn how to properly handle API errors, implement retry strategies, and build resilient applications.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
+import { Callout } from "fumadocs-ui/components/callout";
 
 # Error Handling Guide
 
@@ -23,14 +23,15 @@ All Planisfy API errors follow a consistent JSON format:
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `message` | `string` | Human-readable description of the error |
-| `code` | `string` | Machine-readable error code for programmatic handling |
+| Field        | Type     | Description                                            |
+| ------------ | -------- | ------------------------------------------------------ |
+| `message`    | `string` | Human-readable description of the error                |
+| `code`       | `string` | Machine-readable error code for programmatic handling  |
 | `request_id` | `string` | Unique identifier for the request (useful for support) |
 
 <Callout type="tip" title="Log Request IDs">
-Always log the <code>request_id</code> when handling errors. This helps Planisfy support track down specific issues.
+  Always log the <code>request_id</code> when handling errors. This helps
+  Planisfy support track down specific issues.
 </Callout>
 
 ---
@@ -41,27 +42,27 @@ Always log the <code>request_id</code> when handling errors. This helps Planisfy
 
 These errors indicate a problem with the request:
 
-| Status | Error Code | Description | Common Cause |
-|--------|------------|-------------|--------------|
-| `400` | `bad_request` | Invalid request format | Malformed JSON, invalid parameters |
-| `401` | `unauthorized` | Authentication required | Missing or invalid API key |
-| `403` | `forbidden` | Access denied | Insufficient permissions, suspended account |
-| `404` | `not_found` | Resource not found | Invalid ID, non-existent resource |
-| `406` | `not_acceptable` | Invalid Accept header | Unsupported response format |
-| `408` | `request_timeout` | Request took too long | Slow server, network issues |
-| `422` | `unprocessable_entity` | Semantic errors | Invalid coordinates, failed validation |
-| `429` | `rate_limit_exceeded` | Too many requests | Rate limit exceeded |
+| Status | Error Code             | Description             | Common Cause                                |
+| ------ | ---------------------- | ----------------------- | ------------------------------------------- |
+| `400`  | `bad_request`          | Invalid request format  | Malformed JSON, invalid parameters          |
+| `401`  | `unauthorized`         | Authentication required | Missing or invalid API key                  |
+| `403`  | `forbidden`            | Access denied           | Insufficient permissions, suspended account |
+| `404`  | `not_found`            | Resource not found      | Invalid ID, non-existent resource           |
+| `406`  | `not_acceptable`       | Invalid Accept header   | Unsupported response format                 |
+| `408`  | `request_timeout`      | Request took too long   | Slow server, network issues                 |
+| `422`  | `unprocessable_entity` | Semantic errors         | Invalid coordinates, failed validation      |
+| `429`  | `rate_limit_exceeded`  | Too many requests       | Rate limit exceeded                         |
 
 ### Server Errors (5xx)
 
 These errors indicate a problem with the server:
 
-| Status | Error Code | Description | Action |
-|--------|------------|-------------|--------|
-| `500` | `internal_server_error` | Server error | Retry with backoff |
-| `502` | `bad_gateway` | Upstream server error | Retry with backoff |
-| `503` | `service_unavailable` | Service temporarily down | Retry with backoff |
-| `504` | `gateway_timeout` | Upstream timeout | Retry with backoff |
+| Status | Error Code              | Description              | Action             |
+| ------ | ----------------------- | ------------------------ | ------------------ |
+| `500`  | `internal_server_error` | Server error             | Retry with backoff |
+| `502`  | `bad_gateway`           | Upstream server error    | Retry with backoff |
+| `503`  | `service_unavailable`   | Service temporarily down | Retry with backoff |
+| `504`  | `gateway_timeout`       | Upstream timeout         | Retry with backoff |
 
 ---
 
@@ -72,6 +73,7 @@ These errors indicate a problem with the server:
 **Status:** `401 Unauthorized`
 
 **Response:**
+
 ```json
 {
   "message": "Invalid API key",
@@ -81,13 +83,14 @@ These errors indicate a problem with the server:
 ```
 
 **Solution:**
+
 - Verify API key is correct
 - Check token hasn't been deleted or expired
 - Ensure token has required scopes
 
 ```javascript
 if (response.status === 401) {
-  console.error('Authentication failed. Check your API key.');
+  console.error("Authentication failed. Check your API key.");
 }
 ```
 
@@ -96,6 +99,7 @@ if (response.status === 401) {
 **Status:** `429 Too Many Requests`
 
 **Response:**
+
 ```json
 {
   "message": "Rate limit exceeded",
@@ -106,13 +110,14 @@ if (response.status === 401) {
 ```
 
 **Solution:**
+
 - Implement retry with `Retry-After` header
 - Reduce request frequency
 - Consider upgrading your plan
 
 ```javascript
 if (response.status === 429) {
-  const retryAfter = parseInt(response.headers.get('Retry-After'));
+  const retryAfter = parseInt(response.headers.get("Retry-After"));
   await sleep(retryAfter * 1000);
   return retryRequest();
 }
@@ -123,6 +128,7 @@ if (response.status === 429) {
 **Status:** `422 Unprocessable Entity`
 
 **Response:**
+
 ```json
 {
   "message": "Coordinates are invalid",
@@ -132,16 +138,17 @@ if (response.status === 429) {
 ```
 
 **Solution:**
+
 - Validate coordinates before sending: latitude (-90 to 90), longitude (-180 to 180)
 - Check for missing or malformed coordinate values
 
 ```javascript
 function validateCoordinates(lng, lat) {
   if (lng < -180 || lng > 180) {
-    throw new Error('Longitude must be between -180 and 180');
+    throw new Error("Longitude must be between -180 and 180");
   }
   if (lat < -90 || lat > 90) {
-    throw new Error('Latitude must be between -90 and 90');
+    throw new Error("Latitude must be between -90 and 90");
   }
   return true;
 }
@@ -152,6 +159,7 @@ function validateCoordinates(lng, lat) {
 **Status:** `404 Not Found`
 
 **Response:**
+
 ```json
 {
   "message": "Style not found: planisfy/unknown",
@@ -161,15 +169,17 @@ function validateCoordinates(lng, lat) {
 ```
 
 **Solution:**
+
 - Verify resource ID is correct
 - Check resource hasn't been deleted
 - Ensure account has access to the resource
 
 ### 5. Service Unavailable
 
-**Status:** `503 Service Unavailable**
+**Status:** `503 Service Unavailable\*\*
 
 **Response:**
+
 ```json
 {
   "message": "Service temporarily unavailable",
@@ -179,6 +189,7 @@ function validateCoordinates(lng, lat) {
 ```
 
 **Solution:**
+
 - Retry with exponential backoff
 - Check status page for incidents
 - Implement fallback behavior
@@ -200,7 +211,11 @@ async function fetchWithBackoff(url, options = {}, maxRetries = 5) {
       const response = await fetch(url, options);
 
       // Don't retry client errors (except 429)
-      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+      if (
+        response.status >= 400 &&
+        response.status < 500 &&
+        response.status !== 429
+      ) {
         return response;
       }
 
@@ -208,7 +223,6 @@ async function fetchWithBackoff(url, options = {}, maxRetries = 5) {
       if (response.ok || response.status >= 500) {
         return response;
       }
-
     } catch (error) {
       lastError = error;
 
@@ -216,11 +230,11 @@ async function fetchWithBackoff(url, options = {}, maxRetries = 5) {
       const delay = Math.pow(2, attempt) * 1000;
       console.log(`Attempt ${attempt + 1} failed. Retrying in ${delay}ms...`);
 
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
-  throw lastError || new Error('Max retries exceeded');
+  throw lastError || new Error("Max retries exceeded");
 }
 ```
 
@@ -236,8 +250,8 @@ function getDelayWithJitter(attempt, baseDelay = 1000) {
 }
 
 // Usage
-await new Promise(resolve =>
-  setTimeout(resolve, getDelayWithJitter(attempt))
+await new Promise((resolve) =>
+  setTimeout(resolve, getDelayWithJitter(attempt)),
 );
 ```
 
@@ -270,15 +284,15 @@ function logError(response, error) {
     code: error?.code,
     message: error?.message,
     requestId: error?.request_id,
-    userAgent: navigator.userAgent
+    userAgent: navigator.userAgent,
   };
 
   // Send to logging service
   sendToLogging(logEntry);
 
   // Also log to console in development
-  if (process.env.NODE_ENV === 'development') {
-    console.error('API Error:', logEntry);
+  if (process.env.NODE_ENV === "development") {
+    console.error("API Error:", logEntry);
   }
 }
 ```
@@ -291,7 +305,7 @@ Monitor error rates by endpoint:
 const errorTracker = {
   tiles: { total: 0, errors: 0 },
   geocoding: { total: 0, errors: 0 },
-  directions: { total: 0, errors: 0 }
+  directions: { total: 0, errors: 0 },
 };
 
 function trackRequest(endpoint, success) {
@@ -309,7 +323,9 @@ function trackRequest(endpoint, success) {
   const errorRate = stats.errors / stats.total;
 
   if (stats.total > 100 && errorRate > 0.05) {
-    console.warn(`High error rate for ${endpoint}: ${(errorRate * 100).toFixed(1)}%`);
+    console.warn(
+      `High error rate for ${endpoint}: ${(errorRate * 100).toFixed(1)}%`,
+    );
   }
 }
 ```
@@ -322,7 +338,7 @@ Set up alerts for critical failures:
 const alertThresholds = {
   errorRate: 0.1, // 10% error rate
   consecutiveErrors: 5,
-  downtimeSeconds: 60
+  downtimeSeconds: 60,
 };
 
 let consecutiveErrors = 0;
@@ -332,8 +348,8 @@ function checkAlerts() {
   // Check consecutive errors
   if (consecutiveErrors >= alertThresholds.consecutiveErrors) {
     sendAlert({
-      severity: 'critical',
-      message: `${consecutiveErrors} consecutive API errors`
+      severity: "critical",
+      message: `${consecutiveErrors} consecutive API errors`,
     });
   }
 
@@ -341,8 +357,8 @@ function checkAlerts() {
   const downtime = (Date.now() - lastSuccessTime) / 1000;
   if (downtime > alertThresholds.downtimeSeconds) {
     sendAlert({
-      severity: 'critical',
-      message: `API down for ${Math.floor(downtime)} seconds`
+      severity: "critical",
+      message: `API down for ${Math.floor(downtime)} seconds`,
     });
   }
 }
@@ -360,18 +376,22 @@ Implement fallback behavior when APIs fail:
 async function getMapStyle(styleId) {
   try {
     const response = await fetch(
-      `https://api.planisfy.com/styles/v1/planisfy/${styleId}?access_token=${apiKey}`
+      `https://api.planisfy.com/styles/v1/planisfy/${styleId}`,
     );
     return await response.json();
   } catch (error) {
-    console.warn('Failed to load style, using fallback');
+    console.warn("Failed to load style, using fallback");
 
     // Return cached or fallback style
     return {
       version: 8,
-      name: 'Fallback Style',
-      sources: { /* ... */ },
-      layers: [ /* ... */ ]
+      name: "Fallback Style",
+      sources: {
+        /* ... */
+      },
+      layers: [
+        /* ... */
+      ],
     };
   }
 }
@@ -384,18 +404,15 @@ async function geocodeWithFallback(address) {
   try {
     return await planisfyGeocode(address);
   } catch (error) {
-    console.warn('Planisfy geocoding failed, using browser Geolocation API');
+    console.warn("Planisfy geocoding failed, using browser Geolocation API");
 
     return new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            coordinates: [position.coords.longitude, position.coords.latitude],
-            source: 'browser'
-          });
-        },
-        reject
-      );
+      navigator.geolocation.getCurrentPosition((position) => {
+        resolve({
+          coordinates: [position.coords.longitude, position.coords.latitude],
+          source: "browser",
+        });
+      }, reject);
     });
   }
 }
@@ -406,7 +423,7 @@ async function geocodeWithFallback(address) {
 Detect offline state and provide cached data:
 
 ```javascript
-const cache = await caches.open('planisfy-v1');
+const cache = await caches.open("planisfy-v1");
 
 async function fetchWithCache(url) {
   // Check if offline
@@ -415,7 +432,7 @@ async function fetchWithCache(url) {
     if (cached) {
       return cached;
     }
-    throw new Error('Offline and no cached data available');
+    throw new Error("Offline and no cached data available");
   }
 
   try {
@@ -438,12 +455,12 @@ async function fetchWithCache(url) {
 }
 
 // Listen for online/offline events
-window.addEventListener('offline', () => {
-  console.log('App is offline. Using cached data.');
+window.addEventListener("offline", () => {
+  console.log("App is offline. Using cached data.");
 });
 
-window.addEventListener('online', () => {
-  console.log('App is back online.');
+window.addEventListener("online", () => {
+  console.log("App is back online.");
 });
 ```
 
@@ -456,11 +473,11 @@ window.addEventListener('online', () => {
 ```javascript
 async function loadMap() {
   try {
-    const style = await getMapStyle('basic');
+    const style = await getMapStyle("basic");
     map.setStyle(style);
   } catch (error) {
-    console.error('Failed to load map:', error);
-    showErrorMessage('Unable to load map. Please try again.');
+    console.error("Failed to load map:", error);
+    showErrorMessage("Unable to load map. Please try again.");
   } finally {
     hideLoadingSpinner();
   }
@@ -499,13 +516,13 @@ class APIErrorBoundary {
 // Usage
 const errorHandler = new APIErrorBoundary();
 
-errorHandler.register('rate_limit_exceeded', async (error, response) => {
-  const retryAfter = response.headers.get('Retry-After');
+errorHandler.register("rate_limit_exceeded", async (error, response) => {
+  const retryAfter = response.headers.get("Retry-After");
   await sleep(retryAfter * 1000);
   return retryRequest();
 });
 
-errorHandler.register('auth_invalid_token', async (error) => {
+errorHandler.register("auth_invalid_token", async (error) => {
   logout();
   redirectToLogin();
 });
@@ -516,27 +533,27 @@ errorHandler.register('auth_invalid_token', async (error) => {
 Set up global error handling for uncaught errors:
 
 ```javascript
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection:', event.reason);
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("Unhandled promise rejection:", event.reason);
 
   // Log to error tracking service
   logToErrorService({
-    type: 'unhandledRejection',
+    type: "unhandledRejection",
     error: event.reason,
-    url: window.location.href
+    url: window.location.href,
   });
 
   // Prevent default browser error
   event.preventDefault();
 });
 
-window.addEventListener('error', (event) => {
-  console.error('Global error:', event.error);
+window.addEventListener("error", (event) => {
+  console.error("Global error:", event.error);
 
   logToErrorService({
-    type: 'globalError',
+    type: "globalError",
     error: event.error,
-    url: window.location.href
+    url: window.location.href,
   });
 });
 ```
@@ -556,17 +573,20 @@ global.fetch = jest.fn(() =>
     ok: false,
     status: 429,
     headers: {
-      get: (name) => name === 'Retry-After' ? '60' : null
+      get: (name) => (name === "Retry-After" ? "60" : null),
     },
-    json: () => Promise.resolve({
-      message: 'Rate limit exceeded',
-      code: 'rate_limit_exceeded'
-    })
-  })
+    json: () =>
+      Promise.resolve({
+        message: "Rate limit exceeded",
+        code: "rate_limit_exceeded",
+      }),
+  }),
 );
 
 // Test retry logic
-await expect(fetchWithRetry('https://api.planisfy.com/...')).resolves.toBeDefined();
+await expect(
+  fetchWithRetry("https://api.planisfy.com/..."),
+).resolves.toBeDefined();
 ```
 
 ### Simulate Network Failures
@@ -575,14 +595,14 @@ await expect(fetchWithRetry('https://api.planisfy.com/...')).resolves.toBeDefine
 // Test offline behavior
 async function testOfflineMode() {
   // Simulate offline
-  Object.defineProperty(navigator, 'onLine', {
+  Object.defineProperty(navigator, "onLine", {
     writable: true,
-    value: false
+    value: false,
   });
 
-  const result = await fetchWithCache('https://api.planisfy.com/styles/...');
+  const result = await fetchWithCache("https://api.planisfy.com/styles/...");
 
-  expect(result.source).toBe('cache');
+  expect(result.source).toBe("cache");
 }
 ```
 
@@ -618,43 +638,43 @@ async function testOfflineMode() {
 
 ### Authentication Errors
 
-| Code | Status | Description |
-|------|--------|-------------|
-| `auth_invalid_token` | 401 | API key is invalid or expired |
-| `auth_missing_token` | 401 | No API key provided |
-| `auth_forbidden` | 403 | Insufficient permissions for resource |
+| Code                 | Status | Description                           |
+| -------------------- | ------ | ------------------------------------- |
+| `auth_invalid_token` | 401    | API key is invalid or expired         |
+| `auth_missing_token` | 401    | No API key provided                   |
+| `auth_forbidden`     | 403    | Insufficient permissions for resource |
 
 ### Request Errors
 
-| Code | Status | Description |
-|------|--------|-------------|
-| `bad_request` | 400 | Invalid request format or parameters |
-| `invalid_coordinates` | 422 | Coordinates out of valid range |
-| `invalid_query` | 400 | Query string validation failed |
-| `missing_parameter` | 400 | Required parameter not provided |
+| Code                  | Status | Description                          |
+| --------------------- | ------ | ------------------------------------ |
+| `bad_request`         | 400    | Invalid request format or parameters |
+| `invalid_coordinates` | 422    | Coordinates out of valid range       |
+| `invalid_query`       | 400    | Query string validation failed       |
+| `missing_parameter`   | 400    | Required parameter not provided      |
 
 ### Resource Errors
 
-| Code | Status | Description |
-|------|--------|-------------|
-| `not_found` | 404 | Resource doesn't exist |
-| `style_not_found` | 404 | Style ID not found |
-| `tile_not_found` | 404 | Tile coordinates invalid |
+| Code              | Status | Description              |
+| ----------------- | ------ | ------------------------ |
+| `not_found`       | 404    | Resource doesn't exist   |
+| `style_not_found` | 404    | Style ID not found       |
+| `tile_not_found`  | 404    | Tile coordinates invalid |
 
 ### Rate Limit Errors
 
-| Code | Status | Description |
-|------|--------|-------------|
-| `rate_limit_exceeded` | 429 | Too many requests |
-| `quota_exceeded` | 429 | Daily quota exceeded |
+| Code                  | Status | Description          |
+| --------------------- | ------ | -------------------- |
+| `rate_limit_exceeded` | 429    | Too many requests    |
+| `quota_exceeded`      | 429    | Daily quota exceeded |
 
 ### Server Errors
 
-| Code | Status | Description |
-|------|--------|-------------|
-| `internal_error` | 500 | Unexpected server error |
-| `service_unavailable` | 503 | Service temporarily down |
-| `upstream_timeout` | 504 | Upstream service timeout |
+| Code                  | Status | Description              |
+| --------------------- | ------ | ------------------------ |
+| `internal_error`      | 500    | Unexpected server error  |
+| `service_unavailable` | 503    | Service temporarily down |
+| `upstream_timeout`    | 504    | Upstream service timeout |
 
 ---
 
@@ -675,6 +695,7 @@ async function testOfflineMode() {
 ---
 
 Sources:
+
 - [Web Services APIs - Mapbox API Docs](https://docs.mapbox.com/api/guides/)
 - [Troubleshooting - Mapbox Help](https://docs.mapbox.com/help/troubleshooting/)
 - [Troubleshooting Access Tokens - Mapbox Help](https://docs.mapbox.com/help/troubleshooting/token-errors/)
