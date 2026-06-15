@@ -7,6 +7,7 @@ import {
   styles,
   styleVersions,
 } from "@planisfy/database";
+import { getStorage } from "@planisfy/storage";
 import {
   canReadPublishedStyle,
   parseStyleHandleVersion,
@@ -14,6 +15,10 @@ import {
   styleCacheControl,
   styleEtag,
 } from "../lib/public-style-contract";
+import {
+  parsePublishedSpriteMetadata,
+  type SpriteVariant,
+} from "../lib/style-sprites";
 import type { AuthEnv } from "../middleware/auth";
 
 export const publicStylesRoute = new Hono<AuthEnv>();
@@ -95,11 +100,11 @@ publicStylesRoute.get("/styles/v1/:owner/:handle", async (c) => {
     );
   }
 
-  const snapshot = version
+  const resolved = version
     ? await resolveExplicitVersion(style.id, version)
     : await resolvePublishedVersion(style.id);
 
-  if (!snapshot) {
+  if (!resolved) {
     return c.json(
       {
         error: {
@@ -112,26 +117,124 @@ publicStylesRoute.get("/styles/v1/:owner/:handle", async (c) => {
   }
 
   c.header("Cache-Control", styleCacheControl(style.isPublic));
-  c.header("ETag", styleEtag(style.id, snapshot.version));
+  c.header("ETag", styleEtag(style.id, resolved.snapshot.version));
+
+  const sprite = parsePublishedSpriteMetadata(resolved.publication.metadata);
 
   return c.json(
     publishedStyleJson({
       draftStyleJson: style.styleJson,
-      snapshotStyleJson: snapshot.styleJson,
+      snapshotStyleJson: resolved.snapshot.styleJson,
+      spriteBaseUrl: sprite
+        ? spriteBaseUrl(c, owner, c.req.param("handle"))
+        : null,
     }),
   );
 });
 
 publicStylesRoute.get("/styles/v1/:owner/:handle/sprite*", async (c) => {
-  return c.json(
-    { error: { code: "NOT_FOUND", message: "Sprite not configured" } },
-    404,
+  const suffix = c.req.path.match(/\/sprite(@2x)?\.(json|png)$/);
+  if (!suffix) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Sprite not configured" } },
+      404,
+    );
+  }
+
+  const { owner } = c.req.param();
+  const { handle, version, invalidVersion } = parseStyleHandleVersion(
+    c.req.param("handle"),
   );
+  if (invalidVersion) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid style version" } },
+      400,
+    );
+  }
+
+  const [account] = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(eq(accounts.handle, owner), isNull(accounts.deletedAt)))
+    .limit(1);
+  if (!account) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Owner not found" } },
+      404,
+    );
+  }
+
+  const [style] = await db
+    .select({
+      id: styles.id,
+      handle: styles.handle,
+      isPublic: styles.isPublic,
+      ownerId: styles.ownerId,
+    })
+    .from(styles)
+    .where(
+      and(
+        eq(styles.ownerId, account.id),
+        eq(styles.handle, handle),
+        isNull(styles.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!style) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
+  }
+
+  const requestOwnerId = c.get("ownerId");
+  if (
+    !canReadPublishedStyle({
+      isPublic: style.isPublic,
+      styleOwnerId: style.ownerId,
+      requestOwnerId,
+    })
+  ) {
+    return c.json(
+      { error: { code: "FORBIDDEN", message: "Style is private" } },
+      403,
+    );
+  }
+
+  const resolved = version
+    ? await resolveExplicitVersion(style.id, version)
+    : await resolvePublishedVersion(style.id);
+  const sprite = parsePublishedSpriteMetadata(resolved?.publication.metadata);
+  if (!resolved || !sprite) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Sprite not configured" } },
+      404,
+    );
+  }
+
+  const scale = suffix[1] === "@2x";
+  const kind = suffix[2] as "json" | "png";
+  const variant: SpriteVariant =
+    kind === "json" ? (scale ? "json2x" : "json") : scale ? "png2x" : "png";
+  const data = await getStorage().download(sprite.storageKeys[variant]);
+
+  c.header("Cache-Control", styleCacheControl(style.isPublic));
+  c.header("ETag", `"sprite-${sprite.id}-${variant}"`);
+  return new Response(new Uint8Array(data), {
+    headers: {
+      "Content-Type": kind === "json" ? "application/json" : "image/png",
+      "Cache-Control": styleCacheControl(style.isPublic),
+      ETag: `"sprite-${sprite.id}-${variant}"`,
+    },
+  });
 });
 
 async function resolvePublishedVersion(styleId: string) {
   const [publication] = await db
-    .select({ styleVersionId: stylePublications.styleVersionId })
+    .select({
+      styleVersionId: stylePublications.styleVersionId,
+      metadata: stylePublications.metadata,
+    })
     .from(stylePublications)
     .where(
       and(
@@ -149,12 +252,15 @@ async function resolvePublishedVersion(styleId: string) {
     .where(eq(styleVersions.id, publication.styleVersionId))
     .limit(1);
 
-  return snapshot ?? null;
+  return snapshot ? { snapshot, publication } : null;
 }
 
 async function resolveExplicitVersion(styleId: string, version: number) {
   const [publication] = await db
-    .select({ styleVersionId: stylePublications.styleVersionId })
+    .select({
+      styleVersionId: stylePublications.styleVersionId,
+      metadata: stylePublications.metadata,
+    })
     .from(stylePublications)
     .where(
       and(
@@ -172,5 +278,14 @@ async function resolveExplicitVersion(styleId: string, version: number) {
     .where(eq(styleVersions.id, publication.styleVersionId))
     .limit(1);
 
-  return snapshot?.version === version ? snapshot : null;
+  return snapshot?.version === version ? { snapshot, publication } : null;
+}
+
+function spriteBaseUrl(
+  c: { req: { url: string } },
+  owner: string,
+  handle: string,
+) {
+  const origin = new URL(c.req.url).origin;
+  return `${origin}/styles/v1/${owner}/${handle}/sprite`;
 }

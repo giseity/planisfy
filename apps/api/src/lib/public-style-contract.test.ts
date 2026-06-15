@@ -82,3 +82,32 @@ test("published style JSON resolves from immutable snapshot, not mutable draft",
     snapshotStyleJson,
   );
 });
+
+test("published style JSON includes sprite URL only when configured", () => {
+  const snapshotStyleJson = {
+    version: 8,
+    name: "Published snapshot",
+    sources: {},
+    layers: [],
+  };
+
+  assert.deepEqual(
+    publishedStyleJson({
+      draftStyleJson: {},
+      snapshotStyleJson,
+      spriteBaseUrl: null,
+    }),
+    snapshotStyleJson,
+  );
+  assert.deepEqual(
+    publishedStyleJson({
+      draftStyleJson: {},
+      snapshotStyleJson,
+      spriteBaseUrl: "https://api.example.com/styles/v1/acme/basic/sprite",
+    }),
+    {
+      ...snapshotStyleJson,
+      sprite: "https://api.example.com/styles/v1/acme/basic/sprite",
+    },
+  );
+});

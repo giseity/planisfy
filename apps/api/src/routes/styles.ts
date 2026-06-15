@@ -7,6 +7,7 @@ import {
   stylePublications,
   styleVersions,
 } from "@planisfy/database";
+import { getStorage } from "@planisfy/storage";
 import { validateMapLibreStyle } from "@planisfy/style-spec";
 import {
   createStyleRecord,
@@ -16,6 +17,16 @@ import {
 import { logAudit } from "../lib/audit";
 import { checkResourceLimit } from "../lib/plan-check";
 import { requireOrgMutationPermission, type AuthEnv } from "../middleware/auth";
+import { recordStorageObject } from "../lib/storage-ledger";
+import {
+  buildSpriteJson,
+  extractSpriteImageIds,
+  spriteIdForStyleVersion,
+  spriteStorageKeys,
+  styleReferencesSpriteAssets,
+  transparentPng,
+  type PublishedSpriteMetadata,
+} from "../lib/style-sprites";
 
 export const stylesRoute = new Hono<AuthEnv>();
 
@@ -750,6 +761,16 @@ async function publishStyleSnapshot({
   userId: string;
   snapshot: typeof styleVersions.$inferSelect;
 }) {
+  const sprite = await createStyleSpriteAssets({
+    ownerId,
+    styleId,
+    snapshot,
+  });
+  const metadata = {
+    version: snapshot.version,
+    ...(sprite ? { sprite } : {}),
+  };
+
   await db
     .delete(stylePublications)
     .where(
@@ -767,7 +788,7 @@ async function publishStyleSnapshot({
       accountId: ownerId,
       alias: "latest",
       publishedBy: userId,
-      metadata: { version: snapshot.version },
+      metadata,
     })
     .returning();
 
@@ -779,7 +800,7 @@ async function publishStyleSnapshot({
       accountId: ownerId,
       alias: `v${snapshot.version}`,
       publishedBy: userId,
-      metadata: { version: snapshot.version },
+      metadata,
     })
     .onConflictDoNothing();
 
@@ -788,6 +809,108 @@ async function publishStyleSnapshot({
   }
 
   return publication;
+}
+
+async function createStyleSpriteAssets({
+  ownerId,
+  styleId,
+  snapshot,
+}: {
+  ownerId: string;
+  styleId: string;
+  snapshot: typeof styleVersions.$inferSelect;
+}): Promise<PublishedSpriteMetadata | null> {
+  if (!styleReferencesSpriteAssets(snapshot.styleJson)) return null;
+
+  const imageIds = extractSpriteImageIds(snapshot.styleJson);
+  const spriteId = `${spriteIdForStyleVersion(
+    styleId,
+    snapshot.version,
+    imageIds,
+  )}-${Date.now()}`;
+  const keys = spriteStorageKeys(spriteId);
+  const storage = getStorage();
+  const info = storage.getInfo();
+  const json = Buffer.from(JSON.stringify(buildSpriteJson(imageIds, 1)));
+  const json2x = Buffer.from(JSON.stringify(buildSpriteJson(imageIds, 2)));
+
+  const uploads = await Promise.all([
+    storage.upload(keys.json, json, "application/json"),
+    storage.upload(keys.png, transparentPng, "image/png"),
+    storage.upload(keys.json2x, json2x, "application/json"),
+    storage.upload(keys.png2x, transparentPng, "image/png"),
+  ]);
+
+  const objects = await Promise.all([
+    recordStorageObject({
+      accountId: ownerId,
+      provider: info.provider,
+      bucket: info.bucket,
+      storageKey: keys.json,
+      fileName: "sprite.json",
+      contentType: "application/json",
+      size: uploads[0]!.size,
+      resourceType: "style",
+      resourceId: styleId,
+      artifactKind: "sprite-json",
+      version: String(snapshot.version),
+      metadata: { spriteId, scale: 1 },
+    }),
+    recordStorageObject({
+      accountId: ownerId,
+      provider: info.provider,
+      bucket: info.bucket,
+      storageKey: keys.png,
+      fileName: "sprite.png",
+      contentType: "image/png",
+      size: uploads[1]!.size,
+      resourceType: "style",
+      resourceId: styleId,
+      artifactKind: "sprite-png",
+      version: String(snapshot.version),
+      metadata: { spriteId, scale: 1 },
+    }),
+    recordStorageObject({
+      accountId: ownerId,
+      provider: info.provider,
+      bucket: info.bucket,
+      storageKey: keys.json2x,
+      fileName: "sprite@2x.json",
+      contentType: "application/json",
+      size: uploads[2]!.size,
+      resourceType: "style",
+      resourceId: styleId,
+      artifactKind: "sprite-json-2x",
+      version: String(snapshot.version),
+      metadata: { spriteId, scale: 2 },
+    }),
+    recordStorageObject({
+      accountId: ownerId,
+      provider: info.provider,
+      bucket: info.bucket,
+      storageKey: keys.png2x,
+      fileName: "sprite@2x.png",
+      contentType: "image/png",
+      size: uploads[3]!.size,
+      resourceType: "style",
+      resourceId: styleId,
+      artifactKind: "sprite-png-2x",
+      version: String(snapshot.version),
+      metadata: { spriteId, scale: 2 },
+    }),
+  ]);
+
+  return {
+    id: spriteId,
+    imageIds,
+    storageObjects: {
+      json: objects[0]!.id,
+      png: objects[1]!.id,
+      json2x: objects[2]!.id,
+      png2x: objects[3]!.id,
+    },
+    storageKeys: keys,
+  };
 }
 
 async function resolveLatestPublishedStyleVersion(styleId: string) {

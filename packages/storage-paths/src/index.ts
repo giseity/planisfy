@@ -1,6 +1,10 @@
 export type TilesetArtifactFormat = "pmtiles" | "mbtiles" | "directory";
-export type BasemapArtifactName = "manifest.json" | "tiles.pmtiles" | "style.json";
+export type BasemapArtifactName =
+  | "manifest.json"
+  | "tiles.pmtiles"
+  | "style.json";
 export type SpriteAssetKind = "json" | "png";
+export type SpriteScale = 1 | 2;
 export type GlyphRange = `${number}-${number}`;
 
 const SAFE_SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -13,7 +17,12 @@ export class UnsafeStoragePathSegmentError extends Error {
 }
 
 export function safeSegment(segment: string): string {
-  if (!segment || segment === "." || segment === ".." || !SAFE_SEGMENT_PATTERN.test(segment)) {
+  if (
+    !segment ||
+    segment === "." ||
+    segment === ".." ||
+    !SAFE_SEGMENT_PATTERN.test(segment)
+  ) {
     throw new UnsafeStoragePathSegmentError(segment);
   }
 
@@ -24,7 +33,12 @@ export const StoragePaths = {
   uploadOriginal: (accountId: string, uploadId: string, fileName: string) =>
     `accounts/${safeSegment(accountId)}/uploads/${safeSegment(uploadId)}/original/${safeSegment(fileName)}`,
 
-  datasetVersion: (accountId: string, datasetId: string, version: number, fileName = "features.geojson") =>
+  datasetVersion: (
+    accountId: string,
+    datasetId: string,
+    version: number,
+    fileName = "features.geojson",
+  ) =>
     `accounts/${safeSegment(accountId)}/datasets/${safeSegment(datasetId)}/v${version}/${safeSegment(fileName)}`,
 
   tilesetVersion: (
@@ -35,7 +49,11 @@ export const StoragePaths = {
   ) =>
     `accounts/${safeSegment(accountId)}/tilesets/${safeSegment(tilesetId)}/v${version}/tiles.${format}`,
 
-  tilesetSourceArtifact: (accountId: string, sourceId: string, fileName: string) =>
+  tilesetSourceArtifact: (
+    accountId: string,
+    sourceId: string,
+    fileName: string,
+  ) =>
     `accounts/${safeSegment(accountId)}/tileset-sources/${safeSegment(sourceId)}/${safeSegment(fileName)}`,
 
   styleVersion: (accountId: string, styleId: string, version: number) =>
@@ -44,11 +62,18 @@ export const StoragePaths = {
   styleThumbnail: (accountId: string, styleId: string, version: number) =>
     `accounts/${safeSegment(accountId)}/styles/${safeSegment(styleId)}/v${version}/thumbnail.png`,
 
-  basemapRelease: (name: string, version: string, artifact: BasemapArtifactName) =>
+  basemapRelease: (
+    name: string,
+    version: string,
+    artifact: BasemapArtifactName,
+  ) =>
     `basemaps/${safeSegment(name)}/${safeSegment(version)}/${safeSegment(artifact)}`,
 
-  spriteAsset: (spriteId: string, kind: SpriteAssetKind) =>
-    `sprites/${safeSegment(spriteId)}.${kind}`,
+  spriteAsset: (
+    spriteId: string,
+    kind: SpriteAssetKind,
+    scale: SpriteScale = 1,
+  ) => `sprites/${safeSegment(spriteId)}${scale === 2 ? "@2x" : ""}.${kind}`,
 
   glyphRange: (fontStack: string, range: GlyphRange) =>
     `glyphs/${safeSegment(fontStack)}/${safeSegment(range)}.pbf`,
@@ -93,7 +118,9 @@ export type ParsedStoragePath =
     };
 
 export function parseStoragePath(path: string): ParsedStoragePath | null {
-  const upload = path.match(/^accounts\/([^/]+)\/uploads\/([^/]+)\/original\/([^/]+)$/);
+  const upload = path.match(
+    /^accounts\/([^/]+)\/uploads\/([^/]+)\/original\/([^/]+)$/,
+  );
   if (upload) {
     return {
       kind: "uploadOriginal",
@@ -116,7 +143,9 @@ export function parseStoragePath(path: string): ParsedStoragePath | null {
     };
   }
 
-  const tilesetSource = path.match(/^accounts\/([^/]+)\/tileset-sources\/([^/]+)\/([^/]+)$/);
+  const tilesetSource = path.match(
+    /^accounts\/([^/]+)\/tileset-sources\/([^/]+)\/([^/]+)$/,
+  );
   if (tilesetSource) {
     return {
       kind: "tilesetSourceArtifact",
@@ -126,7 +155,9 @@ export function parseStoragePath(path: string): ParsedStoragePath | null {
     };
   }
 
-  const basemap = path.match(/^basemaps\/([^/]+)\/([^/]+)\/(manifest\.json|tiles\.pmtiles|style\.json)$/);
+  const basemap = path.match(
+    /^basemaps\/([^/]+)\/([^/]+)\/(manifest\.json|tiles\.pmtiles|style\.json)$/,
+  );
   if (basemap) {
     return {
       kind: "basemapRelease",

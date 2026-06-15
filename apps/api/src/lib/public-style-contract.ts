@@ -34,6 +34,17 @@ export function styleEtag(styleId: string, version: number) {
 export function publishedStyleJson(params: {
   draftStyleJson: unknown;
   snapshotStyleJson: unknown;
+  spriteBaseUrl?: string | null;
 }) {
-  return params.snapshotStyleJson;
+  if (!params.spriteBaseUrl || !isRecord(params.snapshotStyleJson)) {
+    return params.snapshotStyleJson;
+  }
+  return {
+    ...params.snapshotStyleJson,
+    sprite: params.spriteBaseUrl,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
