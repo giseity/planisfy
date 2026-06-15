@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.14.1",
+    "@mapbox/vector-tile": "2.0.4",
     "@planisfy/auth": "workspace:*",
     "@planisfy/credentials": "workspace:*",
     "@planisfy/database": "workspace:*",
@@ -32,6 +33,7 @@
     "drizzle-orm": "^0.45.1",
     "hono": "^4.7.10",
     "ioredis": "^5.5.0",
+    "pbf": "4.0.1",
     "pmtiles": "4.4.1",
     "rate-limiter-flexible": "^9.1.1",
     "standardwebhooks": "^1.0.0",

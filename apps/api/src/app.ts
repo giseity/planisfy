@@ -82,11 +82,7 @@ app.route("/", setupRoute);
 
 // ── Published map assets (anonymous public, optional API key/session) ───────
 // Pipeline: API key extraction → optional auth → rate limit → usage log
-const publishedAssetPaths = [
-  "/tiles/*",
-  "/styles/v1/*",
-  "/fonts/*",
-];
+const publishedAssetPaths = ["/tiles/*", "/v4/*", "/styles/v1/*", "/fonts/*"];
 for (const path of publishedAssetPaths) {
   app.use(
     path,

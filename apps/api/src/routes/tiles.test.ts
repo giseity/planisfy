@@ -7,7 +7,10 @@ import {
   apiBaseFromUrl,
   contentTypeForTileType,
   extractVectorLayers,
+  lonLatToTile,
   parseTileCoordinates,
+  parseTileQueryCoordinates,
+  parseTileQueryOptions,
   parsePublicTilesetSlug,
   parseStableTileJsonPath,
   parseVersionedTileJsonPath,
@@ -116,6 +119,41 @@ test("parseTileCoordinates accepts only valid XYZ coordinates", () => {
   assert.equal(parseTileCoordinates("3.1", "0", "0"), null);
 });
 
+test("tilequery coordinate parsing and options validate inputs", () => {
+  assert.deepEqual(parseTileQueryCoordinates("-73.9857,40.7484"), {
+    lon: -73.9857,
+    lat: 40.7484,
+  });
+  assert.equal(parseTileQueryCoordinates("-181,0"), null);
+  assert.equal(parseTileQueryCoordinates("0,90"), null);
+  assert.equal(parseTileQueryCoordinates("bad"), null);
+
+  assert.deepEqual(
+    parseTileQueryOptions({
+      z: "14",
+      radius: "25",
+      limit: "3",
+      layers: "roads,pois",
+      geometry: "full",
+    }),
+    {
+      z: 14,
+      radius: 25,
+      limit: 3,
+      layers: ["roads", "pois"],
+      geometry: "full",
+    },
+  );
+  assert.equal(parseTileQueryOptions({ z: "27" }), null);
+  assert.equal(parseTileQueryOptions({ limit: "0" }), null);
+  assert.equal(parseTileQueryOptions({ geometry: "centroid" }), null);
+});
+
+test("tilequery lon/lat conversion returns bounded XYZ tile coordinates", () => {
+  assert.deepEqual(lonLatToTile(0, 0, 0), { z: 0, x: 0, y: 0 });
+  assert.deepEqual(lonLatToTile(179.999, 85, 2), { z: 2, x: 3, y: 0 });
+});
+
 test("contentTypeForTileType maps PMTiles tile types to HTTP content types", () => {
   assert.equal(
     contentTypeForTileType(TileType.Mvt),
@@ -130,7 +168,9 @@ test("contentTypeForTileType maps PMTiles tile types to HTTP content types", () 
 });
 
 test("verifyTileJsonArtifact confirms PMTiles artifact availability", async () => {
-  const storage = new MemoryStorage("s3", "planisfy-artifacts", ["tiles.pmtiles"]);
+  const storage = new MemoryStorage("s3", "planisfy-artifacts", [
+    "tiles.pmtiles",
+  ]);
   const result = await verifyTileJsonArtifact(
     {
       version: { format: "PMTILES" },
@@ -167,7 +207,9 @@ test("verifyTileJsonArtifact marks missing PMTiles artifacts as unavailable", as
 });
 
 test("verifyTileJsonArtifact marks storage provider mismatches as unavailable", async () => {
-  const storage = new MemoryStorage("s3", "planisfy-artifacts", ["tiles.pmtiles"]);
+  const storage = new MemoryStorage("s3", "planisfy-artifacts", [
+    "tiles.pmtiles",
+  ]);
   const result = await verifyTileJsonArtifact(
     {
       version: { format: "PMTILES" },

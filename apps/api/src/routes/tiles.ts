@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import { and, eq, isNull } from "drizzle-orm";
+import { VectorTile } from "@mapbox/vector-tile";
 import {
   db,
   accounts,
@@ -8,6 +9,7 @@ import {
   tilesets,
 } from "@planisfy/database";
 import { getStorage, type StorageProvider } from "@planisfy/storage";
+import Protobuf from "pbf";
 import {
   PMTiles,
   SharedPromiseCache,
@@ -27,6 +29,32 @@ type ApiContext = Context<AuthEnv>;
 type ResolvedTileset = NonNullable<Awaited<ReturnType<typeof resolveTileset>>>;
 
 const pmtilesCache = new SharedPromiseCache(200);
+
+type TileQueryGeometryMode = "point" | "full";
+type TileQueryOptions = {
+  z?: number;
+  radius: number;
+  limit: number;
+  layers?: string[];
+  geometry: TileQueryGeometryMode;
+};
+
+type GeoJsonFeature = {
+  type: "Feature";
+  id?: string | number;
+  properties: Record<string, unknown>;
+  geometry: GeoJsonGeometry | null;
+};
+
+type GeoJsonGeometry = {
+  type: string;
+  coordinates: unknown;
+};
+
+type GeoJsonFeatureCollection = {
+  type: "FeatureCollection";
+  features: GeoJsonFeature[];
+};
 
 // Stable owner/tileset TileJSON resolves to the promoted current version.
 // Inline @version suffixes are accepted for copied/version-pinned URLs.
@@ -136,10 +164,7 @@ tilesRoute.get("/tiles/v1/:source{.+\\.json$}", async (c) => {
     }
 
     return c.json(
-      toTileJson(
-        resolved,
-        parsed.version ? "dotted-version" : "dotted-stable",
-      ),
+      toTileJson(resolved, parsed.version ? "dotted-version" : "dotted-stable"),
       200,
       {
         "Cache-Control": parsed.version
@@ -228,6 +253,111 @@ tilesRoute.get("/tiles/v1/:owner/:handle/:z/:x/:y", async (c) => {
   return serveResolvedTile(c, resolved, z, x, y, () =>
     proxyMartinTile(c, `${owner}.${handle}/${z}/${x}/${y}`),
   );
+});
+
+tilesRoute.get("/v4/:tileset/tilequery/:coords.json", async (c) => {
+  const tileset = parsePublicTilesetSlug(c.req.param("tileset") ?? "");
+  const coords = parseTileQueryCoordinates(c.req.param("coords") ?? "");
+  const options = parseTileQueryOptions(c.req.query());
+
+  if (!tileset || !coords || !options) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid tilequery request",
+        },
+      },
+      400,
+    );
+  }
+
+  const resolved = await resolveTileset(
+    tileset.owner,
+    tileset.handle,
+    tileset.version,
+  );
+  if (!resolved?.version) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Tileset not found" } },
+      404,
+    );
+  }
+  if (resolved.version.format !== "PMTILES" || !resolved.artifact) {
+    return c.json(
+      {
+        error: {
+          code: "UNSUPPORTED_TILEQUERY",
+          message: "Tilequery is only available for PMTiles vector tilesets.",
+        },
+      },
+      400,
+    );
+  }
+
+  try {
+    const storage = getStorage();
+    const storageInfo = storage.getInfo();
+    if (
+      resolved.artifact.provider !== storageInfo.provider ||
+      (resolved.artifact.bucket &&
+        resolved.artifact.bucket !== storageInfo.bucket)
+    ) {
+      return c.json(
+        {
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Tileset storage is not available from this API instance",
+          },
+        },
+        503,
+      );
+    }
+
+    const archive = new PMTiles(
+      new StorageSource(storage, {
+        provider: resolved.artifact.provider,
+        bucket: resolved.artifact.bucket ?? storageInfo.bucket,
+        key: resolved.artifact.storageKey,
+      }),
+      pmtilesCache,
+    );
+    const header = await archive.getHeader();
+    if (header.tileType !== TileType.Mvt) {
+      return c.json(
+        {
+          error: {
+            code: "UNSUPPORTED_TILEQUERY",
+            message: "Tilequery is only available for vector tiles.",
+          },
+        },
+        400,
+      );
+    }
+
+    const z = options.z ?? resolved.version.maxZoom ?? header.maxZoom ?? 14;
+    const tileCoords = lonLatToTile(coords.lon, coords.lat, z);
+    const tile = await archive.getZxy(tileCoords.z, tileCoords.x, tileCoords.y);
+    if (!tile) {
+      return c.json(emptyFeatureCollection(), 200, tileQueryHeaders());
+    }
+
+    const collection = queryVectorTile({
+      data: tile.data,
+      tile: tileCoords,
+      lon: coords.lon,
+      lat: coords.lat,
+      options,
+    });
+
+    return c.json(collection, 200, tileQueryHeaders());
+  } catch (err) {
+    console.error("[tiles] tilequery error:", err);
+    return c.json(
+      { error: { code: "INTERNAL_ERROR", message: "Tilequery failed" } },
+      500,
+    );
+  }
 });
 
 async function legacyMartinTileJson(c: ApiContext, source: string) {
@@ -325,7 +455,8 @@ async function serveResolvedTile(
     const storageInfo = storage.getInfo();
     if (
       resolved.artifact.provider !== storageInfo.provider ||
-      (resolved.artifact.bucket && resolved.artifact.bucket !== storageInfo.bucket)
+      (resolved.artifact.bucket &&
+        resolved.artifact.bucket !== storageInfo.bucket)
     ) {
       console.error("[tiles] Storage provider mismatch", {
         artifactProvider: resolved.artifact.provider,
@@ -607,6 +738,252 @@ export function parseTileCoordinates(z: string, x: string, y: string) {
   return parsed;
 }
 
+export function parseTileQueryCoordinates(value: string) {
+  const match = value.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+  if (!match) return null;
+  const lon = Number(match[1]);
+  const lat = Number(match[2]);
+  if (
+    !Number.isFinite(lon) ||
+    !Number.isFinite(lat) ||
+    lon < -180 ||
+    lon > 180 ||
+    lat < -85.051129 ||
+    lat > 85.051129
+  ) {
+    return null;
+  }
+  return { lon, lat };
+}
+
+export function parseTileQueryOptions(
+  query: Record<string, string | string[]>,
+): TileQueryOptions | null {
+  const z = singleQueryValue(query.z);
+  const radius = singleQueryValue(query.radius);
+  const limit = singleQueryValue(query.limit);
+  const layers = singleQueryValue(query.layers);
+  const geometry = singleQueryValue(query.geometry);
+
+  const parsedZ = z === undefined ? undefined : Number(z);
+  const parsedRadius = radius === undefined ? 0 : Number(radius);
+  const parsedLimit = limit === undefined ? 5 : Number(limit);
+  const parsedGeometry = geometry ?? "point";
+
+  if (
+    (parsedZ !== undefined &&
+      (!Number.isInteger(parsedZ) || parsedZ < 0 || parsedZ > 26)) ||
+    !Number.isFinite(parsedRadius) ||
+    parsedRadius < 0 ||
+    parsedRadius > 10_000 ||
+    !Number.isInteger(parsedLimit) ||
+    parsedLimit < 1 ||
+    parsedLimit > 100 ||
+    (parsedGeometry !== "point" && parsedGeometry !== "full")
+  ) {
+    return null;
+  }
+
+  return {
+    z: parsedZ,
+    radius: parsedRadius,
+    limit: parsedLimit,
+    layers: layers
+      ?.split(",")
+      .map((layer) => layer.trim())
+      .filter(Boolean),
+    geometry: parsedGeometry,
+  };
+}
+
+export function lonLatToTile(lon: number, lat: number, z: number) {
+  const scale = 2 ** z;
+  const x = Math.min(
+    scale - 1,
+    Math.max(0, Math.floor(((lon + 180) / 360) * scale)),
+  );
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.min(
+    scale - 1,
+    Math.max(
+      0,
+      Math.floor(
+        ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) /
+          2) *
+          scale,
+      ),
+    ),
+  );
+  return { z, x, y };
+}
+
+function queryVectorTile(params: {
+  data: Uint8Array | ArrayBuffer;
+  tile: { z: number; x: number; y: number };
+  lon: number;
+  lat: number;
+  options: TileQueryOptions;
+}): GeoJsonFeatureCollection {
+  const vectorTile = new VectorTile(new Protobuf(toUint8Array(params.data)));
+  const layerFilter = new Set(params.options.layers ?? []);
+  const features: GeoJsonFeature[] = [];
+
+  for (const layerName of Object.keys(vectorTile.layers)) {
+    if (layerFilter.size > 0 && !layerFilter.has(layerName)) continue;
+    const layer = vectorTile.layers[layerName]!;
+    for (let index = 0; index < layer.length; index += 1) {
+      const feature = layer.feature(index);
+      const geojson = feature.toGeoJSON(
+        params.tile.x,
+        params.tile.y,
+        params.tile.z,
+      ) as GeoJsonFeature;
+      if (
+        !geojson.geometry ||
+        !geometryNearPoint(
+          geojson.geometry,
+          params.lon,
+          params.lat,
+          params.options.radius,
+        )
+      ) {
+        continue;
+      }
+
+      features.push({
+        ...geojson,
+        properties: { ...geojson.properties, layer: layerName },
+        geometry:
+          params.options.geometry === "full"
+            ? geojson.geometry
+            : representativePointGeometry(
+                geojson.geometry,
+                params.lon,
+                params.lat,
+              ),
+      });
+
+      if (features.length >= params.options.limit) {
+        return { type: "FeatureCollection", features };
+      }
+    }
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
+function geometryNearPoint(
+  geometry: GeoJsonGeometry,
+  lon: number,
+  lat: number,
+  radiusMeters: number,
+) {
+  const bbox = geometryBbox(geometry);
+  if (!bbox) return false;
+  if (lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3]) {
+    return true;
+  }
+  if (radiusMeters === 0) return false;
+  return (
+    minCoordinateDistanceMeters(geometry.coordinates, lon, lat) <= radiusMeters
+  );
+}
+
+function representativePointGeometry(
+  geometry: GeoJsonGeometry,
+  lon: number,
+  lat: number,
+): GeoJsonGeometry {
+  return {
+    type: "Point",
+    coordinates: nearestCoordinate(geometry.coordinates, lon, lat) ?? [
+      lon,
+      lat,
+    ],
+  };
+}
+
+function geometryBbox(geometry: GeoJsonGeometry) {
+  const coords = flattenCoordinates(geometry.coordinates);
+  if (coords.length === 0) return null;
+  return coords.reduce<[number, number, number, number]>(
+    (bbox, coord) => [
+      Math.min(bbox[0], coord[0]),
+      Math.min(bbox[1], coord[1]),
+      Math.max(bbox[2], coord[0]),
+      Math.max(bbox[3], coord[1]),
+    ],
+    [coords[0]![0], coords[0]![1], coords[0]![0], coords[0]![1]],
+  );
+}
+
+function minCoordinateDistanceMeters(
+  coordinates: unknown,
+  lon: number,
+  lat: number,
+) {
+  const nearest = nearestCoordinate(coordinates, lon, lat);
+  return nearest ? haversineMeters(lon, lat, nearest[0], nearest[1]) : Infinity;
+}
+
+function nearestCoordinate(coordinates: unknown, lon: number, lat: number) {
+  let best: [number, number] | null = null;
+  let bestDistance = Infinity;
+  for (const coord of flattenCoordinates(coordinates)) {
+    const distance = haversineMeters(lon, lat, coord[0], coord[1]);
+    if (distance < bestDistance) {
+      best = coord;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function flattenCoordinates(value: unknown): Array<[number, number]> {
+  if (!Array.isArray(value)) return [];
+  if (
+    typeof value[0] === "number" &&
+    typeof value[1] === "number" &&
+    Number.isFinite(value[0]) &&
+    Number.isFinite(value[1])
+  ) {
+    return [[value[0], value[1]]];
+  }
+  return value.flatMap((child) => flattenCoordinates(child));
+}
+
+function haversineMeters(
+  lon1: number,
+  lat1: number,
+  lon2: number,
+  lat2: number,
+) {
+  const radius = 6_371_000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return 2 * radius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function singleQueryValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function emptyFeatureCollection(): GeoJsonFeatureCollection {
+  return { type: "FeatureCollection", features: [] };
+}
+
+function tileQueryHeaders() {
+  return {
+    "Cache-Control": "public, max-age=300",
+    "Access-Control-Allow-Origin": "*",
+  };
+}
+
 export function contentTypeForTileType(tileType: TileType) {
   switch (tileType) {
     case TileType.Mvt:
@@ -652,4 +1029,8 @@ function toExactArrayBuffer(data: Buffer): ArrayBuffer {
     data.byteOffset,
     data.byteOffset + data.byteLength,
   ) as ArrayBuffer;
+}
+
+function toUint8Array(data: Uint8Array | ArrayBuffer) {
+  return data instanceof Uint8Array ? data : new Uint8Array(data);
 }
