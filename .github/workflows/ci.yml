@@ -85,6 +85,8 @@ jobs:
             dockerfile: apps/marketing/Dockerfile
           - app: worker-geodata
             dockerfile: apps/worker-geodata/Dockerfile
+          - app: tile-worker
+            dockerfile: apps/tile-worker/Dockerfile
           - app: self-host-supervisor
             dockerfile: apps/self-host-supervisor/Dockerfile
     steps:

@@ -16,7 +16,7 @@ import {
   parseVersionedTileJsonPath,
   publicTilesetBaseUrl,
   verifyTileJsonArtifact,
-} from "./tiles";
+} from "@planisfy/tile-runtime";
 
 test("parsePublicTilesetSlug accepts stable and immutable dotted aliases", () => {
   assert.deepEqual(parsePublicTilesetSlug("acme.roads"), {

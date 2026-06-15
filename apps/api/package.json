@@ -24,6 +24,7 @@
     "@planisfy/storage": "workspace:*",
     "@planisfy/storage-paths": "workspace:*",
     "@planisfy/style-spec": "workspace:*",
+    "@planisfy/tile-runtime": "workspace:*",
     "@planisfy/types": "workspace:*",
     "@planisfy/upgrade-manifest": "workspace:*",
     "@planisfy/utils": "workspace:*",

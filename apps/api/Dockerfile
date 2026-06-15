@@ -17,6 +17,7 @@ COPY packages/events/package.json packages/events/
 COPY packages/storage/package.json packages/storage/
 COPY packages/storage-paths/package.json packages/storage-paths/
 COPY packages/style-spec/package.json packages/style-spec/
+COPY packages/tile-runtime/package.json packages/tile-runtime/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter api...
 

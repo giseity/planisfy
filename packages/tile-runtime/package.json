@@ -1,0 +1,29 @@
+{
+  "name": "@planisfy/tile-runtime",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "node ../eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mapbox/vector-tile": "2.0.4",
+    "@planisfy/database": "workspace:*",
+    "@planisfy/storage": "workspace:*",
+    "drizzle-orm": "^0.45.1",
+    "pbf": "4.0.1",
+    "pmtiles": "4.4.1"
+  },
+  "devDependencies": {
+    "@planisfy/eslint-config": "workspace:*",
+    "@planisfy/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "typescript": "5.9.2",
+    "vitest": "4.0.18"
+  }
+}
