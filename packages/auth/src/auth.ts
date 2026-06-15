@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
+import { oAuthProxy } from "better-auth/plugins/oauth-proxy";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import {
   db,
@@ -17,6 +18,7 @@ import { randomUUID } from "crypto";
 import {
   getAuthBaseURL,
   getAuthSecret,
+  getOAuthProxyURL,
   getSocialProviderCredentials,
 } from "./env";
 
@@ -26,7 +28,18 @@ if (!apiUrl) {
 }
 
 const authBaseURL = getAuthBaseURL();
+const oauthProxyURL = getOAuthProxyURL();
 const authCookieDomain = getAuthCookieDomain(authBaseURL);
+const trustedOrigins = buildTrustedOrigins(authBaseURL, oauthProxyURL);
+const betterAuthBaseURL = oauthProxyURL
+  ? {
+      allowedHosts: Array.from(
+        new Set([new URL(authBaseURL).host, new URL(oauthProxyURL).host]),
+      ),
+      protocol: "auto" as const,
+      fallback: authBaseURL,
+    }
+  : authBaseURL;
 
 // ============================================================================
 // Handle generation (OAuth users — no handle provided at signup)
@@ -75,13 +88,24 @@ function getAuthCookieDomain(baseURL: string) {
   return undefined;
 }
 
+function buildTrustedOrigins(authURL: string, proxyURL: string | undefined) {
+  return Array.from(
+    new Set(
+      [authURL, proxyURL]
+        .filter((url): url is string => Boolean(url))
+        .map((url) => new URL(url).origin),
+    ),
+  );
+}
+
 // ============================================================================
 // Better-Auth instance
 // ============================================================================
 
 export const auth = betterAuth({
   secret: getAuthSecret(),
-  baseURL: authBaseURL,
+  baseURL: betterAuthBaseURL,
+  trustedOrigins,
   socialProviders: socialProviders(),
 
   database: drizzleAdapter(db, {
@@ -98,6 +122,15 @@ export const auth = betterAuth({
   }),
 
   plugins: [
+    ...(oauthProxyURL
+      ? [
+          oAuthProxy({
+            currentURL: authBaseURL,
+            productionURL: oauthProxyURL,
+            secret: getAuthSecret(),
+          }),
+        ]
+      : []),
     organization({
       sendInvitationEmail: async ({ invitation, organization, inviter }) => {
         // Email sending delegated to API email service

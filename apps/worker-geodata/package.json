@@ -21,7 +21,7 @@
     "@planisfy/storage-paths": "workspace:*",
     "bullmq": "^5.71.0",
     "dotenv": "^16.4.7",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "ioredis": "^5.5.0"
   },
   "devDependencies": {

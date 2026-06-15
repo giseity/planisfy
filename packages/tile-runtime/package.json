@@ -15,7 +15,7 @@
     "@mapbox/vector-tile": "2.0.4",
     "@planisfy/database": "workspace:*",
     "@planisfy/storage": "workspace:*",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "pbf": "4.0.1",
     "pmtiles": "4.4.1"
   },

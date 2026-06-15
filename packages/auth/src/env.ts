@@ -20,6 +20,10 @@ export function getAuthBaseURL() {
   return authUrlFromAppUrl(authOrigin)!;
 }
 
+export function getOAuthProxyURL() {
+  return authUrlFromAppUrl(process.env.OAUTH_PROXY_ORIGIN);
+}
+
 export function getSocialProviderCredentials() {
   return {
     github: optionalProviderCredentials(
