@@ -15,6 +15,7 @@ documentation review.
 | Docker images | CI Docker matrix run URL for API, Console, Admin, Docs, Marketing, worker-geodata, and self-host supervisor |
 | Non-binary Compose smoke | `scripts/docker-compose-smoke.sh` output or CI run URL |
 | Optional PMTiles smoke | `Demo Data Smoke` workflow URL or explicit `not applicable` note |
+| Console product-loop browser smoke | `pnpm e2e:product-loop` output |
 | Setup preflight | `/setup/preflight` JSON saved with required blockers reviewed |
 | Detailed health | `/health/detailed` JSON saved after stack boot |
 | Support bundle | `scripts/self-host-support-bundle.sh` archive path or incident note |

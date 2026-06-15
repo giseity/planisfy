@@ -115,6 +115,16 @@ scripts/self-host-browser-map-smoke.mjs
 The browser smoke writes an ignored screenshot under `dogfood-output/` and
 fails if MapLibre emits an error before reaching `idle`.
 
+To verify the Console product loop against the already-running stack, run:
+
+```bash
+pnpm e2e:product-loop
+```
+
+The product-loop smoke runs `pnpm dev:seed`, signs in with the seeded demo
+account, and checks the dashboard, styles, tilesets, and integration pages in a
+real browser.
+
 ## Valhalla Dev Graph
 
 Valhalla readiness is route-backed. A container that answers `/status` but has
@@ -247,7 +257,7 @@ local data scope small. The pinned defaults are:
 
 ```bash
 PELIAS_API_IMAGE=pelias/api:v7.8.0
-PELIAS_ELASTICSEARCH_IMAGE=pelias/elasticsearch:7.17.27-2025-01-22-66b2b704398cecb3f0bccede4286a840972c57f8
+PELIAS_ELASTICSEARCH_IMAGE=<pinned Pelias Elasticsearch image from infra/docker/docker-compose.yml>
 PELIAS_SCHEMA_IMAGE=pelias/schema:v9.1.0
 PELIAS_CSV_IMPORTER_IMAGE=pelias/csv-importer:v5.4.0
 PELIAS_ES_JAVA_OPTS="-Xms2g -Xmx2g"

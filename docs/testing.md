@@ -7,6 +7,32 @@ Test coverage is intentionally focused on current platform contracts.
 tests currently run through package-level Node test scripts. `pnpm test` runs
 the fast infrastructure-free suite through Turbo and currently passes.
 
+## Local Green Path
+
+The local DX and product-loop gates are expected to be green with Docker
+Desktop running:
+
+```bash
+pnpm lint
+pnpm check-types
+pnpm test
+pnpm build
+docker compose --env-file .env -f infra/docker/docker-compose.yml config --quiet
+pnpm e2e:product-loop
+```
+
+`pnpm e2e:product-loop` seeds the demo user, organization, API key, style, and
+tileset through `pnpm dev:seed`, then drives the Console in a real browser. It
+signs in as `demo@planisfy.localhost`, verifies the dashboard, styles,
+tilesets, and integration pages, and writes a failure screenshot to
+`dogfood-output/screenshots/product-loop-browser-smoke-failure.png` when an
+assertion fails.
+
+`agent-browser doctor` is also green for local browser launch and config
+validity. It can still report Chrome-for-Testing CDN reachability as failed
+when the network blocks that endpoint; this is not a local blocker when the
+bundled Chrome runtime is already installed and the launch test passes.
+
 ## Target
 
 Keep `pnpm test` fast and infrastructure-free by default, then add explicit
@@ -75,6 +101,7 @@ For full local service smoke after the stack is already running, verify the
 graph-backed and browser-backed services explicitly:
 
 ```bash
+pnpm e2e:product-loop
 curl "http://localhost:3100/v1/search?text=Stuttgart&size=1"
 curl -X POST http://localhost:3007/route \
   -H 'content-type: application/json' \

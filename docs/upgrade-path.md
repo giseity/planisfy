@@ -17,7 +17,7 @@ valid manifest includes:
 - `backupRequired`
 - `rollbackSupported`
 
-See `docs/examples/release-manifest.valid.json`.
+See `docs/examples/release-manifest.example.json`.
 
 ## Preflight
 
