@@ -1,6 +1,6 @@
 "use client"
 
-import { ProfileTab } from "@/components/studio/settings-tabs"
+import { ProfileTab } from "@/components/settings/tabs"
 
 export default function SettingsProfilePage() {
   return <ProfileTab />

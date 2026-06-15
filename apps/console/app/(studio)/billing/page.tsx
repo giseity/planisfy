@@ -1,6 +1,6 @@
 "use client"
 
-import { BillingTab } from "@/components/studio/settings-tabs"
+import { BillingTab } from "@/components/settings/tabs"
 import {
   PageDescription,
   PageHeader,

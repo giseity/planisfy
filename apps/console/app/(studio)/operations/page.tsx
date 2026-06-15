@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@planisfy/ui/components/table"
-import { useOperations } from "@/components/studio/operations-provider"
+import { useOperations } from "@/components/operations/provider"
 
 export default function OperationsPage() {
   const { overview, openTimeline } = useOperations()

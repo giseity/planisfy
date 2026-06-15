@@ -1,6 +1,6 @@
 "use client"
 
-import { AccountTab } from "@/components/studio/settings-tabs"
+import { AccountTab } from "@/components/settings/tabs"
 
 export default function SettingsSecurityPage() {
   return <AccountTab />

@@ -3,9 +3,9 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@planisfy/ui/lib/utils"
-import { ContextSwitcher } from "@/components/studio/context-switcher"
-import { ThemeToggle } from "@/components/studio/theme-toggle"
-import { EmailVerificationBanner } from "@/components/studio/email-verification-banner"
+import { ContextSwitcher } from "@/components/shell/context-switcher"
+import { ThemeToggle } from "@/components/shell/theme-toggle"
+import { EmailVerificationBanner } from "@/components/shell/email-verification-banner"
 import {
   AppShellContent,
   AppShellHeader,

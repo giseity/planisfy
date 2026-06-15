@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState, useMemo } from "react"
-import { StyleCard } from "@/components/studio/style-card"
-import { StyleListItem } from "@/components/studio/style-list-item"
+import { StyleCard } from "@/components/style-editor/style-card"
+import { StyleListItem } from "@/components/style-editor/style-list-item"
 import { Button } from "@planisfy/ui/components/button"
 import { Input } from "@planisfy/ui/components/input"
 import { Skeleton } from "@planisfy/ui/components/skeleton"

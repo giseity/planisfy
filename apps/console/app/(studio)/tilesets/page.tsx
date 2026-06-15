@@ -20,11 +20,11 @@ import {
   Globe,
 } from "lucide-react";
 import { toast } from "sonner";
-import { OvertureImportDialog } from "@/components/studio/overture-import-dialog";
-import { SourceImportsTable } from "@/components/studio/source-imports-table";
-import { SourceTilesetsTable } from "@/components/studio/source-tilesets-table";
-import { SourceWorkflowGuide } from "@/components/studio/source-workflow-guide";
-import { TilesetUploadDialog } from "@/components/studio/tileset-upload-dialog";
+import { OvertureImportDialog } from "@/components/tilesets/overture-import-dialog";
+import { SourceImportsTable } from "@/components/tilesets/source-imports-table";
+import { SourceTilesetsTable } from "@/components/tilesets/source-tilesets-table";
+import { SourceWorkflowGuide } from "@/components/tilesets/source-workflow-guide";
+import { TilesetUploadDialog } from "@/components/tilesets/tileset-upload-dialog";
 import {
   canCreateTilesetFromImport,
   defaultTilesetOptionsForImport,

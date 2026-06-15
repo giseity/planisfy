@@ -1,7 +1,7 @@
 "use client"
 
-import { SchedulesTab } from "@/components/studio/operations-tabs"
-import { useOperations } from "@/components/studio/operations-provider"
+import { SchedulesTab } from "@/components/operations/tabs"
+import { useOperations } from "@/components/operations/provider"
 
 export default function OperationsSchedulesPage() {
   const { executionTargets, overview, tilesets, workerProfiles, load } = useOperations()

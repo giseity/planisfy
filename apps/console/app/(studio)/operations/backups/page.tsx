@@ -1,7 +1,7 @@
 "use client";
 
-import { BackupsTab } from "@/components/studio/operations-tabs";
-import { useOperations } from "@/components/studio/operations-provider";
+import { BackupsTab } from "@/components/operations/tabs";
+import { useOperations } from "@/components/operations/provider";
 
 export default function OperationsBackupsPage() {
   const { overview, load } = useOperations();
