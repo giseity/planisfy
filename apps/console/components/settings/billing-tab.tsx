@@ -7,6 +7,7 @@ import {
   billingStatusVariant,
   formatLimit,
   type BillingInfo,
+  type BillingTransaction,
   type PlanInfo,
 } from "@/components/settings/model";
 import { Badge } from "@planisfy/ui/components/badge";
@@ -32,16 +33,19 @@ import { toast } from "sonner";
 export function BillingTab() {
   const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [plans, setPlans] = useState<PlanInfo[]>([]);
+  const [transactions, setTransactions] = useState<BillingTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       api.get<BillingInfo>("/billing"),
       api.get<PlanInfo[]>("/billing/plans"),
+      api.get<{ data: BillingTransaction[] }>("/billing/transactions"),
     ])
-      .then(([b, p]) => {
+      .then(([b, p, t]) => {
         setBilling(b);
         setPlans(p);
+        setTransactions(t.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -269,62 +273,77 @@ export function BillingTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Invoice history</CardTitle>
+          <CardTitle className="text-base">Transaction history</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Invoice</TableHead>
-                <TableHead>Period</TableHead>
+                <TableHead>Transaction</TableHead>
+                <TableHead>Product</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Date</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {[
-                {
-                  id: "INV-2026-006",
-                  period: "Jun 2026",
-                  amount: "$0.00",
-                  status: "current",
-                },
-                {
-                  id: "INV-2026-005",
-                  period: "May 2026",
-                  amount: "$0.00",
-                  status: "paid",
-                },
-                {
-                  id: "INV-2026-004",
-                  period: "Apr 2026",
-                  amount: "$0.00",
-                  status: "paid",
-                },
-              ].map((invoice) => (
-                <TableRow key={invoice.id}>
-                  <TableCell className="font-mono text-xs">
-                    {invoice.id}
-                  </TableCell>
-                  <TableCell>{invoice.period}</TableCell>
-                  <TableCell className="font-medium">
-                    {invoice.amount}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        invoice.status === "paid" ? "success" : "secondary"
-                      }
-                    >
-                      {invoice.status}
-                    </Badge>
+              {transactions.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="py-8 text-center text-sm text-muted-foreground"
+                  >
+                    No billing transactions have been recorded yet.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                transactions.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                    <TableCell className="font-mono text-xs">
+                      {transaction.providerOrderId ??
+                        transaction.providerCheckoutId ??
+                        transaction.id}
+                    </TableCell>
+                    <TableCell>{transaction.productLabel}</TableCell>
+                    <TableCell className="font-medium">
+                      {formatAmount(
+                        transaction.amountCents,
+                        transaction.currency,
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={transactionStatusVariant(transaction.status)}
+                      >
+                        {transaction.status.replaceAll("_", " ").toLowerCase()}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(
+                        transaction.paidAt ?? transaction.createdAt,
+                      ).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
     </div>
   );
+}
+
+function formatAmount(amountCents: number | null, currency: string | null) {
+  if (amountCents === null) return "Pending";
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: currency ?? "USD",
+  }).format(amountCents / 100);
+}
+
+function transactionStatusVariant(status: string) {
+  if (status === "PAID") return "success";
+  if (status === "FAILED" || status === "REFUNDED") return "destructive";
+  return "secondary";
 }

@@ -44,6 +44,22 @@ export interface BillingInfo {
   portalAvailable: boolean;
 }
 
+export interface BillingTransaction {
+  id: string;
+  provider: string;
+  type: string;
+  status: string;
+  providerCheckoutId: string | null;
+  providerOrderId: string | null;
+  productKey: string;
+  productLabel: string;
+  amountCents: number | null;
+  currency: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PlanInfo {
   id: string;
   productId: string;
@@ -55,6 +71,16 @@ export interface PlanInfo {
   maxStyles: string | number;
   maxSources: string | number;
   maxApiKeys: string | number;
+}
+
+export interface SecurityActivity {
+  id: string;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  metadata: unknown;
+  ipAddress: string | null;
+  timestamp: string;
 }
 
 export interface SessionData {

@@ -8,6 +8,7 @@ import {
   parseUserAgent,
   timeAgo,
   type ProfileData,
+  type SecurityActivity,
   type SessionData,
 } from "@/components/settings/model";
 import { authClient, useSession } from "@planisfy/auth/client";
@@ -369,75 +370,83 @@ function SessionsSection() {
 }
 
 function LoginHistorySection() {
-  const loginHistory = [
-    {
-      time: "Jun 9, 11:30 AM",
-      method: "Email / Password",
-      ip: "192.168.1.42",
-      status: "success",
-    },
-    {
-      time: "Jun 8, 09:15 AM",
-      method: "Google OAuth",
-      ip: "10.0.0.15",
-      status: "success",
-    },
-    {
-      time: "Jun 7, 02:40 PM",
-      method: "Email / Password",
-      ip: "203.0.113.42",
-      status: "failed",
-    },
-    {
-      time: "Jun 6, 10:00 AM",
-      method: "Email / Password",
-      ip: "192.168.1.42",
-      status: "success",
-    },
-  ];
+  const [activity, setActivity] = useState<SecurityActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .get<{ data: SecurityActivity[] }>("/security/activity")
+      .then((res) => setActivity(res.data))
+      .catch(() => setActivity([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Login history</h2>
+        <h2 className="text-lg font-semibold">Security activity</h2>
         <p className="text-sm text-muted-foreground">
-          Recent authentication attempts for this account.
+          Recent persisted account and authentication events.
         </p>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Time</TableHead>
-            <TableHead>Method</TableHead>
-            <TableHead>IP address</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loginHistory.map((entry) => (
-            <TableRow key={`${entry.time}-${entry.ip}`}>
-              <TableCell className="text-sm text-muted-foreground">
-                {entry.time}
-              </TableCell>
-              <TableCell>{entry.method}</TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {entry.ip}
-              </TableCell>
-              <TableCell>
-                <Badge
-                  variant={
-                    entry.status === "success" ? "success" : "destructive"
-                  }
-                >
-                  {entry.status}
-                </Badge>
-              </TableCell>
-            </TableRow>
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-12 rounded-lg" />
           ))}
-        </TableBody>
-      </Table>
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Time</TableHead>
+              <TableHead>Event</TableHead>
+              <TableHead>IP address</TableHead>
+              <TableHead>Resource</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {activity.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={4}
+                  className="py-8 text-center text-sm text-muted-foreground"
+                >
+                  No security activity has been recorded yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              activity.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {new Date(entry.timestamp).toLocaleString()}
+                  </TableCell>
+                  <TableCell>{formatSecurityAction(entry.action)}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {entry.ipAddress ?? "Unknown"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">
+                      {entry.resourceType}
+                      {entry.resourceId ? `:${entry.resourceId}` : ""}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      )}
     </div>
   );
+}
+
+function formatSecurityAction(action: string) {
+  return action
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function DangerZone() {

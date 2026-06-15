@@ -19,8 +19,14 @@ import {
   getMonthlyUsagePeriod,
   getMonthlyUsageUnits,
 } from "../lib/usage-quota";
-import { db, styles, tilesets, apiKeys } from "@planisfy/database";
-import { eq, and, isNull, count } from "drizzle-orm";
+import {
+  db,
+  styles,
+  tilesets,
+  apiKeys,
+  billingTransactions,
+} from "@planisfy/database";
+import { eq, and, isNull, count, desc } from "drizzle-orm";
 import { env } from "../env";
 import { requireOrgPermission } from "../middleware/auth";
 
@@ -33,6 +39,26 @@ export const billingWebhookRoute = new Hono();
 
 billingRoute.use("/billing/checkout", requireOrgPermission("billing.manage"));
 billingRoute.use("/billing/portal", requireOrgPermission("billing.manage"));
+
+type BillingTransactionRow = typeof billingTransactions.$inferSelect;
+
+export function serializeBillingTransaction(row: BillingTransactionRow) {
+  return {
+    id: row.id,
+    provider: row.provider,
+    type: row.type,
+    status: row.status,
+    providerCheckoutId: row.providerCheckoutId,
+    providerOrderId: row.providerOrderId,
+    productKey: row.productKey,
+    productLabel: row.productLabel,
+    amountCents: row.amountCents,
+    currency: row.currency,
+    paidAt: row.paidAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
 
 // ── GET /billing — Current plan, usage, and limits ──────────────────────────
 
@@ -122,6 +148,21 @@ billingRoute.get("/billing/plans", async (c) => {
   }));
 
   return c.json(plans);
+});
+
+// ── GET /billing/transactions — Local Dodo transaction ledger ───────────────
+
+billingRoute.get("/billing/transactions", async (c) => {
+  const ownerId = c.get("ownerId");
+
+  const rows = await db
+    .select()
+    .from(billingTransactions)
+    .where(eq(billingTransactions.accountId, ownerId))
+    .orderBy(desc(billingTransactions.createdAt))
+    .limit(25);
+
+  return c.json({ data: rows.map(serializeBillingTransaction) });
 });
 
 // ── POST /billing/checkout — Create a checkout session ──────────────────────
