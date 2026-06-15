@@ -18,8 +18,8 @@ dogfood-output/
 
 # Self-host backups
 .storage/
-backups/
-support-bundles/
+/backups/
+/support-bundles/
 infra/docker/data/minio/*
 !infra/docker/data/minio/
 !infra/docker/data/minio/README.md
