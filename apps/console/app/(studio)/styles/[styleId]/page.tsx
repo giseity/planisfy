@@ -93,6 +93,8 @@ export default function StyleEditorPage() {
   // Load style from API, a URL import, or the local starter style for new drafts.
   useEffect(() => {
     const id = params.styleId;
+    setLoadError(null);
+
     if (UUID_RE.test(id)) {
       loadStyleFromApi(id).catch((err) => {
         setLoadError(
@@ -103,7 +105,7 @@ export default function StyleEditorPage() {
     }
 
     const styleUrl = searchParams.get("url");
-    if (styleUrl) {
+    if (id === "new" && styleUrl) {
       fetch(styleUrl)
         .then((r) => r.json())
         .then((json) => {
@@ -118,9 +120,17 @@ export default function StyleEditorPage() {
             err instanceof Error ? err.message : "Failed to load style URL",
           );
         });
-    } else {
-      loadStyle(sampleStyle);
+      return;
     }
+
+    if (id === "new") {
+      loadStyle(sampleStyle);
+      return;
+    }
+
+    setLoadError(
+      "Style not found. Open an existing style or use /styles/new to start a draft.",
+    );
   }, [params.styleId, searchParams, loadStyle, loadStyleFromApi]);
 
   useEffect(() => {
@@ -449,9 +459,7 @@ export default function StyleEditorPage() {
                       size="sm"
                       className="h-7 justify-start gap-2 text-xs"
                       disabled={!isPublic || !ownerHandle}
-                      onClick={() =>
-                        copyUrl("MapLibre", mapLibreSnippet())
-                      }
+                      onClick={() => copyUrl("MapLibre", mapLibreSnippet())}
                     >
                       {copiedUrl === "MapLibre" ? (
                         <Check className="h-3 w-3" />

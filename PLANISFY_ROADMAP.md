@@ -26,9 +26,8 @@ Implemented today:
 
 ## Current Gaps
 
-- Public sprite publishing is not wired; published style sprite routes return `404 Sprite not configured`.
-- Tilequery is not implemented.
-- Edge tile delivery worker is a placeholder.
+- Sprite publishing and tilequery are implemented for PMTiles/vector-style paths; broader asset management and raster parity remain future work.
+- Tile-worker is available as an internal runtime; API proxying to it remains optional deployment work.
 - Larger Overture import UX, managed basemap releases, and global release packaging need more product and QA work.
 - Browser coverage for the full Console product loop is still limited.
 - Operations need stronger stuck-job reconciliation, schedule execution, notification delivery, and retention-aware usage summaries.

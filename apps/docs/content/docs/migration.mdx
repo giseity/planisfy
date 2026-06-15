@@ -9,19 +9,21 @@ Planisfy intentionally uses familiar style, tile, and coordinate shapes, but it 
 
 ## URL Changes
 
-| Need | Planisfy route |
-| --- | --- |
-| Style JSON | `/styles/v1/{owner}/{style}` |
-| Versioned style JSON | `/styles/v1/{owner}/{style}@{version}` |
-| TileJSON | `/tiles/v1/{owner}.{tileset}.json` or `/tiles/v1/{owner}/{tileset}.json` |
-| Vector tile | `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}` |
-| Glyph PBF | `/fonts/v1/{fontstack}/{range}.pbf` |
-| Directions | `/directions/v1/{profile}/{lon,lat;lon,lat}` |
+| Need                 | Planisfy route                                                           |
+| -------------------- | ------------------------------------------------------------------------ |
+| Style JSON           | `/styles/v1/{owner}/{style}`                                             |
+| Versioned style JSON | `/styles/v1/{owner}/{style}@{version}`                                   |
+| TileJSON             | `/tiles/v1/{owner}.{tileset}.json` or `/tiles/v1/{owner}/{tileset}.json` |
+| Vector tile          | `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}`                                |
+| Tilequery            | `/v4/{owner}.{tileset}/tilequery/{lon},{lat}.json`                       |
+| Style sprite         | `/styles/v1/{owner}/{style}/sprite(.json\|.png\|@2x.json\|@2x.png)`      |
+| Glyph PBF            | `/fonts/v1/{fontstack}/{range}.pbf`                                      |
+| Directions           | `/directions/v1/{profile}/{lon,lat;lon,lat}`                             |
 
 ## Auth Changes
 
 Use `X-API-Key: pk_...` for service APIs. Do not pass Mapbox-style `access_token` as the primary auth mechanism; the implemented middleware validates the `X-API-Key` header and session cookies.
 
-## Unsupported Mapbox Endpoints
+## Compatibility Limits
 
-Tilequery is not implemented. Sprite routes exist under published styles but currently return `404 Sprite not configured`.
+Tilequery is implemented for PMTiles-backed vector tilesets. Raster tilequery is not supported. Sprite routes are published only when the style references sprite assets; styles without sprite assets return `404 Sprite not configured`.

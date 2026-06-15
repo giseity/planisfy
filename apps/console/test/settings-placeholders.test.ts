@@ -39,4 +39,40 @@ describe("settings placeholder removal", () => {
     expect(templatesSource).toContain("api.applyWorkflowTemplate");
     expect(notificationsSource).toContain("api.testNotificationChannel");
   });
+
+  it("Overture import dialog does not initialize demo region values", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../components/tilesets/overture-import-dialog.tsx"),
+      "utf8",
+    );
+
+    expect(source).not.toContain('useState("Demo region")');
+    expect(source).not.toContain('useState("demo-region")');
+    expect(source).toContain("Use sample bbox");
+  });
+
+  it("style editor only loads sample style for the new draft route", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../app/(studio)/styles/[styleId]/page.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain('if (id === "new")');
+    expect(source).toContain("loadStyle(sampleStyle)");
+    expect(source).toContain("Style not found.");
+  });
+
+  it("docs no longer claim sprites or tilequery are unavailable", () => {
+    const migration = readFileSync(
+      resolve(__dirname, "../../docs/content/docs/migration.mdx"),
+      "utf8",
+    );
+    const sprites = readFileSync(
+      resolve(__dirname, "../../docs/content/docs/api/sprites.mdx"),
+      "utf8",
+    );
+
+    expect(migration).not.toContain("Tilequery is not implemented");
+    expect(sprites).not.toContain("Sprite publication is not implemented");
+  });
 });

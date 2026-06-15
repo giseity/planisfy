@@ -1,20 +1,23 @@
 ---
 title: Sprites
-description: Current sprite route behavior.
+description: Published style sprite routes.
 ---
 
-# Sprites
+# Sprites API
 
-Published style sprite paths are reserved under the style URL namespace:
+Published style sprite paths live under the style URL namespace:
 
 ```text
-GET /styles/v1/{owner}/{style}/sprite*
+GET /styles/v1/{owner}/{style}/sprite.json
+GET /styles/v1/{owner}/{style}/sprite.png
+GET /styles/v1/{owner}/{style}/sprite@2x.json
+GET /styles/v1/{owner}/{style}/sprite@2x.png
 ```
 
-Current implementation returns:
+Published style JSON includes:
 
 ```json
-{ "error": { "code": "NOT_FOUND", "message": "Sprite not configured" } }
+{ "sprite": "/styles/v1/{owner}/{style}/sprite" }
 ```
 
-Sprite publication is not implemented. Do not depend on sprite responses in production styles unless you host sprite assets separately and reference them directly from the style JSON.
+The sprite URL is emitted only when the published style references sprite assets. Styles without sprite assets return `404 Sprite not configured` for sprite routes.

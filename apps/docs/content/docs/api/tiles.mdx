@@ -19,6 +19,7 @@ GET /tiles/v1/{owner}.{handle}@{version}.json
 GET /tiles/v1/{owner}.{handle}/{z}/{x}/{y}
 GET /tiles/v1/{source}.json
 GET /tiles/v1/{source}/{z}/{x}/{y}
+GET /v4/{owner}.{handle}/tilequery/{lon},{lat}.json
 ```
 
 Stable URLs resolve to the promoted current version. Version URLs are immutable and receive long cache headers.
@@ -30,3 +31,7 @@ Published public tiles can be read anonymously. Valid API keys or sessions may a
 ## Errors
 
 Common responses include `404 NOT_FOUND` for missing tilesets or versions, `400 VALIDATION_ERROR` for invalid versions, and `503 ARTIFACT_MISSING` when the database points at a missing published artifact.
+
+## Tilequery
+
+Tilequery is available for PMTiles-backed vector tilesets. Supported query parameters are `z`, `radius`, `limit`, `layers`, and `geometry=point|full`. Raster tilequery is not supported.

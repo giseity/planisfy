@@ -60,12 +60,12 @@ export function OvertureImportDialog({
   const [importName, setImportName] = useState("");
   const [importHandle, setImportHandle] = useState("");
   const [importDescription, setImportDescription] = useState("");
-  const [regionName, setRegionName] = useState("Demo region");
-  const [regionHandle, setRegionHandle] = useState("demo-region");
-  const [bboxWest, setBboxWest] = useState("-122.55");
-  const [bboxSouth, setBboxSouth] = useState("37.70");
-  const [bboxEast, setBboxEast] = useState("-122.35");
-  const [bboxNorth, setBboxNorth] = useState("37.84");
+  const [regionName, setRegionName] = useState("");
+  const [regionHandle, setRegionHandle] = useState("");
+  const [bboxWest, setBboxWest] = useState("");
+  const [bboxSouth, setBboxSouth] = useState("");
+  const [bboxEast, setBboxEast] = useState("");
+  const [bboxNorth, setBboxNorth] = useState("");
 
   const loadOptions = useCallback(async () => {
     setLoading(true);
@@ -173,6 +173,15 @@ export function OvertureImportDialog({
     setImportHandle("");
     setImportDescription("");
     setSelectedRegionId(regionId);
+  }
+
+  function useSampleBbox() {
+    setRegionName("San Francisco sample");
+    setRegionHandle("san-francisco-sample");
+    setBboxWest("-122.55");
+    setBboxSouth("37.70");
+    setBboxEast("-122.35");
+    setBboxNorth("37.84");
   }
 
   const canSubmit = canRequestOvertureImport({
@@ -295,13 +304,18 @@ export function OvertureImportDialog({
           </div>
           {selectedRegionId === NEW_REGION_VALUE && (
             <div className="space-y-3 rounded-md border p-3">
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={useSampleBbox}>
+                  Use sample bbox
+                </Button>
+              </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Region name</Label>
                   <Input
                     value={regionName}
                     onChange={(e) => setRegionName(e.target.value)}
-                    placeholder="Demo region"
+                    placeholder="Region name"
                   />
                 </div>
                 <div className="space-y-2">
@@ -313,7 +327,7 @@ export function OvertureImportDialog({
                         e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
                       )
                     }
-                    placeholder="demo-region"
+                    placeholder="region-handle"
                   />
                 </div>
               </div>
