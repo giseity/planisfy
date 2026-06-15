@@ -1,33 +1,15 @@
 # Billing
 
-Planisfy uses subscription plans with monthly usage units. It does not use a
-prepaid credit wallet, credit grants, rollover balances, or free trials.
+Billing support is implemented around Dodo Payments.
 
-## Billing Model
+## Self-Host Mode
 
-Plans define a monthly allowance through `monthlyUnits`. API requests consume
-weighted units from that allowance based on endpoint category. The allowance is
-for the current monthly period and is not stored as a spendable balance.
+Billing configuration is optional. Console can show billing capability as unavailable or degraded without blocking the local product loop.
 
-The Free plan is the low-friction entry path. Free users receive a small monthly
-usage quota instead of a time-limited trial. Paid plans increase the monthly
-quota and resource limits.
+## Managed Mode
 
-## Dodo Payments
+Managed mode requires Dodo configuration through `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_API_URL`, `DODO_PAYMENTS_ENVIRONMENT`, `DODO_PAYMENTS_WEBHOOK_SECRET`, and product IDs.
 
-Managed checkout is backed by Dodo Payments subscription products. The local
-database stores normalized billing transaction records for checkout and webhook
-reconciliation, including provider product IDs, product keys, customer IDs,
-webhook IDs, and normalized transaction statuses.
+## Runtime
 
-Payment webhooks record transaction state. Subscription webhooks update the
-local subscription state. Unknown Dodo products do not mutate local billing
-state.
-
-## Non-Goals
-
-- No credit ledger.
-- No purchased credit packs.
-- No FIFO credit consumption.
-- No usage rollover.
-- No free-trial subscription state.
+The API owns checkout/session creation and webhook handling. Webhooks are mounted at `/webhooks/dodo` and update billing/subscription ledger rows after verification. Plan limits feed request-per-minute and monthly quota checks.

@@ -1,24 +1,7 @@
-# Planisfy Geodata Contracts
+# @planisfy/geodata-contracts
 
-Shared geodata worker contracts for the API, Admin, and worker apps.
+Pure geodata queue names, heartbeat keys, and worker job input contracts shared by API, Admin, and worker.
 
-## Owns
+No runtime service config.
 
-- Source-processing queue names and worker heartbeat keys.
-- Tileset build input types and parsers.
-- Retry source-resource mapping for upload-backed and dataset-backed builds.
-
-## Does Not Own
-
-- BullMQ worker runtime setup.
-- Database status transitions.
-- Storage artifact writes.
-- Tippecanoe, GDAL, DuckDB, or cloud execution logic.
-
-## Important Commands
-
-```bash
-pnpm -F @planisfy/geodata-contracts check-types
-pnpm -F @planisfy/geodata-contracts test
-pnpm -F @planisfy/geodata-contracts lint
-```
+Commands: `pnpm --filter @planisfy/geodata-contracts test`, `check-types`, `lint`.

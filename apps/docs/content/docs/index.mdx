@@ -1,110 +1,30 @@
 ---
 title: Welcome
-description: Planisfy documentation — Mapbox-compatible API platform
+description: Current Planisfy API and self-hosting documentation.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-import { Cards, Card } from 'fumadocs-ui/components/card';
+# Planisfy Docs
 
-# Welcome to Planisfy
+Planisfy publishes MapLibre styles, vector tiles, and related map service APIs through a Hono gateway backed by PostgreSQL, Redis, storage, and open geospatial engines.
 
-Planisfy is a geospatial API platform with self-hosted and managed v1 modes,
-MapLibre style publishing, uploaded tilesets, API keys, usage tracking, and
-operator tooling around open geospatial engines.
+## What Exists Today
 
-## Quick Start
+- Published styles at `/styles/v1/{owner}/{style}` and `/styles/v1/{owner}/{style}@{version}`.
+- Published tilesets and TileJSON at `/tiles/v1/*`.
+- Glyph proxy at `/fonts/v1/{fontstack}/{range}.pbf`.
+- Geocoding through a configured Pelias-compatible service.
+- Routing, isochrones, matching, matrices, and optimized trips through Valhalla.
+- Elevation through a configured elevation service.
+- Static PNG maps through the configured static renderer.
+- Self-host Docker Compose for the apps, database, Redis, Martin, Valhalla, Pelias, elevation, renderer, worker, and optional profiles.
 
-### 1. Prepare Access
+## Access Model
 
-Create a Console account and, when needed, create an API key from the dashboard.
-Published public map assets can be loaded anonymously; service APIs such as
-geocoding and routing still require API key or session auth.
+Published map assets under `/tiles/*`, `/styles/v1/*`, and `/fonts/*` can load anonymously when public. Service APIs require `X-API-Key` or a valid session cookie.
 
-### 2. Replace Your Mapbox URL
+## Start Here
 
-```javascript
-// Before (Mapbox)
-map.setStyle('https://api.mapbox.com/styles/v1/mapbox/streets-v12?access_token=YOUR_KEY')
-
-// After (Planisfy)
-map.setStyle('https://api.planisfy.com/styles/v1/planisfy/streets?access_token=YOUR_KEY')
-```
-
-### 3. That's It!
-
-MapLibre GL JS and standard z/x/y tile coordinates work with Planisfy's public
-style and tile URLs.
-
----
-
-## Documentation
-
-<Cards>
-  <Card title="API Reference" href="/docs/api/tiles">
-    Explore all Planisfy APIs: Tiles, Styles, Geocoding, Directions, and more.
-  </Card>
-  <Card title="Quick Start Guide" href="/docs/quickstart">
-    Get up and running in 5 minutes with interactive examples.
-  </Card>
-  <Card title="Migration Guide" href="/docs/migration">
-    Switch from Mapbox with our step-by-step migration guide.
-  </Card>
-  <Card title="Self-Hosting" href="/docs/self-hosting/overview">
-    Deploy Planisfy on your own infrastructure for full data sovereignty.
-  </Card>
-</Cards>
-
----
-
-## What is Planisfy?
-
-Planisfy provides Mapbox-compatible API shapes where practical using:
-
-- **[Martin](https://github.com/maplibre/martin)** — Vector tile server (Rust)
-- **[Pelias](https://github.com/pelias/pelias)** — Geocoding engine (Node.js)
-- **[Valhalla](https://github.com/valhalla/valhalla)** — Routing engine (C++)
-- **[Overture Maps](https://overturemaps.org/)** — Open map data source
-
-Uploaded published tilesets are served through Planisfy API-owned TileJSON and
-tile URLs. Martin remains the static/local tile engine for configured PMTiles
-sources; Valhalla requires a mounted routing graph before route APIs are ready.
-
----
-
-## Why Planisfy?
-
-| Feature | Planisfy | Mapbox |
-|---------|----------|--------|
-| **Self-Hostable** | ✅ Full control | ❌ Cloud-only |
-| **Open Source** | Pending repository license | ❌ Proprietary |
-| **Data Source** | Overture Maps (free) | Proprietary |
-| **Pricing** | Self-host + planned SaaS | Subscription only |
-| **API Compatible** | Mapbox-compatible shapes where implemented | — |
-
----
-
-## Core APIs
-
-| API | Description | Status |
-|-----|-------------|--------|
-| **Vector Tiles** | Uploaded/static vector tiles and TileJSON | Available |
-| **Style JSON** | MapLibre style specifications and publishing | Available |
-| **Sprites & Glyphs** | Public map assets for rendering | Available |
-| **Geocoding** | Provider-backed forward/reverse search | Provider dependent |
-| **Directions** | Valhalla-backed routing | Graph dependent |
-| **Isochrones** | Valhalla-backed time-distance polygons | Graph dependent |
-| **Static Images** | PNG map snapshots | Local renderer in Docker Compose |
-
----
-
-## Need Help?
-
-- **GitHub**: [github.com/cruzor-blade/planisfy](https://github.com/cruzor-blade/planisfy)
-- **Discord**: Join our community
-- **Email**: support@planisfy.com
-
----
-
-<Callout type="info" title="Project Status">
-Planisfy is in active development. Core tile and style APIs are available, while the self-hosted product loop is still being hardened. See the <a href="https://github.com/cruzor-blade/planisfy/blob/main/PLANISFY_ROADMAP.md">roadmap</a> for current reality and milestone focus.
-</Callout>
+- [Quickstart](/docs/quickstart)
+- [Vector Tiles API](/docs/api/tiles)
+- [Directions API](/docs/api/directions)
+- [Self-Hosting Overview](/docs/self-hosting/overview)

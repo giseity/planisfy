@@ -2,21 +2,23 @@
   "docs": [
     {
       "title": "Getting Started",
-      "pages": [
-        "index",
-        "quickstart",
-        "migration"
-      ]
+      "pages": ["index", "quickstart", "migration"]
     },
     {
       "title": "API Reference",
       "pages": [
         "api/tiles",
         "api/styles",
+        "api/glyphs",
+        "api/sprites",
         "api/geocoding",
         "api/directions",
-        "api/sprites",
-        "api/glyphs"
+        "api/isochrone",
+        "api/matching",
+        "api/matrix",
+        "api/optimization",
+        "api/elevation",
+        "api/static"
       ]
     },
     {
@@ -25,7 +27,8 @@
         "guides/authentication",
         "guides/rate-limits",
         "guides/caching",
-        "guides/error-handling"
+        "guides/error-handling",
+        "guides/best-practices"
       ]
     },
     {
@@ -33,7 +36,9 @@
       "pages": [
         "self-hosting/overview",
         "self-hosting/docker",
-        "self-hosting/data-sources"
+        "self-hosting/configuration",
+        "self-hosting/data-sources",
+        "self-hosting/performance"
       ]
     }
   ]

@@ -1,0 +1,19 @@
+---
+title: Matrix
+description: Valhalla sources_to_targets proxy.
+---
+
+# Matrix API
+
+```text
+GET /matrix/v1/{profile}/{lon,lat;lon,lat}
+```
+
+The API sends coordinates to Valhalla `sources_to_targets`.
+
+Optional query parameters:
+
+- `sources`: semicolon-separated coordinate indexes.
+- `destinations`: semicolon-separated coordinate indexes.
+
+If omitted, all points are used as both sources and targets. Requests require API key or session auth.

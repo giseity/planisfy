@@ -1,3 +1,7 @@
-# `@workspace/eslint-config`
+# @planisfy/eslint-config
 
-Shared eslint configuration for the workspace.
+Shared ESLint flat config package.
+
+No runtime config.
+
+No package scripts; consumers call the local ESLint binary from their own scripts.

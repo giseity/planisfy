@@ -1,0 +1,20 @@
+---
+title: Elevation
+description: Configured elevation lookup and profile routes.
+---
+
+# Elevation API
+
+Elevation proxies to `ELEVATION_URL`, which Docker Compose points at the local SRTM HGT service.
+
+## Routes
+
+```text
+GET /elevation/v1/{lon,lat}
+GET /elevation/v1/{lon,lat;lon,lat}
+GET /elevation/v1/along/{lon,lat;lon,lat}?samples=100
+```
+
+Point lookups accept up to 100 points. Along-route profiles require at least two points and sample up to 500 interpolated locations.
+
+Requests require API key or session auth.

@@ -1,3 +1,7 @@
-# `@workspace/typescript-config`
+# @planisfy/typescript-config
 
-Shared typescript configuration for the workspace.
+Shared TypeScript configuration package.
+
+No runtime config.
+
+No package scripts.

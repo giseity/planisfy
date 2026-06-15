@@ -1,24 +1,7 @@
-# Planisfy Events
+# @planisfy/events
 
-Pure event contract package for async work.
+Pure Zod schemas and parsers for async event payloads.
 
-## Owns
+No runtime service config. Do not add database, Redis, filesystem, or HTTP dependencies.
 
-- Zod schemas for known event payloads.
-- TypeScript payload types.
-- Unknown-event and invalid-payload errors.
-- Parsing helpers used by API and workers.
-
-## Rules
-
-- No database, Redis, filesystem, provider SDK, or HTTP dependencies.
-- Event docs and schemas must stay in sync.
-- Workers must parse payloads before handling them.
-
-## Commands
-
-```bash
-pnpm -F @planisfy/events test
-pnpm -F @planisfy/events check-types
-pnpm -F @planisfy/events lint
-```
+Commands: `pnpm --filter @planisfy/events test`, `check-types`, `lint`.

@@ -1,67 +1,30 @@
 ---
-title: Quick Start Guide
-description: Render a published Planisfy style with MapLibre GL JS.
+title: Quickstart
+description: Render a published Planisfy style with MapLibre.
 ---
 
-import { Callout } from "fumadocs-ui/components/callout";
-import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+# Quickstart
 
-# Quick Start Guide
-
-This guide gets a browser map on screen using Planisfy's current published
-style contract. For local self-hosting, use the seeded Planisfy Streets fixture.
-For your own data, publish a style in Console and swap in its public style URL.
-
----
-
-## Step 1: Choose A Style URL
-
-Published public styles are loaded directly by MapLibre:
+## 1. Pick A Style URL
 
 ```text
 https://api.planisfy.com/styles/v1/{owner}/{style}
 https://api.planisfy.com/styles/v1/{owner}/{style}@{version}
 ```
 
-For a local self-host demo after running the setup flow, use:
+For local Docker Compose, replace the origin with `http://localhost:4000`.
 
-```text
-http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1
-```
-
-<Callout type="info" title="API keys">
-  Planisfy API keys start with <code>pk_</code>. Published public map assets can
-  load anonymously, while protected service APIs and private resources use the
-  <code>X-API-Key</code> header.
-</Callout>
-
----
-
-## Step 2: Create An HTML Page
-
-<Tabs items={['local self-host', 'published style']}>
-
-  <Tab value="local self-host">
+## 2. Render With MapLibre
 
 ```html
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Planisfy Local Map</title>
-    <link
-      href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css"
-      rel="stylesheet"
-    />
+    <meta charset="utf-8" />
+    <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
-      body {
-        margin: 0;
-      }
-      #map {
-        width: 100vw;
-        height: 100vh;
-      }
+      body { margin: 0; }
+      #map { width: 100vw; height: 100vh; }
     </style>
   </head>
   <body>
@@ -70,108 +33,25 @@ http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1
     <script>
       const map = new maplibregl.Map({
         container: "map",
-        style:
-          "http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1",
+        style: "http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1",
         center: [9.1829, 48.7758],
-        zoom: 12,
+        zoom: 12
       });
-
       map.addControl(new maplibregl.NavigationControl(), "top-right");
     </script>
   </body>
 </html>
 ```
 
-  </Tab>
+## 3. Check API Access
 
-  <Tab value="published style">
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Planisfy Published Map</title>
-    <link
-      href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css"
-      rel="stylesheet"
-    />
-    <style>
-      body {
-        margin: 0;
-      }
-      #map {
-        width: 100vw;
-        height: 100vh;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="map"></div>
-    <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
-    <script>
-      const map = new maplibregl.Map({
-        container: "map",
-        style: "https://api.planisfy.com/styles/v1/acme/roads",
-        center: [-74.006, 40.7128],
-        zoom: 12,
-      });
-
-      map.addControl(new maplibregl.NavigationControl(), "top-right");
-    </script>
-  </body>
-</html>
-```
-
-  </Tab>
-
-</Tabs>
-
----
-
-## Step 3: Verify The Style
-
-Before wiring a style into an app, check that the published URL returns JSON:
+Published public assets can load without a key. Service APIs require an API key or session:
 
 ```bash
-curl "http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1" \
-  -H "Accept: application/json"
-```
-
-For protected Console and service APIs, pass the API key as a header:
-
-```bash
-curl "http://localhost:4000/geocoding/v1/search?text=Stuttgart" \
+curl "http://localhost:4000/geocoding/v1/forward?q=Stuttgart" \
   -H "X-API-Key: pk_your_key_here"
 ```
 
-<Callout type="warn" title="Local fixture data">
-  The local Planisfy Streets fixture needs the Stuttgart PMTiles demo artifact.
-  If the artifact is missing, the stack can boot, but the default map will
-  report fixture-data readiness warnings until compatible PMTiles are supplied.
-</Callout>
+## 4. Publish Your Own Data
 
----
-
-## Step 4: Publish Your Own Style
-
-1. Upload or import source data in Console.
-2. Build and publish a tileset.
-3. Add the tileset source to a style.
-4. Publish the style.
-5. Use the stable URL, or pin an immutable `@version` URL for production.
-
-```text
-https://api.planisfy.com/styles/v1/{owner}/{style}
-https://api.planisfy.com/styles/v1/{owner}/{style}@{version}
-```
-
----
-
-## Next Steps
-
-- [Self-Hosting Overview](/docs/self-hosting/overview)
-- [Vector Tiles API](/docs/api/tiles)
-- [Styles API](/docs/api/styles)
-- [Authentication Guide](/docs/guides/authentication)
+Use Console to upload or import data, build a tileset, add it to a style, publish the style, and copy the stable or versioned URLs.

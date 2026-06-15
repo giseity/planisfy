@@ -1,73 +1,35 @@
 # Architecture
 
-## Product Shape
+Planisfy wraps open geospatial engines with a TypeScript platform layer. The API gateway owns authentication, API keys, rate limits, usage, style and tileset publication, console APIs, internal webhooks, health, metrics, and setup preflight. Specialized engines and workers do heavy map work.
 
-Planisfy is a maps platform with two official v1 modes: `self_host` and
-`managed`. Both modes share the same API/resource/publishing/usage core; the
-mode boundary lives in `@planisfy/platform-policy` and is exposed through
-`/setup/preflight` capability records.
+## Apps
 
-The credible v1 product loop is: sign up or self-host, see a default map, upload
-geodata, process it into tiles, style it, publish a stable MapLibre URL, observe
-usage, and roll back or recover safely.
+- `apps/api`: Hono server. Mounts Better Auth, published map assets, service APIs, console APIs, internal routes, health, metrics, and setup preflight.
+- `apps/console`: customer Console and Studio for styles, tilesets, keys, usage, platform readiness, operations, billing, organization, and settings.
+- `apps/admin`: internal operations app for accounts, users, jobs, storage, usage, health, audit, and upgrade center.
+- `apps/marketing`: public website and managed-mode auth pages.
+- `apps/docs`: Fumadocs documentation site.
+- `apps/worker-geodata`: outbox dispatcher and BullMQ worker for upload/import processing.
+- `apps/elevation`: local HGT DEM lookup service.
+- `apps/static-renderer`: local MapLibre PNG renderer.
+- `apps/self-host-supervisor`: optional local-only upgrade/backup/rollback API.
+- `apps/tile-worker`: placeholder only.
 
-## Current System
+## Shared Packages
 
-- `apps/api`: Hono API gateway.
-- `apps/console`: customer console, route-backed operations pages, and Studio.
-- `apps/admin`: internal operations UI with its own navigation tree.
-- `apps/docs`: public and self-host documentation.
-- `apps/marketing`: public website and managed auth entry surface.
-- `apps/tile-worker`: placeholder for planned edge tile delivery.
-- `apps/worker-geodata`: tileset upload and geodata artifact processing.
-- `packages/auth`: Better Auth setup.
-- `packages/credentials`: shared encrypted credential envelope helpers.
-- `packages/database`: Drizzle schema and shared DB helpers.
-- `packages/geodata-contracts`: geodata queue names, heartbeat keys, and worker job input contracts.
-- `packages/types`: broad shared types.
-- `packages/upgrade-manifest`: self-host upgrade release manifest schema and policy helpers.
-- `packages/utils`: pure utilities.
-- `packages/ui`: shared UI components.
-- `packages/map-styles`: default style assets.
+Important packages include `@planisfy/auth`, `@planisfy/database`, `@planisfy/env`, `@planisfy/events`, `@planisfy/geodata-contracts`, `@planisfy/platform-policy`, `@planisfy/storage`, `@planisfy/storage-paths`, `@planisfy/style-spec`, `@planisfy/upgrade-manifest`, `@planisfy/ui`, and tooling config packages.
 
-## Target System
+## Data Flow
 
-- API owns backend business mutations and public map API routes.
-- Console and admin consume API contracts instead of duplicating business rules.
-- Heavy geodata work moves to `apps/worker-geodata`.
-- Durable async work flows through `event_outbox` and user-visible `processing_jobs`.
-- API code produces source-processing jobs; `apps/worker-geodata` consumes and executes them.
-- Source-processing job inputs, retry source mapping, queue names, and heartbeat keys live in `@planisfy/geodata-contracts`.
-- Encrypted operational credential envelopes live in `@planisfy/credentials`.
-- Self-host upgrade release manifests live in `@planisfy/upgrade-manifest`.
-- Storage keys are generated through `@planisfy/storage-paths`.
-- Server storage providers live in `@planisfy/storage`.
-- Async event payloads are validated through `@planisfy/events`.
-- Style lifecycle helpers live in `@planisfy/style-spec`.
+1. Console creates resources through Hono console routes or colocated server code that uses shared database helpers.
+2. Uploads and imports create `processing_jobs`, `storage_objects`, and `event_outbox` rows.
+3. The geodata worker claims outbox events, dispatches BullMQ work, invokes DuckDB/GDAL/Tippecanoe as needed, writes artifacts to local/S3/R2 storage, and updates job status.
+4. Published style and tileset routes read publication state from PostgreSQL and artifacts from the configured storage backend.
+5. External APIs proxy to Martin, Valhalla, Pelias, local elevation, or static renderer.
 
-## Dependency Boundaries
+## Boundaries
 
-- Pure contract packages must not import database, Redis, HTTP, filesystem, or provider SDKs.
-- API and workers can import database and contract packages.
-- Next.js apps should not own backend business rules.
-- Worker containers can depend on GDAL, Tippecanoe, DuckDB, and other heavy tools; the API image should stay lighter.
-
-## Web App Boundaries
-
-Marketing/public, Console, and Admin are separate surfaces. Managed deployments
-mount sign-in, sign-up, and reset-password on Marketing through shared auth UI.
-Self-host and local development keep Console-local auth pages as the default
-fallback. `NEXT_PUBLIC_AUTH_ORIGIN` is the canonical auth origin; the server
-derives the auth handler URL from it, and client redirects use it directly.
-
-Console navigation is driven by a route manifest. Studio is implemented as a
-route group, so Studio URLs are `/styles`, `/styles/[styleId]`, and `/tilesets`.
-
-Shared UI primitives live in `@planisfy/ui`. App shells, breadcrumbs, sidebars,
-alerts, alert dialogs, loading/empty states, metrics, comboboxes, tables, and
-charts should be built from the shared primitives first; app-specific components
-should compose them rather than reimplement them.
-
-## Identity
-
-Planisfy uses `accounts` as the shared owner anchor, with `users.id = accounts.id` and `organizations.id = accounts.id`, following the proven Geobble pattern. Better Auth provider credentials live in `oauth_accounts`. The database package temporarily exports `profiles` as an alias for existing legacy API callers.
+- Pure contract packages should not import database, Redis, HTTP, filesystem, or provider SDK code.
+- API and workers may import database and provider packages.
+- Next.js apps should compose shared UI and API/database helpers rather than duplicating backend rules.
+- Worker images can carry heavy geodata tools; the API image should stay focused on request handling.

@@ -1,281 +1,32 @@
 ---
-title: Vector Tiles API
-description: Request vector tiles for rendering with MapLibre GL JS, Mapbox GL JS, and other compatible libraries.
+title: Tiles
+description: Implemented TileJSON and vector tile routes.
 ---
 
-import { Callout } from "fumadocs-ui/components/callout";
+# Tiles API
 
-# Vector Tiles API
+Tiles are served from published uploaded PMTiles artifacts or proxied Martin sources.
 
-The **Planisfy Vector Tiles API** serves MapLibre-compatible vector tiles from
-published tilesets and configured static sources. Tile coordinates stay in the
-standard z/x/y shape used by MapLibre and Mapbox clients.
+## Routes
 
-<Callout type="info" title="Data sources">
-  Tiles can come from uploaded tilesets, configured static PMTiles sources, or
-  future managed basemap releases. The local self-host fixture uses a Stuttgart
-  PMTiles artifact; production data sources depend on the tilesets you publish.
-</Callout>
-
----
-
-## Endpoint Overview
-
-```
-GET https://api.planisfy.com/tiles/v1/{tileset}.json
-GET https://api.planisfy.com/tiles/v1/{tileset}/{z}/{x}/{y}
+```text
+GET /tiles/v1/{owner}/{handle}.json
+GET /tiles/v1/{owner}/{handle}/{z}/{x}/{y}
+GET /tiles/v1/{owner}/{handle}/versions/{version}.json
+GET /tiles/v1/{owner}/{handle}/versions/{version}/{z}/{x}/{y}
+GET /tiles/v1/{owner}.{handle}.json
+GET /tiles/v1/{owner}.{handle}@{version}.json
+GET /tiles/v1/{owner}.{handle}/{z}/{x}/{y}
+GET /tiles/v1/{source}.json
+GET /tiles/v1/{source}/{z}/{x}/{y}
 ```
 
-| Component | Description                                                                          |
-| --------- | ------------------------------------------------------------------------------------ |
-| `tileset` | A Martin source or published tileset alias, such as `stuttgart-base` or `acme.roads` |
-| `z`       | Zoom level (0-22)                                                                    |
-| `x`       | Tile column                                                                          |
-| `y`       | Tile row                                                                             |
+Stable URLs resolve to the promoted current version. Version URLs are immutable and receive long cache headers.
 
-The tile coordinate system follows the [OSM slippy map tilename specification](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames).
+## Auth
 
-### Published Tileset Aliases
+Published public tiles can be read anonymously. Valid API keys or sessions may attach identity for private-owner reads and metering.
 
-Uploaded tilesets support stable and immutable aliases:
+## Errors
 
-| URL                                                 | Resolves to                                 |
-| --------------------------------------------------- | ------------------------------------------- |
-| `/tiles/v1/{owner}.{tileset}.json`                  | TileJSON for the current published version  |
-| `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}`           | Tiles for the current published version     |
-| `/tiles/v1/{owner}.{tileset}@{version}.json`        | TileJSON for an immutable published version |
-| `/tiles/v1/{owner}.{tileset}@{version}/{z}/{x}/{y}` | Tiles for an immutable published version    |
-
-These API URLs are the public contract for uploaded tilesets. When artifact
-storage is S3/R2/MinIO, the API reads PMTiles ranges from the configured object
-store and Martin does not need matching source names. Local deployments that
-choose to expose uploaded artifacts directly through Martin can still mount
-local aliases named `{owner}.{tileset}` and `{owner}.{tileset}.v{version}`.
-
-Before returning TileJSON, Planisfy verifies that the promoted PMTiles artifact
-exists in the configured storage backend. If the database points at a missing
-object after a crash or storage restore, TileJSON returns `503
-ARTIFACT_MISSING` instead of advertising tile URLs that cannot work.
-
----
-
-## Request Parameters
-
-### Required Parameters
-
-| Parameter | Type      | Description                                     |
-| --------- | --------- | ----------------------------------------------- |
-| `tileset` | `string`  | Tileset identifier or published alias           |
-| `z`       | `integer` | Zoom level (0-22). Higher = closer, more detail |
-| `x`       | `integer` | Tile column (0 to 2<sup>z</sup>-1)              |
-| `y`       | `integer` | Tile row (0 to 2<sup>z</sup>-1)                 |
-
-### Optional Parameters
-
-| Parameter | Type      | Description                   |
-| --------- | --------- | ----------------------------- |
-| `secure`  | `boolean` | Force HTTPS (default: `true`) |
-
----
-
-## Authentication
-
-Published public tilesets can be loaded anonymously by MapLibre and other tile
-clients. API keys are still accepted and may be required by managed/private
-deployments or non-asset service APIs.
-
-When an API key is required, include it in the `X-API-Key` header:
-
-```bash
-GET https://api.planisfy.com/tiles/v1/basic/0/0/0.mvt
-X-API-Key: pk_your_key_here
-```
-
-<Callout type="info" title="Published Asset Access">
-  Published map assets under `/tiles/*`, `/styles/v1/*`, and `/fonts/*` are
-  designed to be browser-loadable. Non-asset APIs such as geocoding, directions,
-  matrix, and static maps still require API key or session auth.
-</Callout>
-
----
-
-## Example Requests
-
-### cURL
-
-```bash
-# Fetch a tile at zoom 10, coordinates (517, 353)
-curl "https://api.planisfy.com/tiles/v1/acme.roads/10/517/353.mvt" \
-  --output tile.mvt
-```
-
-### JavaScript (MapLibre GL JS)
-
-```javascript
-// Replace Mapbox with Planisfy — just change the URL
-const map = new maplibregl.Map({
-  container: "map",
-  style: "https://api.planisfy.com/styles/v1/acme/roads",
-  center: [-74.006, 40.7128], // New York
-  zoom: 12,
-});
-```
-
-### JavaScript (Mapbox GL JS)
-
-```javascript
-// Planisfy tiles work with Mapbox GL JS too
-const map = new mapboxgl.Map({
-  container: "map",
-  style: "https://api.planisfy.com/styles/v1/acme/roads",
-});
-```
-
-### Python
-
-```python
-import requests
-
-url = "https://api.planisfy.com/tiles/v1/basic/12/1171/1566.mvt"
-headers = {"X-API-Key": "pk_your_key_here"}
-
-response = requests.get(url, headers=headers)
-
-if response.status_code == 200:
-    with open("tile.mvt", "wb") as f:
-        f.write(response.content)
-```
-
----
-
-## Response
-
-The API returns a **Protocol Buffer Vector Tile** (`.mvt` format):
-
-```
-Content-Type: application/vnd.mapbox-vector-tile
-Content-Encoding: gzip
-Cache-Control: public, max-age=43200
-Access-Control-Allow-Origin: *
-```
-
-### Tile Layers
-
-Tile layers are determined by the published PMTiles artifact. For the local
-Planisfy Streets fixture, inspect TileJSON first:
-
-```bash
-curl "http://localhost:4000/tiles/v1/stuttgart-base.json"
-```
-
----
-
-## Caching
-
-Tiles are heavily cached for performance:
-
-| Cache Type         | Duration  | Description               |
-| ------------------ | --------- | ------------------------- |
-| **Browser/Client** | 12 hours  | Local cache in your app   |
-| **CDN/Edge**       | 5 minutes | Cloudflare edge locations |
-| **Origin**         | 5 minutes | Planisfy servers          |
-
-<Callout type="tip" title="Cache Headers">
-  Responses include <code>Cache-Control</code> and <code>ETag</code> headers.
-  Implement conditional requests with <code>If-None-Match</code> for bandwidth
-  savings.
-</Callout>
-
----
-
-## Rate Limits
-
-| Plan       | Requests per Minute | Requests per Day |
-| ---------- | ------------------- | ---------------- |
-| Free       | 1,000               | 50,000           |
-| Starter    | 10,000              | 500,000          |
-| Pro        | 100,000             | 5,000,000        |
-| Enterprise | Custom              | Custom           |
-
-Exceeding limits returns `HTTP 429` with a `Retry-After` header.
-
----
-
-## Error Codes
-
-| HTTP Code | Error             | Description                       |
-| --------- | ----------------- | --------------------------------- |
-| `400`     | Bad Request       | Invalid coordinates or zoom level |
-| `401`     | Unauthorized      | Missing or invalid API key        |
-| `403`     | Forbidden         | API key suspended or over quota   |
-| `404`     | Not Found         | Tile coordinates out of range     |
-| `429`     | Too Many Requests | Rate limit exceeded               |
-| `500`     | Server Error      | Internal server error             |
-
-### Error Response Format
-
-```json
-{
-  "message": "Invalid API key",
-  "code": "auth_invalid_token",
-  "request_id": "req_abc123xyz"
-}
-```
-
----
-
-## Zoom Levels by Use Case
-
-| Zoom  | Use Case                   | Tile Coverage       |
-| ----- | -------------------------- | ------------------- |
-| 0-3   | Country/continent overview | ~1-8 tiles          |
-| 4-7   | Regional view              | ~16-1,024 tiles     |
-| 8-10  | Metropolitan area          | ~4,000-16,000 tiles |
-| 11-14 | City/district              | ~64,000-4M tiles    |
-| 15-17 | Street detail              | ~16M-256M tiles     |
-| 18+   | Building-level precision   | Extremely localized |
-
----
-
-## Switching from Mapbox
-
-Replace your Mapbox tile URL:
-
-```javascript
-// Before (Mapbox)
-url: "https://api.mapbox.com/v4/mapbox.mapbox-streets-v8/{z}/{x}/{y}.vector.pbf?access_token=YOUR_MAPBOX_KEY";
-
-// After (Planisfy)
-url: "https://api.planisfy.com/tiles/v1/streets/{z}/{x}/{y}.mvt";
-```
-
-<Callout type="info" title="Compatible Tools">
-  Planisfy tiles work with any Mapbox Vector Tile (MVT) compatible renderer:
-  MapLibre GL JS, Mapbox GL JS, Leaflet with VectorGrid, QGIS, and more.
-</Callout>
-
----
-
-## Self-Hosting Tiles
-
-When self-hosting Planisfy, built-in or static tile sources can be served by
-**Martin** (Rust-based tile server) from PMTiles archives. Uploaded tilesets are
-served through the Planisfy API URLs above so the same contract works for local,
-S3, R2, and MinIO artifact storage.
-
-```bash
-# Example: Serve tiles locally with Martin
-martin --config /path/to/martin-config.yaml
-# Access at: http://localhost:3005
-```
-
-See the [Self-Hosting Guide](/docs/self-hosting) for full setup instructions.
-
----
-
-## See Also
-
-- [Styles API](/docs/api/styles) — Style JSON specifications
-- [Sprites API](/docs/api/sprites) — Map icons and markers
-- [Geocoding API](/docs/api/geocoding) — Search for places
-- [Migration Guide](/docs/guides/migrate-from-mapbox) — Switch from Mapbox in 5 minutes
+Common responses include `404 NOT_FOUND` for missing tilesets or versions, `400 VALIDATION_ERROR` for invalid versions, and `503 ARTIFACT_MISSING` when the database points at a missing published artifact.

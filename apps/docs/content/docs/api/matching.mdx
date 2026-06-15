@@ -1,0 +1,12 @@
+---
+title: Map Matching
+description: Valhalla trace_route proxy.
+---
+
+# Map Matching API
+
+```text
+GET /matching/v1/{profile}/{lon,lat;lon,lat}
+```
+
+The API sends the coordinate shape to Valhalla `trace_route` with `shape_match: "map_snap"`. At least two coordinates are required. Requests require API key or session auth.

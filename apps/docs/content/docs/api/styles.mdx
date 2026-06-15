@@ -1,186 +1,25 @@
 ---
-title: Styles API
-description: Retrieve published MapLibre style JSON for browser map rendering.
+title: Styles
+description: Published MapLibre style JSON routes.
 ---
-
-import { Callout } from "fumadocs-ui/components/callout";
 
 # Styles API
 
-The **Planisfy Styles API** serves published MapLibre-compatible style JSON.
-Stable URLs point at the latest published snapshot, while `@version` URLs point
-at immutable published snapshots.
+Published styles return the stored published style snapshot.
 
-<Callout type="info" title="Published asset route">
-  Style JSON under <code>/styles/v1/*</code> is a browser-loadable map asset.
-  Public published styles can be read anonymously. Private styles require the
-  owner session or an API key sent with <code>X-API-Key</code>.
-</Callout>
+## Routes
 
----
-
-## Endpoint Overview
-
-```http
-GET https://api.planisfy.com/styles/v1/{owner}/{style}
-GET https://api.planisfy.com/styles/v1/{owner}/{style}@{version}
+```text
+GET /styles/v1/{owner}/{style}
+GET /styles/v1/{owner}/{style}@{version}
 ```
 
-| Component | Description                                 |
-| --------- | ------------------------------------------- |
-| `owner`   | Account handle that owns the style          |
-| `style`   | Published style handle                      |
-| `version` | Optional immutable published version number |
+`{version}` must be a positive integer. Stable URLs use the publication alias `latest`; version URLs resolve the matching `v{version}` publication.
 
-Stable style URLs resolve to the latest published snapshot. Version-pinned URLs
-only resolve for snapshots that have actually been published, so draft saves do
-not leak into public `@version` URLs.
+## Auth
 
----
+Public styles can be read anonymously. Private styles require the style owner context from a valid API key or session.
 
-## Local Fixture Styles
+## Caching
 
-The self-host demo stack seeds fixture style files from `@planisfy/map-styles`.
-These are the current local/demo style handles, not a managed basemap catalog:
-
-| Style ID                    | Description                        |
-| --------------------------- | ---------------------------------- |
-| `planisfy-streets-v1`       | Backwards-compatible fixture style |
-| `planisfy-streets-light-v1` | Light Planisfy Streets fixture     |
-| `planisfy-streets-dark-v1`  | Dark Planisfy Streets fixture      |
-
-The fixture styles require the local Stuttgart PMTiles artifact described in
-the self-hosting guide. Managed/global basemap releases are still a v1 readiness
-item, tracked in the roadmap.
-
----
-
-## Authentication
-
-Published public styles are anonymous:
-
-```bash
-curl "https://api.planisfy.com/styles/v1/acme/roads"
-```
-
-For private styles or deployments that require metered owner context, send the
-API key in the `X-API-Key` header:
-
-```bash
-curl "https://api.planisfy.com/styles/v1/acme/private-roads" \
-  -H "X-API-Key: pk_your_key_here"
-```
-
-Query-string API key examples are intentionally not used in current
-Planisfy docs because the API key middleware validates the `X-API-Key` header.
-
----
-
-## Example Requests
-
-### Stable Published Style
-
-```bash
-curl "https://api.planisfy.com/styles/v1/acme/roads" \
-  -H "Accept: application/json"
-```
-
-### Immutable Published Version
-
-```bash
-curl "https://api.planisfy.com/styles/v1/acme/roads@3" \
-  -H "Accept: application/json"
-```
-
-### MapLibre GL JS
-
-```javascript
-const map = new maplibregl.Map({
-  container: "map",
-  style: "https://api.planisfy.com/styles/v1/acme/roads",
-  center: [-74.006, 40.7128],
-  zoom: 12,
-});
-```
-
-### Self-Hosted Local Fixture
-
-```javascript
-const map = new maplibregl.Map({
-  container: "map",
-  style: "http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1",
-  center: [9.1829, 48.7758],
-  zoom: 12,
-});
-```
-
----
-
-## Response
-
-The API returns a JSON object conforming to the MapLibre Style Specification:
-
-```http
-Content-Type: application/json
-Cache-Control: public, max-age=43200
-ETag: "style-id:version"
-```
-
-Example shape:
-
-```json
-{
-  "version": 8,
-  "name": "Roads",
-  "sources": {
-    "roads": {
-      "type": "vector",
-      "url": "https://api.planisfy.com/tiles/v1/acme.roads.json"
-    }
-  },
-  "glyphs": "https://api.planisfy.com/fonts/{fontstack}/{range}.pbf",
-  "layers": [
-    {
-      "id": "background",
-      "type": "background",
-      "paint": {
-        "background-color": "#f8f8f8"
-      }
-    }
-  ]
-}
-```
-
----
-
-## Style Versioning
-
-| Type   | Description                 | Example                   |
-| ------ | --------------------------- | ------------------------- |
-| Stable | Latest published snapshot   | `/styles/v1/acme/roads`   |
-| Pinned | Specific published snapshot | `/styles/v1/acme/roads@3` |
-
-<Callout type="info" title="Pinning versions">
-  Append <code>@version</code> to the style handle when you need rollback-safe,
-  immutable URLs in production.
-</Callout>
-
----
-
-## Error Codes
-
-| HTTP Code | Error              | Description                                      |
-| --------- | ------------------ | ------------------------------------------------ |
-| `400`     | `VALIDATION_ERROR` | Invalid version alias                            |
-| `403`     | `FORBIDDEN`        | The style is private for this requester          |
-| `404`     | `NOT_FOUND`        | Owner, style, or published version was not found |
-| `500`     | `INTERNAL_ERROR`   | Unexpected server error                          |
-
----
-
-## Related Resources
-
-- [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/)
-- [Vector Tiles API](/docs/api/tiles)
-- [Glyphs API](/docs/api/glyphs)
-- [Self-Hosting](/docs/self-hosting/overview)
+Public styles return `Cache-Control: public, max-age=300` and an `ETag`. Private styles return `private, no-cache`.

@@ -1,25 +1,19 @@
 # Security
 
-## Current Concerns
+## Authentication
 
-- Internal API routes must require `X-Internal-Secret` in production-like deployments.
-- Upload validation is still being hardened.
-- Remote imports are not yet a durable product feature.
-- Billing and storage provider configuration are still being productized.
+Planisfy uses Better Auth sessions and API keys. API keys must start with `pk_`, are stored as hashes, can expire, can be scoped, and can be restricted to browser origins through Origin or Referer checks.
 
-## Target Requirements
+## Route Protection
 
-- Validate all upload size, type, filename, and content assumptions.
-- Prevent storage path traversal through centralized path builders.
-- Treat remote imports as SSRF-sensitive. Application validation rejects
-  credentials-in-URL, non-HTTP(S) schemes, localhost/local domains, private and
-  reserved IP ranges, parser-normalized IPv4 forms, and IPv4-mapped IPv6
-  loopback/private targets by default. Production deployments should still pair
-  this with network egress controls and DNS/redirect policy.
-- Separate public map routes from console/admin/internal routes.
-- Define API key scopes for styles, tiles, uploads, datasets, tilesets, usage, and admin operations.
-- Keep tenant isolation assumptions explicit for both self-host and hosted cloud.
+- Published assets under `/tiles/*`, `/styles/v1/*`, and `/fonts/*` allow anonymous public reads and optional identity attachment.
+- Service APIs require API key or session auth.
+- `/console/*` requires a session.
+- `/internal/*` requires `INTERNAL_API_SECRET`.
+- Dodo webhooks verify the configured webhook secret.
 
-## Rule
+## Secrets
 
-Production-like environments must not silently run with development internal secrets.
+Production installs must set strong `BETTER_AUTH_SECRET` and `INTERNAL_API_SECRET`. Source credentials should use `SOURCE_CREDENTIAL_ENCRYPTION_KEY`; local development falls back to existing auth/internal secrets.
+
+`ALLOW_PRIVATE_SOURCE_URLS=false` should remain the default unless a trusted private-network import environment is intentionally configured.
