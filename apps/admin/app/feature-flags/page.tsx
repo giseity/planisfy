@@ -1,3 +1,5 @@
+import { isNull } from "drizzle-orm"
+import { db, featureFlags } from "@planisfy/database"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Button } from "@planisfy/ui/components/button"
 import {
@@ -7,6 +9,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@planisfy/ui/components/card"
+import { Checkbox } from "@planisfy/ui/components/checkbox"
+import { Input } from "@planisfy/ui/components/input"
+import { Label } from "@planisfy/ui/components/label"
 import {
   PageActions,
   PageDescription,
@@ -14,90 +19,24 @@ import {
   PageHeaderText,
   PageTitle,
 } from "@planisfy/ui/components/page-header"
-import { Switch } from "@planisfy/ui/components/switch"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@planisfy/ui/components/dropdown-menu"
-import { Flag, MoreHorizontal, Plus } from "lucide-react"
+import { Textarea } from "@planisfy/ui/components/textarea"
+import { Archive, Flag, Plus } from "lucide-react"
 import { requireAdmin } from "@/lib/admin-auth"
-import type { ComponentProps } from "react"
+import {
+  archiveFeatureFlagAction,
+  createFeatureFlagAction,
+  updateFeatureFlagAction,
+} from "@/lib/platform-admin-actions"
 
 export const dynamic = "force-dynamic"
 
-const scopes = ["All", "Global", "Managed", "Self-host", "Enterprise"]
-
-const flags = [
-  {
-    name: "overture_imports",
-    label: "Overture Imports",
-    desc: "Allow users to import Overture Maps Foundation data.",
-    enabled: true,
-    scope: "global",
-    updated: "Jun 5",
-  },
-  {
-    name: "elevation_api",
-    label: "Elevation API",
-    desc: "Enable the /v1/elevation endpoint.",
-    enabled: false,
-    scope: "global",
-    updated: "May 28",
-  },
-  {
-    name: "static_maps",
-    label: "Static Map Rendering",
-    desc: "Server-side static map image generation.",
-    enabled: false,
-    scope: "global",
-    updated: "May 20",
-  },
-  {
-    name: "custom_exec_targets",
-    label: "Custom Execution Targets",
-    desc: "Allow self-host admins to configure custom worker runtimes.",
-    enabled: true,
-    scope: "self-host",
-    updated: "Jun 1",
-  },
-  {
-    name: "usage_billing_v2",
-    label: "Usage Billing v2",
-    desc: "New metered billing pipeline with per-unit tracking.",
-    enabled: true,
-    scope: "managed",
-    updated: "Jun 8",
-  },
-  {
-    name: "sso_saml",
-    label: "SSO / SAML",
-    desc: "Enterprise single sign-on via SAML 2.0.",
-    enabled: false,
-    scope: "enterprise",
-    updated: "Apr 15",
-  },
-  {
-    name: "public_signup",
-    label: "Public Signup",
-    desc: "Allow new user registration without invitation.",
-    enabled: true,
-    scope: "managed",
-    updated: "Mar 1",
-  },
-  {
-    name: "worker_autoscale",
-    label: "Worker Autoscaling",
-    desc: "Automatically scale processing workers based on queue depth.",
-    enabled: false,
-    scope: "self-host",
-    updated: "Jun 3",
-  },
-]
-
 export default async function FeatureFlagsPage() {
   await requireAdmin()
+  const flags = await db
+    .select()
+    .from(featureFlags)
+    .where(isNull(featureFlags.archivedAt))
+    .orderBy(featureFlags.scope, featureFlags.key)
 
   return (
     <div className="space-y-5">
@@ -105,70 +44,140 @@ export default async function FeatureFlagsPage() {
         <PageHeaderText>
           <PageTitle>Feature Flags</PageTitle>
           <PageDescription>
-            Toggle platform capabilities and experimental features.
+            Persisted platform feature flags with rollout metadata.
           </PageDescription>
         </PageHeaderText>
         <PageActions>
-          <Button>
-            <Plus className="h-4 w-4" />
-            Create flag
-          </Button>
+          <Badge variant="secondary">{flags.length} active</Badge>
         </PageActions>
       </PageHeader>
 
-      <div className="flex flex-wrap gap-1 rounded-md border bg-muted/20 p-1">
-        {scopes.map((scope, index) => (
-          <Button
-            key={scope}
-            size="sm"
-            variant={index === 0 ? "secondary" : "ghost"}
-          >
-            {scope}
-          </Button>
-        ))}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Plus className="h-4 w-4 text-muted-foreground" />
+            Create Flag
+          </CardTitle>
+          <CardDescription>
+            Use stable keys; application code can read these rows to gate
+            features.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={createFeatureFlagAction} className="grid gap-3 lg:grid-cols-[1fr_1fr_0.7fr_0.5fr_auto]">
+            <Field label="Key">
+              <Input name="key" required placeholder="static_maps" />
+            </Field>
+            <Field label="Label">
+              <Input name="label" required placeholder="Static maps" />
+            </Field>
+            <Field label="Scope">
+              <Input name="scope" defaultValue="global" />
+            </Field>
+            <Field label="Rollout %">
+              <Input
+                name="rolloutPercent"
+                type="number"
+                min={0}
+                max={100}
+                defaultValue={0}
+              />
+            </Field>
+            <div className="flex items-end">
+              <Button type="submit">Create</Button>
+            </div>
+            <Field label="Description">
+              <Textarea name="description" rows={3} />
+            </Field>
+            <label className="flex items-center gap-2 self-end pb-2 text-sm">
+              <Checkbox name="enabled" />
+              Enabled
+            </label>
+          </form>
+        </CardContent>
+      </Card>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {flags.map((flag) => (
-          <Card key={flag.name}>
-            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-              <Switch checked={flag.enabled} aria-label={`${flag.label} enabled`} />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-medium">{flag.label}</p>
-                  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-                    {flag.name}
-                  </code>
-                  <Badge variant={scopeVariant(flag.scope)}>{flag.scope}</Badge>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">{flag.desc}</p>
-              </div>
-              <span className="text-xs text-muted-foreground">{flag.updated}</span>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${flag.label}`}>
-                    <MoreHorizontal className="h-4 w-4" />
+          <Card key={flag.id}>
+            <CardContent className="p-4">
+              <form
+                action={updateFeatureFlagAction}
+                className="grid gap-3 lg:grid-cols-[1fr_1fr_0.7fr_0.5fr_auto]"
+              >
+                <input type="hidden" name="id" value={flag.id} />
+                <Field label="Key">
+                  <div className="rounded-md border bg-muted px-2.5 py-2 font-mono text-xs">
+                    {flag.key}
+                  </div>
+                </Field>
+                <Field label="Label">
+                  <Input name="label" defaultValue={flag.label} required />
+                </Field>
+                <Field label="Scope">
+                  <Input name="scope" defaultValue={flag.scope} />
+                </Field>
+                <Field label="Rollout %">
+                  <Input
+                    name="rolloutPercent"
+                    type="number"
+                    min={0}
+                    max={100}
+                    defaultValue={flag.rolloutPercent}
+                  />
+                </Field>
+                <div className="flex items-end gap-2">
+                  <Button type="submit" size="sm">
+                    Save
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem>Edit targeting</DropdownMenuItem>
-                  <DropdownMenuItem>View history</DropdownMenuItem>
-                  <DropdownMenuItem>Archive flag</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="outline"
+                    formAction={archiveFeatureFlagAction}
+                  >
+                    <Archive className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Field label="Description">
+                  <Textarea
+                    name="description"
+                    rows={2}
+                    defaultValue={flag.description ?? ""}
+                  />
+                </Field>
+                <label className="flex items-center gap-2 self-end pb-2 text-sm">
+                  <Checkbox name="enabled" defaultChecked={flag.enabled} />
+                  Enabled
+                </label>
+                <div className="flex items-end pb-2">
+                  <Badge variant={flag.enabled ? "success" : "secondary"}>
+                    {flag.enabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                </div>
+              </form>
             </CardContent>
           </Card>
         ))}
+        {flags.length === 0 && (
+          <Card>
+            <CardContent className="flex min-h-32 items-center justify-center text-sm text-muted-foreground">
+              No feature flags have been created.
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Flag className="h-4 w-4 text-muted-foreground" />
-            Flag governance
+            Application integration
           </CardTitle>
           <CardDescription>
-            Structural placeholder for approval rules, rollout percentages, and account-level overrides.
+            The control plane is now persisted. Runtime callers should read the
+            `feature_flags` table or a cached projection before gating product
+            behavior.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -176,9 +185,17 @@ export default async function FeatureFlagsPage() {
   )
 }
 
-function scopeVariant(scope: string): ComponentProps<typeof Badge>["variant"] {
-  if (scope === "managed") return "default"
-  if (scope === "self-host") return "secondary"
-  if (scope === "enterprise") return "warning"
-  return "outline"
+function Field({
+  children,
+  label,
+}: {
+  children: React.ReactNode
+  label: string
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
+    </div>
+  )
 }

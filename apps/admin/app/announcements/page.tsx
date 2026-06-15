@@ -1,3 +1,5 @@
+import { desc, isNull } from "drizzle-orm"
+import { announcements, db } from "@planisfy/database"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Button } from "@planisfy/ui/components/button"
 import {
@@ -7,7 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@planisfy/ui/components/card"
-import { MetricCard } from "@planisfy/ui/components/metric-card"
+import { Input } from "@planisfy/ui/components/input"
+import { Label } from "@planisfy/ui/components/label"
 import {
   PageActions,
   PageDescription,
@@ -16,145 +19,156 @@ import {
   PageTitle,
 } from "@planisfy/ui/components/page-header"
 import { StatusAlert } from "@planisfy/ui/components/status-alert"
-import {
-  Clock,
-  Eye,
-  FilePenLine,
-  Megaphone,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-} from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@planisfy/ui/components/dropdown-menu"
+import { Textarea } from "@planisfy/ui/components/textarea"
+import { Megaphone, Plus } from "lucide-react"
 import { requireAdmin } from "@/lib/admin-auth"
+import {
+  createAnnouncementAction,
+  updateAnnouncementStatusAction,
+} from "@/lib/platform-admin-actions"
 import type { ComponentProps } from "react"
 
 export const dynamic = "force-dynamic"
 
-const announcements = [
-  {
-    id: 1,
-    title: "Scheduled maintenance window",
-    body: "Platform will be unavailable Jun 15, 02:00-04:00 UTC for database migration.",
-    status: "scheduled",
-    audience: "all",
-    created: "Jun 9",
-    publish: "Jun 12",
-  },
-  {
-    id: 2,
-    title: "New: Overture Maps imports",
-    body: "Users can import building, POI, and transportation data directly from Overture Maps Foundation.",
-    status: "published",
-    audience: "all",
-    created: "Jun 5",
-    publish: "Jun 5",
-  },
-  {
-    id: 3,
-    title: "Rate limit changes for Free plan",
-    body: "Starting Jul 1, Free plan rate limits will be reduced from 100 to 60 requests per minute.",
-    status: "draft",
-    audience: "free",
-    created: "Jun 8",
-    publish: "-",
-  },
-]
-
 export default async function AnnouncementsPage() {
   await requireAdmin()
+  const rows = await db
+    .select()
+    .from(announcements)
+    .where(isNull(announcements.archivedAt))
+    .orderBy(desc(announcements.updatedAt))
 
   return (
     <div className="space-y-5">
       <PageHeader>
         <PageHeaderText>
           <PageTitle>Announcements</PageTitle>
-          <PageDescription>Broadcast messages to platform users.</PageDescription>
+          <PageDescription>
+            Create and schedule persisted platform announcements.
+          </PageDescription>
         </PageHeaderText>
         <PageActions>
-          <Button>
-            <Plus className="h-4 w-4" />
-            Create announcement
-          </Button>
+          <Badge variant="secondary">{rows.length} active</Badge>
         </PageActions>
       </PageHeader>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard
-          icon={<Megaphone className="h-4 w-4" />}
-          label="Published"
-          value="1"
-        />
-        <MetricCard icon={<Clock className="h-4 w-4" />} label="Scheduled" value="1" />
-        <MetricCard icon={<FilePenLine className="h-4 w-4" />} label="Drafts" value="1" />
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Plus className="h-4 w-4 text-muted-foreground" />
+            Create Announcement
+          </CardTitle>
+          <CardDescription>
+            Drafts can be promoted to published or scheduled states.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={createAnnouncementAction} className="grid gap-3 lg:grid-cols-[1fr_0.45fr_0.45fr]">
+            <Field label="Title">
+              <Input name="title" required />
+            </Field>
+            <Field label="Audience">
+              <Input name="audience" defaultValue="all" />
+            </Field>
+            <Field label="Status">
+              <select
+                name="status"
+                defaultValue="draft"
+                className="h-8 w-full rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="draft">Draft</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="published">Published</option>
+              </select>
+            </Field>
+            <Field label="Body">
+              <Textarea name="body" rows={4} required />
+            </Field>
+            <Field label="Starts at">
+              <Input name="startsAt" type="datetime-local" />
+            </Field>
+            <Field label="Ends at">
+              <Input name="endsAt" type="datetime-local" />
+            </Field>
+            <div className="lg:col-span-3">
+              <Button type="submit">
+                <Megaphone className="h-4 w-4" />
+                Create announcement
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       <div className="space-y-3">
-        {announcements.map((announcement) => (
+        {rows.map((announcement) => (
           <Card key={announcement.id}>
-            <CardContent className="space-y-3 p-4">
+            <CardContent className="space-y-4 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold">{announcement.title}</p>
+                    <p className="text-sm font-semibold">
+                      {announcement.title}
+                    </p>
                     <Badge variant={statusVariant(announcement.status)}>
                       {announcement.status}
                     </Badge>
-                    <Badge variant="outline">Audience: {announcement.audience}</Badge>
+                    <Badge variant="outline">
+                      Audience: {announcement.audience}
+                    </Badge>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
                     {announcement.body}
                   </p>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon-sm" aria-label={`Edit ${announcement.title}`}>
-                    <Pencil className="h-4 w-4" />
+                <form action={updateAnnouncementStatusAction} className="flex gap-2">
+                  <input type="hidden" name="id" value={announcement.id} />
+                  <select
+                    name="status"
+                    defaultValue={announcement.status}
+                    className="h-8 rounded-md border bg-background px-2 text-sm"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="published">Published</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                  <Button type="submit" size="sm">
+                    Save
                   </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${announcement.title}`}>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem>Duplicate</DropdownMenuItem>
-                      <DropdownMenuItem>Preview</DropdownMenuItem>
-                      <DropdownMenuItem>Archive</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                </form>
               </div>
               <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-                <span>Created: {announcement.created}</span>
-                <span>Publish: {announcement.publish}</span>
+                <span>Created: {formatDate(announcement.createdAt)}</span>
+                <span>Starts: {formatDate(announcement.startsAt)}</span>
+                <span>Ends: {formatDate(announcement.endsAt)}</span>
               </div>
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Eye className="h-4 w-4 text-muted-foreground" />
-            Banner preview
-          </CardTitle>
-          <CardDescription>How the announcement appears to users.</CardDescription>
-        </CardHeader>
-        <CardContent>
+        {rows.length === 0 && (
           <StatusAlert
             icon={<Megaphone className="h-4 w-4" />}
-            title="Scheduled maintenance window"
-            description="Platform will be unavailable Jun 15, 02:00-04:00 UTC for database migration."
-            action={<Button variant="outline" size="xs">Dismiss</Button>}
+            title="No announcements yet"
+            description="Create a draft announcement to start the broadcast workflow."
           />
-        </CardContent>
-      </Card>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Field({
+  children,
+  label,
+}: {
+  children: React.ReactNode
+  label: string
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
     </div>
   )
 }
@@ -162,5 +176,14 @@ export default async function AnnouncementsPage() {
 function statusVariant(status: string): ComponentProps<typeof Badge>["variant"] {
   if (status === "published") return "success"
   if (status === "scheduled") return "warning"
-  return "secondary"
+  if (status === "archived") return "secondary"
+  return "outline"
+}
+
+function formatDate(value: Date | string | null) {
+  if (!value) return "-"
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value))
 }

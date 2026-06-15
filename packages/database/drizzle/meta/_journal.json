@@ -64,6 +64,13 @@
       "when": 1781362000000,
       "tag": "0008_remove_subscription_trials",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781363000000,
+      "tag": "0009_platform_admin_controls",
+      "breakpoints": true
     }
   ]
 }
