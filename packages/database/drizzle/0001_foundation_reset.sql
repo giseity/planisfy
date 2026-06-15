@@ -33,6 +33,8 @@ DROP TABLE IF EXISTS "profiles" CASCADE;--> statement-breakpoint
 DROP TYPE IF EXISTS "account_lifecycle_status" CASCADE;--> statement-breakpoint
 DROP TYPE IF EXISTS "account_type" CASCADE;--> statement-breakpoint
 DROP TYPE IF EXISTS "billing_provider" CASCADE;--> statement-breakpoint
+DROP TYPE IF EXISTS "billing_transaction_status" CASCADE;--> statement-breakpoint
+DROP TYPE IF EXISTS "billing_transaction_type" CASCADE;--> statement-breakpoint
 DROP TYPE IF EXISTS "dataset_status" CASCADE;--> statement-breakpoint
 DROP TYPE IF EXISTS "event_status" CASCADE;--> statement-breakpoint
 DROP TYPE IF EXISTS "processing_job_status" CASCADE;--> statement-breakpoint
@@ -59,7 +61,9 @@ CREATE TYPE "tile_artifact_format" AS ENUM('PMTILES', 'MBTILES', 'DIRECTORY', 'E
 CREATE TYPE "processing_job_status" AS ENUM('PENDING', 'PROCESSING', 'SUCCEEDED', 'FAILED', 'CANCELED');--> statement-breakpoint
 CREATE TYPE "event_status" AS ENUM('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'ARCHIVED');--> statement-breakpoint
 CREATE TYPE "billing_provider" AS ENUM('DODO');--> statement-breakpoint
-CREATE TYPE "subscription_status" AS ENUM('ACTIVE', 'PAST_DUE', 'CANCELED', 'TRIALING', 'INACTIVE');--> statement-breakpoint
+CREATE TYPE "billing_transaction_type" AS ENUM('SUBSCRIPTION');--> statement-breakpoint
+CREATE TYPE "billing_transaction_status" AS ENUM('CHECKOUT_CREATED', 'PENDING', 'PAID', 'FAILED', 'CANCELED', 'REFUNDED', 'UNKNOWN');--> statement-breakpoint
+CREATE TYPE "subscription_status" AS ENUM('ACTIVE', 'PAST_DUE', 'CANCELED', 'INACTIVE');--> statement-breakpoint
 
 CREATE TABLE "accounts" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -442,14 +446,23 @@ CREATE TABLE "subscriptions" (
 CREATE TABLE "billing_transactions" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "account_id" uuid NOT NULL REFERENCES "accounts"("id") ON DELETE cascade,
+  "initiated_by_account_id" uuid REFERENCES "accounts"("id") ON DELETE set null,
   "provider" "billing_provider" DEFAULT 'DODO' NOT NULL,
-  "status" varchar(64) NOT NULL,
+  "type" "billing_transaction_type" DEFAULT 'SUBSCRIPTION' NOT NULL,
+  "status" "billing_transaction_status" DEFAULT 'CHECKOUT_CREATED' NOT NULL,
   "provider_checkout_id" text,
   "provider_order_id" text,
   "provider_customer_id" text,
+  "provider_customer_external_id" text,
+  "provider_product_id" text NOT NULL,
+  "product_key" text NOT NULL,
+  "product_label" text NOT NULL,
   "amount_cents" integer,
   "currency" varchar(8),
   "metadata" jsonb,
+  "last_webhook_id" text,
+  "last_webhook_type" text,
+  "last_webhook_at" timestamp with time zone,
   "paid_at" timestamp with time zone,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL

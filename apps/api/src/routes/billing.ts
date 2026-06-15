@@ -210,6 +210,10 @@ billingWebhookRoute.post("/webhooks/dodo", async (c) => {
 
   const result = await applyDodoWebhookEvent(
     payload as Record<string, unknown>,
+    {
+      webhookId: c.req.header("webhook-id"),
+      webhookTimestamp: c.req.header("webhook-timestamp"),
+    },
   );
   return c.json({ data: result });
 });

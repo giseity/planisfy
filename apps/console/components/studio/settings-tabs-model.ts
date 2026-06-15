@@ -20,7 +20,6 @@ export interface BillingInfo {
     | "configured"
     | "checkout_unavailable"
     | "active_subscription"
-    | "trialing"
     | "past_due"
     | "canceled"
     | "free_plan";
@@ -228,7 +227,7 @@ export function billingStatusLabel(status: BillingInfo["billingStatus"]) {
 }
 
 export function billingStatusVariant(status: BillingInfo["billingStatus"]) {
-  if (status === "active_subscription" || status === "trialing") {
+  if (status === "active_subscription") {
     return "success";
   }
   if (status === "checkout_unavailable" || status === "past_due") {

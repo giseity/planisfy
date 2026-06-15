@@ -1,6 +1,5 @@
 import {
   billingCustomers,
-  billingTransactions,
   db,
   plans,
   accounts,
@@ -15,16 +14,22 @@ import {
 } from "@planisfy/types";
 import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { env } from "../env";
+import { recordDodoBillingTransaction } from "./billing-transactions";
+import {
+  isCheckoutPlan,
+  lookupSubscriptionProduct,
+  resolveSubscriptionProduct,
+  type BillablePlanSlug,
+  type SubscriptionProduct,
+} from "./subscription-products";
 
 export { PLANS };
 export type { PlanLimits, PlanSlug };
 
-type BillablePlanSlug = Exclude<PlanSlug, "free">;
 export type AccountBillingStatus =
   | "configured"
   | "checkout_unavailable"
   | "active_subscription"
-  | "trialing"
   | "past_due"
   | "canceled"
   | "free_plan";
@@ -60,9 +65,15 @@ export interface CheckoutSession {
 interface DodoWebhookPayload {
   type?: string;
   event_type?: string;
+  timestamp?: string;
   data?: Record<string, unknown>;
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+}
+
+export interface DodoWebhookContext {
+  webhookId?: string | null;
+  webhookTimestamp?: string | null;
 }
 
 export function serializePlanLimits(limits: PlanLimits): SerializedPlanLimits {
@@ -84,7 +95,10 @@ export function isBillingConfigured(): boolean {
 }
 
 export function isCheckoutConfiguredForPlan(planId: PlanSlug): boolean {
-  return planId !== "free" && Boolean(env.DODO_PAYMENTS_API_KEY && getDodoProductId(planId));
+  return (
+    isCheckoutPlan(planId) &&
+    Boolean(env.DODO_PAYMENTS_API_KEY && resolveSubscriptionProduct(planId))
+  );
 }
 
 export async function ensureBillingPlans() {
@@ -150,10 +164,7 @@ export async function getAccountPlan(accountId: string): Promise<PlanSlug> {
     .where(
       and(
         eq(subscriptions.accountId, accountId),
-        or(
-          eq(subscriptions.status, "ACTIVE"),
-          eq(subscriptions.status, "TRIALING"),
-        ),
+        eq(subscriptions.status, "ACTIVE"),
         or(
           isNull(subscriptions.currentPeriodEnd),
           gt(subscriptions.currentPeriodEnd, new Date()),
@@ -184,7 +195,6 @@ export async function getAccountBillingStatus(
   }
 
   if (subscription.status === "ACTIVE") return "active_subscription";
-  if (subscription.status === "TRIALING") return "trialing";
   if (subscription.status === "PAST_DUE") return "past_due";
   if (subscription.status === "CANCELED") return "canceled";
   return isBillingConfigured() ? "configured" : "checkout_unavailable";
@@ -210,8 +220,8 @@ export async function createCheckoutSession(params: {
   accountId: string;
   planId: BillablePlanSlug;
 }): Promise<CheckoutSession | null> {
-  const productId = getDodoProductId(params.planId);
-  if (!env.DODO_PAYMENTS_API_KEY || !productId) return null;
+  const product = resolveSubscriptionProduct(params.planId);
+  if (!env.DODO_PAYMENTS_API_KEY || !product) return null;
 
   await ensureBillingPlans();
 
@@ -235,7 +245,7 @@ export async function createCheckoutSession(params: {
       email: user.email,
       name: user.name || user.displayName || user.email,
     },
-    product_cart: [{ product_id: productId, quantity: 1 }],
+    product_cart: [{ product_id: product.dodoProductId, quantity: 1 }],
     return_url: `${env.NEXT_PUBLIC_CONSOLE_URL}/billing?billing=success`,
     cancel_url: `${env.NEXT_PUBLIC_CONSOLE_URL}/billing?billing=cancelled`,
     metadata: {
@@ -257,14 +267,21 @@ export async function createCheckoutSession(params: {
 
   const checkoutId = data.session_id ?? data.sessionId ?? data.id ?? null;
 
-  await db.insert(billingTransactions).values({
+  await recordDodoBillingTransaction({
     accountId: params.accountId,
-    provider: "DODO",
+    initiatedByAccountId: params.userId,
+    type: "SUBSCRIPTION",
     status: "CHECKOUT_CREATED",
     providerCheckoutId: checkoutId,
+    providerOrderId: null,
+    providerCustomerId: null,
+    providerCustomerExternalId: params.accountId,
+    providerProductId: product.dodoProductId,
+    productKey: product.productKey,
+    productLabel: product.productLabel,
     metadata: {
       planId: params.planId,
-      productId,
+      productId: product.dodoProductId,
       userId: params.userId,
     },
   });
@@ -290,7 +307,10 @@ export async function reportUsage(): Promise<void> {
   // the source of truth for Planisfy quotas.
 }
 
-export async function applyDodoWebhookEvent(payload: DodoWebhookPayload) {
+export async function applyDodoWebhookEvent(
+  payload: DodoWebhookPayload,
+  context: DodoWebhookContext = {},
+) {
   await ensureBillingPlans();
 
   const eventType = payload.type ?? payload.event_type ?? "unknown";
@@ -300,10 +320,10 @@ export async function applyDodoWebhookEvent(payload: DodoWebhookPayload) {
       ? payload.payload
       : {};
   const metadata = readMetadata(payload, data);
-  const accountId = stringValue(metadata.accountId);
-  const planId = readPlanId(metadata, data);
+  const accountId = readAccountId(metadata, data);
+  const product = readSubscriptionProduct(metadata, data);
 
-  if (!accountId || !planId) {
+  if (!accountId || !product) {
     return { applied: false, reason: "missing-account-or-plan", eventType };
   }
 
@@ -314,12 +334,6 @@ export async function applyDodoWebhookEvent(payload: DodoWebhookPayload) {
     "customer.customerId",
     "customer.id",
   ]);
-  const subscriptionId = readFirstString(data, [
-    "subscription_id",
-    "subscriptionId",
-    "subscription.id",
-    "id",
-  ]);
   const checkoutId = readFirstString(data, [
     "checkout_id",
     "checkoutId",
@@ -328,61 +342,72 @@ export async function applyDodoWebhookEvent(payload: DodoWebhookPayload) {
     "session_id",
   ]);
   const orderId = readFirstString(data, ["order_id", "orderId", "payment_id"]);
-  const status = mapSubscriptionStatus(eventType, stringValue(data.status));
+
+  if (customerId) {
+    await upsertDodoCustomerMapping({
+      accountId,
+      providerCustomerId: customerId,
+      email: stringValue(readFirst(data, ["customer.email", "email"])),
+      metadata: data,
+    });
+  }
+
+  if (isPaymentEvent(eventType)) {
+    const status = normalizeDodoBillingTransactionStatus(
+      eventType,
+      stringValue(data.status),
+    );
+    await recordDodoBillingTransaction({
+      accountId,
+      type: "SUBSCRIPTION",
+      status,
+      providerCheckoutId: checkoutId,
+      providerOrderId: orderId,
+      providerCustomerId: customerId,
+      providerCustomerExternalId: accountId,
+      providerProductId: product.dodoProductId,
+      productKey: product.productKey,
+      productLabel: product.productLabel,
+      amountCents: getNumber(data, "total_amount", "totalAmount", "amount"),
+      currency: stringValue(readFirst(data, ["currency"])),
+      metadata: data,
+      webhookId: context.webhookId ?? null,
+      webhookType: eventType,
+      webhookAt: parseWebhookTimestamp(
+        context.webhookTimestamp ?? payload.timestamp,
+      ),
+    });
+
+    return {
+      applied: true,
+      eventType,
+      accountId,
+      planId: product.planId,
+      status,
+      subscriptionId: null,
+    };
+  }
+
+  if (!isSubscriptionEvent(eventType)) {
+    return { applied: false, reason: "ignored-event-type", eventType };
+  }
+
+  const subscriptionId = readFirstString(data, [
+    "subscription_id",
+    "subscriptionId",
+    "subscription.id",
+    "id",
+  ]);
+  const status = normalizeDodoSubscriptionStatus(
+    eventType,
+    stringValue(data.status),
+  );
   const periodStart = dateValue(
     readFirst(data, ["current_period_start", "currentPeriodStart"]),
   );
   const periodEnd = dateValue(
     readFirst(data, ["current_period_end", "currentPeriodEnd"]),
   );
-
-  if (customerId) {
-    await db
-      .insert(billingCustomers)
-      .values({
-        accountId,
-        provider: "DODO",
-        providerCustomerId: customerId,
-        email: stringValue(readFirst(data, ["customer.email", "email"])),
-        metadata: data,
-      })
-      .onConflictDoUpdate({
-        target: [billingCustomers.provider, billingCustomers.providerCustomerId],
-        set: {
-          accountId,
-          email: stringValue(readFirst(data, ["customer.email", "email"])),
-          metadata: data,
-        },
-      });
-  }
-
-  if (checkoutId) {
-    await db
-      .insert(billingTransactions)
-      .values({
-        accountId,
-        provider: "DODO",
-        status: eventType,
-        providerCheckoutId: checkoutId,
-        providerOrderId: orderId,
-        providerCustomerId: customerId,
-        metadata: data,
-        paidAt: status === "ACTIVE" ? new Date() : null,
-      })
-      .onConflictDoUpdate({
-        target: [
-          billingTransactions.provider,
-          billingTransactions.providerCheckoutId,
-        ],
-        set: {
-          status: eventType,
-          providerOrderId: orderId,
-          providerCustomerId: customerId,
-          metadata: data,
-          paidAt: status === "ACTIVE" ? new Date() : null,
-        },
-      });
-  }
 
   if (subscriptionId) {
     const [existing] = await db
@@ -396,7 +421,7 @@ export async function applyDodoWebhookEvent(payload: DodoWebhookPayload) {
         .update(subscriptions)
         .set({
           accountId,
-          planId,
+          planId: product.planId,
           status,
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
@@ -405,7 +430,7 @@ export async function applyDodoWebhookEvent(payload: DodoWebhookPayload) {
     } else {
       await db.insert(subscriptions).values({
         accountId,
-        planId,
+        planId: product.planId,
         status,
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
@@ -418,15 +443,10 @@ export async function applyDodoWebhookEvent(payload: DodoWebhookPayload) {
     applied: true,
     eventType,
     accountId,
-    planId,
+    planId: product.planId,
     status,
     subscriptionId,
   };
-}
-
-function getDodoProductId(planId: BillablePlanSlug): string | undefined {
-  if (planId === "pro") return env.DODO_PRO_PRODUCT_ID;
-  if (planId === "enterprise") return env.DODO_ENTERPRISE_PRODUCT_ID;
 }
 
 function getDodoApiUrl(): string {
@@ -493,13 +513,55 @@ function numericLimit(value: unknown, fallback: number): number {
   return fallback;
 }
 
-function readPlanId(
+async function upsertDodoCustomerMapping(input: {
+  accountId: string;
+  providerCustomerId: string;
+  email?: string | null;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  await db
+    .insert(billingCustomers)
+    .values({
+      accountId: input.accountId,
+      provider: "DODO",
+      providerCustomerId: input.providerCustomerId,
+      email: input.email ?? null,
+      metadata: input.metadata ?? null,
+    })
+    .onConflictDoUpdate({
+      target: [billingCustomers.accountId, billingCustomers.provider],
+      set: {
+        providerCustomerId: input.providerCustomerId,
+        email: input.email ?? null,
+        metadata: input.metadata ?? null,
+      },
+    });
+}
+
+function readAccountId(
   metadata: Record<string, unknown>,
   data: Record<string, unknown>,
-): BillablePlanSlug | null {
+): string | null {
+  const direct = stringValue(metadata.accountId) ?? stringValue(metadata.account_id);
+  if (direct) return direct;
+
+  const customer = readFirst(data, ["customer"]);
+  const customerMetadata =
+    isRecord(customer) && isRecord(customer.metadata) ? customer.metadata : {};
+  return (
+    stringValue(customerMetadata.accountId) ??
+    stringValue(customerMetadata.account_id)
+  );
+}
+
+function readSubscriptionProduct(
+  metadata: Record<string, unknown>,
+  data: Record<string, unknown>,
+): SubscriptionProduct | null {
   const metadataPlan = stringValue(metadata.planId);
   if (metadataPlan === "pro" || metadataPlan === "enterprise") {
-    return metadataPlan;
+    const product = resolveSubscriptionProduct(metadataPlan);
+    if (product) return product;
   }
 
   const productId = readFirstString(data, [
@@ -507,15 +569,56 @@ function readPlanId(
     "productId",
     "product.product_id",
     "product.id",
+    "product_cart.0.product_id",
+    "productCart.0.productId",
   ]);
-  const matching = Object.values(PLANS).find(
-    (plan: PlanDefinition) =>
-      plan.id !== "free" && getDodoProductId(plan.id) === productId,
-  );
+  return productId ? lookupSubscriptionProduct(productId) : null;
+}
 
-  return matching?.id === "pro" || matching?.id === "enterprise"
-    ? matching.id
-    : null;
+function isPaymentEvent(eventType: string): boolean {
+  return [
+    "payment.processing",
+    "payment.succeeded",
+    "payment.failed",
+    "payment.cancelled",
+    "payment.canceled",
+    "payment.refunded",
+  ].includes(eventType);
+}
+
+function isSubscriptionEvent(eventType: string): boolean {
+  return [
+    "subscription.active",
+    "subscription.updated",
+    "subscription.renewed",
+    "subscription.plan_changed",
+    "subscription.on_hold",
+    "subscription.failed",
+    "subscription.cancelled",
+    "subscription.canceled",
+    "subscription.expired",
+  ].includes(eventType);
+}
+
+export function normalizeDodoBillingTransactionStatus(
+  eventType: string,
+  rawStatus: string | null,
+): "PENDING" | "PAID" | "FAILED" | "CANCELED" | "REFUNDED" | "UNKNOWN" {
+  if (eventType === "payment.succeeded") return "PAID";
+  if (eventType === "payment.processing") return "PENDING";
+  if (eventType === "payment.failed") return "FAILED";
+  if (eventType === "payment.cancelled" || eventType === "payment.canceled") {
+    return "CANCELED";
+  }
+  if (eventType === "payment.refunded") return "REFUNDED";
+
+  const status = rawStatus?.toLowerCase();
+  if (status === "succeeded" || status === "paid") return "PAID";
+  if (status === "processing" || status === "pending") return "PENDING";
+  if (status === "failed") return "FAILED";
+  if (status === "cancelled" || status === "canceled") return "CANCELED";
+  if (status === "refunded") return "REFUNDED";
+  return "UNKNOWN";
 }
 
 function readMetadata(
@@ -526,12 +629,12 @@ function readMetadata(
   return isRecord(direct) ? direct : {};
 }
 
-function mapSubscriptionStatus(
+export function normalizeDodoSubscriptionStatus(
   eventType: string,
   rawStatus: string | null,
-): "ACTIVE" | "PAST_DUE" | "CANCELED" | "TRIALING" | "INACTIVE" {
+): "ACTIVE" | "PAST_DUE" | "CANCELED" | "INACTIVE" {
   const status = `${eventType} ${rawStatus ?? ""}`.toLowerCase();
-  if (status.includes("trial")) return "TRIALING";
+  if (status.includes("trial")) return "INACTIVE";
   if (status.includes("cancel") || status.includes("expired")) {
     return "CANCELED";
   }
@@ -568,8 +671,14 @@ function readFirst(
 function readPath(data: Record<string, unknown>, path: string): unknown {
   let cursor: unknown = data;
   for (const segment of path.split(".")) {
-    if (!isRecord(cursor)) return undefined;
-    cursor = cursor[segment];
+    if (Array.isArray(cursor)) {
+      const index = Number(segment);
+      if (!Number.isInteger(index)) return undefined;
+      cursor = cursor[index];
+    } else {
+      if (!isRecord(cursor)) return undefined;
+      cursor = cursor[segment];
+    }
   }
   return cursor;
 }
@@ -578,9 +687,27 @@ function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+function getNumber(data: Record<string, unknown>, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const value = readPath(data, key);
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return null;
+}
+
 function dateValue(value: unknown): Date | null {
   if (typeof value !== "string" && typeof value !== "number") return null;
   const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseWebhookTimestamp(timestamp: string | null | undefined): Date | null {
+  if (!timestamp) return null;
+  const date = new Date(timestamp);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 

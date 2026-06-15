@@ -141,11 +141,25 @@ export const customDomainStatusEnum = pgEnum("custom_domain_status", [
   "failed",
 ]);
 export const billingProviderEnum = pgEnum("billing_provider", ["DODO"]);
+export const billingTransactionTypeEnum = pgEnum("billing_transaction_type", [
+  "SUBSCRIPTION",
+]);
+export const billingTransactionStatusEnum = pgEnum(
+  "billing_transaction_status",
+  [
+    "CHECKOUT_CREATED",
+    "PENDING",
+    "PAID",
+    "FAILED",
+    "CANCELED",
+    "REFUNDED",
+    "UNKNOWN",
+  ],
+);
 export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "ACTIVE",
   "PAST_DUE",
   "CANCELED",
-  "TRIALING",
   "INACTIVE",
 ]);
 
@@ -1417,14 +1431,28 @@ export const billingTransactions = pgTable(
     accountId: uuid("account_id")
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
+    initiatedByAccountId: uuid("initiated_by_account_id").references(
+      () => accounts.id,
+      { onDelete: "set null" },
+    ),
     provider: billingProviderEnum("provider").notNull().default("DODO"),
-    status: varchar("status", { length: 64 }).notNull(),
+    type: billingTransactionTypeEnum("type").notNull().default("SUBSCRIPTION"),
+    status: billingTransactionStatusEnum("status")
+      .notNull()
+      .default("CHECKOUT_CREATED"),
     providerCheckoutId: text("provider_checkout_id"),
     providerOrderId: text("provider_order_id"),
     providerCustomerId: text("provider_customer_id"),
+    providerCustomerExternalId: text("provider_customer_external_id"),
+    providerProductId: text("provider_product_id").notNull(),
+    productKey: text("product_key").notNull(),
+    productLabel: text("product_label").notNull(),
     amountCents: integer("amount_cents"),
     currency: varchar("currency", { length: 8 }),
     metadata: jsonb("metadata"),
+    lastWebhookId: text("last_webhook_id"),
+    lastWebhookType: text("last_webhook_type"),
+    lastWebhookAt: timestamp("last_webhook_at", { withTimezone: true }),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
