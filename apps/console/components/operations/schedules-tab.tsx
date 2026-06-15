@@ -108,7 +108,7 @@ export function SchedulesTab({
   async function runSchedule(id: string) {
     await runAction(
       () => api.runScheduledOperation(id),
-      "Schedule run recorded",
+      "Schedule run queued",
       onChanged,
     );
   }
@@ -127,8 +127,8 @@ export function SchedulesTab({
         <CardHeader>
           <CardTitle>Create Schedule</CardTitle>
           <CardDescription>
-            Use cron syntax for recurring imports, rebuilds, or command
-            workflows.
+            Store recurring import, rebuild, or command requests. Runs enqueue
+            operational events for workers to process.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

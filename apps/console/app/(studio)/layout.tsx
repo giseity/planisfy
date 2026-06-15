@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@planisfy/ui/lib/utils"
 import { ContextSwitcher } from "@/components/shell/context-switcher"
+import { CommandPalette } from "@/components/shell/command-palette"
 import { ThemeToggle } from "@/components/shell/theme-toggle"
 import { EmailVerificationBanner } from "@/components/shell/email-verification-banner"
 import {
@@ -57,6 +58,7 @@ export default function StudioLayout({
             LinkComponent={Link}
           />
           <div className="ml-auto flex items-center gap-2">
+            <CommandPalette />
             <ContextSwitcher />
             <ThemeToggle />
           </div>

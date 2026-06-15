@@ -66,9 +66,9 @@ export const config = {
     "/operations/:path*",
     "/platform/:path*",
     "/organization/:path*",
+    "/team/:path*",
     "/settings/:path*",
     "/billing/:path*",
-    "/team/:path*",
     "/integration/:path*",
   ],
 };

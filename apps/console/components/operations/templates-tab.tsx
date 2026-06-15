@@ -61,8 +61,8 @@ export function TemplatesTab({
         <CardHeader>
           <CardTitle>Create Template</CardTitle>
           <CardDescription>
-            Store reusable execution targets, schedules, and import workflow
-            payloads.
+            Store reusable JSON payloads for execution targets, schedules, and
+            import workflows. Applying a template is not automated yet.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

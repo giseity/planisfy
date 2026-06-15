@@ -1,127 +1,183 @@
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  RefreshCw,
+  XCircle,
+} from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@planisfy/ui/components/alert"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Button } from "@planisfy/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
-import { Input } from "@planisfy/ui/components/input"
 import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  CheckCircle2,
-  Database,
-  HardDrive,
-  Mail,
-  Plug,
-  Server,
-  Shield,
-} from "lucide-react"
-import type { ReactNode } from "react"
-
-const steps = [
-  { label: "Database", status: "complete", icon: Database },
-  { label: "Services", status: "complete", icon: Server },
-  { label: "Storage", status: "current", icon: HardDrive },
-  { label: "Auth", status: "upcoming", icon: Shield },
-  { label: "Email", status: "upcoming", icon: Mail },
-  { label: "Review", status: "upcoming", icon: CheckCircle2 },
-]
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@planisfy/ui/components/card"
+import { LoadingState } from "@planisfy/ui/components/loading-state"
+import { api, type PlatformPreflight } from "@/lib/api"
 
 export default function OnboardingPage() {
+  const [preflight, setPreflight] = useState<PlatformPreflight | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    try {
+      const res = await api.getPlatformPreflight()
+      setPreflight(res.data)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load setup")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  const groups = useMemo(
+    () => preflight?.groups ?? [],
+    [preflight?.groups],
+  )
+
+  if (loading && !preflight) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4">
+        <LoadingState label="Checking platform setup..." />
+      </main>
+    )
+  }
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-3xl space-y-7">
-        <div className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-xl font-bold text-primary-foreground">
-            P
+    <main className="min-h-screen bg-background px-4 py-10">
+      <div className="mx-auto max-w-5xl space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Set up Planisfy
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Live readiness checks for this {preflight?.deploymentMode ?? "active"} deployment.
+            </p>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Setup your Planisfy instance</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Configure the core services for your self-hosted deployment.
-          </p>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-6">
-          {steps.map((step, index) => (
-            <div key={step.label} className="flex flex-col items-center gap-2 text-center">
-              <div
-                className={
-                  step.status === "complete"
-                    ? "flex h-9 w-9 items-center justify-center rounded-full bg-success text-success-foreground"
-                    : step.status === "current"
-                      ? "flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground"
-                      : "flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground"
-                }
-              >
-                {step.status === "complete" ? <Check className="h-4 w-4" /> : index + 1}
-              </div>
-              <span className="text-xs text-muted-foreground">{step.label}</span>
-            </div>
-          ))}
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-3 text-base">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                <HardDrive className="h-5 w-5 text-muted-foreground" />
-              </span>
-              Object Storage
-              <Badge variant="secondary">Step 3 of 6</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field label="Provider">
-              <Input readOnly value="Cloudflare R2" />
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Account ID">
-                <Input placeholder="Your R2 account ID" />
-              </Field>
-              <Field label="Tiles bucket">
-                <Input defaultValue="planisfy-tiles" />
-              </Field>
-            </div>
-            <Field label="Access Key ID">
-              <Input placeholder="R2 access key" />
-            </Field>
-            <Field label="Secret Access Key">
-              <Input type="password" placeholder="R2 secret access key" />
-            </Field>
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <Button variant="outline">
-                <Plug className="h-4 w-4" />
-                Test connection
-              </Button>
-              <span className="flex items-center gap-1 text-sm text-success">
-                <CheckCircle2 className="h-4 w-4" />
-                Connection successful
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-between gap-3">
-          <Button variant="outline">
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
           <div className="flex gap-2">
-            <Button variant="ghost">Skip for now</Button>
-            <Button>
-              Continue
-              <ArrowRight className="h-4 w-4" />
+            <Button variant="outline" onClick={load} disabled={loading}>
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            <Button asChild>
+              <Link href="/">
+                Open console
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </Button>
           </div>
         </div>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Setup checks unavailable</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {preflight && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-4">
+              <Summary label="Passing" value={preflight.summary.pass} />
+              <Summary label="Warnings" value={preflight.summary.warn} />
+              <Summary label="Failing" value={preflight.summary.fail} />
+              <Summary label="Blocking" value={preflight.summary.blocking} />
+            </div>
+
+            {preflight.summary.blocking > 0 ? (
+              <Alert variant="destructive">
+                <XCircle className="h-4 w-4" />
+                <AlertTitle>Required setup is incomplete</AlertTitle>
+                <AlertDescription>
+                  Resolve blocking checks before treating this deployment as
+                  production ready.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertTitle>Required checks passed</AlertTitle>
+                <AlertDescription>
+                  Optional and recommended checks may still improve production
+                  readiness.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              {groups.map((group) => (
+                <Card key={group.name}>
+                  <CardHeader>
+                    <CardTitle className="text-base">{group.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {group.checks.map((check) => (
+                      <div key={check.id} className="flex gap-3 rounded-md border p-3">
+                        <StatusIcon status={check.status} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium">{check.label}</p>
+                            <Badge variant={statusVariant(check.status)}>
+                              {check.status}
+                            </Badge>
+                            <Badge variant="outline">{check.severity}</Badge>
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {check.message}
+                          </p>
+                          {check.action && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {check.action}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </main>
   )
 }
 
-function Field({ children, label }: { children: ReactNode; label: string }) {
+function Summary({ label, value }: { label: string; value: number }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-sm font-medium">{label}</span>
-      {children}
-    </label>
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="mt-1 text-2xl font-semibold">{value}</p>
+      </CardContent>
+    </Card>
   )
+}
+
+function StatusIcon({ status }: { status: "pass" | "warn" | "fail" }) {
+  if (status === "pass") return <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />
+  if (status === "warn") return <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />
+  return <XCircle className="mt-0.5 h-4 w-4 text-destructive" />
+}
+
+function statusVariant(status: "pass" | "warn" | "fail") {
+  if (status === "pass") return "success"
+  if (status === "warn") return "warning"
+  return "destructive"
 }

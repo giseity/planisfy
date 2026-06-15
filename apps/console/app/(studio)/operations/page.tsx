@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, ClipboardList, Loader2, XCircle } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
+import { useState } from "react"
 import { Badge } from "@planisfy/ui/components/badge"
 import { Button } from "@planisfy/ui/components/button"
 import {
@@ -22,15 +23,35 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table"
 import { useOperations } from "@/components/operations/provider"
+import { api } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function OperationsPage() {
-  const { overview, openTimeline } = useOperations()
+  const { overview, openTimeline, load } = useOperations()
+  const [controllingJobId, setControllingJobId] = useState<string | null>(null)
   const jobs = overview.recentJobs
   const activeJobs = jobs.filter((job) => isActiveJob(job.status))
   const completed24h = jobs.filter((job) => job.status === "SUCCEEDED").length
   const failed24h = jobs.filter((job) => job.status === "FAILED").length
   const activeJob = activeJobs[0] ?? jobs.find((job) => job.progress > 0 && job.progress < 100)
   const failedJob = jobs.find((job) => job.status === "FAILED")
+
+  async function runJobAction(
+    jobId: string,
+    action: () => Promise<unknown>,
+    message: string,
+  ) {
+    setControllingJobId(jobId)
+    try {
+      await action()
+      toast.success(message)
+      load({ silent: true })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Job action failed")
+    } finally {
+      setControllingJobId(null)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -60,7 +81,18 @@ export default function OperationsPage() {
                 <Button variant="ghost" size="sm" onClick={() => openTimeline(activeJob.id)}>
                   View logs
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={controllingJobId === activeJob.id}
+                  onClick={() =>
+                    runJobAction(
+                      activeJob.id,
+                      () => api.cancelJob(activeJob.id),
+                      "Cancellation requested",
+                    )
+                  }
+                >
                   Cancel
                 </Button>
               </div>
@@ -135,7 +167,22 @@ export default function OperationsPage() {
           icon={<AlertTriangle className="h-4 w-4" />}
           title={`${failedJob.type} failed`}
           description={failedJob.errorMessage ?? "Inspect the job timeline for details."}
-          action={<Button variant="outline" size="xs">Retry</Button>}
+          action={
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={controllingJobId === failedJob.id}
+              onClick={() =>
+                runJobAction(
+                  failedJob.id,
+                  () => api.retryJob(failedJob.id),
+                  "Retry queued",
+                )
+              }
+            >
+              Retry
+            </Button>
+          }
         />
       )}
     </div>

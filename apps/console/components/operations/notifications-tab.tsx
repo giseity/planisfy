@@ -72,8 +72,8 @@ export function NotificationsTab({
         <CardHeader>
           <CardTitle>Add Channel</CardTitle>
           <CardDescription>
-            Webhook delivery is active; email and chat providers are stored for
-            adapter rollout.
+            Webhook tests deliver immediately; email and chat providers are
+            stored until their delivery adapters are configured.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
