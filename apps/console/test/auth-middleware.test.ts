@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 async function loadMiddleware() {
-  return import("../middleware");
+  return import("../proxy");
 }
 
 describe("Console auth middleware helpers", () => {

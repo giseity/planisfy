@@ -96,7 +96,10 @@ function managedProductionEnvIssues(value: typeof env): string[] {
   }
   if (!value.DODO_PRO_PRODUCT_ID) issues.push("DODO_PRO_PRODUCT_ID");
   if (!value.RESEND_API_KEY) issues.push("RESEND_API_KEY");
-  if (!value.BETTER_AUTH_SECRET || isPlaceholderSecret(value.BETTER_AUTH_SECRET)) {
+  if (
+    !value.BETTER_AUTH_SECRET ||
+    isPlaceholderSecret(value.BETTER_AUTH_SECRET)
+  ) {
     issues.push("BETTER_AUTH_SECRET");
   }
   if (
@@ -116,11 +119,14 @@ function managedProductionEnvIssues(value: typeof env): string[] {
   if (!value.R2_SECRET_ACCESS_KEY && !value.AWS_SECRET_ACCESS_KEY) {
     issues.push("R2_SECRET_ACCESS_KEY");
   }
-  if (!value.R2_PUBLIC_URL && !value.S3_PUBLIC_URL) issues.push("R2_PUBLIC_URL");
+  if (!value.R2_PUBLIC_URL && !value.S3_PUBLIC_URL)
+    issues.push("R2_PUBLIC_URL");
 
   return issues;
 }
 
 function isPlaceholderSecret(value: string) {
-  return /generate-a-random|change-this|changeme|secret-here/i.test(value);
+  return /generate-a-random|change-this|changeme|secret-here|local-dev-only/i.test(
+    value,
+  );
 }

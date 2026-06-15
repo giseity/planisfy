@@ -15,7 +15,10 @@ export function getSessionBaseURL(requestOrigin: string) {
   return getConsoleAuthOrigin(requestOrigin);
 }
 
-export function buildSignInRedirectURL(requestUrl: string, requestOrigin: string) {
+export function buildSignInRedirectURL(
+  requestUrl: string,
+  requestOrigin: string,
+) {
   const signInUrl = new URL("/sign-in", getConsoleAuthOrigin(requestOrigin));
   const requested = new URL(requestUrl);
   const callbackUrl = new URL(
@@ -26,7 +29,7 @@ export function buildSignInRedirectURL(requestUrl: string, requestOrigin: string
   return signInUrl;
 }
 
-export default async function authMiddleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let session: Session | null = null;
 
   try {
