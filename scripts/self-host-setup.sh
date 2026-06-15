@@ -133,6 +133,32 @@ resolve_repo_path() {
   esac
 }
 
+resolve_compose_path() {
+  local compose_dir
+  compose_dir="$(cd "$(dirname "$COMPOSE_FILE")" && pwd)"
+
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    */*)
+      local parent="${1%/*}"
+      local base="${1##*/}"
+      if [[ -d "$compose_dir/$parent" ]]; then
+        printf '%s/%s\n' "$(cd "$compose_dir/$parent" && pwd)" "$base"
+      else
+        printf '%s/%s\n' "$compose_dir" "$1"
+      fi
+      ;;
+    *) printf '%s/%s\n' "$compose_dir" "$1" ;;
+  esac
+}
+
+display_path() {
+  case "$1" in
+    "$ROOT_DIR"/*) printf '%s\n' "${1#$ROOT_DIR/}" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
 set_env_if_blank_or_default() {
   local name="$1"
   local value="$2"
@@ -231,12 +257,12 @@ fi
 load_env_file
 
 set_env_if_blank_or_default LOCAL_STORAGE_PATH "$ROOT_DIR/.storage" ".storage"
-set_env_if_blank_or_default LOCAL_STORAGE_HOST_PATH "$ROOT_DIR/.storage" ".storage" "infra/docker/data/storage"
+set_env_if_blank_or_default LOCAL_STORAGE_HOST_PATH "../../.storage" ".storage" "infra/docker/data/storage" "$ROOT_DIR/.storage"
 set_env_if_blank_or_default MARTIN_SOURCES_PATH "$ROOT_DIR/.storage/martin-sources"
-set_env_if_blank_or_default DEMO_PMTILES_PATH "$DEMO_PMTILES"
+set_env_if_blank_or_default DEMO_PMTILES_PATH "/data/pmtiles/stuttgart.pmtiles" "$DEMO_PMTILES"
 
 API_STORAGE_DIR="$(resolve_repo_path "${LOCAL_STORAGE_PATH:-.storage}")"
-LOCAL_STORAGE_MOUNT_DIR="$(resolve_repo_path "${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}")"
+LOCAL_STORAGE_MOUNT_DIR="$(resolve_compose_path "${LOCAL_STORAGE_HOST_PATH:-./data/storage}")"
 LOCAL_STORAGE_MOUNT_STYLE_DIR="$LOCAL_STORAGE_MOUNT_DIR/styles"
 LOCAL_STORAGE_MOUNT_FIXTURE_DIR="$LOCAL_STORAGE_MOUNT_DIR/fixtures"
 LOCAL_STORAGE_MOUNT_MARTIN_SOURCES_DIR="$LOCAL_STORAGE_MOUNT_DIR/martin-sources"
@@ -320,6 +346,9 @@ if [[ "$want_migrate" == true ]]; then
   fi
 fi
 
+LOCAL_STORAGE_MOUNT_DISPLAY="$(display_path "$LOCAL_STORAGE_MOUNT_DIR")"
+MARTIN_SOURCES_DISPLAY="$(display_path "$API_STORAGE_MARTIN_SOURCES_DIR")"
+
 cat <<NEXT
 
 Self-host demo prep complete.
@@ -337,10 +366,10 @@ Demo data directories:
                                    The default fixture expects stuttgart.pmtiles.
                                    Use --demo-data with DEMO_PMTILES_URL to fetch it.
   infra/docker/data/valhalla_data  Put Valhalla tiles/config data here.
-  ${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}
+  $LOCAL_STORAGE_MOUNT_DISPLAY
                                    Host local object storage mount shared by API
                                    and worker-geodata.
-  ${MARTIN_SOURCES_PATH:-${LOCAL_STORAGE_PATH:-.storage}/martin-sources}
+  $MARTIN_SOURCES_DISPLAY
                                    Published local tileset aliases for
                                    filesystem storage.
 

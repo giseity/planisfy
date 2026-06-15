@@ -42,7 +42,12 @@ The smoke script validates Compose, starts Postgres, Redis, and the API, polls
 Redis, storage, worker-geodata, Martin, and Valhalla entries, optionally
 reports a reachable Martin catalog, runs the default-map smoke when
 `infra/docker/data/pmtiles/stuttgart.pmtiles` is present, and then cleans up
-containers and volumes.
+containers and volumes. It reuses existing local images by default; force fresh
+image builds with:
+
+```bash
+SMOKE_FORCE_REBUILD=true scripts/docker-compose-smoke.sh
+```
 
 When the self-host stack is already running with Martin and the demo PMTiles
 fixture, run the default-map smoke directly:
@@ -53,6 +58,18 @@ scripts/self-host-default-map-smoke.mjs
 
 It verifies the PMTiles magic header, Martin TileJSON vector layer metadata,
 and a non-empty vector tile around Stuttgart.
+
+For browser-backed proof that MapLibre can render the fixture style from the
+same Martin TileJSON, run:
+
+```bash
+scripts/self-host-browser-map-smoke.mjs
+```
+
+The script reuses the `static-renderer` package's Playwright and MapLibre
+dependencies, waits for MapLibre `idle`, writes a screenshot to
+`dogfood-output/screenshots/default-map-browser-smoke.png`, and fails if the
+browser reports errors or the screenshot is unexpectedly small.
 
 For full local service smoke after the stack is already running, verify the
 graph-backed and browser-backed services explicitly:
@@ -89,5 +106,5 @@ The trust gate now includes:
 - Docker image builds for API, Console, Admin, Docs, Marketing,
   worker-geodata, and self-host supervisor
 - non-binary Compose smoke
-- optional/manual PMTiles, Pelias, Valhalla routing, and browser/static-renderer
+- optional/manual PMTiles, Pelias, Valhalla routing, browser MapLibre rendering, and static-renderer
   smoke

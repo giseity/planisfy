@@ -4,9 +4,18 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/infra/docker/docker-compose.yml"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
+SMOKE_ENV_FILE=""
 
 compose() {
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+  docker compose --env-file "${SMOKE_ENV_FILE:-$ENV_FILE}" -f "$COMPOSE_FILE" "$@"
+}
+
+compose_up() {
+  local args=(-d)
+  case "${SMOKE_FORCE_REBUILD:-false}" in
+    1 | true | TRUE | yes | YES) args+=(--build --force-recreate) ;;
+  esac
+  compose up "${args[@]}" "$@"
 }
 
 require_cmd() {
@@ -17,7 +26,12 @@ require_cmd() {
 }
 
 cleanup() {
-  compose down -v --remove-orphans
+  if [[ -n "$SMOKE_ENV_FILE" ]]; then
+    compose down -v --remove-orphans
+  fi
+  if [[ -n "$SMOKE_ENV_FILE" && -f "$SMOKE_ENV_FILE" ]]; then
+    rm -f "$SMOKE_ENV_FILE"
+  fi
 }
 
 require_cmd docker
@@ -28,8 +42,22 @@ trap cleanup EXIT
 
 "$ROOT_DIR/scripts/self-host-setup.sh"
 
+SMOKE_ENV_FILE="$(mktemp)"
+if [[ -f "$ENV_FILE" ]]; then
+  grep -Ev '^(DEPLOYMENT_MODE|STORAGE_PROVIDER|LOCAL_STORAGE_HOST_PATH|DEMO_PMTILES_PATH)=' "$ENV_FILE" >"$SMOKE_ENV_FILE" || true
+fi
+{
+  echo "DEPLOYMENT_MODE=${SMOKE_DEPLOYMENT_MODE:-self_host}"
+  echo "STORAGE_PROVIDER=${SMOKE_STORAGE_PROVIDER:-local}"
+  echo "LOCAL_STORAGE_HOST_PATH=${SMOKE_LOCAL_STORAGE_HOST_PATH:-../../.storage}"
+  echo "DEMO_PMTILES_PATH=${SMOKE_DEMO_PMTILES_PATH:-/data/pmtiles/stuttgart.pmtiles}"
+} >>"$SMOKE_ENV_FILE"
+
 echo "Validating Docker Compose configuration"
 compose config >/dev/null
+
+echo "Preparing clean smoke-test stack"
+compose down -v --remove-orphans >/dev/null 2>&1 || true
 
 echo "Checking seeded style fixtures"
 for style in \
@@ -56,7 +84,7 @@ do
 done
 
 echo "Starting smoke-test services"
-compose up -d postgres redis api
+compose_up postgres redis api
 
 echo "Waiting for API health"
 for attempt in {1..60}; do
@@ -125,7 +153,7 @@ fi
 
 if [[ -f "$ROOT_DIR/infra/docker/data/pmtiles/stuttgart.pmtiles" ]]; then
   echo "Starting Martin for optional fixture TileJSON check"
-  compose up -d martin
+  compose_up martin
   if curl -fsS http://localhost:3005/planisfy.basic >/dev/null 2>&1; then
     echo "Fixture TileJSON is reachable"
   else

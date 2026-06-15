@@ -63,7 +63,7 @@ fixture-data-missing state until compatible PMTiles are supplied.
 To fetch a known fixture as part of setup, configure `.env`:
 
 ```bash
-DEMO_PMTILES_PATH="infra/docker/data/pmtiles/stuttgart.pmtiles"
+DEMO_PMTILES_PATH="/data/pmtiles/stuttgart.pmtiles"
 DEMO_PMTILES_URL="https://example.com/path/to/stuttgart.pmtiles"
 DEMO_PMTILES_SHA256="optional-lowercase-sha256"
 ```
@@ -89,7 +89,12 @@ API, waits for `/health`, checks the public `/setup/preflight` product-loop
 prerequisites, checks `/health/detailed` for core runtime dependency entries,
 optionally reports Martin catalog reachability, runs the default-map smoke when
 `infra/docker/data/pmtiles/stuttgart.pmtiles` is present, and removes the
-smoke-test containers and volumes on exit.
+smoke-test containers and volumes on exit. It reuses existing local images by
+default; force fresh image builds when needed with:
+
+```bash
+SMOKE_FORCE_REBUILD=true scripts/docker-compose-smoke.sh
+```
 
 To check the mounted default map source against an already-running Martin
 service without tearing down Compose, run:
@@ -100,6 +105,15 @@ scripts/self-host-default-map-smoke.mjs
 
 The smoke verifies the PMTiles magic header, Martin TileJSON vector layer
 metadata, and a real non-empty vector tile around Stuttgart.
+
+To browser-render the same fixture style with MapLibre, run:
+
+```bash
+scripts/self-host-browser-map-smoke.mjs
+```
+
+The browser smoke writes an ignored screenshot under `dogfood-output/` and
+fails if MapLibre emits an error before reaching `idle`.
 
 ## Valhalla Dev Graph
 
@@ -334,15 +348,15 @@ webhook secret, and the Pro product ID are required readiness capabilities.
 
 ## Demo Data Layout
 
-| Path                                        | Purpose                                                                                                            |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `infra/docker/data/pmtiles/`                | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `planisfy.basic` source used by Planisfy Streets.    |
-| `infra/docker/data/pelias/csv/`             | Tiny Pelias CSV fixture imported by `scripts/pelias-dev-fixture.sh`.                                               |
-| `infra/docker/data/valhalla_data/`          | Valhalla graph/runtime data mounted at `/custom_files`; the Stuttgart dev fixture uses `Stuttgart.osm.pbf` plus generated `valhalla_tiles.tar`. |
-| `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/uploads/`        | Local upload/object storage area.                                                                                  |
-| `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/styles/`         | Demo and published style JSON. The setup script seeds the legacy, light, and dark Planisfy Streets fixture styles. |
-| `${LOCAL_STORAGE_HOST_PATH:-infra/docker/data/storage}/martin-sources/` | Local aliases for published PMTiles/MBTiles artifacts when using filesystem storage. Published PMTiles are served by the API from storage. |
-| `packages/map-styles/`                      | Versioned Planisfy Streets fixture style, source-layer contract, schema, and release manifest.                     |
+| Path                                                                    | Purpose                                                                                                                                         |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `infra/docker/data/pmtiles/`                                            | Martin PMTiles mount. Add `stuttgart.pmtiles` for the default `planisfy.basic` source used by Planisfy Streets.                                 |
+| `infra/docker/data/pelias/csv/`                                         | Tiny Pelias CSV fixture imported by `scripts/pelias-dev-fixture.sh`.                                                                            |
+| `infra/docker/data/valhalla_data/`                                      | Valhalla graph/runtime data mounted at `/custom_files`; the Stuttgart dev fixture uses `Stuttgart.osm.pbf` plus generated `valhalla_tiles.tar`. |
+| `${LOCAL_STORAGE_HOST_PATH:-../../.storage}/uploads/`                   | Local upload/object storage area. The default is relative to `infra/docker/docker-compose.yml`.                                                  |
+| `${LOCAL_STORAGE_HOST_PATH:-../../.storage}/styles/`                    | Demo and published style JSON. The setup script seeds the legacy, light, and dark Planisfy Streets fixture styles.                              |
+| `${LOCAL_STORAGE_HOST_PATH:-../../.storage}/martin-sources/`            | Local aliases for published PMTiles/MBTiles artifacts when using filesystem storage. Published PMTiles are served by the API from storage.      |
+| `packages/map-styles/`                                                  | Versioned Planisfy Streets fixture style, source-layer contract, schema, and release manifest.                                                  |
 
 The repository intentionally does not store binary map data. Keep downloaded
 PMTiles and Valhalla graph data outside Git while preserving these mount points.
@@ -496,16 +510,16 @@ Expected notes:
 
 ## Default Service URLs
 
-| Service   | URL                     |
-| --------- | ----------------------- |
-| Marketing | <http://localhost:3000> |
-| Console   | <http://localhost:3001> |
-| Docs      | <http://localhost:3002> |
-| Admin     | <http://localhost:3003> |
-| API       | <http://localhost:4000> |
-| Martin    | <http://localhost:3005> |
-| Valhalla  | <http://localhost:3007> |
-| Pelias    | <http://localhost:3100> |
+| Service         | URL                     |
+| --------------- | ----------------------- |
+| Marketing       | <http://localhost:3000> |
+| Console         | <http://localhost:3001> |
+| Docs            | <http://localhost:3002> |
+| Admin           | <http://localhost:3003> |
+| API             | <http://localhost:4000> |
+| Martin          | <http://localhost:3005> |
+| Valhalla        | <http://localhost:3007> |
+| Pelias          | <http://localhost:3100> |
 | Static renderer | <http://localhost:4300> |
 
 ## Target Additions
