@@ -2,18 +2,21 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
   artifactBackups,
   customDomains,
   db,
+  executionTargets,
   notificationChannels,
+  platformConfig,
   previewLinks,
   processingJobLogs,
   processingJobs,
   scheduledOperations,
   storageObjects,
+  workerProfiles,
   workerNodes,
   workflowTemplates,
 } from "@planisfy/database";
@@ -23,12 +26,10 @@ import {
 } from "@planisfy/geodata-contracts";
 import { getStorage } from "@planisfy/storage";
 import { requireOrgMutationPermission, type AuthEnv } from "../middleware/auth";
-import { redisConnection } from "../env";
+import { env, redisConnection } from "../env";
 import { enqueueOutboxEvent } from "../lib/outbox";
-import {
-  buildNotificationPayload,
-  notificationDeliveryMode,
-} from "../lib/notification-adapters";
+import { sendEmail } from "../lib/email";
+import { buildNotificationPayload } from "../lib/notification-adapters";
 
 export const operationsRoute = new Hono<AuthEnv>();
 
@@ -105,6 +106,53 @@ const templateSchema = z.object({
   description: z.string().max(2000).optional(),
   template: z.record(z.string(), z.unknown()).default({}),
 });
+
+const templateApplyBodySchema = z.object({
+  values: z.record(z.string(), z.unknown()).default({}),
+});
+
+const executionTargetTemplateSchema = z.object({
+  name: z.string().min(1).max(128).optional(),
+  provider: z.enum(["local", "aws_batch", "gcp_batch"]).default("local"),
+  authMode: z.enum(["federated", "static", "external"]).default("federated"),
+  region: z.string().min(1).max(128).optional(),
+  config: z.record(z.string(), z.unknown()).default({}),
+  workerProfile: z
+    .object({
+      name: z.string().min(1).max(128).optional(),
+      image: z.string().max(512).optional(),
+      command: z.array(z.string().max(512)).default([]),
+      args: z.array(z.string().max(512)).default([]),
+      cpu: z.number().int().min(1).max(128).optional(),
+      memoryMb: z.number().int().min(128).max(1_048_576).optional(),
+      timeoutSeconds: z.number().int().min(1).max(604_800).optional(),
+      concurrency: z.number().int().min(1).max(10_000).optional(),
+      config: z.record(z.string(), z.unknown()).default({}),
+    })
+    .optional(),
+});
+
+const storageTemplateSchema = z
+  .record(z.string(), z.unknown())
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "Storage templates must include at least one configuration key",
+  });
+
+type WorkflowTemplateForApply = {
+  id: string;
+  name: string;
+  category: string;
+  template: unknown;
+};
+
+export type WorkflowTemplateApplication =
+  | {
+      category: "execution-target";
+      values: z.infer<typeof executionTargetTemplateSchema>;
+    }
+  | { category: "schedule"; values: z.infer<typeof scheduleSchema> }
+  | { category: "preview"; values: z.infer<typeof previewLinkSchema> }
+  | { category: "storage"; values: Record<string, unknown> };
 
 operationsRoute.get("/operations", async (c) => {
   const accountId = c.get("ownerId");
@@ -687,6 +735,151 @@ operationsRoute.post("/operations/workflow-templates", async (c) => {
   return c.json({ data: created }, 201);
 });
 
+operationsRoute.post("/operations/workflow-templates/:id/apply", async (c) => {
+  const accountId = c.get("ownerId");
+  const id = c.req.param("id");
+  const template = (await listTemplates(accountId)).find(
+    (row) => row.id === id,
+  );
+  if (!template) return notFound(c, "Workflow template not found");
+
+  const body = templateApplyBodySchema.safeParse(await readJsonObject(c));
+  if (!body.success) return validationError(c, body.error);
+
+  const prepared = prepareWorkflowTemplateApplication(
+    template,
+    body.data.values,
+  );
+  if (!prepared.success) return validationError(c, prepared.error);
+
+  const application = prepared.data;
+  if (application.category === "schedule") {
+    const [created] = await db
+      .insert(scheduledOperations)
+      .values({
+        accountId,
+        ...application.values,
+        nextRunAt: roughNextRunAt(application.values.status),
+      })
+      .returning();
+    return c.json(
+      { data: { applied: true, category: "schedule", schedule: created } },
+      201,
+    );
+  }
+
+  if (application.category === "preview") {
+    const [created] = await db
+      .insert(previewLinks)
+      .values({
+        accountId,
+        ...application.values,
+        slug:
+          application.values.slug ??
+          previewSlug(application.values.resourceType),
+        expiresAt: application.values.expiresAt
+          ? new Date(application.values.expiresAt)
+          : null,
+      })
+      .returning();
+    return c.json(
+      { data: { applied: true, category: "preview", previewLink: created } },
+      201,
+    );
+  }
+
+  if (application.category === "execution-target") {
+    if (env.DEPLOYMENT_MODE === "managed") {
+      return c.json(
+        {
+          error: {
+            code: "CAPABILITY_UNAVAILABLE",
+            message:
+              "Customer execution targets are unavailable in managed deployments.",
+          },
+        },
+        409,
+      );
+    }
+
+    const [target] = await db
+      .insert(executionTargets)
+      .values({
+        accountId,
+        name: application.values.name ?? template.name,
+        provider: application.values.provider,
+        authMode: application.values.authMode,
+        region: application.values.region ?? null,
+        config: application.values.config,
+        encryptedCredentials: {},
+      })
+      .returning();
+
+    let profile: typeof workerProfiles.$inferSelect | null = null;
+    if (application.values.workerProfile) {
+      const [createdProfile] = await db
+        .insert(workerProfiles)
+        .values({
+          accountId,
+          name:
+            application.values.workerProfile.name ??
+            `${application.values.name ?? template.name} profile`,
+          image: application.values.workerProfile.image ?? null,
+          command: application.values.workerProfile.command,
+          args: application.values.workerProfile.args,
+          cpu: application.values.workerProfile.cpu ?? null,
+          memoryMb: application.values.workerProfile.memoryMb ?? null,
+          timeoutSeconds:
+            application.values.workerProfile.timeoutSeconds ?? null,
+          concurrency: application.values.workerProfile.concurrency ?? null,
+          config: application.values.workerProfile.config,
+        })
+        .returning();
+      profile = createdProfile ?? null;
+    }
+
+    return c.json(
+      {
+        data: {
+          applied: true,
+          category: "execution-target",
+          executionTarget: target,
+          workerProfile: profile,
+        },
+      },
+      201,
+    );
+  }
+
+  const keys = Object.keys(application.values);
+  const matchingConfig = await db
+    .select({ key: platformConfig.key })
+    .from(platformConfig)
+    .where(inArray(platformConfig.key, keys));
+  if (matchingConfig.length === 0) {
+    return c.json({
+      data: {
+        applied: false,
+        category: "storage",
+        status: "requires_admin_config",
+        message:
+          "No matching platform storage settings are available for this template.",
+        requiredKeys: keys,
+      },
+    });
+  }
+
+  return c.json({
+    data: {
+      applied: false,
+      category: "storage",
+      status: "configuration_draft",
+      config: application.values,
+      matchingConfigKeys: matchingConfig.map((row) => row.key),
+    },
+  });
+});
+
 operationsRoute.delete("/operations/workflow-templates/:id", async (c) => {
   return softDeleteWorkflowTemplate(c);
 });
@@ -793,6 +986,71 @@ function builtInTemplates() {
   ];
 }
 
+export function prepareWorkflowTemplateApplication(
+  template: WorkflowTemplateForApply,
+  values: Record<string, unknown> = {},
+):
+  | { success: true; data: WorkflowTemplateApplication }
+  | { success: false; error: z.ZodError } {
+  const base = isObjectRecord(template.template) ? template.template : {};
+  const merged = { ...base, ...values };
+
+  if (template.category === "execution-target") {
+    const parsed = executionTargetTemplateSchema.safeParse(merged);
+    return parsed.success
+      ? {
+          success: true,
+          data: { category: "execution-target", values: parsed.data },
+        }
+      : { success: false, error: parsed.error };
+  }
+
+  if (template.category === "schedule") {
+    const parsed = scheduleSchema.safeParse({
+      name: template.name,
+      ...merged,
+    });
+    return parsed.success
+      ? { success: true, data: { category: "schedule", values: parsed.data } }
+      : { success: false, error: parsed.error };
+  }
+
+  if (template.category === "preview") {
+    const ttlHours =
+      typeof merged.ttlHours === "number" && Number.isFinite(merged.ttlHours)
+        ? merged.ttlHours
+        : null;
+    const parsed = previewLinkSchema.safeParse({
+      ...merged,
+      expiresAt:
+        typeof merged.expiresAt === "string"
+          ? merged.expiresAt
+          : ttlHours
+            ? new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString()
+            : undefined,
+    });
+    return parsed.success
+      ? { success: true, data: { category: "preview", values: parsed.data } }
+      : { success: false, error: parsed.error };
+  }
+
+  if (template.category === "storage") {
+    const parsed = storageTemplateSchema.safeParse(merged);
+    return parsed.success
+      ? { success: true, data: { category: "storage", values: parsed.data } }
+      : { success: false, error: parsed.error };
+  }
+
+  const error = new z.ZodError([
+    {
+      code: z.ZodIssueCode.custom,
+      path: ["category"],
+      message: `Unsupported workflow template category: ${template.category}`,
+    },
+  ]);
+  return { success: false, error };
+}
+
 async function fetchWorkerHealth() {
   const startedAt = Date.now();
   try {
@@ -892,18 +1150,55 @@ async function sendTestNotification(
     message: "Planisfy test notification",
     timestamp: new Date().toISOString(),
   };
-  const body = buildNotificationPayload(channel.provider, event);
+  return deliverNotification(channel, event);
+}
 
-  if (notificationDeliveryMode(channel.provider) === "email-adapter") {
+export async function deliverNotification(
+  channel: Pick<
+    typeof notificationChannels.$inferSelect,
+    "provider" | "target"
+  >,
+  event: {
+    event: string;
+    message: string;
+    timestamp: string;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  if (channel.provider === "email") {
+    const body = buildNotificationPayload("email", event) as {
+      subject: string;
+      text: string;
+    };
+    if (!env.RESEND_API_KEY) {
+      return {
+        delivered: false,
+        adapter: "email",
+        status: 503,
+        code: "EMAIL_UNAVAILABLE",
+        payload: body,
+        message:
+          "Email delivery is unavailable because Resend is not configured.",
+      };
+    }
+    const delivered = await sendEmail({
+      to: channel.target,
+      subject: body.subject,
+      html: `<p>${body.text.replaceAll("\n", "<br />")}</p>`,
+      text: body.text,
+    });
     return {
-      delivered: false,
+      delivered,
       adapter: "email",
+      status: delivered ? 202 : 502,
       payload: body,
-      message:
-        "Email adapter payload prepared; configure an email worker to send it.",
+      message: delivered
+        ? "Email adapter accepted test payload"
+        : "Email adapter failed to send test payload",
     };
   }
 
+  const body = buildNotificationPayload(channel.provider, event);
   const response = await fetch(channel.target, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -911,7 +1206,9 @@ async function sendTestNotification(
   });
   return {
     delivered: response.ok,
+    adapter: channel.provider,
     status: response.status,
+    payload: body,
     message: response.ok
       ? "Notification endpoint accepted test payload"
       : response.statusText,
@@ -1146,6 +1443,16 @@ function roughNextRunAt(status: "active" | "paused") {
 
 function previewSlug(resourceType: string) {
   return `${resourceType}-${randomUUID().slice(0, 8)}`;
+}
+
+async function readJsonObject(c: Context) {
+  if (!c.req.header("content-type")?.includes("application/json")) return {};
+  try {
+    const body = (await c.req.json()) as unknown;
+    return isObjectRecord(body) ? body : {};
+  } catch {
+    return {};
+  }
 }
 
 function validationError(c: Context, error: z.ZodError) {

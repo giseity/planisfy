@@ -34,6 +34,7 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table";
 import { Bell, CheckCircle2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 export function NotificationsTab({
   channels,
@@ -72,8 +73,8 @@ export function NotificationsTab({
         <CardHeader>
           <CardTitle>Add Channel</CardTitle>
           <CardDescription>
-            Webhook tests deliver immediately; email and chat providers are
-            stored until their delivery adapters are configured.
+            Webhook, Slack, and Discord tests post immediately. Email tests use
+            Resend when it is configured.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -136,13 +137,7 @@ export function NotificationsTab({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() =>
-                        runAction(
-                          () => api.testNotificationChannel(channel.id),
-                          "Test sent",
-                          onChanged,
-                        )
-                      }
+                      onClick={() => testChannel(channel.id, onChanged)}
                     >
                       <CheckCircle2 className="h-4 w-4" />
                     </Button>
@@ -174,4 +169,18 @@ export function NotificationsTab({
       </Card>
     </div>
   );
+}
+
+async function testChannel(id: string, onChanged: () => void) {
+  try {
+    const result = await api.testNotificationChannel(id);
+    if (result.data.delivered) {
+      toast.success(result.data.message || "Test delivered");
+    } else {
+      toast.error(result.data.message || "Test delivery failed");
+    }
+    onChanged();
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : "Test delivery failed");
+  }
 }

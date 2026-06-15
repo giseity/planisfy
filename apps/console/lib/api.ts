@@ -993,9 +993,14 @@ class ApiClient {
   }
 
   testNotificationChannel(id: string) {
-    return this.post<ApiEnvelope<{ delivered: boolean; message: string }>>(
-      `/operations/notification-channels/${id}/test`,
-    );
+    return this.post<
+      ApiEnvelope<{
+        delivered: boolean;
+        message: string;
+        status?: number;
+        code?: string;
+      }>
+    >(`/operations/notification-channels/${id}/test`);
   }
 
   createScheduledOperation(options: {
@@ -1117,6 +1122,17 @@ class ApiClient {
       "/operations/workflow-templates",
       options,
     );
+  }
+
+  applyWorkflowTemplate(id: string, values?: Record<string, unknown>) {
+    return this.post<
+      ApiEnvelope<{
+        applied: boolean;
+        category: string;
+        status?: string;
+        message?: string;
+      }>
+    >(`/operations/workflow-templates/${id}/apply`, { values: values ?? {} });
   }
 
   deleteWorkflowTemplate(id: string) {

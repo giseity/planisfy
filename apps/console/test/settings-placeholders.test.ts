@@ -23,4 +23,20 @@ describe("settings placeholder removal", () => {
     expect(source).not.toContain("203.0.113.42");
     expect(source).toContain("No security activity has been recorded yet.");
   });
+
+  it("operations tabs do not render adapter placeholder copy", () => {
+    const templatesSource = readFileSync(
+      resolve(__dirname, "../components/operations/templates-tab.tsx"),
+      "utf8",
+    );
+    const notificationsSource = readFileSync(
+      resolve(__dirname, "../components/operations/notifications-tab.tsx"),
+      "utf8",
+    );
+
+    expect(templatesSource).not.toContain("not automated yet");
+    expect(notificationsSource).not.toContain("stored until");
+    expect(templatesSource).toContain("api.applyWorkflowTemplate");
+    expect(notificationsSource).toContain("api.testNotificationChannel");
+  });
 });
