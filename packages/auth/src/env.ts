@@ -19,3 +19,40 @@ export function getAuthBaseURL() {
   }
   return authUrlFromAppUrl(authOrigin)!;
 }
+
+export function getSocialProviderCredentials() {
+  return {
+    github: optionalProviderCredentials(
+      process.env.GITHUB_CLIENT_ID,
+      process.env.GITHUB_CLIENT_SECRET,
+    ),
+    google: optionalProviderCredentials(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+    ),
+  };
+}
+
+function optionalProviderCredentials(
+  clientId: string | undefined,
+  clientSecret: string | undefined,
+) {
+  if (
+    !clientId ||
+    !clientSecret ||
+    !isUsableOAuthValue(clientId) ||
+    !isUsableOAuthValue(clientSecret)
+  ) {
+    return null;
+  }
+  return { clientId, clientSecret };
+}
+
+function isUsableOAuthValue(value: string | undefined) {
+  return Boolean(
+    value &&
+    !/replace-me|placeholder|example|changeme|change-this|local-dev-only/i.test(
+      value,
+    ),
+  );
+}

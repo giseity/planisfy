@@ -332,6 +332,14 @@ Console routes redirect to `/sign-in?callbackUrl=...` on the Console origin.
 Managed deployments set `NEXT_PUBLIC_AUTH_ORIGIN` to the public Marketing
 origin instead.
 
+GitHub and Google sign-in are disabled until real OAuth credentials are set.
+Replace `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` or
+`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, then set
+`NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS` to a comma-separated list such as
+`github,google`. Configure provider callback URLs against the auth origin:
+`<NEXT_PUBLIC_AUTH_ORIGIN>/api/auth/callback/github` and
+`<NEXT_PUBLIC_AUTH_ORIGIN>/api/auth/callback/google`.
+
 Managed mode is different: `DEPLOYMENT_MODE=managed` requires Resend, and API
 key creation is blocked until the user email is verified.
 

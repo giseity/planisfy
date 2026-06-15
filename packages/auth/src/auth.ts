@@ -14,12 +14,19 @@ import {
 } from "@planisfy/database";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
-import { getAuthBaseURL, getAuthSecret } from "./env";
+import {
+  getAuthBaseURL,
+  getAuthSecret,
+  getSocialProviderCredentials,
+} from "./env";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 if (!apiUrl) {
   throw new Error("NEXT_PUBLIC_API_URL is required.");
 }
+
+const authBaseURL = getAuthBaseURL();
+const authCookieDomain = getAuthCookieDomain(authBaseURL);
 
 // ============================================================================
 // Handle generation (OAuth users — no handle provided at signup)
@@ -44,13 +51,38 @@ function internalHeaders(): HeadersInit {
   };
 }
 
+function socialProviders() {
+  const providers = getSocialProviderCredentials();
+  return {
+    ...(providers.github ? { github: providers.github } : {}),
+    ...(providers.google ? { google: providers.google } : {}),
+  };
+}
+
+function getAuthCookieDomain(baseURL: string) {
+  if (process.env.AUTH_COOKIE_DOMAIN) {
+    return process.env.AUTH_COOKIE_DOMAIN;
+  }
+
+  const hostname = new URL(baseURL).hostname;
+  if (
+    process.env.NODE_ENV === "production" &&
+    hostname.endsWith("planisfy.com")
+  ) {
+    return ".planisfy.com";
+  }
+
+  return undefined;
+}
+
 // ============================================================================
 // Better-Auth instance
 // ============================================================================
 
 export const auth = betterAuth({
   secret: getAuthSecret(),
-  baseURL: getAuthBaseURL(),
+  baseURL: authBaseURL,
+  socialProviders: socialProviders(),
 
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -71,7 +103,7 @@ export const auth = betterAuth({
         // Email sending delegated to API email service
         // The API hooks into this via the onInviteSent callback pattern
         console.log(
-          `[invite] ${invitation.email} invited to ${organization.name} by ${inviter.user.name} (role: ${invitation.role}, id: ${invitation.id})`
+          `[invite] ${invitation.email} invited to ${organization.name} by ${inviter.user.name} (role: ${invitation.role}, id: ${invitation.id})`,
         );
         // When RESEND_API_KEY is set, the API's email service sends the actual email
         // via a fire-and-forget fetch to the internal email endpoint
@@ -87,7 +119,9 @@ export const auth = betterAuth({
                 role: invitation.role,
                 invitationId: invitation.id,
               }),
-            }).catch(() => {/* fire and forget */});
+            }).catch(() => {
+              /* fire and forget */
+            });
           } catch {
             // Ignore — email delivery is best-effort
           }
@@ -146,7 +180,9 @@ export const auth = betterAuth({
               name: user.name,
               resetUrl: url,
             }),
-          }).catch(() => {/* fire and forget */});
+          }).catch(() => {
+            /* fire and forget */
+          });
         } catch {
           // Ignore — email delivery is best-effort
         }
@@ -169,7 +205,9 @@ export const auth = betterAuth({
               name: user.name,
               verifyUrl: url,
             }),
-          }).catch(() => {/* fire and forget */});
+          }).catch(() => {
+            /* fire and forget */
+          });
         } catch {
           // Ignore — email delivery is best-effort
         }
@@ -242,13 +280,14 @@ export const auth = betterAuth({
   },
 
   advanced: {
-    // Force all better-auth generated IDs to be UUIDs so they fit our uuid columns
-    generateId: () => randomUUID(),
+    database: {
+      // Force all better-auth generated IDs to be UUIDs so they fit our uuid columns.
+      generateId: () => randomUUID(),
+    },
     defaultCookieAttributes: {
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      domain:
-        process.env.NODE_ENV === "production" ? ".planisfy.com" : undefined,
+      secure: authBaseURL.startsWith("https://"),
+      domain: authCookieDomain,
     },
   },
 });

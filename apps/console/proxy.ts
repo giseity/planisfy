@@ -11,8 +11,12 @@ export function getConsoleAuthOrigin(requestOrigin: string) {
   return env.NEXT_PUBLIC_AUTH_ORIGIN || getConsoleAppOrigin(requestOrigin);
 }
 
+export function getConsoleAuthFetchOrigin(requestOrigin: string) {
+  return env.AUTH_INTERNAL_ORIGIN || getConsoleAuthOrigin(requestOrigin);
+}
+
 export function getSessionBaseURL(requestOrigin: string) {
-  return getConsoleAuthOrigin(requestOrigin);
+  return getConsoleAuthFetchOrigin(requestOrigin);
 }
 
 export function buildSignInRedirectURL(

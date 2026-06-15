@@ -4,6 +4,7 @@ const AUTH_ENV_KEYS = [
   "NEXT_PUBLIC_AUTH_ORIGIN",
   "NEXT_PUBLIC_APP_URL",
   "NEXT_PUBLIC_API_URL",
+  "AUTH_INTERNAL_ORIGIN",
 ] as const;
 
 const originalEnv = Object.fromEntries(
@@ -15,6 +16,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_AUTH_ORIGIN = "https://console.planisfy.localhost";
   process.env.NEXT_PUBLIC_APP_URL = "https://console.planisfy.localhost";
   process.env.NEXT_PUBLIC_API_URL = "https://api.planisfy.localhost";
+  delete process.env.AUTH_INTERNAL_ORIGIN;
 });
 
 afterEach(() => {
@@ -74,6 +76,36 @@ describe("Console auth middleware helpers", () => {
     );
     expect(getSessionBaseURL("https://localhost:4404")).toBe(
       "https://console.planisfy.localhost",
+    );
+  });
+
+  it("uses an internal auth origin for server-side session checks", async () => {
+    process.env.AUTH_INTERNAL_ORIGIN = "http://localhost:3000";
+
+    const {
+      buildSignInRedirectURL,
+      getConsoleAuthOrigin,
+      getConsoleAuthFetchOrigin,
+      getSessionBaseURL,
+    } = await loadMiddleware();
+
+    expect(getConsoleAuthOrigin("https://localhost:4404")).toBe(
+      "https://console.planisfy.localhost",
+    );
+    expect(getConsoleAuthFetchOrigin("https://localhost:4404")).toBe(
+      "http://localhost:3000",
+    );
+    expect(getSessionBaseURL("https://localhost:4404")).toBe(
+      "http://localhost:3000",
+    );
+
+    const redirect = buildSignInRedirectURL(
+      "https://localhost:4404/styles",
+      "https://localhost:4404",
+    );
+
+    expect(redirect.toString()).toBe(
+      "https://console.planisfy.localhost/sign-in?callbackUrl=https%3A%2F%2Fconsole.planisfy.localhost%2Fstyles",
     );
   });
 });

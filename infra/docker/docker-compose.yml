@@ -49,6 +49,10 @@ services:
       - REDIS_PORT=6379
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3001
@@ -101,7 +105,11 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: [ "CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"" ]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:4000/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -187,9 +195,16 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p}
+      - AUTH_INTERNAL_ORIGIN=http://localhost:3000
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       - NEXT_PUBLIC_APP_URL=http://localhost:3001
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3001
+      - NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - CONSOLE_API_INTERNAL_ORIGIN=http://api:4000
       - NEXT_PUBLIC_ADMIN_URL=http://localhost:3003
       - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
       - NEXT_PUBLIC_CONSOLE_API_PATH=/api/v1/console
@@ -215,6 +230,10 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       - NEXT_PUBLIC_APP_URL=http://localhost:3003
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3003
       - NEXT_PUBLIC_API_URL=http://localhost:4000
@@ -292,8 +311,13 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3000
+      - NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
     depends_on:
       postgres:
@@ -317,7 +341,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U planisfy" ]
+      test: ["CMD-SHELL", "pg_isready -U planisfy"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -333,7 +357,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -351,7 +375,7 @@ services:
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-planisfy-local-minio-password}
     volumes:
       - ./data/minio:/data
-    command: [ "server", "/data", "--console-address", ":9001" ]
+    command: ["server", "/data", "--console-address", ":9001"]
     restart: unless-stopped
     networks:
       - planisfy-network
@@ -394,7 +418,7 @@ services:
       - ./configs/martin.yaml:/config/config.yaml:ro
       - ./data/pmtiles:/data:ro
       - ./data/fonts:/fonts:ro
-    command: [ "--config", "/config/config.yaml", "--font", "/fonts" ]
+    command: ["--config", "/config/config.yaml", "--font", "/fonts"]
     restart: unless-stopped
     networks:
       - planisfy-network
@@ -410,7 +434,7 @@ services:
     volumes:
       - ./data/valhalla_data:/custom_files
       - ./configs/valhalla.json:/etc/valhalla/valhalla.json:ro
-    command: [ "valhalla_service", "/etc/valhalla/valhalla.json", "1" ]
+    command: ["valhalla_service", "/etc/valhalla/valhalla.json", "1"]
     restart: unless-stopped
     networks:
       - planisfy-network
@@ -430,7 +454,11 @@ services:
     volumes:
       - ./data/elevation:/data/elevation:ro
     healthcheck:
-      test: [ "CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"" ]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:8080/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -455,7 +483,11 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4300/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"" ]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:4300/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -476,7 +508,11 @@ services:
     volumes:
       - pelias_elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
-      test: [ "CMD-SHELL", "curl -fsS 'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=1s' >/dev/null || exit 1" ]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS 'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=1s' >/dev/null || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 24
@@ -495,12 +531,21 @@ services:
       - PORT=4000
     volumes:
       - ./configs/pelias.json:/config/pelias.json:ro
-    command: [ "sh", "-c", "sed -i \"/req.errors.push( _.get(err, 'message', err) );/i\\        if (_.get(err, 'message', err) === 'libpostal service disabled') { return next(); }\" controller/libpostal.js && ./bin/start" ]
+    command:
+      [
+        "sh",
+        "-c",
+        "sed -i \"/req.errors.push( _.get(err, 'message', err) );/i\\        if (_.get(err, 'message', err) === 'libpostal service disabled') { return next(); }\" controller/libpostal.js && ./bin/start",
+      ]
     depends_on:
       pelias-elasticsearch:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:4000/v1', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\"" ]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "require(''http'').get(''http://127.0.0.1:4000/v1'', r => process.exit(r.statusCode < 500 ? 0 : 1)).on(''error'', () => process.exit(1))"',
+        ]
       interval: 10s
       timeout: 5s
       retries: 24
@@ -515,7 +560,7 @@ services:
       - PELIAS_CONFIG=/config/pelias.json
     volumes:
       - ./configs/pelias.json:/config/pelias.json:ro
-    command: [ "./bin/create_index" ]
+    command: ["./bin/create_index"]
     depends_on:
       pelias-elasticsearch:
         condition: service_healthy
@@ -532,7 +577,12 @@ services:
     volumes:
       - ./configs/pelias.json:/config/pelias.json:ro
       - ./data/pelias/csv:/data/csv:ro
-    command: [ "sh", "-c", "sed -i '/adminLookup.create()/d' lib/importPipeline.js && ./bin/start" ]
+    command:
+      [
+        "sh",
+        "-c",
+        "sed -i '/adminLookup.create()/d' lib/importPipeline.js && ./bin/start",
+      ]
     depends_on:
       pelias-elasticsearch:
         condition: service_healthy

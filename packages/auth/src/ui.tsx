@@ -1,22 +1,39 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { authClient, signIn, signUp } from "./client"
-import { ArrowLeft, Building2, Chrome, Github, KeyRound, Lock, Mail, Send } from "lucide-react"
-import { Button } from "@planisfy/ui/components/button"
-import { Input } from "@planisfy/ui/components/input"
-import { Field, FieldLabel } from "@planisfy/ui/components/field"
-import { cn } from "@planisfy/ui/lib/utils"
-import { toast } from "sonner"
+import * as React from "react";
+import {
+  authClient,
+  isSocialProviderEnabled,
+  signIn,
+  signUp,
+  type SocialProvider,
+} from "./client";
+import {
+  ArrowLeft,
+  Building2,
+  Chrome,
+  Github,
+  KeyRound,
+  Lock,
+  Mail,
+  Send,
+} from "lucide-react";
+import { Button } from "@planisfy/ui/components/button";
+import { Input } from "@planisfy/ui/components/input";
+import { Field, FieldLabel } from "@planisfy/ui/components/field";
+import { cn } from "@planisfy/ui/lib/utils";
+import { toast } from "sonner";
 
 function callbackUrl(fallback: string) {
-  if (typeof window === "undefined") return fallback
-  return new URLSearchParams(window.location.search).get("callbackUrl") ?? fallback
+  if (typeof window === "undefined") return fallback;
+  return (
+    new URLSearchParams(window.location.search).get("callbackUrl") ?? fallback
+  );
 }
 
 function tokenFromUrl() {
-  if (typeof window === "undefined") return null
-  return new URLSearchParams(window.location.search).get("token")
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("token");
 }
 
 function AuthShell({
@@ -27,12 +44,12 @@ function AuthShell({
   width = "sm",
   icon,
 }: {
-  title: string
-  description: string
-  children: React.ReactNode
-  footer?: React.ReactNode
-  width?: "sm" | "md"
-  icon?: React.ReactNode
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  width?: "sm" | "md";
+  icon?: React.ReactNode;
 }) {
   return (
     <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10 text-foreground">
@@ -55,7 +72,7 @@ function AuthShell({
         {footer}
       </main>
     </div>
-  )
+  );
 }
 
 function AuthInput({
@@ -63,7 +80,7 @@ function AuthInput({
   className,
   ...props
 }: React.ComponentProps<typeof Input> & {
-  icon?: React.ReactNode
+  icon?: React.ReactNode;
 }) {
   return (
     <div className="relative">
@@ -81,11 +98,11 @@ function AuthInput({
         {...props}
       />
     </div>
-  )
+  );
 }
 
 function AuthLabel(props: React.ComponentProps<typeof FieldLabel>) {
-  return <FieldLabel className="text-xs font-medium" {...props} />
+  return <FieldLabel className="text-xs font-medium" {...props} />;
 }
 
 function AuthDivider() {
@@ -95,7 +112,7 @@ function AuthDivider() {
       <span className="text-[11px] uppercase tracking-wider">or</span>
       <div className="h-px flex-1 bg-border" />
     </div>
-  )
+  );
 }
 
 function SocialButton({
@@ -104,31 +121,31 @@ function SocialButton({
   children,
   compact = false,
 }: {
-  provider: "github" | "google"
-  callbackURL: string
-  children: React.ReactNode
-  compact?: boolean
+  provider: SocialProvider;
+  callbackURL: string;
+  children: React.ReactNode;
+  compact?: boolean;
 }) {
-  const [loading, setLoading] = React.useState(false)
-  const Icon = provider === "github" ? Github : Chrome
+  const [loading, setLoading] = React.useState(false);
+  const Icon = provider === "github" ? Github : Chrome;
 
   async function handleSocialSignIn() {
-    setLoading(true)
+    setLoading(true);
     try {
-      const { data, error } = await signIn.social({ provider, callbackURL })
+      const { data, error } = await signIn.social({ provider, callbackURL });
       if (error) {
-        toast.error(error.message || `${provider} sign-in is unavailable`)
-        return
+        toast.error(error.message || `${provider} sign-in is unavailable`);
+        return;
       }
-      if (data?.url) window.location.href = data.url
+      if (data?.url) window.location.href = data.url;
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
           : `${provider} sign-in is unavailable`,
-      )
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -146,7 +163,49 @@ function SocialButton({
       <Icon className="size-4" />
       {loading ? "Connecting..." : children}
     </Button>
-  )
+  );
+}
+
+function SocialAuthOptions({
+  callbackURL,
+  compact = false,
+}: {
+  callbackURL: string;
+  compact?: boolean;
+}) {
+  const providers = (["github", "google"] as const).filter(
+    isSocialProviderEnabled,
+  );
+
+  if (providers.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <div className={compact ? "flex gap-2" : "flex flex-col gap-2"}>
+        {providers.includes("github") && (
+          <SocialButton
+            provider="github"
+            callbackURL={callbackURL}
+            compact={compact}
+          >
+            {compact ? "GitHub" : "Continue with GitHub"}
+          </SocialButton>
+        )}
+        {providers.includes("google") && (
+          <SocialButton
+            provider="google"
+            callbackURL={callbackURL}
+            compact={compact}
+          >
+            {compact ? "Google" : "Continue with Google"}
+          </SocialButton>
+        )}
+      </div>
+      <AuthDivider />
+    </>
+  );
 }
 
 export function SignInForm({
@@ -154,32 +213,32 @@ export function SignInForm({
   signUpHref = "/sign-up",
   resetHref = "/reset-password",
 }: {
-  defaultCallbackUrl?: string
-  signUpHref?: string
-  resetHref?: string
+  defaultCallbackUrl?: string;
+  signUpHref?: string;
+  resetHref?: string;
 }) {
-  const [email, setEmail] = React.useState("")
-  const [password, setPassword] = React.useState("")
-  const [loading, setLoading] = React.useState(false)
-  const target = callbackUrl(defaultCallbackUrl)
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const target = callbackUrl(defaultCallbackUrl);
 
   async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    setLoading(true)
+    event.preventDefault();
+    setLoading(true);
     await signIn.email({
       email,
       password,
       callbackURL: target,
       fetchOptions: {
         onSuccess: () => {
-          window.location.assign(target)
+          window.location.assign(target);
         },
         onError: (ctx: { error: { message: string } }) => {
-          toast.error(ctx.error.message)
+          toast.error(ctx.error.message);
         },
       },
-    })
-    setLoading(false)
+    });
+    setLoading(false);
   }
 
   return (
@@ -188,25 +247,17 @@ export function SignInForm({
       description="Sign in to your Planisfy account"
       footer={
         <p className="text-center text-xs text-muted-foreground">
-            Don&apos;t have an account?{" "}
+          Don&apos;t have an account?{" "}
           <a
             href={signUpHref}
             className="font-medium text-primary underline-offset-4 hover:underline"
           >
-              Sign up
-            </a>
-          </p>
+            Sign up
+          </a>
+        </p>
       }
     >
-      <div className="flex flex-col gap-2">
-        <SocialButton provider="github" callbackURL={target}>
-          Continue with GitHub
-        </SocialButton>
-        <SocialButton provider="google" callbackURL={target}>
-          Continue with Google
-        </SocialButton>
-      </div>
-      <AuthDivider />
+      <SocialAuthOptions callbackURL={target} />
       <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
         <Field>
           <AuthLabel htmlFor="email">Email</AuthLabel>
@@ -242,32 +293,36 @@ export function SignInForm({
             autoComplete="current-password"
           />
         </Field>
-        <Button type="submit" className="h-10 w-full justify-center text-sm" disabled={loading}>
+        <Button
+          type="submit"
+          className="h-10 w-full justify-center text-sm"
+          disabled={loading}
+        >
           {loading ? "Signing in..." : "Sign In"}
         </Button>
       </form>
     </AuthShell>
-  )
+  );
 }
 
 export function SignUpForm({
   defaultCallbackUrl = "/styles",
   signInHref = "/sign-in",
 }: {
-  defaultCallbackUrl?: string
-  signInHref?: string
+  defaultCallbackUrl?: string;
+  signInHref?: string;
 }) {
-  const [firstName, setFirstName] = React.useState("")
-  const [lastName, setLastName] = React.useState("")
-  const [email, setEmail] = React.useState("")
-  const [password, setPassword] = React.useState("")
-  const [organizationName, setOrganizationName] = React.useState("")
-  const [loading, setLoading] = React.useState(false)
-  const target = callbackUrl(defaultCallbackUrl)
+  const [firstName, setFirstName] = React.useState("");
+  const [lastName, setLastName] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [organizationName, setOrganizationName] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const target = callbackUrl(defaultCallbackUrl);
 
   async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    setLoading(true)
+    event.preventDefault();
+    setLoading(true);
     await signUp.email({
       email,
       password,
@@ -275,14 +330,14 @@ export function SignUpForm({
       callbackURL: target,
       fetchOptions: {
         onSuccess: () => {
-          window.location.assign(target)
+          window.location.assign(target);
         },
         onError: (ctx: { error: { message: string } }) => {
-          toast.error(ctx.error.message)
+          toast.error(ctx.error.message);
         },
       },
-    })
-    setLoading(false)
+    });
+    setLoading(false);
   }
 
   return (
@@ -294,11 +349,17 @@ export function SignUpForm({
         <>
           <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
             By signing up you agree to our{" "}
-            <a href="/terms" className="text-primary underline-offset-4 hover:underline">
+            <a
+              href="/terms"
+              className="text-primary underline-offset-4 hover:underline"
+            >
               Terms of Service
             </a>{" "}
             and{" "}
-            <a href="/privacy" className="text-primary underline-offset-4 hover:underline">
+            <a
+              href="/privacy"
+              className="text-primary underline-offset-4 hover:underline"
+            >
               Privacy Policy
             </a>
           </p>
@@ -314,15 +375,7 @@ export function SignUpForm({
         </>
       }
     >
-      <div className="flex gap-2">
-        <SocialButton provider="github" callbackURL={target} compact>
-          GitHub
-        </SocialButton>
-        <SocialButton provider="google" callbackURL={target} compact>
-          Google
-        </SocialButton>
-      </div>
-      <AuthDivider />
+      <SocialAuthOptions callbackURL={target} compact />
       <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
         <div className="grid grid-cols-2 gap-3">
           <Field>
@@ -400,69 +453,80 @@ export function SignUpForm({
             autoComplete="organization"
           />
         </Field>
-        <Button type="submit" className="h-10 w-full justify-center text-sm" disabled={loading}>
+        <Button
+          type="submit"
+          className="h-10 w-full justify-center text-sm"
+          disabled={loading}
+        >
           {loading ? "Creating account..." : "Create Account"}
         </Button>
       </form>
     </AuthShell>
-  )
+  );
 }
 
-export function ResetPasswordForm({ signInHref = "/sign-in" }: { signInHref?: string }) {
-  const [email, setEmail] = React.useState("")
-  const [submitted, setSubmitted] = React.useState(false)
-  const [password, setPassword] = React.useState("")
-  const [confirmPassword, setConfirmPassword] = React.useState("")
-  const [error, setError] = React.useState("")
-  const [loading, setLoading] = React.useState(false)
-  const [token, setToken] = React.useState<string | null>(null)
+export function ResetPasswordForm({
+  signInHref = "/sign-in",
+}: {
+  signInHref?: string;
+}) {
+  const [email, setEmail] = React.useState("");
+  const [submitted, setSubmitted] = React.useState(false);
+  const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [token, setToken] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    setToken(tokenFromUrl())
-  }, [])
+    setToken(tokenFromUrl());
+  }, []);
 
   async function handleRequest(event: React.FormEvent) {
-    event.preventDefault()
-    setLoading(true)
+    event.preventDefault();
+    setLoading(true);
     try {
       await authClient.requestPasswordReset({
         email,
         redirectTo: `${window.location.origin}/reset-password`,
-      })
-      setSubmitted(true)
+      });
+      setSubmitted(true);
     } catch {
-      setSubmitted(true)
+      setSubmitted(true);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   async function handleReset(event: React.FormEvent) {
-    event.preventDefault()
-    setError("")
-    if (!token) return
+    event.preventDefault();
+    setError("");
+    if (!token) return;
     if (password !== confirmPassword) {
-      setError("Passwords do not match")
-      return
+      setError("Passwords do not match");
+      return;
     }
     if (password.length < 8) {
-      setError("Password must be at least 8 characters")
-      return
+      setError("Password must be at least 8 characters");
+      return;
     }
-    setLoading(true)
+    setLoading(true);
     try {
-      await authClient.resetPassword({ token, newPassword: password })
-      window.location.assign(signInHref)
+      await authClient.resetPassword({ token, newPassword: password });
+      window.location.assign(signInHref);
     } catch {
-      setError("Invalid or expired reset link. Please request a new one.")
+      setError("Invalid or expired reset link. Please request a new one.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   if (token) {
     return (
-      <AuthShell title="Set a new password" description="Choose a password for your account.">
+      <AuthShell
+        title="Set a new password"
+        description="Choose a password for your account."
+      >
         <form onSubmit={handleReset} className="flex flex-col gap-3.5">
           <Field>
             <AuthLabel htmlFor="new-password">New password</AuthLabel>
@@ -493,22 +557,33 @@ export function ResetPasswordForm({ signInHref = "/sign-in" }: { signInHref?: st
             />
           </Field>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" className="h-10 w-full justify-center" disabled={loading}>
+          <Button
+            type="submit"
+            className="h-10 w-full justify-center"
+            disabled={loading}
+          >
             {loading ? "Resetting..." : "Reset password"}
           </Button>
         </form>
       </AuthShell>
-    )
+    );
   }
 
   if (submitted) {
     return (
-      <AuthShell title="Check your inbox" description="If an account exists for that email, a reset link is on the way.">
-        <Button asChild variant="outline" className="h-10 w-full justify-center">
+      <AuthShell
+        title="Check your inbox"
+        description="If an account exists for that email, a reset link is on the way."
+      >
+        <Button
+          asChild
+          variant="outline"
+          className="h-10 w-full justify-center"
+        >
           <a href={signInHref}>Back to sign in</a>
         </Button>
       </AuthShell>
-    )
+    );
   }
 
   return (
@@ -531,7 +606,11 @@ export function ResetPasswordForm({ signInHref = "/sign-in" }: { signInHref?: st
             autoComplete="email"
           />
         </Field>
-        <Button type="submit" className="h-10 w-full justify-center" disabled={loading}>
+        <Button
+          type="submit"
+          className="h-10 w-full justify-center"
+          disabled={loading}
+        >
           <Send className="size-4" />
           {loading ? "Sending..." : "Send Reset Link"}
         </Button>
@@ -546,5 +625,5 @@ export function ResetPasswordForm({ signInHref = "/sign-in" }: { signInHref?: st
         </a>
       </div>
     </AuthShell>
-  )
+  );
 }

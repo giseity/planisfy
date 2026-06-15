@@ -23,8 +23,13 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
 ENV BETTER_AUTH_SECRET=local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE
+ENV GITHUB_CLIENT_ID=replace-me-github-client-id
+ENV GITHUB_CLIENT_SECRET=replace-me-github-client-secret
+ENV GOOGLE_CLIENT_ID=replace-me-google-client-id
+ENV GOOGLE_CLIENT_SECRET=replace-me-google-client-secret
 ENV NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3000
+ENV NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=
 ENV NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
 RUN pnpm --filter marketing build
 

@@ -15,7 +15,7 @@ import type {
 const BASE =
   typeof window !== "undefined"
     ? clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH
-    : `${clientEnv.NEXT_PUBLIC_API_URL}/console`;
+    : `${process.env.CONSOLE_API_INTERNAL_ORIGIN ?? clientEnv.NEXT_PUBLIC_API_URL}/console`;
 const API_ROOT = BASE.replace(/\/console\/?$/, "");
 
 interface ApiError {
@@ -336,10 +336,7 @@ export interface ConsoleWorkflowTemplate {
 }
 
 export type PlatformPreflightStatus = "pass" | "warn" | "fail";
-export type PlatformPreflightSeverity =
-  | "required"
-  | "recommended"
-  | "optional";
+export type PlatformPreflightSeverity = "required" | "recommended" | "optional";
 
 export interface PlatformPreflightCheck {
   id: string;
@@ -788,7 +785,8 @@ class ApiClient {
   }
 
   async getDashboard() {
-    const envelope = await this.get<ApiEnvelope<ConsoleDashboard>>("/dashboard");
+    const envelope =
+      await this.get<ApiEnvelope<ConsoleDashboard>>("/dashboard");
     return {
       ...envelope,
       data: normalizeDashboardUrls(envelope.data),
@@ -1015,9 +1013,9 @@ class ApiClient {
   }
 
   runScheduledOperation(id: string) {
-    return this.post<ApiEnvelope<{ schedule: ConsoleScheduledOperation; queued: boolean }>>(
-      `/operations/schedules/${id}/run`,
-    );
+    return this.post<
+      ApiEnvelope<{ schedule: ConsoleScheduledOperation; queued: boolean }>
+    >(`/operations/schedules/${id}/run`);
   }
 
   deleteScheduledOperation(id: string) {
@@ -1163,9 +1161,7 @@ class ApiClient {
   }
 
   retryJob(jobId: string) {
-    return this.post<ApiEnvelope<ConsoleProcessingJob>>(
-      `/jobs/${jobId}/retry`,
-    );
+    return this.post<ApiEnvelope<ConsoleProcessingJob>>(`/jobs/${jobId}/retry`);
   }
 
   cancelJob(jobId: string) {
@@ -1240,9 +1236,7 @@ function normalizeTilesetUrls(tileset: ConsoleTileset): ConsoleTileset {
   };
 }
 
-function normalizeDashboardUrls(
-  dashboard: ConsoleDashboard,
-): ConsoleDashboard {
+function normalizeDashboardUrls(dashboard: ConsoleDashboard): ConsoleDashboard {
   return {
     ...dashboard,
     resources: {
@@ -1262,7 +1256,8 @@ function normalizeDashboardUrls(
       publicStyleUrl: normalizeApiUrl(dashboard.integration.publicStyleUrl),
       tilejsonUrl: normalizeApiUrl(dashboard.integration.tilejsonUrl),
       mapLibreSnippet:
-        dashboard.integration.publicStyleUrl && dashboard.integration.tilejsonUrl
+        dashboard.integration.publicStyleUrl &&
+        dashboard.integration.tilejsonUrl
           ? `new maplibregl.Map({\n  container: "map",\n  style: "${normalizeApiUrl(dashboard.integration.publicStyleUrl)}"\n});`
           : dashboard.integration.mapLibreSnippet,
       curlSnippet: dashboard.integration.tilejsonUrl
