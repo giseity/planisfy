@@ -21,6 +21,30 @@ import type { AuthEnv } from "./auth";
 
 const MONTHLY_QUOTA_CACHE_TTL_SECONDS = 35 * 24 * 60 * 60;
 const ANONYMOUS_PUBLIC_RPM = 120;
+const QUOTA_RESERVATION_SCRIPT = `
+local key = KEYS[1]
+local baseline = tonumber(ARGV[1])
+local cost = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local ttl = tonumber(ARGV[4])
+local current = tonumber(redis.call("GET", key) or "0")
+
+if current < baseline then
+  current = baseline
+  redis.call("SET", key, current, "EX", ttl)
+else
+  redis.call("EXPIRE", key, ttl)
+end
+
+local projected = current + cost
+if projected > limit then
+  return {0, current, projected}
+end
+
+redis.call("INCRBY", key, cost)
+redis.call("EXPIRE", key, ttl)
+return {1, current, projected}
+`;
 
 const redis = new Redis({
   ...redisConnection,
@@ -97,33 +121,24 @@ async function reserveMonthlyQuota(params: {
 
   try {
     const key = getMonthlyQuotaKey(params.ownerId, period.key);
-    const cachedRaw = await redis.get(key);
-    const cachedUsed = cachedRaw ? Number(cachedRaw) : 0;
-    const baseline = Math.max(
-      Number.isFinite(cachedUsed) ? cachedUsed : 0,
-      durableUsed,
-    );
-
-    await redis.set(
+    const reservation = await redis.eval(
+      QUOTA_RESERVATION_SCRIPT,
+      1,
       key,
-      String(baseline),
-      "EX",
-      MONTHLY_QUOTA_CACHE_TTL_SECONDS,
+      String(durableUsed),
+      String(params.cost),
+      String(params.monthlyLimit),
+      String(MONTHLY_QUOTA_CACHE_TTL_SECONDS),
     );
-
-    const projected = await redis.incrby(key, params.cost);
-    const usedBeforeRequest = projected - params.cost;
+    const [allowedRaw, usedRaw] = parseQuotaReservation(reservation);
+    const usedBeforeRequest = usedRaw;
     const quota = evaluateMonthlyQuota({
       used: usedBeforeRequest,
       cost: params.cost,
       limit: params.monthlyLimit,
     });
 
-    if (!quota.allowed) {
-      await redis.decrby(key, params.cost);
-    }
-
-    return quota;
+    return { ...quota, allowed: allowedRaw === 1 && quota.allowed };
   } catch {
     return checkMonthlyUsageQuota({
       ownerId: params.ownerId,
@@ -131,6 +146,18 @@ async function reserveMonthlyQuota(params: {
       limit: params.monthlyLimit,
     });
   }
+}
+
+export function parseQuotaReservation(result: unknown): [number, number] {
+  if (!Array.isArray(result) || result.length < 2) {
+    throw new Error("Invalid quota reservation result");
+  }
+  const allowed = Number(result[0]);
+  const used = Number(result[1]);
+  if (!Number.isFinite(allowed) || !Number.isFinite(used)) {
+    throw new Error("Invalid quota reservation result");
+  }
+  return [allowed, used];
 }
 
 export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
