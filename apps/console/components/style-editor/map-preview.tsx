@@ -17,6 +17,71 @@ export interface InspectedFeature {
   properties: Record<string, unknown>;
 }
 
+function buildInspectPopupContent(
+  inspected: InspectedFeature[],
+  onSelectLayer: (layerId: string) => void,
+) {
+  const root = document.createElement("div");
+  root.style.maxHeight = "250px";
+  root.style.overflow = "auto";
+
+  inspected.forEach((feature, index) => {
+    if (index > 0) {
+      const divider = document.createElement("hr");
+      divider.style.margin = "4px 0";
+      divider.style.borderColor = "#333";
+      root.append(divider);
+    }
+
+    const item = document.createElement("div");
+    item.style.marginBottom = "6px";
+    item.style.fontSize = "11px";
+    item.style.fontFamily = "monospace";
+
+    const layerButton = document.createElement("button");
+    layerButton.type = "button";
+    layerButton.textContent = feature.layer;
+    layerButton.style.cursor = "pointer";
+    layerButton.style.color = "#3b82f6";
+    layerButton.style.border = "0";
+    layerButton.style.background = "transparent";
+    layerButton.style.padding = "0";
+    layerButton.style.font = "inherit";
+    layerButton.style.fontWeight = "700";
+    layerButton.addEventListener("click", () => onSelectLayer(feature.layer));
+    item.append(layerButton);
+
+    const source = document.createElement("div");
+    source.style.color = "#888";
+    source.style.fontSize = "10px";
+    source.textContent = `${feature.source}${feature.sourceLayer ? ` / ${feature.sourceLayer}` : ""}`;
+    item.append(source);
+
+    Object.entries(feature.properties)
+      .slice(0, 8)
+      .forEach(([key, value]) => {
+        const row = document.createElement("div");
+        const keyNode = document.createElement("span");
+        keyNode.style.color = "#888";
+        keyNode.textContent = `${key}:`;
+        row.append(keyNode, ` ${String(value)}`);
+        item.append(row);
+      });
+
+    const remainingProperties = Object.keys(feature.properties).length - 8;
+    if (remainingProperties > 0) {
+      const remaining = document.createElement("div");
+      remaining.style.color = "#888";
+      remaining.textContent = `...${remainingProperties} more`;
+      item.append(remaining);
+    }
+
+    root.append(item);
+  });
+
+  return root;
+}
+
 export function MapPreview({ inspectMode, onFeatureInspect }: MapPreviewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -48,41 +113,11 @@ export function MapPreview({ inspectMode, onFeatureInspect }: MapPreviewProps) {
 
       onFeatureInspect?.(inspected);
 
-      // Show popup with feature info
-      const html = inspected
-        .map(
-          (f) =>
-            `<div style="margin-bottom:6px;font-size:11px;font-family:monospace">` +
-            `<strong style="cursor:pointer;color:#3b82f6" data-layer="${f.layer}">${f.layer}</strong>` +
-            `<div style="color:#888;font-size:10px">${f.source}${f.sourceLayer ? ` / ${f.sourceLayer}` : ""}</div>` +
-            Object.entries(f.properties)
-              .slice(0, 8)
-              .map(
-                ([k, v]) =>
-                  `<div><span style="color:#888">${k}:</span> ${String(v)}</div>`,
-              )
-              .join("") +
-            (Object.keys(f.properties).length > 8
-              ? `<div style="color:#888">…${Object.keys(f.properties).length - 8} more</div>`
-              : "") +
-            `</div>`,
-        )
-        .join('<hr style="margin:4px 0;border-color:#333">');
-
       popupRef.current?.remove();
       popupRef.current = new maplibregl.Popup({ maxWidth: "320px" })
         .setLngLat(e.lngLat)
-        .setHTML(`<div style="max-height:250px;overflow:auto">${html}</div>`)
+        .setDOMContent(buildInspectPopupContent(inspected, setSelectedLayer))
         .addTo(map);
-
-      // Add click handlers to layer names in popup
-      const popupEl = popupRef.current.getElement();
-      popupEl?.querySelectorAll("[data-layer]").forEach((el) => {
-        el.addEventListener("click", () => {
-          const layerId = el.getAttribute("data-layer");
-          if (layerId) setSelectedLayer(layerId);
-        });
-      });
     },
     [inspectMode, onFeatureInspect, setSelectedLayer],
   );
