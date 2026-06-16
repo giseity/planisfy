@@ -9,7 +9,7 @@ import {
   featureFlags,
   platformConfig,
 } from "@planisfy/database"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requireAdmin, requirePlatformPermission } from "@/lib/admin-auth"
 
 function stringValue(formData: FormData, key: string) {
   const value = formData.get(key)
@@ -59,7 +59,7 @@ async function audit({
 }
 
 export async function upsertPlatformConfigAction(formData: FormData) {
-  const admin = await requireAdmin()
+  const admin = await requirePlatformPermission("platform.configuration.manage")
   const id = stringValue(formData, "id")
   const key = stringValue(formData, "key")
   const value = stringValue(formData, "value")
@@ -130,7 +130,7 @@ export async function upsertPlatformConfigAction(formData: FormData) {
 }
 
 export async function createFeatureFlagAction(formData: FormData) {
-  const admin = await requireAdmin()
+  const admin = await requirePlatformPermission("platform.configuration.manage")
   const key = stringValue(formData, "key")
   const label = stringValue(formData, "label")
   if (!key || !label) throw new Error("Feature flag key and label are required")
@@ -159,7 +159,7 @@ export async function createFeatureFlagAction(formData: FormData) {
 }
 
 export async function updateFeatureFlagAction(formData: FormData) {
-  const admin = await requireAdmin()
+  const admin = await requirePlatformPermission("platform.configuration.manage")
   const id = stringValue(formData, "id")
   if (!id) throw new Error("Feature flag ID is required")
 
@@ -188,7 +188,7 @@ export async function updateFeatureFlagAction(formData: FormData) {
 }
 
 export async function archiveFeatureFlagAction(formData: FormData) {
-  const admin = await requireAdmin()
+  const admin = await requirePlatformPermission("platform.configuration.manage")
   const id = stringValue(formData, "id")
   if (!id) throw new Error("Feature flag ID is required")
 

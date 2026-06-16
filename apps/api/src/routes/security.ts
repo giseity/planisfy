@@ -2,8 +2,11 @@ import { Hono } from "hono";
 import { and, desc, eq, inArray, or, like } from "drizzle-orm";
 import { auditEvents, db } from "@planisfy/database";
 import type { AuthEnv } from "../middleware/auth";
+import { requireOrgPermission } from "../middleware/auth";
 
 export const securityRoute = new Hono<AuthEnv>();
+
+securityRoute.use("/security/activity", requireOrgPermission("members.manage"));
 
 const securityResourceTypes = [
   "account",

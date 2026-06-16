@@ -3,8 +3,11 @@ import { z } from "zod";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 import { db, auditEvents, accounts } from "@planisfy/database";
 import type { AuthEnv } from "../middleware/auth";
+import { requireOrgPermission } from "../middleware/auth";
 
 export const auditRoute = new Hono<AuthEnv>();
+
+auditRoute.use("/audit", requireOrgPermission("members.manage"));
 
 const querySchema = z.object({
   page: z.coerce.number().int().positive().default(1),

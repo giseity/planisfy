@@ -3,6 +3,7 @@ import test from "node:test";
 import { Hono } from "hono";
 import {
   isOrgRoleAtLeast,
+  requireOrgPermission,
   requireOrgMutationPermission,
   requireOrgMutationRole,
   resolveSessionOwnerContext,
@@ -194,6 +195,48 @@ test("org mutation permission middleware allows personal workflows and gates org
     (
       await app.request("/keys", {
         method: "POST",
+        headers: { "x-active-org": "org-1", "x-org-role": "admin" },
+      })
+    ).status,
+    200,
+  );
+});
+
+test("org permission middleware gates sensitive reads for active organizations", async () => {
+  const app = new Hono<AuthEnv>();
+  app.use("*", async (c, next) => {
+    const activeOrg = c.req.header("x-active-org") ?? null;
+    const orgRole = c.req.header("x-org-role") ?? null;
+    c.set("userId", "user-1");
+    c.set("ownerId", activeOrg ?? "user-1");
+    c.set("orgRole", orgRole);
+    c.set("session", {
+      id: "session-1",
+      userId: "user-1",
+      token: "token-1",
+      activeOrganizationId: activeOrg,
+    });
+    c.set("apiKeyId", null);
+    c.set("apiKeyOwnerId", null);
+    c.set("apiKeyScopes", null);
+    c.set("requestId", "request-1");
+    await next();
+  });
+  app.use("/operations", requireOrgPermission("operations.manage"));
+  app.get("/operations", (c) => c.json({ ok: true }));
+
+  assert.equal((await app.request("/operations")).status, 200);
+  assert.equal(
+    (
+      await app.request("/operations", {
+        headers: { "x-active-org": "org-1", "x-org-role": "member" },
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await app.request("/operations", {
         headers: { "x-active-org": "org-1", "x-org-role": "admin" },
       })
     ).status,

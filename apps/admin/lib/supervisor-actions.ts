@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/lib/admin-auth";
+import { requirePlatformRole } from "@/lib/admin-auth";
 import {
   runSupervisorApply,
   runSupervisorBackup,
@@ -11,19 +11,19 @@ import {
 } from "@/lib/supervisor";
 
 export async function supervisorPreflightAction() {
-  await requireAdmin();
+  await requirePlatformRole("OWNER");
   await runSupervisorPreflight();
   revalidatePath("/upgrade");
 }
 
 export async function supervisorBackupAction() {
-  await requireAdmin();
+  await requirePlatformRole("OWNER");
   await runSupervisorBackup();
   revalidatePath("/upgrade");
 }
 
 export async function supervisorApplyAction(formData: FormData) {
-  await requireAdmin();
+  await requirePlatformRole("OWNER");
   await runSupervisorApply({
     backupOperationId: requireString(formData, "backupOperationId"),
     manifestPath: requireString(formData, "manifestPath"),
@@ -32,7 +32,7 @@ export async function supervisorApplyAction(formData: FormData) {
 }
 
 export async function supervisorRollbackAction(formData: FormData) {
-  await requireAdmin();
+  await requirePlatformRole("OWNER");
   await runSupervisorRollback({
     backupDir: requireString(formData, "backupDir"),
     manifestPath: requireString(formData, "manifestPath"),

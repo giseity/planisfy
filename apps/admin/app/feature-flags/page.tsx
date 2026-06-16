@@ -21,7 +21,7 @@ import {
 } from "@planisfy/ui/components/page-header"
 import { Textarea } from "@planisfy/ui/components/textarea"
 import { Archive, Flag, Plus } from "lucide-react"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requirePlatformPermission } from "@/lib/admin-auth"
 import {
   archiveFeatureFlagAction,
   createFeatureFlagAction,
@@ -31,7 +31,7 @@ import {
 export const dynamic = "force-dynamic"
 
 export default async function FeatureFlagsPage() {
-  await requireAdmin()
+  await requirePlatformPermission("platform.configuration.manage")
   const flags = await db
     .select()
     .from(featureFlags)

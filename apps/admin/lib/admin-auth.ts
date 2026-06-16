@@ -2,7 +2,13 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@planisfy/auth/auth";
 import { db, users } from "@planisfy/database";
-import { hasMinPlatformRole } from "@planisfy/utils";
+import {
+  canPlatform,
+  hasMinPlatformRole,
+  minPlatformRoleFor,
+  type PlatformPermission,
+  type PlatformRole,
+} from "@planisfy/utils";
 import { eq } from "drizzle-orm";
 
 /**
@@ -34,4 +40,24 @@ export async function requireAdmin() {
     email: session.user.email,
     role: user.role,
   };
+}
+
+export async function requirePlatformPermission(
+  permission: PlatformPermission,
+) {
+  const admin = await requireAdmin();
+  if (!canPlatform(admin.role, permission)) {
+    throw new Error(
+      `Forbidden: ${permission} requires ${minPlatformRoleFor(permission)} access`,
+    );
+  }
+  return admin;
+}
+
+export async function requirePlatformRole(minRole: PlatformRole) {
+  const admin = await requireAdmin();
+  if (!hasMinPlatformRole(admin.role, minRole)) {
+    throw new Error(`Forbidden: ${minRole} access required`);
+  }
+  return admin;
 }

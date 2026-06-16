@@ -36,7 +36,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 
-import { requireAdmin } from "@/lib/admin-auth";
+import { requirePlatformRole } from "@/lib/admin-auth";
 import {
   supervisorApplyAction,
   supervisorBackupAction,
@@ -51,7 +51,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function UpgradePage() {
-  await requireAdmin();
+  await requirePlatformRole("OWNER");
   const data = await getUpgradeCenterData();
 
   return (

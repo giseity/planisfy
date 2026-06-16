@@ -37,8 +37,8 @@ const checkoutSchema = z.object({
 export const billingRoute = new Hono<AuthEnv>();
 export const billingWebhookRoute = new Hono();
 
-billingRoute.use("/billing/checkout", requireOrgPermission("billing.manage"));
-billingRoute.use("/billing/portal", requireOrgPermission("billing.manage"));
+billingRoute.use("/billing", requireOrgPermission("billing.manage"));
+billingRoute.use("/billing/*", requireOrgPermission("billing.manage"));
 
 type BillingTransactionRow = typeof billingTransactions.$inferSelect;
 

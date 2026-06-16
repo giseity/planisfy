@@ -246,6 +246,9 @@ importers:
       "@planisfy/ui":
         specifier: workspace:*
         version: link:../../packages/ui
+      "@planisfy/utils":
+        specifier: workspace:*
+        version: link:../../packages/utils
       "@types/geojson":
         specifier: ^7946.0.16
         version: 7946.0.16

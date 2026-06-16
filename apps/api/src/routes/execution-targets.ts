@@ -9,7 +9,7 @@ import {
   executionTargets,
   workerProfiles,
 } from "@planisfy/database";
-import { requireOrgMutationPermission, type AuthEnv } from "../middleware/auth";
+import { requireOrgPermission, type AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 import { customerComputeMutationGate } from "../lib/platform-gates";
 import {
@@ -24,19 +24,23 @@ export const executionTargetsRoute = new Hono<AuthEnv>();
 
 executionTargetsRoute.use(
   "/execution-targets",
-  requireOrgMutationPermission("execution_target.manage"),
+  requireOrgPermission("execution_target.manage"),
 );
 executionTargetsRoute.use(
   "/execution-targets/*",
-  requireOrgMutationPermission("execution_target.manage"),
+  requireOrgPermission("execution_target.manage"),
 );
 executionTargetsRoute.use(
   "/worker-profiles",
-  requireOrgMutationPermission("execution_target.manage"),
+  requireOrgPermission("execution_target.manage"),
 );
 executionTargetsRoute.use(
   "/worker-profiles/*",
-  requireOrgMutationPermission("execution_target.manage"),
+  requireOrgPermission("execution_target.manage"),
+);
+executionTargetsRoute.use(
+  "/processing-jobs/estimate",
+  requireOrgPermission("execution_target.manage"),
 );
 
 const providerSchema = z.enum(["local", "aws_batch", "gcp_batch"]);

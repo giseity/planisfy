@@ -29,7 +29,7 @@ import {
 } from "@planisfy/ui/components/table"
 import { Textarea } from "@planisfy/ui/components/textarea"
 import { Database, Save, SlidersHorizontal } from "lucide-react"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requirePlatformPermission } from "@/lib/admin-auth"
 import { upsertPlatformConfigAction } from "@/lib/platform-admin-actions"
 
 export const dynamic = "force-dynamic"
@@ -51,7 +51,7 @@ const runtimeKeys = [
 const secretPattern = /(SECRET|KEY|TOKEN|PASSWORD|DATABASE_URL|REDIS_URL)/i
 
 export default async function ConfigurationPage() {
-  await requireAdmin()
+  await requirePlatformPermission("platform.configuration.manage")
   const rows = await db
     .select()
     .from(platformConfig)
