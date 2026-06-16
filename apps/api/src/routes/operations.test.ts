@@ -7,6 +7,7 @@ import {
   prepareWorkflowTemplateApplication,
   validateScheduleInput,
   validateNotificationTarget,
+  validatePreviewTargetUrl,
 } from "./operations";
 
 test("formatSseEvent emits EventSource-compatible frames", () => {
@@ -210,6 +211,42 @@ test("notification targets reject private hosts and wrong provider hosts", async
     ),
     "https://discordapp.com/api/webhooks/123/abc",
   );
+});
+
+test("preview targets allow only http and https URLs", () => {
+  assert.equal(
+    validatePreviewTargetUrl("https://example.com/preview?token=abc"),
+    "https://example.com/preview?token=abc",
+  );
+  assert.throws(
+    () => validatePreviewTargetUrl("javascript:alert(1)"),
+    /http or https/,
+  );
+  assert.throws(
+    () => validatePreviewTargetUrl("/relative-preview"),
+    /valid URL/,
+  );
+});
+
+test("preview workflow templates reject unsafe target URLs", () => {
+  const prepared = prepareWorkflowTemplateApplication(
+    {
+      id: "template-1",
+      name: "Preview",
+      category: "preview",
+      template: {
+        resourceType: "tileset",
+        resourceId: "00000000-0000-4000-8000-000000000001",
+        targetUrl: "javascript:alert(1)",
+      },
+    },
+    {},
+  );
+
+  assert.equal(prepared.success, false);
+  if (!prepared.success) {
+    assert.match(JSON.stringify(prepared.error.flatten()), /http or https/);
+  }
 });
 
 test("deliverNotification does not fetch rejected targets", async () => {

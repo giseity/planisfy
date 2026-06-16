@@ -28,7 +28,7 @@ import { getStorage } from "@planisfy/storage";
 import { requireOrgPermission, type AuthEnv } from "../middleware/auth";
 import { env, redisConnection } from "../env";
 import { enqueueOutboxEvent } from "../lib/outbox";
-import { sendEmail } from "../lib/email";
+import { htmlParagraphFromText, sendEmail } from "../lib/email";
 import { buildNotificationPayload } from "../lib/notification-adapters";
 import {
   SourceUrlRejectedError,
@@ -111,7 +111,24 @@ const workerNodeSchema = z
 const previewLinkSchema = z.object({
   resourceType: z.string().min(1).max(64),
   resourceId: z.string().uuid(),
-  targetUrl: z.string().min(1).max(2048),
+  targetUrl: z
+    .string()
+    .min(1)
+    .max(2048)
+    .transform((target, ctx) => {
+      try {
+        return validatePreviewTargetUrl(target);
+      } catch (err) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            err instanceof Error
+              ? err.message
+              : "Preview target URL is not allowed",
+        });
+        return z.NEVER;
+      }
+    }),
   slug: z.string().min(1).max(128).optional(),
   expiresAt: z.string().datetime().optional(),
   metadata: z.record(z.string(), z.unknown()).default({}),
@@ -1228,6 +1245,19 @@ export function validateNotificationTarget(
   return validateOutboundUrl(target);
 }
 
+export function validatePreviewTargetUrl(target: string) {
+  let url: URL;
+  try {
+    url = new URL(target);
+  } catch {
+    throw new Error("Preview target URL must be a valid URL");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Preview target URL must use http or https");
+  }
+  return url.toString();
+}
+
 function validateProviderWebhookUrl(
   target: string,
   allowedHosts: readonly string[],
@@ -1281,7 +1311,7 @@ export async function deliverNotification(
     const delivered = await sendEmail({
       to: channel.target,
       subject: body.subject,
-      html: `<p>${body.text.replaceAll("\n", "<br />")}</p>`,
+      html: htmlParagraphFromText(body.text),
       text: body.text,
     });
     return {
