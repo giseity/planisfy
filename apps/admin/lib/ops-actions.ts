@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { and, eq, isNull, sql } from "drizzle-orm"
+import { and, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm"
 import {
   db,
   eventOutbox,
@@ -51,7 +51,7 @@ export async function retryOutboxEventAction(formData: FormData) {
     throw new Error("Only failed or stale processing events can be retried")
   }
 
-  await db
+  const [updated] = await db
     .update(eventOutbox)
     .set({
       status: "PENDING",
@@ -59,7 +59,23 @@ export async function retryOutboxEventAction(formData: FormData) {
       lastError: null,
       updatedAt: now,
     })
-    .where(eq(eventOutbox.id, id))
+    .where(
+      and(
+        eq(eventOutbox.id, id),
+        or(
+          eq(eventOutbox.status, "FAILED"),
+          and(
+            eq(eventOutbox.status, "PROCESSING"),
+            lt(eventOutbox.updatedAt, staleOutboxCutoff(now)),
+          ),
+        ),
+      ),
+    )
+    .returning({ id: eventOutbox.id })
+
+  if (!updated) {
+    throw new Error("Only failed or stale processing events can be retried")
+  }
 
   revalidateOpsPaths("/outbox")
 }
@@ -83,10 +99,23 @@ export async function archiveOutboxEventAction(formData: FormData) {
     throw new Error("Active processing events cannot be archived")
   }
 
-  await db
+  const [updated] = await db
     .update(eventOutbox)
     .set({ status: "ARCHIVED", updatedAt: now })
-    .where(eq(eventOutbox.id, id))
+    .where(
+      and(
+        eq(eventOutbox.id, id),
+        or(
+          ne(eventOutbox.status, "PROCESSING"),
+          lt(eventOutbox.updatedAt, staleOutboxCutoff(now)),
+        ),
+      ),
+    )
+    .returning({ id: eventOutbox.id })
+
+  if (!updated) {
+    throw new Error("Active processing events cannot be archived")
+  }
 
   revalidateOpsPaths("/outbox")
 }
@@ -118,8 +147,8 @@ export async function retryProcessingJobAction(formData: FormData) {
     options: input.options,
   })
 
-  await db.transaction(async (tx) => {
-    await tx
+  const transitioned = await db.transaction(async (tx) => {
+    const [updated] = await tx
       .update(processingJobs)
       .set({
         status: "PENDING",
@@ -133,7 +162,15 @@ export async function retryProcessingJobAction(formData: FormData) {
         completedAt: null,
         updatedAt: now,
       })
-      .where(eq(processingJobs.id, job.id))
+      .where(
+        and(
+          eq(processingJobs.id, job.id),
+          inArray(processingJobs.status, ["FAILED", "CANCELED"]),
+        ),
+      )
+      .returning({ id: processingJobs.id })
+
+    if (!updated) return false
 
     await tx.insert(processingJobLogs).values({
       jobId: job.id,
@@ -151,7 +188,7 @@ export async function retryProcessingJobAction(formData: FormData) {
 
     await tx
       .update(tilesets)
-      .set({ status: "BUILDING" })
+      .set({ status: "BUILDING", buildJobId: job.id })
       .where(eq(tilesets.id, input.tilesetId))
 
     if (input.uploadId) {
@@ -160,7 +197,13 @@ export async function retryProcessingJobAction(formData: FormData) {
         .set({ status: "VALIDATING", linkedTilesetId: input.tilesetId })
         .where(eq(uploads.id, input.uploadId))
     }
+
+    return true
   })
+
+  if (!transitioned) {
+    throw new Error("Only failed or canceled jobs can be retried")
+  }
 
   revalidateOpsPaths("/jobs", `/jobs/${id}`)
 }
@@ -181,27 +224,48 @@ export async function cancelProcessingJobAction(formData: FormData) {
     throw new Error("Completed jobs cannot be canceled")
   }
 
-  await db.transaction(async (tx) => {
-    await tx
+  const transitioned = await db.transaction(async (tx) => {
+    const [updated] = await tx
       .update(processingJobs)
       .set({
-        status: job.status === "PENDING" ? "CANCELED" : job.status,
+        status: sql<
+          typeof processingJobs.status
+        >`case when ${processingJobs.status} = 'PENDING' then 'CANCELED' else ${processingJobs.status} end`,
         cancelRequestedAt: now,
-        completedAt: job.status === "PENDING" ? now : job.completedAt,
+        completedAt: sql<
+          Date | null
+        >`case when ${processingJobs.status} = 'PENDING' then ${now} else ${processingJobs.completedAt} end`,
         updatedAt: now,
       })
-      .where(eq(processingJobs.id, id))
+      .where(
+        and(
+          eq(processingJobs.id, id),
+          inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
+        ),
+      )
+      .returning({ status: processingJobs.status })
+
+    if (!updated) return null
+
+    const previousStatus =
+      updated.status === "CANCELED" ? "PENDING" : updated.status
 
     await tx.insert(processingJobLogs).values({
       jobId: id,
       level: "warn",
       message:
-        job.status === "PENDING"
+        previousStatus === "PENDING"
           ? "Admin canceled pending job"
           : "Admin cancellation requested",
-      metadata: { previousStatus: job.status },
+      metadata: { previousStatus },
     })
+
+    return updated
   })
+
+  if (!transitioned) {
+    throw new Error("Completed jobs cannot be canceled")
+  }
 
   revalidateOpsPaths("/jobs", `/jobs/${id}`)
 }
