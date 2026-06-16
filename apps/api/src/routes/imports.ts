@@ -15,7 +15,11 @@ import {
 } from "@planisfy/database";
 import { encryptCredentialPayload } from "@planisfy/credentials";
 import type { AuthEnv } from "../middleware/auth";
-import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
+import {
+  ActiveProcessingJobLimitError,
+  createProcessingJob,
+  logProcessingJob,
+} from "../lib/processing-jobs";
 import { enqueueOutboxEvent } from "../lib/outbox";
 import { logAudit } from "../lib/audit";
 import { env } from "../env";
@@ -381,27 +385,34 @@ importsRoute.post("/source-imports/overture", async (c) => {
   }
 
   const dataset = await createDataset(accountId, parsed.data);
-  const job = await createProcessingJob({
-    accountId,
-    type: "source.import_overture",
-    input: {
-      provider: "OVERTURE",
-      datasetId: dataset.id,
-      regionId: region.id,
-      bbox: region.bbox,
-      estimate: importEstimate,
-      sourceConnectionId: parsed.data.sourceConnectionId,
-      theme: parsed.data.theme,
-      type: parsed.data.type,
-      catalog: catalogEntry
-        ? {
-            label: catalogEntry.label,
-            geometry: catalogEntry.geometry,
-            defaultLayerId: catalogEntry.defaultLayerId,
-          }
-        : undefined,
-    },
-  });
+  let job;
+  try {
+    job = await createProcessingJob({
+      accountId,
+      type: "source.import_overture",
+      input: {
+        provider: "OVERTURE",
+        datasetId: dataset.id,
+        regionId: region.id,
+        bbox: region.bbox,
+        estimate: importEstimate,
+        sourceConnectionId: parsed.data.sourceConnectionId,
+        theme: parsed.data.theme,
+        type: parsed.data.type,
+        catalog: catalogEntry
+          ? {
+              label: catalogEntry.label,
+              geometry: catalogEntry.geometry,
+              defaultLayerId: catalogEntry.defaultLayerId,
+            }
+          : undefined,
+      },
+    });
+  } catch (err) {
+    const response = processingJobLimitResponse(c, err);
+    if (response) return response;
+    throw err;
+  }
   const [sourceImport] = await db
     .insert(sourceImports)
     .values({
@@ -618,13 +629,20 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
     storageKey: storageObject.storageKey,
     options: { minZoom, maxZoom },
   });
-  const processingJob = await createProcessingJob({
-    accountId,
-    type: "tileset.process_dataset",
-    executionTargetId: runtimeSelection.executionTargetId,
-    workerProfileId: runtimeSelection.workerProfileId,
-    input: jobInput,
-  });
+  let processingJob;
+  try {
+    processingJob = await createProcessingJob({
+      accountId,
+      type: "tileset.process_dataset",
+      executionTargetId: runtimeSelection.executionTargetId,
+      workerProfileId: runtimeSelection.workerProfileId,
+      input: jobInput,
+    });
+  } catch (err) {
+    const response = processingJobLimitResponse(c, err);
+    if (response) return response;
+    throw err;
+  }
 
   await logProcessingJob(processingJob.id, "Dataset tiling queued", {
     metadata: {
@@ -689,6 +707,19 @@ function validationError(c: Context, error: z.ZodError) {
       },
     },
     400,
+  );
+}
+
+function processingJobLimitResponse(c: Context, err: unknown) {
+  if (!(err instanceof ActiveProcessingJobLimitError)) return null;
+  return c.json(
+    {
+      error: {
+        code: err.code,
+        message: `Too many active processing jobs (${err.current}/${err.limit}). Wait for a job to finish before queueing more work.`,
+      },
+    },
+    429,
   );
 }
 

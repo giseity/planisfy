@@ -56,7 +56,25 @@ export function getEndpointCategory(path: string): string {
 }
 
 export function getEndpointCost(path: string): number {
-  return ENDPOINT_COSTS[getEndpointCategory(path)] ?? 1;
+  const category = getEndpointCategory(path);
+  const baseCost = ENDPOINT_COSTS[category] ?? 1;
+  const coordinates = routeCoordinateCount(path);
+  if (!coordinates) return baseCost;
+
+  if (category === "directions") {
+    return baseCost + Math.max(0, coordinates - 2);
+  }
+  if (category === "matching") {
+    return baseCost + Math.max(0, Math.ceil(coordinates / 10) - 1);
+  }
+  if (category === "matrix") {
+    return baseCost + Math.ceil(Math.max(0, coordinates * coordinates - 4) / 10);
+  }
+  if (category === "optimized-trips") {
+    return baseCost + Math.max(0, coordinates - 3) * 2;
+  }
+
+  return baseCost;
 }
 
 /** All available API key scopes */
@@ -162,6 +180,15 @@ function hostFromUrl(value: string) {
   } catch {
     return null;
   }
+}
+
+function routeCoordinateCount(path: string): number | null {
+  const match = path.match(
+    /^\/(?:directions|matching|matrix|optimized-trips)\/v1\/[^/]+\/([^/?]+)/,
+  );
+  if (!match) return null;
+  const coords = decodeURIComponent(match[1]!);
+  return coords.split(";").filter(Boolean).length;
 }
 
 function isValidHostname(host: string) {

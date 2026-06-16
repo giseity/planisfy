@@ -1,8 +1,28 @@
-import { eq } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { db, processingJobLogs, processingJobs } from "@planisfy/database";
 
 type DatabaseClient = typeof db;
 type JsonObject = Record<string, unknown>;
+const ACTIVE_JOB_STATUSES = ["PENDING", "PROCESSING"] as const;
+const DEFAULT_ACTIVE_PROCESSING_JOB_LIMIT = 5;
+
+export class ActiveProcessingJobLimitError extends Error {
+  code = "ACTIVE_JOB_LIMIT";
+
+  constructor(
+    public current: number,
+    public limit: number,
+  ) {
+    super(`Active processing job limit reached (${current}/${limit})`);
+  }
+}
+
+export function activeProcessingJobLimit() {
+  const configured = Number(process.env.PROCESSING_ACTIVE_JOB_LIMIT);
+  return Number.isInteger(configured) && configured > 0
+    ? configured
+    : DEFAULT_ACTIVE_PROCESSING_JOB_LIMIT;
+}
 
 export async function createProcessingJob(
   params: {
@@ -14,17 +34,39 @@ export async function createProcessingJob(
   },
   database: DatabaseClient = db
 ) {
-  const [job] = await database
-    .insert(processingJobs)
-    .values({
-      accountId: params.accountId,
-      type: params.type,
-      input: params.input,
-      executionTargetId: params.executionTargetId ?? null,
-      workerProfileId: params.workerProfileId ?? null,
-      status: "PENDING",
-    })
-    .returning();
+  const job = await database.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`processingJobs:${params.accountId}`}))`,
+    );
+    const limit = activeProcessingJobLimit();
+    const [row] = await tx
+      .select({ count: count() })
+      .from(processingJobs)
+      .where(
+        and(
+          eq(processingJobs.accountId, params.accountId),
+          inArray(processingJobs.status, [...ACTIVE_JOB_STATUSES]),
+        ),
+      );
+    const current = row?.count ?? 0;
+    if (current >= limit) {
+      throw new ActiveProcessingJobLimitError(current, limit);
+    }
+
+    const [created] = await tx
+      .insert(processingJobs)
+      .values({
+        accountId: params.accountId,
+        type: params.type,
+        input: params.input,
+        executionTargetId: params.executionTargetId ?? null,
+        workerProfileId: params.workerProfileId ?? null,
+        status: "PENDING",
+      })
+      .returning();
+
+    return created;
+  });
 
   return job!;
 }

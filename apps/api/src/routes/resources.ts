@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -14,7 +14,11 @@ import {
 import { getStorage } from "@planisfy/storage";
 import { StoragePaths } from "@planisfy/storage-paths";
 import type { AuthEnv } from "../middleware/auth";
-import { createProcessingJob, logProcessingJob } from "../lib/processing-jobs";
+import {
+  ActiveProcessingJobLimitError,
+  createProcessingJob,
+  logProcessingJob,
+} from "../lib/processing-jobs";
 import { recordStorageObject } from "../lib/storage-ledger";
 import { logAudit } from "../lib/audit";
 import { registerPublishedTileAliases } from "../lib/martin-sources";
@@ -276,27 +280,34 @@ resourcesRoute.post("/uploads", async (c) => {
     })
     .where(eq(uploads.id, upload.id));
 
-  const processingJob = await createProcessingJob({
-    accountId,
-    type: "tileset.process_upload",
-    executionTargetId: runtimeSelection.executionTargetId,
-    workerProfileId: runtimeSelection.workerProfileId,
-    input: {
-      tilesetId: tileset.id,
-      uploadId: upload.id,
-      storageObjectId: storageObject.id,
-      uploadKey,
-      format,
-      csv: {
-        latitude: parsed.data.csvLatitude,
-        longitude: parsed.data.csvLongitude,
+  let processingJob: typeof processingJobs.$inferSelect;
+  try {
+    processingJob = await createProcessingJob({
+      accountId,
+      type: "tileset.process_upload",
+      executionTargetId: runtimeSelection.executionTargetId,
+      workerProfileId: runtimeSelection.workerProfileId,
+      input: {
+        tilesetId: tileset.id,
+        uploadId: upload.id,
+        storageObjectId: storageObject.id,
+        uploadKey,
+        format,
+        csv: {
+          latitude: parsed.data.csvLatitude,
+          longitude: parsed.data.csvLongitude,
+        },
+        options: {
+          minZoom: parsed.data.minZoom ?? 0,
+          maxZoom: parsed.data.maxZoom ?? 14,
+        },
       },
-      options: {
-        minZoom: parsed.data.minZoom ?? 0,
-        maxZoom: parsed.data.maxZoom ?? 14,
-      },
-    },
-  });
+    });
+  } catch (err) {
+    const response = processingJobLimitResponse(c, err);
+    if (response) return response;
+    throw err;
+  }
 
   await logProcessingJob(processingJob.id, "Upload received and queued", {
     metadata: {
@@ -698,21 +709,45 @@ resourcesRoute.post("/tilesets/:id/rebuild", async (c) => {
     );
   }
 
-  const processingJob = await createProcessingJob({
-    accountId,
-    type: "tileset.process_upload",
-    input: {
-      tilesetId: tileset.id,
-      uploadId: upload.id,
-      storageObjectId: storageObject.id,
-      uploadKey: storageObject.storageKey,
-      format,
-      options: {
-        minZoom: tileset.minZoom ?? 0,
-        maxZoom: tileset.maxZoom ?? 14,
+  const [activeRebuild] = await db
+    .select()
+    .from(processingJobs)
+    .where(
+      and(
+        eq(processingJobs.accountId, accountId),
+        eq(processingJobs.type, "tileset.process_upload"),
+        inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
+        sql`${processingJobs.input}->>'tilesetId' = ${tileset.id}`,
+      ),
+    )
+    .limit(1);
+
+  if (activeRebuild) {
+    return c.json({ data: activeRebuild }, 202);
+  }
+
+  let processingJob: typeof processingJobs.$inferSelect;
+  try {
+    processingJob = await createProcessingJob({
+      accountId,
+      type: "tileset.process_upload",
+      input: {
+        tilesetId: tileset.id,
+        uploadId: upload.id,
+        storageObjectId: storageObject.id,
+        uploadKey: storageObject.storageKey,
+        format,
+        options: {
+          minZoom: tileset.minZoom ?? 0,
+          maxZoom: tileset.maxZoom ?? 14,
+        },
       },
-    },
-  });
+    });
+  } catch (err) {
+    const response = processingJobLimitResponse(c, err);
+    if (response) return response;
+    throw err;
+  }
 
   await db.transaction(async (tx) => {
     await tx
@@ -1179,6 +1214,19 @@ function toConsoleTilesetVersion(
       ? (artifactById?.get(version.artifactStorageObjectId) ?? null)
       : null,
   };
+}
+
+function processingJobLimitResponse(c: Context, err: unknown) {
+  if (!(err instanceof ActiveProcessingJobLimitError)) return null;
+  return c.json(
+    {
+      error: {
+        code: err.code,
+        message: `Too many active processing jobs (${err.current}/${err.limit}). Wait for a job to finish before queueing more work.`,
+      },
+    },
+    429,
+  );
 }
 
 type ConsoleArtifact = {

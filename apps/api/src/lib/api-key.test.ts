@@ -64,3 +64,15 @@ test("endpoint category and cost classify tilequery", () => {
   assert.equal(getEndpointCategory(path), "tilequery");
   assert.equal(getEndpointCost(path), 10);
 });
+
+test("endpoint cost scales bounded routing workloads", () => {
+  assert.equal(
+    getEndpointCost("/directions/v1/driving/0,0;1,1;2,2"),
+    11,
+  );
+  assert.equal(getEndpointCost("/matrix/v1/driving/0,0;1,1;2,2;3,3"), 12);
+  assert.equal(
+    getEndpointCost("/optimized-trips/v1/driving/0,0;1,1;2,2;3,3"),
+    17,
+  );
+});
