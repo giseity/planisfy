@@ -58,3 +58,4 @@ credentials/
 
 # Local scratch notes should live outside the repository or under .local/.
 .local/
+.deepsec/
