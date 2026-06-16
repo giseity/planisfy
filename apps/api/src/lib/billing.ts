@@ -410,33 +410,27 @@ export async function applyDodoWebhookEvent(
   );
 
   if (subscriptionId) {
-    const [existing] = await db
-      .select({ id: subscriptions.id })
-      .from(subscriptions)
-      .where(eq(subscriptions.providerSubscriptionId, subscriptionId))
-      .limit(1);
-
-    if (existing) {
-      await db
-        .update(subscriptions)
-        .set({
-          accountId,
-          planId: product.planId,
-          status,
-          currentPeriodStart: periodStart,
-          currentPeriodEnd: periodEnd,
-        })
-        .where(eq(subscriptions.id, existing.id));
-    } else {
-      await db.insert(subscriptions).values({
+    await db
+      .insert(subscriptions)
+      .values({
         accountId,
         planId: product.planId,
         status,
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
         providerSubscriptionId: subscriptionId,
+      })
+      .onConflictDoUpdate({
+        target: subscriptions.providerSubscriptionId,
+        set: {
+          accountId,
+          planId: product.planId,
+          status,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          updatedAt: new Date(),
+        },
       });
-    }
   }
 
   return {

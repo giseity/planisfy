@@ -1511,6 +1511,9 @@ export const subscriptions = pgTable(
   (table) => [
     index("subscriptions_account_idx").on(table.accountId),
     index("subscriptions_status_idx").on(table.status),
+    uniqueIndex("subscriptions_provider_subscription_unique").on(
+      table.providerSubscriptionId,
+    ),
   ],
 );
 
