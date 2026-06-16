@@ -1,7 +1,7 @@
 import { createMiddleware } from "hono/factory";
 import type { Context } from "hono";
-import { db, members, sessions } from "@planisfy/database";
-import { eq, and, gt } from "drizzle-orm";
+import { accounts, db, members, sessions } from "@planisfy/database";
+import { eq, and, gt, isNull } from "drizzle-orm";
 import { getCookie } from "hono/cookie";
 import {
   canOrg,
@@ -281,8 +281,8 @@ export function requireOrgMutationPermission(
 
 export function getBetterAuthSessionCookie(c: Parameters<typeof getCookie>[0]) {
   return (
-    getCookie(c, "better-auth.session_token") ||
-    getCookie(c, "__Secure-better-auth.session_token")
+    getCookie(c, "__Secure-better-auth.session_token") ||
+    getCookie(c, "better-auth.session_token")
   );
 }
 
@@ -300,7 +300,15 @@ async function findValidSession(rawToken: string) {
       activeOrganizationId: sessions.activeOrganizationId,
     })
     .from(sessions)
-    .where(and(eq(sessions.token, token), gt(sessions.expiresAt, new Date())))
+    .innerJoin(accounts, eq(accounts.id, sessions.userId))
+    .where(
+      and(
+        eq(sessions.token, token),
+        gt(sessions.expiresAt, new Date()),
+        eq(accounts.lifecycleStatus, "ACTIVE"),
+        isNull(accounts.deletedAt),
+      ),
+    )
     .limit(1);
 
   return session ?? null;
@@ -339,7 +347,15 @@ async function findMembershipRole(userId: string, orgId: string) {
   const [membership] = await db
     .select({ role: members.role })
     .from(members)
-    .where(and(eq(members.userId, userId), eq(members.organizationId, orgId)))
+    .innerJoin(accounts, eq(accounts.id, members.organizationId))
+    .where(
+      and(
+        eq(members.userId, userId),
+        eq(members.organizationId, orgId),
+        eq(accounts.lifecycleStatus, "ACTIVE"),
+        isNull(accounts.deletedAt),
+      ),
+    )
     .limit(1);
 
   return membership?.role ?? null;

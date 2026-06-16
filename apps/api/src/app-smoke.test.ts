@@ -81,3 +81,15 @@ test("auth middleware accepts secure Better Auth session cookie name", async () 
   assert.equal(response.status, 200);
   assert.equal(await response.text(), "secure-token.signed");
 });
+
+test("auth middleware prefers secure session cookie when both names are present", async () => {
+  const response = await cookieApp.request("/session-cookie", {
+    headers: {
+      Cookie:
+        "better-auth.session_token=plain-token.signed; __Secure-better-auth.session_token=secure-token.signed",
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "secure-token.signed");
+});

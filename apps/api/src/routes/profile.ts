@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, isNull } from "drizzle-orm";
-import { db, profiles, users } from "@planisfy/database";
+import { apiKeys, db, profiles, sessions, users } from "@planisfy/database";
 import { logAudit } from "../lib/audit";
 import type { AuthEnv } from "../middleware/auth";
 
@@ -174,11 +174,20 @@ profileRoute.delete("/profile", async (c) => {
     ipAddress: getClientIp(c.req.raw),
   });
 
-  // Soft-delete the profile — cascades via FK to soft-delete user data
-  await db
-    .update(profiles)
-    .set({ deletedAt: new Date() })
-    .where(eq(profiles.id, userId));
+  // Soft-delete the account and immediately revoke credentials that would
+  // otherwise remain valid until their normal expiry.
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(profiles)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(eq(profiles.id, userId));
+    await tx.delete(sessions).where(eq(sessions.userId, userId));
+    await tx
+      .update(apiKeys)
+      .set({ deletedAt: now })
+      .where(and(eq(apiKeys.ownerId, userId), isNull(apiKeys.deletedAt)));
+  });
 
   return c.json({ data: { deleted: true } });
 });

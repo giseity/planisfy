@@ -120,7 +120,7 @@ function ChangePasswordSection() {
       await authClient.changePassword({
         currentPassword,
         newPassword,
-        revokeOtherSessions: false,
+        revokeOtherSessions: true,
       });
       setSuccess(true);
       setCurrentPassword("");

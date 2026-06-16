@@ -1,5 +1,5 @@
 import { createMiddleware } from "hono/factory";
-import { db, apiKeys } from "@planisfy/database";
+import { accounts, apiKeys, db } from "@planisfy/database";
 import { eq, and, isNull } from "drizzle-orm";
 import {
   hashKey,
@@ -52,7 +52,15 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
       expiresAt: apiKeys.expiresAt,
     })
     .from(apiKeys)
-    .where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.deletedAt)))
+    .innerJoin(accounts, eq(accounts.id, apiKeys.ownerId))
+    .where(
+      and(
+        eq(apiKeys.keyHash, keyHash),
+        isNull(apiKeys.deletedAt),
+        eq(accounts.lifecycleStatus, "ACTIVE"),
+        isNull(accounts.deletedAt),
+      ),
+    )
     .limit(1);
 
   if (!key) {
