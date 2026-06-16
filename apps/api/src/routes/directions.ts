@@ -4,13 +4,24 @@ import { z } from "zod";
 import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 
+const MAX_ROUTE_COORDINATES = 25;
+const MAX_TRACE_COORDINATES = 100;
+const MAX_OPTIMIZED_TRIP_COORDINATES = 12;
+const MAX_MATRIX_LOCATIONS = 25;
+const MAX_MATRIX_CELLS = 100;
+const MAX_ISOCHRONE_CONTOURS = 4;
+const MAX_ISOCHRONE_MINUTES = 240;
+const MAX_ISOCHRONE_KILOMETERS = 500;
+
+type Coordinate = { lon: number; lat: number };
+
 const directionsBodySchema = z.object({
   locations: z.array(
     z.object({
       lon: z.number().min(-180).max(180),
       lat: z.number().min(-90).max(90),
     })
-  ).min(2).max(100),
+  ).min(2).max(MAX_ROUTE_COORDINATES),
   costing: z.string().optional(),
   units: z.enum(["kilometers", "miles"]).optional(),
   language: z.string().max(8).optional(),
@@ -40,15 +51,71 @@ async function valhallaProxy(
   }
 }
 
-function parseCoords(coords: string): { lon: number; lat: number }[] {
+export function parseCoords(coords: string): Coordinate[] {
   return coords.split(";").map((pair) => {
     const [lon, lat] = pair.split(",").map(Number);
     return { lon: lon!, lat: lat! };
   });
 }
 
-function toValhallaLocations(coords: { lon: number; lat: number }[]) {
+function toValhallaLocations(coords: Coordinate[]) {
   return coords.map((c) => ({ lon: c.lon, lat: c.lat }));
+}
+
+export function validateCoordinateList(
+  points: Coordinate[],
+  params: { min: number; max: number },
+): string | null {
+  if (points.length < params.min) {
+    return `At least ${params.min} coordinates required`;
+  }
+  if (points.length > params.max) {
+    return `At most ${params.max} coordinates allowed`;
+  }
+  if (
+    points.some(
+      (point) =>
+        !Number.isFinite(point.lon) ||
+        !Number.isFinite(point.lat) ||
+        point.lon < -180 ||
+        point.lon > 180 ||
+        point.lat < -90 ||
+        point.lat > 90,
+    )
+  ) {
+    return "Coordinates must be valid longitude,latitude pairs";
+  }
+  return null;
+}
+
+export function validateMatrixWorkload(
+  sources: Coordinate[],
+  targets: Coordinate[],
+): string | null {
+  const locationCount = Math.max(sources.length, targets.length);
+  if (locationCount > MAX_MATRIX_LOCATIONS) {
+    return `At most ${MAX_MATRIX_LOCATIONS} matrix locations allowed`;
+  }
+  if (sources.length * targets.length > MAX_MATRIX_CELLS) {
+    return `At most ${MAX_MATRIX_CELLS} matrix cells allowed`;
+  }
+  return null;
+}
+
+export function selectIndexedCoordinates(
+  points: Coordinate[],
+  indexesParam: string | undefined,
+): Coordinate[] | null {
+  if (!indexesParam) return points;
+  const selected: Coordinate[] = [];
+  for (const indexValue of indexesParam.split(";")) {
+    const index = Number(indexValue);
+    if (!Number.isInteger(index) || index < 0 || index >= points.length) {
+      return null;
+    }
+    selected.push(points[index]!);
+  }
+  return selected;
 }
 
 // ── GET /directions/v1/:profile/:coords ─────────────────────────────────────
@@ -56,9 +123,15 @@ function toValhallaLocations(coords: { lon: number; lat: number }[]) {
 directionsRoute.get("/directions/v1/:profile/:coords", async (c) => {
   const { profile, coords } = c.req.param();
   const points = parseCoords(coords);
-
-  if (points.length < 2) {
-    return c.json({ error: { code: "BAD_REQUEST", message: "At least 2 coordinates required" } }, 400);
+  const coordinateError = validateCoordinateList(points, {
+    min: 2,
+    max: MAX_ROUTE_COORDINATES,
+  });
+  if (coordinateError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: coordinateError } },
+      400,
+    );
   }
 
   const costing = mapProfileToCosting(profile);
@@ -115,6 +188,16 @@ directionsRoute.post("/directions/v1/:profile", async (c) => {
 directionsRoute.get("/isochrone/v1/:profile/:coord", async (c) => {
   const { profile, coord } = c.req.param();
   const [lon, lat] = coord.split(",").map(Number);
+  const coordinateError = validateCoordinateList([{ lon: lon!, lat: lat! }], {
+    min: 1,
+    max: 1,
+  });
+  if (coordinateError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: coordinateError } },
+      400,
+    );
+  }
 
   const costing = mapProfileToCosting(profile);
   if (!costing) {
@@ -126,11 +209,54 @@ directionsRoute.get("/isochrone/v1/:profile/:coord", async (c) => {
   const distParam = c.req.query("contours_meters");
 
   if (timeParam) {
-    for (const t of timeParam.split(",")) contours.push({ time: Number(t) });
+    for (const t of timeParam.split(",")) {
+      const time = Number(t);
+      if (!Number.isFinite(time) || time <= 0 || time > MAX_ISOCHRONE_MINUTES) {
+        return c.json(
+          {
+            error: {
+              code: "BAD_REQUEST",
+              message: `Contour minutes must be between 1 and ${MAX_ISOCHRONE_MINUTES}`,
+            },
+          },
+          400,
+        );
+      }
+      contours.push({ time });
+    }
   } else if (distParam) {
-    for (const d of distParam.split(",")) contours.push({ distance: Number(d) / 1000 });
+    for (const d of distParam.split(",")) {
+      const distance = Number(d) / 1000;
+      if (
+        !Number.isFinite(distance) ||
+        distance <= 0 ||
+        distance > MAX_ISOCHRONE_KILOMETERS
+      ) {
+        return c.json(
+          {
+            error: {
+              code: "BAD_REQUEST",
+              message: `Contour distance must be between 1 and ${MAX_ISOCHRONE_KILOMETERS} kilometers`,
+            },
+          },
+          400,
+        );
+      }
+      contours.push({ distance });
+    }
   } else {
     contours.push({ time: 15 });
+  }
+  if (contours.length > MAX_ISOCHRONE_CONTOURS) {
+    return c.json(
+      {
+        error: {
+          code: "BAD_REQUEST",
+          message: `At most ${MAX_ISOCHRONE_CONTOURS} contours allowed`,
+        },
+      },
+      400,
+    );
   }
 
   const polygons = c.req.query("polygons") !== "false";
@@ -155,9 +281,15 @@ directionsRoute.get("/isochrone/v1/:profile/:coord", async (c) => {
 directionsRoute.get("/matching/v1/:profile/:coords", async (c) => {
   const { profile, coords } = c.req.param();
   const points = parseCoords(coords);
-
-  if (points.length < 2) {
-    return c.json({ error: { code: "BAD_REQUEST", message: "At least 2 coordinates required" } }, 400);
+  const coordinateError = validateCoordinateList(points, {
+    min: 2,
+    max: MAX_TRACE_COORDINATES,
+  });
+  if (coordinateError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: coordinateError } },
+      400,
+    );
   }
 
   const costing = mapProfileToCosting(profile);
@@ -183,9 +315,15 @@ directionsRoute.get("/matching/v1/:profile/:coords", async (c) => {
 directionsRoute.get("/matrix/v1/:profile/:coords", async (c) => {
   const { profile, coords } = c.req.param();
   const points = parseCoords(coords);
-
-  if (points.length < 2) {
-    return c.json({ error: { code: "BAD_REQUEST", message: "At least 2 coordinates required" } }, 400);
+  const coordinateError = validateCoordinateList(points, {
+    min: 2,
+    max: MAX_MATRIX_LOCATIONS,
+  });
+  if (coordinateError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: coordinateError } },
+      400,
+    );
   }
 
   const costing = mapProfileToCosting(profile);
@@ -196,12 +334,24 @@ directionsRoute.get("/matrix/v1/:profile/:coords", async (c) => {
   const sourcesParam = c.req.query("sources");
   const destinationsParam = c.req.query("destinations");
 
-  const sources = sourcesParam
-    ? sourcesParam.split(";").map((i) => points[Number(i)]!)
-    : points;
-  const targets = destinationsParam
-    ? destinationsParam.split(";").map((i) => points[Number(i)]!)
-    : points;
+  const sources = selectIndexedCoordinates(points, sourcesParam);
+  const targets = selectIndexedCoordinates(points, destinationsParam);
+  if (!sources || !targets) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: "Invalid matrix indexes" } },
+      400,
+    );
+  }
+  const matrixError =
+    validateCoordinateList(sources, { min: 1, max: MAX_MATRIX_LOCATIONS }) ??
+    validateCoordinateList(targets, { min: 1, max: MAX_MATRIX_LOCATIONS }) ??
+    validateMatrixWorkload(sources, targets);
+  if (matrixError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: matrixError } },
+      400,
+    );
+  }
 
   const result = await valhallaProxy("sources_to_targets", {
     sources: toValhallaLocations(sources),
@@ -221,9 +371,15 @@ directionsRoute.get("/matrix/v1/:profile/:coords", async (c) => {
 directionsRoute.get("/optimized-trips/v1/:profile/:coords", async (c) => {
   const { profile, coords } = c.req.param();
   const points = parseCoords(coords);
-
-  if (points.length < 3) {
-    return c.json({ error: { code: "BAD_REQUEST", message: "At least 3 coordinates required for optimization" } }, 400);
+  const coordinateError = validateCoordinateList(points, {
+    min: 3,
+    max: MAX_OPTIMIZED_TRIP_COORDINATES,
+  });
+  if (coordinateError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: coordinateError } },
+      400,
+    );
   }
 
   const costing = mapProfileToCosting(profile);
