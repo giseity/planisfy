@@ -67,6 +67,7 @@ describe("self-host supervisor", () => {
     const { app, manifestPath } = await testApp({
       execute: async (command, args) => {
         commands.push(`${command} ${args.join(" ")}`);
+        if (args.includes("--services")) return { stdout: "api\n", stderr: "" };
         return { stdout: "ok", stderr: "" };
       },
     });
@@ -88,7 +89,41 @@ describe("self-host supervisor", () => {
     assert.equal(body.data.status, "SUCCEEDED");
     assert.equal(body.data.targetVersion, "1.2.3");
     assert.match(body.data.logs.join("\n"), /sha256:/);
-    assert.ok(commands.some((command) => command.includes("docker compose")));
+    assert.ok(
+      commands.some((command) =>
+        command.includes("docker compose --env-file") &&
+        command.includes(".release.yml pull"),
+      ),
+    );
+    assert.ok(
+      commands.some((command) =>
+        command.includes("docker compose --env-file") &&
+        command.includes(".release.yml up -d"),
+      ),
+    );
+  });
+
+  it("redacts supervisor command output and keeps compose preflight quiet", async () => {
+    const { app } = await testApp({
+      execute: async (_command, args) => {
+        if (args.includes("config")) {
+          assert.ok(args.includes("--quiet"));
+        }
+        return {
+          stdout:
+            "BETTER_AUTH_SECRET=super-secret DATABASE_URL=postgresql://user:pass@postgres:5432/db",
+          stderr: "INTERNAL_API_SECRET=internal-secret",
+        };
+      },
+    });
+
+    const response = await authed(app, "/preflight", { method: "POST" });
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { data: { logs: string[] } };
+    const logs = body.data.logs.join("\n");
+    assert.doesNotMatch(logs, /super-secret|internal-secret|user:pass/);
+    assert.match(logs, /BETTER_AUTH_SECRET=\[REDACTED\]/);
+    assert.match(logs, /DATABASE_URL=\[REDACTED\]/);
   });
 
   it("rejects latest upgrade targets", async () => {

@@ -13,6 +13,7 @@ import {
 } from "@planisfy/upgrade-manifest";
 
 const execFileAsync = promisify(execFile);
+const activeOperationLocks = new Set<string>();
 
 export type SupervisorConfig = {
   token: string;
@@ -103,7 +104,15 @@ export function createSupervisorApp(config: SupervisorConfig) {
         record,
         execute,
         "docker",
-        ["compose", "--env-file", config.envFile, "-f", config.composeFile, "config"],
+        [
+          "compose",
+          "--env-file",
+          config.envFile,
+          "-f",
+          config.composeFile,
+          "config",
+          "--quiet",
+        ],
         { cwd: config.rootDir },
       );
     });
@@ -111,6 +120,7 @@ export function createSupervisorApp(config: SupervisorConfig) {
   });
 
   app.post("/backup", async (c) => {
+    if (hasActiveOperation(config)) return activeOperationError(c);
     const operation = await createOperation(config, "backup");
     await runOperation(config, operation, async (record) => {
       const backupDir = join(config.stateDir, "backups", operation.id);
@@ -127,6 +137,7 @@ export function createSupervisorApp(config: SupervisorConfig) {
   });
 
   app.post("/upgrade/apply", async (c) => {
+    if (hasActiveOperation(config)) return activeOperationError(c);
     const parsed = applySchema.safeParse(await c.req.json());
     if (!parsed.success) return validationError(c, parsed.error);
 
@@ -175,6 +186,18 @@ export function createSupervisorApp(config: SupervisorConfig) {
     operation.backupDir = backup.backupDir;
 
     await runOperation(config, operation, async (record) => {
+      const services = await listComposeServices(config, execute);
+      const missingServices = manifest.images
+        .map((image) => image.service)
+        .filter((service) => !services.has(service));
+      if (missingServices.length > 0) {
+        throw new Error(
+          `Release manifest references unknown Compose services: ${missingServices.join(", ")}`,
+        );
+      }
+
+      const overrideFile = await writeReleaseOverride(config, operation, manifest);
+      const composeArgs = composeFileArgs(config, overrideFile);
       record.logs.push(`Validated pinned release ${manifest.version}.`);
       for (const image of manifest.images) {
         record.logs.push(`${image.service}: ${image.image}@${image.digest}`);
@@ -183,7 +206,7 @@ export function createSupervisorApp(config: SupervisorConfig) {
         record,
         execute,
         "docker",
-        ["compose", "--env-file", config.envFile, "-f", config.composeFile, "pull"],
+        ["compose", "--env-file", config.envFile, ...composeArgs, "pull"],
         { cwd: config.rootDir },
       );
       await runCommand(
@@ -201,8 +224,7 @@ export function createSupervisorApp(config: SupervisorConfig) {
           "compose",
           "--env-file",
           config.envFile,
-          "-f",
-          config.composeFile,
+          ...composeArgs,
           "up",
           "-d",
         ],
@@ -221,6 +243,7 @@ export function createSupervisorApp(config: SupervisorConfig) {
   });
 
   app.post("/upgrade/rollback", async (c) => {
+    if (hasActiveOperation(config)) return activeOperationError(c);
     const parsed = rollbackSchema.safeParse(await c.req.json());
     if (!parsed.success) return validationError(c, parsed.error);
 
@@ -363,6 +386,17 @@ async function runOperation(
   operation: OperationRecord,
   task: (operation: OperationRecord) => Promise<void>,
 ) {
+  const lockKey = operationLockKey(config);
+  if (activeOperationLocks.has(lockKey)) {
+    operation.status = "FAILED";
+    operation.error = "Another supervisor operation is already running.";
+    operation.logs.push(operation.error);
+    operation.completedAt = new Date().toISOString();
+    await writeOperation(config, operation);
+    return;
+  }
+
+  activeOperationLocks.add(lockKey);
   operation.status = "RUNNING";
   await writeOperation(config, operation);
   try {
@@ -370,9 +404,10 @@ async function runOperation(
     operation.status = "SUCCEEDED";
   } catch (err) {
     operation.status = "FAILED";
-    operation.error = errorMessage(err);
+    operation.error = redactSensitive(errorMessage(err));
     operation.logs.push(operation.error);
   } finally {
+    activeOperationLocks.delete(lockKey);
     operation.completedAt = new Date().toISOString();
     await writeOperation(config, operation);
   }
@@ -385,10 +420,85 @@ async function runCommand(
   args: string[],
   options: { cwd: string },
 ) {
-  operation.logs.push(`$ ${command} ${args.join(" ")}`);
+  operation.logs.push(redactSensitive(`$ ${command} ${args.join(" ")}`));
   const result = await execute(command, args, options);
-  if (result.stdout.trim()) operation.logs.push(result.stdout.trim());
-  if (result.stderr.trim()) operation.logs.push(result.stderr.trim());
+  if (result.stdout.trim()) operation.logs.push(redactSensitive(result.stdout.trim()));
+  if (result.stderr.trim()) operation.logs.push(redactSensitive(result.stderr.trim()));
+}
+
+async function listComposeServices(
+  config: SupervisorConfig,
+  execute: CommandExecutor,
+) {
+  const result = await execute(
+    "docker",
+    [
+      "compose",
+      "--env-file",
+      config.envFile,
+      "-f",
+      config.composeFile,
+      "config",
+      "--services",
+    ],
+    { cwd: config.rootDir },
+  );
+  return new Set(
+    result.stdout
+      .split(/\r?\n/)
+      .map((service) => service.trim())
+      .filter(Boolean),
+  );
+}
+
+async function writeReleaseOverride(
+  config: SupervisorConfig,
+  operation: OperationRecord,
+  manifest: UpgradeReleaseManifest,
+) {
+  await mkdir(join(config.stateDir, "overrides"), { recursive: true });
+  const path = join(config.stateDir, "overrides", `${operation.id}.release.yml`);
+  const body = [
+    "services:",
+    ...manifest.images.flatMap((image) => [
+      `  ${image.service}:`,
+      `    image: ${image.image}@${image.digest}`,
+    ]),
+    "",
+  ].join("\n");
+  await writeFile(path, body);
+  return path;
+}
+
+function composeFileArgs(config: SupervisorConfig, overrideFile: string) {
+  return ["-f", config.composeFile, "-f", overrideFile];
+}
+
+function hasActiveOperation(config: SupervisorConfig) {
+  return activeOperationLocks.has(operationLockKey(config));
+}
+
+function operationLockKey(config: SupervisorConfig) {
+  return config.stateDir;
+}
+
+function activeOperationError(c: Context) {
+  return c.json(
+    {
+      error: {
+        code: "OPERATION_IN_PROGRESS",
+        message: "Another supervisor operation is already running.",
+      },
+    },
+    409,
+  );
+}
+
+function redactSensitive(value: string) {
+  return value
+    .replace(/(BETTER_AUTH_SECRET|INTERNAL_API_SECRET|SUPERVISOR_TOKEN|DATABASE_URL|REDIS_URL|PASSWORD|SECRET|TOKEN|KEY)=([^\s"'\\]+)/gi, "$1=[REDACTED]")
+    .replace(/(postgres(?:ql)?:\/\/)([^@\s]+)@/gi, "$1[REDACTED]@")
+    .replace(/(redis:\/\/)([^@\s]+)@/gi, "$1[REDACTED]@");
 }
 
 async function writeOperation(config: SupervisorConfig, operation: OperationRecord) {

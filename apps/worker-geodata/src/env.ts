@@ -40,4 +40,31 @@ export const env = createEnv(schema, process.env, {
   appName: "worker-geodata",
 });
 
+assertProductionSecrets(env);
+
 export const redisConnection = redisConnectionFromEnv(env);
+
+function assertProductionSecrets(value: typeof env) {
+  if (process.env.NODE_ENV !== "production") {
+    return;
+  }
+
+  const issues: string[] = [];
+  if (isPlaceholderSecret(value.BETTER_AUTH_SECRET)) {
+    issues.push("BETTER_AUTH_SECRET");
+  }
+  if (isPlaceholderSecret(value.INTERNAL_API_SECRET)) {
+    issues.push("INTERNAL_API_SECRET");
+  }
+  if (issues.length > 0) {
+    throw new Error(
+      `Production deployments require generated secrets, not placeholders: ${issues.join(", ")}`,
+    );
+  }
+}
+
+function isPlaceholderSecret(value: string) {
+  return /generate-a-random|change-this|changeme|secret-here|local-dev-only/i.test(
+    value,
+  );
+}

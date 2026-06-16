@@ -47,8 +47,8 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE}
-      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
@@ -137,8 +137,8 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE}
-      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - SOURCE_CREDENTIAL_ENCRYPTION_KEY=${SOURCE_CREDENTIAL_ENCRYPTION_KEY:-}
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
       - LOCAL_STORAGE_PATH=/data/storage
@@ -193,8 +193,8 @@ services:
       - "3001:3000"
     environment:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE}
-      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - AUTH_INTERNAL_ORIGIN=http://localhost:3000
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
@@ -228,8 +228,8 @@ services:
       - "3003:3000"
     environment:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE}
-      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
@@ -286,8 +286,8 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE}
-      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - NEXT_PUBLIC_APP_URL=http://localhost:3000
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3000
       - NEXT_PUBLIC_API_URL=http://localhost:4000
@@ -309,8 +309,8 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE}
-      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:-local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-replace-me-google-client-id}

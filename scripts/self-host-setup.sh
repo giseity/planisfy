@@ -203,6 +203,21 @@ set_env_if_blank_or_default() {
   echo "Set $name=${value#$ROOT_DIR/}"
 }
 
+generate_secret() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 32
+    return
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+    return
+  fi
+
+  echo "openssl or node is required to generate secrets" >&2
+  exit 1
+}
+
 download_demo_pmtiles() {
   local url="${DEMO_PMTILES_URL:-}"
   local checksum="${DEMO_PMTILES_SHA256:-}"
@@ -256,6 +271,8 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 load_env_file
 
+set_env_if_blank_or_default BETTER_AUTH_SECRET "$(generate_secret)" "local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE"
+set_env_if_blank_or_default INTERNAL_API_SECRET "$(generate_secret)" "local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p"
 set_env_if_blank_or_default LOCAL_STORAGE_PATH "$ROOT_DIR/.storage" ".storage"
 set_env_if_blank_or_default LOCAL_STORAGE_HOST_PATH "../../.storage" ".storage" "infra/docker/data/storage" "$ROOT_DIR/.storage"
 set_env_if_blank_or_default MARTIN_SOURCES_PATH "$ROOT_DIR/.storage/martin-sources"
