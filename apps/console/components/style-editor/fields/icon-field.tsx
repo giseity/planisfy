@@ -37,18 +37,36 @@ export function IconField({
   onChange,
   spriteUrl,
 }: IconFieldProps) {
-  const [sprites, setSprites] = useState<SpriteMetadata | null>(null);
+  const [spriteMetadata, setSpriteMetadata] = useState<{
+    url: string;
+    data: SpriteMetadata | null;
+  } | null>(null);
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState(false);
+  const sprites =
+    spriteMetadata && spriteMetadata.url === spriteUrl
+      ? spriteMetadata.data
+      : null;
 
   useEffect(() => {
-    if (!spriteUrl || sprites) return;
-    // Fetch sprite metadata JSON
+    if (!spriteUrl) return;
+
+    let canceled = false;
     fetch(`${spriteUrl}.json`)
       .then((r) => r.json())
-      .then((data) => setSprites(data as SpriteMetadata))
-      .catch(() => setSprites(null));
-  }, [spriteUrl, sprites]);
+      .then((data) => {
+        if (!canceled) {
+          setSpriteMetadata({ url: spriteUrl, data: data as SpriteMetadata });
+        }
+      })
+      .catch(() => {
+        if (!canceled) setSpriteMetadata({ url: spriteUrl, data: null });
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [spriteUrl]);
 
   const filteredSprites = useMemo(() => {
     if (!sprites) return [];

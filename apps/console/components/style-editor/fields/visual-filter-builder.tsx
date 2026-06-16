@@ -48,9 +48,11 @@ function parseFilter(
 
   // Single condition: ["==", "prop", "val"]
   if (OPERATORS.includes(op)) {
+    const condition = parseCondition(filter);
+    if (!condition) return null;
     return {
       combining: "all",
-      conditions: [parseCondition(filter)].filter(Boolean) as Condition[],
+      conditions: [condition],
     };
   }
 
@@ -71,24 +73,44 @@ function parseCondition(cond: unknown): Condition | null {
   if (!Array.isArray(cond) || cond.length < 2) return null;
   const op = cond[0] as Operator;
   if (!OPERATORS.includes(op)) return null;
+  const property = cond[1];
+  if (typeof property !== "string") return null;
 
   if (op === "has" || op === "!has") {
-    return { property: String(cond[1] ?? ""), operator: op, value: "" };
+    if (cond.length !== 2) return null;
+    return { property, operator: op, value: "" };
   }
 
   if (op === "in" || op === "!in") {
+    if (
+      cond.length < 3 ||
+      !cond.slice(2).every((value) => isVisualFilterScalar(value))
+    ) {
+      return null;
+    }
     return {
-      property: String(cond[1] ?? ""),
+      property,
       operator: op,
       value: cond.slice(2).map(String).join(", "),
     };
   }
 
+  if (cond.length !== 3 || !isVisualFilterScalar(cond[2])) return null;
+
   return {
-    property: String(cond[1] ?? ""),
+    property,
     operator: op,
     value: String(cond[2] ?? ""),
   };
+}
+
+function isVisualFilterScalar(value: unknown) {
+  return (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
 }
 
 function buildFilter(combining: CombiningOp, conditions: Condition[]): unknown {

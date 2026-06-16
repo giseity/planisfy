@@ -350,7 +350,7 @@ export default function TeamPage() {
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-destructive"
-                                onClick={() => setRemoveId(member.userId)}
+                                onClick={() => setRemoveId(member.id)}
                               >
                                 <UserMinus className="mr-2 h-4 w-4" />
                                 Remove member

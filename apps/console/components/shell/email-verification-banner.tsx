@@ -24,13 +24,21 @@ export function EmailVerificationBanner() {
   const handleResend = async () => {
     setSending(true);
     try {
-      await authClient.sendVerificationEmail({
+      const result = await authClient.sendVerificationEmail({
         email: session.user.email,
         callbackURL: "/styles",
       });
+      if (result.error) {
+        throw new Error(
+          result.error.message ?? "Failed to send verification email",
+        );
+      }
       setSent(true);
-    } catch {
-      toast.error("Failed to send verification email");
+      toast.success("Verification email sent");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to send verification email",
+      );
     } finally {
       setSending(false);
     }
