@@ -17,6 +17,7 @@ import type { AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 import { isPeliasConfigured } from "../lib/geocoding-config";
 import { probeValhallaReadiness } from "../lib/valhalla-readiness";
+import { isInternalRequestAuthorized } from "../middleware/internal-auth";
 
 export const setupRoute = new Hono<AuthEnv>();
 
@@ -53,6 +54,13 @@ const LOCAL_DEMO_STYLE_FIXTURES = [
 ];
 
 setupRoute.get("/setup/preflight", async (c) => {
+  if (!isPublicSetupPreflightAllowed(c.req.path, c.req.raw.headers)) {
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Setup preflight access denied" } },
+      401,
+    );
+  }
+
   const deploymentMode = activeDeploymentMode();
   const checks = await buildPreflightChecks(deploymentMode);
   const capabilities = buildCapabilityStates(deploymentMode, checks);
@@ -80,6 +88,14 @@ setupRoute.get("/setup/preflight", async (c) => {
     },
   });
 });
+
+function isPublicSetupPreflightAllowed(path: string, headers: Headers) {
+  return (
+    process.env.NODE_ENV !== "production" ||
+    path.startsWith("/console/") ||
+    isInternalRequestAuthorized(headers)
+  );
+}
 
 async function buildPreflightChecks(
   deploymentMode = activeDeploymentMode(),

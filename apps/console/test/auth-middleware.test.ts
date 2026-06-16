@@ -108,4 +108,10 @@ describe("Console auth middleware helpers", () => {
       "https://console.planisfy.localhost/sign-in?callbackUrl=https%3A%2F%2Fconsole.planisfy.localhost%2Fstyles",
     );
   });
+
+  it("protects onboarding routes with the auth proxy", async () => {
+    const { config } = await loadMiddleware();
+
+    expect(config.matcher).toContain("/onboarding/:path*");
+  });
 });

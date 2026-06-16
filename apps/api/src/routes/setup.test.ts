@@ -8,6 +8,63 @@ import { setupRoute } from "./setup";
 
 const app = new Hono();
 app.route("/", setupRoute);
+const consoleApp = new Hono();
+consoleApp.route("/console", setupRoute);
+
+test("production setup preflight requires internal authorization outside console", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousInternalSecret = process.env.INTERNAL_API_SECRET;
+  process.env.NODE_ENV = "production";
+  process.env.INTERNAL_API_SECRET = "setup-secret";
+
+  try {
+    const response = await app.request("/setup/preflight");
+    const body = (await response.json()) as {
+      error?: { code?: string; message?: string };
+    };
+
+    assert.equal(response.status, 401);
+    assert.equal(body.error?.code, "UNAUTHORIZED");
+    assert.match(body.error?.message ?? "", /Setup preflight/);
+  } finally {
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+    if (previousInternalSecret === undefined) {
+      delete process.env.INTERNAL_API_SECRET;
+    } else {
+      process.env.INTERNAL_API_SECRET = previousInternalSecret;
+    }
+  }
+});
+
+test("production setup preflight remains available from the console route", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousInternalSecret = process.env.INTERNAL_API_SECRET;
+  process.env.NODE_ENV = "production";
+  delete process.env.INTERNAL_API_SECRET;
+
+  try {
+    const response = await withMockValhalla(async () =>
+      consoleApp.request("/console/setup/preflight"),
+    );
+
+    assert.equal(response.status, 200);
+  } finally {
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+    if (previousInternalSecret === undefined) {
+      delete process.env.INTERNAL_API_SECRET;
+    } else {
+      process.env.INTERNAL_API_SECRET = previousInternalSecret;
+    }
+  }
+});
 
 test("setup preflight reports self-host product loop fixture readiness", async () => {
   const root = await mkdtemp(join(tmpdir(), "planisfy-setup-preflight-"));

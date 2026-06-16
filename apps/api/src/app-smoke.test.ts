@@ -50,6 +50,36 @@ test("metrics endpoint returns Prometheus text", async () => {
   assert.match(body, /planisfy_api_info/);
 });
 
+test("production diagnostics require internal authorization", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousInternalSecret = process.env.INTERNAL_API_SECRET;
+  process.env.NODE_ENV = "production";
+  process.env.INTERNAL_API_SECRET = "diagnostics-secret";
+
+  try {
+    const metricsResponse = await healthApp.request("/metrics");
+    const detailedResponse = await healthApp.request("/health/detailed");
+    const authorizedMetricsResponse = await healthApp.request("/metrics", {
+      headers: { "x-internal-secret": "diagnostics-secret" },
+    });
+
+    assert.equal(metricsResponse.status, 401);
+    assert.equal(detailedResponse.status, 401);
+    assert.equal(authorizedMetricsResponse.status, 200);
+  } finally {
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+    if (previousInternalSecret === undefined) {
+      delete process.env.INTERNAL_API_SECRET;
+    } else {
+      process.env.INTERNAL_API_SECRET = previousInternalSecret;
+    }
+  }
+});
+
 test("published map asset routes allow anonymous reads", async () => {
   const response = await publishedAssetApp.request("/styles/v1/acme/basic");
   const body = (await response.json()) as { ok?: boolean };

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { env, redisConnection } from "../env";
 import { renderPrometheusMetrics } from "../lib/metrics";
 import { probeValhallaReadiness } from "../lib/valhalla-readiness";
+import { isInternalRequestAuthorized } from "../middleware/internal-auth";
 
 export const healthRoute = new Hono();
 type HealthCheck = {
@@ -25,6 +26,13 @@ healthRoute.get("/health", (c) => {
 });
 
 healthRoute.get("/metrics", (c) => {
+  if (!isDiagnosticsRequestAllowed(c.req.raw.headers)) {
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Diagnostics access denied" } },
+      401,
+    );
+  }
+
   return c.text(
     renderPrometheusMetrics({ service: "api", version: env.APP_VERSION }),
     200,
@@ -35,6 +43,13 @@ healthRoute.get("/metrics", (c) => {
 // ── GET /health/detailed — Deep health check with service probes ────────────
 
 healthRoute.get("/health/detailed", async (c) => {
+  if (!isDiagnosticsRequestAllowed(c.req.raw.headers)) {
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Diagnostics access denied" } },
+      401,
+    );
+  }
+
   const checks: Record<string, HealthCheck> = {};
   let healthy = true;
 
@@ -189,4 +204,10 @@ function storageProviderFromEnv(): "local" | "s3" | "r2" {
   if (process.env.STORAGE_PROVIDER === "s3") return "s3";
   if (process.env.STORAGE_PROVIDER === "r2") return "r2";
   return "local";
+}
+
+function isDiagnosticsRequestAllowed(headers: Headers) {
+  return (
+    process.env.NODE_ENV !== "production" || isInternalRequestAuthorized(headers)
+  );
 }

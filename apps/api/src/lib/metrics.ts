@@ -4,6 +4,12 @@ import type { AuthEnv } from "../middleware/auth";
 const durationBucketsSeconds = [
   0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 ];
+const maxMetricSeries = 2_000;
+const maxRouteLabelLength = 160;
+const maxRouteSegments = 12;
+const maxLabelValueLength = 240;
+const unknownRoute = "/:other";
+const overflowRoute = "/:overflow";
 
 type RequestKey = `${string}\u0000${string}\u0000${number}`;
 
@@ -39,9 +45,17 @@ export function recordRequest(params: {
   status: number;
   durationSeconds: number;
 }) {
-  const route = normalizeRoute(params.path);
-  const key: RequestKey = `${params.method}\u0000${route}\u0000${params.status}`;
+  let route = normalizeRoute(params.path);
+  let key = requestKey(params.method, route, params.status);
   let metric = requests.get(key);
+
+  if (!metric) {
+    if (requests.size >= maxMetricSeries) {
+      route = overflowRoute;
+      key = requestKey(params.method, route, params.status);
+      metric = requests.get(key);
+    }
+  }
 
   if (!metric) {
     metric = {
@@ -109,7 +123,7 @@ export function renderPrometheusMetrics(params: {
 
 export function normalizeRoute(path: string): string {
   const pathname = path.split("?")[0] || "/";
-  return pathname
+  const normalized = pathname
     .replace(
       /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=\/|$)/gi,
       "/:uuid",
@@ -117,6 +131,8 @@ export function normalizeRoute(path: string): string {
     .replace(/\/pk_[a-f0-9]{16}(?=\/|$)/gi, "/:apiKey")
     .replace(/\/\d+(?=\/|$)/g, "/:number")
     .replace(/\/[^/]+\.(pbf|pmtiles|json|png|jpg|jpeg|webp)(?=\/|$)/gi, "/:file");
+
+  return isBoundedRouteLabel(normalized) ? normalized : unknownRoute;
 }
 
 function requestLabels(metric: RequestMetric): string {
@@ -127,6 +143,19 @@ function requestLabels(metric: RequestMetric): string {
   ].join(",");
 }
 
+function requestKey(method: string, route: string, status: number): RequestKey {
+  return `${method}\u0000${route}\u0000${status}`;
+}
+
+function isBoundedRouteLabel(route: string): boolean {
+  if (route.length > maxRouteLabelLength) return false;
+  return route.split("/").filter(Boolean).length <= maxRouteSegments;
+}
+
 function escapeLabel(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const bounded =
+    value.length > maxLabelValueLength
+      ? `${value.slice(0, maxLabelValueLength)}...`
+      : value;
+  return bounded.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
