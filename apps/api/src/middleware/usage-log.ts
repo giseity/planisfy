@@ -10,26 +10,30 @@ import type { AuthEnv } from "./auth";
  */
 export const usageLogMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   const startedAt = performance.now();
-  await next();
+  let statusCode = 500;
 
-  // Log after response
-  const apiKeyId = c.get("apiKeyId") ?? null;
-  const ownerId = c.get("ownerId") ?? null;
-  const cost = getEndpointCost(c.req.path);
+  try {
+    await next();
+    statusCode = c.res.status;
+  } finally {
+    const apiKeyId = c.get("apiKeyId") ?? null;
+    const ownerId = c.get("ownerId") ?? null;
+    const cost = getEndpointCost(c.req.path);
 
-  enqueueUsageLog({
-    apiKeyId,
-    profileId: ownerId,
-    endpoint: c.req.path,
-    method: c.req.method,
-    statusCode: c.res.status,
-    durationMs: Math.round(performance.now() - startedAt),
-    cost,
-    ipAddress:
-      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-      c.req.header("x-real-ip") ||
-      null,
-    referer: c.req.header("referer") || null,
-    userAgent: c.req.header("user-agent") || null,
-  });
+    enqueueUsageLog({
+      apiKeyId,
+      profileId: ownerId,
+      endpoint: c.req.path,
+      method: c.req.method,
+      statusCode,
+      durationMs: Math.round(performance.now() - startedAt),
+      cost,
+      ipAddress:
+        c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+        c.req.header("x-real-ip") ||
+        null,
+      referer: c.req.header("referer") || null,
+      userAgent: c.req.header("user-agent") || null,
+    });
+  }
 });

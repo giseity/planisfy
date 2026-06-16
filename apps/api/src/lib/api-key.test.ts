@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getEndpointCategory,
+  getEndpointCost,
   isRequestOriginAllowed,
   normalizeAllowedDomains,
   requiredScopeForPath,
@@ -48,6 +50,17 @@ test("domain restricted API keys require a valid origin", () => {
 
 test("required scopes map public API paths", () => {
   assert.equal(requiredScopeForPath("/tiles/v1/main/0/0/0.pbf"), "tiles:read");
+  assert.equal(
+    requiredScopeForPath("/v4/acme.roads/tilequery/-73.9,40.7.json"),
+    "tiles:read",
+  );
   assert.equal(requiredScopeForPath("/styles/v1/demo/basic"), "styles:read");
   assert.equal(requiredScopeForPath("/directions/v1/driving"), "directions");
+});
+
+test("endpoint category and cost classify tilequery", () => {
+  const path = "/v4/acme.roads/tilequery/-73.9,40.7.json";
+
+  assert.equal(getEndpointCategory(path), "tilequery");
+  assert.equal(getEndpointCost(path), 10);
 });

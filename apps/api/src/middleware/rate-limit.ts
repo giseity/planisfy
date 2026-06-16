@@ -20,6 +20,7 @@ import { redisConnection } from "../env";
 import type { AuthEnv } from "./auth";
 
 const MONTHLY_QUOTA_CACHE_TTL_SECONDS = 35 * 24 * 60 * 60;
+const ANONYMOUS_PUBLIC_RPM = 120;
 
 const redis = new Redis({
   ...redisConnection,
@@ -133,12 +134,6 @@ async function reserveMonthlyQuota(params: {
 }
 
 export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
-  const ownerId = c.get("ownerId");
-  if (!ownerId) {
-    await next();
-    return;
-  }
-
   const clientIp =
     c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
     c.req.header("x-real-ip") ||
@@ -156,6 +151,48 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
       },
       429,
     );
+  }
+
+  const ownerId = c.get("ownerId");
+  if (!ownerId) {
+    const cost = getEndpointCost(c.req.path);
+    const anonymousLimit = ANONYMOUS_PUBLIC_RPM;
+    const limiter = getRequestLimiter(anonymousLimit);
+
+    try {
+      const rateLimitRes = await limiter.consume(`anon:${clientIp}`, cost);
+      c.header("X-RateLimit-Limit", String(anonymousLimit));
+      c.header(
+        "X-RateLimit-Remaining",
+        String(Math.max(0, rateLimitRes.remainingPoints)),
+      );
+      c.header(
+        "X-RateLimit-Reset",
+        String(
+          Math.ceil(Date.now() / 1000 + rateLimitRes.msBeforeNext / 1000),
+        ),
+      );
+    } catch (err) {
+      if (err instanceof RateLimiterRes) {
+        const retryAfter = Math.ceil(err.msBeforeNext / 1000);
+        c.header("X-RateLimit-Limit", String(anonymousLimit));
+        c.header("X-RateLimit-Remaining", "0");
+        c.header("Retry-After", String(retryAfter));
+
+        return c.json(
+          {
+            error: {
+              code: "RATE_LIMITED",
+              message: `Rate limit exceeded. Retry after ${retryAfter} seconds.`,
+            },
+          },
+          429,
+        );
+      }
+    }
+
+    await next();
+    return;
   }
 
   const planLimits = await getAccountPlanLimits(ownerId);

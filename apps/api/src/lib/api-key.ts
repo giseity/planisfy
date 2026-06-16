@@ -32,6 +32,7 @@ export function hashKey(fullKey: string): string {
  */
 export const ENDPOINT_COSTS: Record<string, number> = {
   "tiles": 1,
+  "tilequery": 10,
   "styles": 1,
   "fonts": 1,
   "geocoding": 5,
@@ -49,6 +50,7 @@ export const ENDPOINT_COSTS: Record<string, number> = {
  * e.g. "/tiles/v1/source/0/0/0.pbf" → "tiles"
  */
 export function getEndpointCategory(path: string): string {
+  if (/^\/v4\/[^/]+\/tilequery\//.test(path)) return "tilequery";
   const match = path.match(/^\/([a-z-]+)\/v1/);
   return match?.[1] ?? "unknown";
 }
@@ -78,6 +80,7 @@ export type ApiKeyScope = (typeof ALL_SCOPES)[number];
  */
 const SCOPE_MAP: Record<string, ApiKeyScope> = {
   "tiles": "tiles:read",
+  "tilequery": "tiles:read",
   "styles": "styles:read",
   "fonts": "tiles:read",      // fonts are part of tile serving
   "geocoding": "geocoding",
