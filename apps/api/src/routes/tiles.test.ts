@@ -17,6 +17,7 @@ import {
   publicTilesetBaseUrl,
   verifyTileJsonArtifact,
 } from "@planisfy/tile-runtime";
+import { buildMartinSourceUrl, buildMartinTileUrl } from "./tiles";
 
 test("parsePublicTilesetSlug accepts stable and immutable dotted aliases", () => {
   assert.deepEqual(parsePublicTilesetSlug("acme.roads"), {
@@ -117,6 +118,28 @@ test("parseTileCoordinates accepts only valid XYZ coordinates", () => {
   assert.equal(parseTileCoordinates("3", "8", "0"), null);
   assert.equal(parseTileCoordinates("3", "0", "8"), null);
   assert.equal(parseTileCoordinates("3.1", "0", "0"), null);
+});
+
+test("Martin source URLs allow only safe source names", () => {
+  assert.equal(
+    buildMartinSourceUrl("http://martin:3000/", "public.tiles_v1"),
+    "http://martin:3000/public.tiles_v1",
+  );
+  assert.equal(buildMartinSourceUrl("http://martin:3000", "../secret"), null);
+  assert.equal(buildMartinSourceUrl("http://martin:3000", "schema/table"), null);
+  assert.equal(buildMartinSourceUrl("http://martin:3000", "source?x=1"), null);
+  assert.equal(buildMartinSourceUrl("http://martin:3000", "source#frag"), null);
+});
+
+test("Martin tile URLs validate coordinates and encode path segments", () => {
+  assert.equal(
+    buildMartinTileUrl("http://martin:3000/", "owner.tiles_v1/0/0/0"),
+    "http://martin:3000/owner.tiles_v1/0/0/0",
+  );
+  assert.equal(buildMartinTileUrl("http://martin:3000", "owner/27/0/0"), null);
+  assert.equal(buildMartinTileUrl("http://martin:3000", "owner/3/8/0"), null);
+  assert.equal(buildMartinTileUrl("http://martin:3000", "owner/3/0/0?x=1"), null);
+  assert.equal(buildMartinTileUrl("http://martin:3000", "../owner/0/0/0"), null);
 });
 
 test("tilequery coordinate parsing and options validate inputs", () => {

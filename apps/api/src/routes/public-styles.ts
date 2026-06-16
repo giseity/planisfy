@@ -20,6 +20,7 @@ import {
   type SpriteVariant,
 } from "../lib/style-sprites";
 import type { AuthEnv } from "../middleware/auth";
+import { env } from "../env";
 
 export const publicStylesRoute = new Hono<AuthEnv>();
 
@@ -282,10 +283,17 @@ async function resolveExplicitVersion(styleId: string, version: number) {
 }
 
 function spriteBaseUrl(
-  c: { req: { url: string } },
+  _c: { req: { url: string } },
   owner: string,
   handle: string,
 ) {
-  const origin = new URL(c.req.url).origin;
-  return `${origin}/styles/v1/${owner}/${handle}/sprite`;
+  return spriteBaseUrlFromApiBase(env.NEXT_PUBLIC_API_URL, owner, handle);
+}
+
+export function spriteBaseUrlFromApiBase(
+  apiBase: string,
+  owner: string,
+  handle: string,
+) {
+  return `${apiBase.replace(/\/$/, "")}/styles/v1/${encodeURIComponent(owner)}/${encodeURIComponent(handle)}/sprite`;
 }

@@ -260,10 +260,18 @@ tilesRoute.get("/v4/:tileset/tilequery/:coords.json", async (c) => {
 });
 
 async function legacyMartinTileJson(c: ApiContext, source: string) {
+  const martinUrl = buildMartinSourceUrl(env.MARTIN_URL, source);
+  if (!martinUrl) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid tile source" } },
+      400,
+    );
+  }
+
   try {
-    const martinUrl = `${env.MARTIN_URL}/${source}`;
     const res = await fetch(martinUrl, {
       headers: { Accept: "application/json" },
+      redirect: "manual",
     });
 
     if (!res.ok) {
@@ -275,7 +283,9 @@ async function legacyMartinTileJson(c: ApiContext, source: string) {
 
     const tileJson = (await res.json()) as { tiles?: string[] };
     const apiBase = publicApiBaseFromEnv();
-    tileJson.tiles = [`${apiBase}/tiles/v1/${source}/{z}/{x}/{y}`];
+    tileJson.tiles = [
+      `${apiBase}/tiles/v1/${encodeURIComponent(source)}/{z}/{x}/{y}`,
+    ];
 
     c.header("Cache-Control", "public, max-age=300");
     return c.json(tileJson);
@@ -288,8 +298,21 @@ async function legacyMartinTileJson(c: ApiContext, source: string) {
 }
 
 async function proxyMartinTile(c: ApiContext, path: string) {
+  const martinUrl = buildMartinTileUrl(env.MARTIN_URL, path);
+  if (!martinUrl) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid tile request",
+        },
+      },
+      400,
+    );
+  }
+
   try {
-    const res = await fetch(`${env.MARTIN_URL}/${path}`);
+    const res = await fetch(martinUrl, { redirect: "manual" });
 
     if (!res.ok) {
       if (res.status === 404) {
@@ -415,6 +438,34 @@ function tileJsonArtifactError(
 
 export function publicApiBaseFromEnv() {
   return env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+}
+
+export function buildMartinSourceUrl(baseUrl: string, source: string) {
+  if (!isSafeMartinSource(source)) return null;
+  return new URL(
+    encodeURIComponent(source),
+    `${baseUrl.replace(/\/$/, "")}/`,
+  ).toString();
+}
+
+export function buildMartinTileUrl(baseUrl: string, path: string) {
+  const segments = path.split("/");
+  if (segments.length !== 4) return null;
+
+  const [source, z, x, y] = segments;
+  if (!source || !z || !x || !y || !isSafeMartinSource(source)) return null;
+  if (!parseTileCoordinates(z, x, y)) return null;
+
+  return new URL(
+    segments.map((segment) => encodeURIComponent(segment)).join("/"),
+    `${baseUrl.replace(/\/$/, "")}/`,
+  ).toString();
+}
+
+function isSafeMartinSource(source: string) {
+  if (source.length === 0 || source.length > 256) return false;
+  if (source === "." || source === "..") return false;
+  return /^[A-Za-z0-9._-]+$/.test(source);
 }
 
 function parseTileQueryRoutePath(pathname: string) {

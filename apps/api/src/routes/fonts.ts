@@ -14,11 +14,20 @@ const GLYPHS_BASE_URL = env.GLYPHS_URL;
 
 fontsRoute.get("/fonts/v1/:fontstack/:range", async (c) => {
   const { fontstack, range } = c.req.param();
-  const glyphRange = range.replace(/\.pbf$/, "");
+  const glyphRange = normalizeGlyphRange(range);
+  const upstreamUrl = glyphRange
+    ? buildGlyphUrl(GLYPHS_BASE_URL, fontstack, glyphRange)
+    : null;
+
+  if (!upstreamUrl) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid font range" } },
+      400,
+    );
+  }
 
   try {
-    const url = `${GLYPHS_BASE_URL}/${encodeURIComponent(fontstack)}/${glyphRange}`;
-    const res = await fetch(url);
+    const res = await fetch(upstreamUrl, { redirect: "manual" });
 
     if (!res.ok) {
       return c.json({ error: { code: "NOT_FOUND", message: "Font range not found" } }, 404);
@@ -37,3 +46,42 @@ fontsRoute.get("/fonts/v1/:fontstack/:range", async (c) => {
     );
   }
 });
+
+export function normalizeGlyphRange(range: string) {
+  const match = range.match(/^(\d+)-(\d+)(?:\.pbf)?$/);
+  if (!match) return null;
+
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start < 0 ||
+    end < start
+  ) {
+    return null;
+  }
+
+  return `${start}-${end}`;
+}
+
+export function buildGlyphUrl(
+  baseUrl: string,
+  fontstack: string,
+  glyphRange: string,
+) {
+  if (!isSafeFontstack(fontstack)) return null;
+  return new URL(
+    `${encodeURIComponent(fontstack)}/${encodeURIComponent(glyphRange)}`,
+    `${baseUrl.replace(/\/$/, "")}/`,
+  ).toString();
+}
+
+function isSafeFontstack(fontstack: string) {
+  if (fontstack.length === 0 || fontstack.length > 256) return false;
+  if (fontstack.includes("/") || fontstack.includes("\\")) return false;
+  if (/[?#]/.test(fontstack)) return false;
+  return fontstack
+    .split(",")
+    .every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
+}
