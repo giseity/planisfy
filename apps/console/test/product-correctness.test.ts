@@ -36,7 +36,7 @@ describe("console product correctness regressions", () => {
       "utf8",
     );
 
-    expect(source).toContain("spriteMetadata?.url === spriteUrl");
+    expect(source).toContain("spriteMetadata && spriteMetadata.url === spriteUrl");
     expect(source).toContain("setSpriteMetadata({ url: spriteUrl");
     expect(source).toContain("}, [spriteUrl]);");
     expect(source).not.toContain("if (!spriteUrl || sprites) return;");

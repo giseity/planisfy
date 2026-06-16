@@ -1,6 +1,6 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "./index";
-import { styles } from "./schema";
+import { stylePublications, styles, styleVersions } from "./schema";
 
 export const BLANK_STYLE = {
   version: 8,
@@ -15,6 +15,21 @@ export function slugifyStyleName(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60);
+}
+
+function styleHandleCandidate(base: string, attempt: number): string {
+  const fallback = base || "untitled";
+  const suffix = attempt === 0 ? "" : `-${attempt}`;
+  return `${fallback.slice(0, 64 - suffix.length)}${suffix}`;
+}
+
+function isUniqueViolation(err: unknown) {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    err.code === "23505"
+  );
 }
 
 export async function uniqueStyleHandle(
@@ -33,7 +48,6 @@ export async function uniqueStyleHandle(
         and(
           eq(styles.ownerId, ownerId),
           eq(styles.handle, candidate),
-          isNull(styles.deletedAt)
         )
       )
       .limit(1);
@@ -52,25 +66,30 @@ export async function createStyleRecord(input: {
   styleJson?: Record<string, unknown>;
 }) {
   const styleJson = input.styleJson ?? { ...BLANK_STYLE, name: input.name };
-  const handle = await uniqueStyleHandle(
-    input.ownerId,
-    input.handle ?? slugifyStyleName(input.name)
-  );
+  const baseHandle = input.handle ?? slugifyStyleName(input.name);
 
-  const [created] = await db
-    .insert(styles)
-    .values({
-      ownerId: input.ownerId,
-      handle,
-      name: input.name,
-      description: input.description ?? null,
-      styleJson,
-      originalStyleJson: styleJson,
-      version: 1,
-    })
-    .returning();
+  for (let attempt = 0; attempt <= 100; attempt++) {
+    try {
+      const [created] = await db
+        .insert(styles)
+        .values({
+          ownerId: input.ownerId,
+          handle: styleHandleCandidate(baseHandle, attempt),
+          name: input.name,
+          description: input.description ?? null,
+          styleJson,
+          originalStyleJson: styleJson,
+          version: 1,
+        })
+        .returning();
 
-  return created!;
+      return created!;
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+    }
+  }
+
+  throw new Error("Unable to allocate a unique style handle");
 }
 
 export async function duplicateStyleRecord(ownerId: string, styleId: string) {
@@ -82,22 +101,30 @@ export async function duplicateStyleRecord(ownerId: string, styleId: string) {
 
   if (!original) return null;
 
-  const handle = await uniqueStyleHandle(ownerId, `${original.handle}-copy`);
+  const baseHandle = `${original.handle}-copy`;
 
-  const [created] = await db
-    .insert(styles)
-    .values({
-      ownerId,
-      handle,
-      name: `${original.name} (copy)`,
-      description: original.description,
-      styleJson: original.styleJson,
-      originalStyleJson: original.styleJson,
-      version: 1,
-    })
-    .returning();
+  for (let attempt = 0; attempt <= 100; attempt++) {
+    try {
+      const [created] = await db
+        .insert(styles)
+        .values({
+          ownerId,
+          handle: styleHandleCandidate(baseHandle, attempt),
+          name: `${original.name} (copy)`,
+          description: original.description,
+          styleJson: original.styleJson,
+          originalStyleJson: original.styleJson,
+          version: 1,
+        })
+        .returning();
 
-  return created!;
+      return created!;
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+    }
+  }
+
+  throw new Error("Unable to allocate a unique style handle");
 }
 
 export async function softDeleteStyleRecord(ownerId: string, styleId: string) {
@@ -111,11 +138,91 @@ export async function softDeleteStyleRecord(ownerId: string, styleId: string) {
 }
 
 export async function toggleStylePublishRecord(ownerId: string, styleId: string) {
-  const [updated] = await db
-    .update(styles)
-    .set({ isPublic: sql`NOT ${styles.isPublic}` })
-    .where(and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt)))
-    .returning({ id: styles.id, isPublic: styles.isPublic });
+  const updated = await db.transaction(async (tx) => {
+    const [style] = await tx
+      .select()
+      .from(styles)
+      .where(
+        and(
+          eq(styles.id, styleId),
+          eq(styles.ownerId, ownerId),
+          isNull(styles.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!style) return null;
+
+    if (style.isPublic) {
+      const [unpublished] = await tx
+        .update(styles)
+        .set({ isPublic: false })
+        .where(eq(styles.id, styleId))
+        .returning({ id: styles.id, isPublic: styles.isPublic });
+      return unpublished ?? null;
+    }
+
+    await tx
+      .insert(styleVersions)
+      .values({
+        styleId,
+        version: style.version,
+        styleJson: style.styleJson,
+        name: style.name,
+      })
+      .onConflictDoNothing();
+
+    const [snapshot] = await tx
+      .select()
+      .from(styleVersions)
+      .where(
+        and(
+          eq(styleVersions.styleId, styleId),
+          eq(styleVersions.version, style.version),
+        ),
+      )
+      .limit(1);
+
+    if (!snapshot) throw new Error("Failed to create style version");
+
+    const metadata = { version: snapshot.version };
+    await tx
+      .insert(stylePublications)
+      .values({
+        styleId,
+        styleVersionId: snapshot.id,
+        accountId: ownerId,
+        alias: "latest",
+        metadata,
+      })
+      .onConflictDoUpdate({
+        target: [stylePublications.styleId, stylePublications.alias],
+        set: {
+          styleVersionId: snapshot.id,
+          accountId: ownerId,
+          metadata,
+        },
+      });
+
+    await tx
+      .insert(stylePublications)
+      .values({
+        styleId,
+        styleVersionId: snapshot.id,
+        accountId: ownerId,
+        alias: `v${snapshot.version}`,
+        metadata,
+      })
+      .onConflictDoNothing();
+
+    const [published] = await tx
+      .update(styles)
+      .set({ isPublic: true })
+      .where(eq(styles.id, styleId))
+      .returning({ id: styles.id, isPublic: styles.isPublic });
+
+    return published ?? null;
+  });
 
   return updated ?? null;
 }

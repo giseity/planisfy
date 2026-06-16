@@ -39,7 +39,7 @@ export function stylePublicUrl(params: {
   ownerHandle: string;
   style: Pick<StudioStyleSummary, "handle">;
 }) {
-  return `${params.origin.replace(/\/$/, "")}/styles/v1/${params.ownerHandle}/${params.style.handle}`;
+  return `${params.origin.replace(/\/$/, "")}/styles/v1/${encodeURIComponent(params.ownerHandle)}/${encodeURIComponent(params.style.handle)}`;
 }
 
 export function mapLibreEmbedSnippet(params: {
@@ -53,8 +53,8 @@ export function mapLibreEmbedSnippet(params: {
   const zoom = params.zoom ?? 2;
 
   return `const map = new maplibregl.Map({
-  container: "${container}",
-  style: "${params.styleUrl}",
+  container: ${JSON.stringify(container)},
+  style: ${JSON.stringify(params.styleUrl)},
   center: [${center[0]}, ${center[1]}],
   zoom: ${zoom}
 });`;

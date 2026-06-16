@@ -183,6 +183,26 @@ describe("Published style browser integration", () => {
     expect(snippet).not.toContain("access_token");
     expect(snippet).not.toContain("X-API-Key");
   });
+
+  it("encodes public style URL segments and JS snippet strings", () => {
+    const styleUrl = stylePublicUrl({
+      origin: "https://api.planisfy.localhost/",
+      ownerHandle: "acme/maps",
+      style: { handle: 'roads "main"' },
+    });
+    const snippet = mapLibreEmbedSnippet({
+      styleUrl,
+      container: 'map-"main"',
+    });
+
+    expect(styleUrl).toBe(
+      "https://api.planisfy.localhost/styles/v1/acme%2Fmaps/roads%20%22main%22",
+    );
+    expect(snippet).toContain('container: "map-\\"main\\""');
+    expect(snippet).toContain(
+      'style: "https://api.planisfy.localhost/styles/v1/acme%2Fmaps/roads%20%22main%22"',
+    );
+  });
 });
 
 describe("Console tileset workflow", () => {
