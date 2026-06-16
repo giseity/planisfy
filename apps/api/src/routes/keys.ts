@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, count, sql } from "drizzle-orm";
 import { db, apiKeys, users } from "@planisfy/database";
 import { logAudit } from "../lib/audit";
 import {
@@ -9,7 +9,7 @@ import {
   ALL_SCOPES,
   normalizeAllowedDomains,
 } from "../lib/api-key";
-import { checkResourceLimit } from "../lib/plan-check";
+import { getAccountPlanLimits } from "../lib/billing";
 import { requireOrgMutationPermission, type AuthEnv } from "../middleware/auth";
 import { env } from "../env";
 import { apiKeyMutationGate } from "../lib/platform-gates";
@@ -66,19 +66,6 @@ keysRoute.post("/keys", async (c) => {
     );
   }
 
-  const planCheck = await checkResourceLimit(userId, ownerId, "apiKeys");
-  if (!planCheck.allowed) {
-    return c.json(
-      {
-        error: {
-          code: "PLAN_LIMIT",
-          message: `You've reached the maximum of ${planCheck.limit} API keys on your current plan. Please upgrade to create more.`,
-        },
-      },
-      403,
-    );
-  }
-
   const { name, scopes, expiresAt } = parsed.data;
   const normalizedDomains = normalizeAllowedDomains(parsed.data.allowedDomains);
   if (normalizedDomains.errors.length > 0) {
@@ -93,24 +80,58 @@ keysRoute.post("/keys", async (c) => {
       400,
     );
   }
-  const { id, fullKey, keyHash } = generateApiKey();
+  const limits = await getAccountPlanLimits(ownerId);
+  const created = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`apiKeys:${ownerId}`}))`,
+    );
 
-  await db.insert(apiKeys).values({
-    id,
-    keyHash,
-    ownerId,
-    name,
-    scopes: scopes as string[],
-    allowedDomains:
-      normalizedDomains.domains.length > 0 ? normalizedDomains.domains : null,
-    expiresAt: expiresAt ? new Date(expiresAt) : null,
+    if (limits.maxApiKeys !== Infinity) {
+      const [row] = await tx
+        .select({ count: count() })
+        .from(apiKeys)
+        .where(and(eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt)));
+      const current = row?.count ?? 0;
+      if (current >= limits.maxApiKeys) {
+        return {
+          ok: false as const,
+          limit: limits.maxApiKeys,
+        };
+      }
+    }
+
+    const { id, fullKey, keyHash } = generateApiKey();
+    await tx.insert(apiKeys).values({
+      id,
+      keyHash,
+      ownerId,
+      name,
+      scopes: scopes as string[],
+      allowedDomains:
+        normalizedDomains.domains.length > 0 ? normalizedDomains.domains : null,
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+    });
+
+    return { ok: true as const, id, fullKey };
   });
+
+  if (!created.ok) {
+    return c.json(
+      {
+        error: {
+          code: "PLAN_LIMIT",
+          message: `You've reached the maximum of ${created.limit} API keys on your current plan. Please upgrade to create more.`,
+        },
+      },
+      403,
+    );
+  }
 
   logAudit({
     profileId: userId,
     action: "key.created",
     resourceType: "api_key",
-    resourceId: id,
+    resourceId: created.id,
     metadata: { name, scopes },
     ipAddress: getClientIp(c.req.raw),
   });
@@ -119,8 +140,8 @@ keysRoute.post("/keys", async (c) => {
   return c.json(
     {
       data: {
-        id,
-        key: fullKey,
+        id: created.id,
+        key: created.fullKey,
         name,
         scopes,
         allowedDomains: normalizedDomains.domains,
