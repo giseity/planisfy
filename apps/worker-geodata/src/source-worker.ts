@@ -117,6 +117,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     await setProcessingStatus({
       tilesetId,
       uploadId,
+      processingJobId,
     });
     if (processingJobId) {
       await throwIfCancellationRequested(processingJobId);
@@ -335,7 +336,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     });
   } catch (err) {
     if (err instanceof ProcessingJobCanceledError) {
-      await setCanceledStatus({ tilesetId, uploadId });
+      await setCanceledStatus({ tilesetId, uploadId, processingJobId });
       await markProcessingJobCanceled(processingJobId, err);
       return;
     }
@@ -343,6 +344,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     await setErrorStatus({
       tilesetId,
       uploadId,
+      processingJobId,
       error: err,
     });
 

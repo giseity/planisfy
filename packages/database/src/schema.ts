@@ -889,6 +889,9 @@ export const tilesets = pgTable(
     type: tilesetTypeEnum("type").notNull().default("VECTOR"),
     status: tilesetStatusEnum("status").notNull().default("DRAFT"),
     currentVersionId: uuid("current_version_id"),
+    buildJobId: uuid("build_job_id").references(() => processingJobs.id, {
+      onDelete: "set null",
+    }),
     bounds: jsonb("bounds"),
     minZoom: integer("min_zoom").default(0),
     maxZoom: integer("max_zoom").default(14),
@@ -903,6 +906,7 @@ export const tilesets = pgTable(
   },
   (table) => [
     index("tilesets_account_idx").on(table.accountId),
+    index("tilesets_build_job_idx").on(table.buildJobId),
     uniqueIndex("tilesets_account_handle_unique")
       .on(table.accountId, table.handle)
       .where(sql`${table.deletedAt} IS NULL`),

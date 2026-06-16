@@ -644,6 +644,11 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
     throw err;
   }
 
+  await db
+    .update(tilesets)
+    .set({ buildJobId: processingJob.id, updatedAt: new Date() })
+    .where(eq(tilesets.id, tileset.id));
+
   await logProcessingJob(processingJob.id, "Dataset tiling queued", {
     metadata: {
       datasetId: dataset.id,

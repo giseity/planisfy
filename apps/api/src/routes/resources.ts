@@ -309,6 +309,11 @@ resourcesRoute.post("/uploads", async (c) => {
     throw err;
   }
 
+  await db
+    .update(tilesets)
+    .set({ buildJobId: processingJob.id, updatedAt: new Date() })
+    .where(eq(tilesets.id, tileset.id));
+
   await logProcessingJob(processingJob.id, "Upload received and queued", {
     metadata: {
       uploadId: upload.id,
@@ -752,7 +757,11 @@ resourcesRoute.post("/tilesets/:id/rebuild", async (c) => {
   await db.transaction(async (tx) => {
     await tx
       .update(tilesets)
-      .set({ status: "BUILDING", updatedAt: new Date() })
+      .set({
+        status: "BUILDING",
+        buildJobId: processingJob.id,
+        updatedAt: new Date(),
+      })
       .where(eq(tilesets.id, tileset.id));
     await tx
       .update(uploads)
@@ -907,7 +916,7 @@ resourcesRoute.post("/jobs/:id/retry", async (c) => {
 
     await tx
       .update(tilesets)
-      .set({ status: "BUILDING", updatedAt: now })
+      .set({ status: "BUILDING", buildJobId: job.id, updatedAt: now })
       .where(
         and(
           eq(tilesets.id, input.tilesetId),

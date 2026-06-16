@@ -1,4 +1,4 @@
-import { eq, max } from "drizzle-orm";
+import { and, eq, max } from "drizzle-orm";
 import {
   db,
   storageObjects,
@@ -92,51 +92,63 @@ export async function finalizeProcessedArtifact(params: {
   bounds?: [number, number, number, number] | null;
   fallback?: string;
 }) {
+  await assertCurrentTilesetBuild(params.tilesetId, params.processingJobId);
+
   const versionNumber =
     params.artifact.versionNumber ??
     (await nextTilesetVersion(params.tilesetId));
-  const [tilesetVersion] = await db
-    .insert(tilesetVersions)
-    .values({
-      tilesetId: params.tilesetId,
-      version: versionNumber,
-      artifactStorageObjectId: params.artifact.storageObjectId,
-      format: tileArtifactFormat(params.artifact.artifactFormat),
-      buildJobId: params.processingJobId,
-      schema: {
-        vector_layers: [
-          {
-            id: "data",
-            fields: {},
-            minzoom: params.minZoom,
-            maxzoom: params.maxZoom,
-          },
-        ],
-        fallback: params.fallback,
-      },
-      bounds: params.bounds,
-      minZoom: params.minZoom,
-      maxZoom: params.maxZoom,
-    })
-    .returning();
+  const tilesetVersion = await db.transaction(async (tx) => {
+    const [createdVersion] = await tx
+      .insert(tilesetVersions)
+      .values({
+        tilesetId: params.tilesetId,
+        version: versionNumber,
+        artifactStorageObjectId: params.artifact.storageObjectId,
+        format: tileArtifactFormat(params.artifact.artifactFormat),
+        buildJobId: params.processingJobId,
+        schema: {
+          vector_layers: [
+            {
+              id: "data",
+              fields: {},
+              minzoom: params.minZoom,
+              maxzoom: params.maxZoom,
+            },
+          ],
+          fallback: params.fallback,
+        },
+        bounds: params.bounds,
+        minZoom: params.minZoom,
+        maxZoom: params.maxZoom,
+      })
+      .returning();
 
-  await db
-    .update(tilesets)
-    .set({
-      status: "READY",
-      bounds: params.bounds,
-      minZoom: params.minZoom,
-      maxZoom: params.maxZoom,
-      layerMetadata: tilesetVersion!.schema,
-    })
-    .where(eq(tilesets.id, params.tilesetId));
+    const [updatedTileset] = await tx
+      .update(tilesets)
+      .set({
+        status: "READY",
+        bounds: params.bounds,
+        minZoom: params.minZoom,
+        maxZoom: params.maxZoom,
+        layerMetadata: createdVersion!.schema,
+        buildJobId: null,
+      })
+      .where(currentTilesetBuild(params.tilesetId, params.processingJobId))
+      .returning({ id: tilesets.id });
 
-  if (params.uploadId) {
-    await db
-      .update(uploads)
-      .set({ status: "READY", linkedTilesetId: params.tilesetId })
-      .where(eq(uploads.id, params.uploadId));
-  }
+    if (!updatedTileset) {
+      throw new Error("Tileset build is no longer the active processing job");
+    }
+
+    if (params.uploadId) {
+      await tx
+        .update(uploads)
+        .set({ status: "READY", linkedTilesetId: params.tilesetId })
+        .where(eq(uploads.id, params.uploadId));
+    }
+
+    return createdVersion!;
+  });
 
   await markProcessingJobSucceeded(params.processingJobId, {
     tilesetId: params.tilesetId,
@@ -157,6 +169,28 @@ async function nextTilesetVersion(tilesetId: string): Promise<number> {
     .where(eq(tilesetVersions.tilesetId, tilesetId));
 
   return (versionState?.latest ?? 0) + 1;
+}
+
+async function assertCurrentTilesetBuild(
+  tilesetId: string,
+  processingJobId?: string,
+) {
+  if (!processingJobId) return;
+
+  const [tileset] = await db
+    .select({ id: tilesets.id })
+    .from(tilesets)
+    .where(currentTilesetBuild(tilesetId, processingJobId))
+    .limit(1);
+
+  if (!tileset) {
+    throw new Error("Tileset build is no longer the active processing job");
+  }
+}
+
+function currentTilesetBuild(tilesetId: string, processingJobId?: string) {
+  const base = eq(tilesets.id, tilesetId);
+  return processingJobId ? and(base, eq(tilesets.buildJobId, processingJobId)) : base;
 }
 
 function tileStorageFormat(format: SourceFormat): TilesetArtifactFormat {

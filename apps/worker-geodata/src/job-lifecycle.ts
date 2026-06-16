@@ -1,4 +1,4 @@
-import { eq, max } from "drizzle-orm";
+import { and, eq, inArray, isNull, max } from "drizzle-orm";
 import {
   db,
   processingJobLogs,
@@ -16,11 +16,12 @@ import {
 export async function setProcessingStatus(params: {
   tilesetId: string;
   uploadId?: string;
+  processingJobId?: string;
 }) {
   await db
     .update(tilesets)
     .set({ status: "BUILDING" })
-    .where(eq(tilesets.id, params.tilesetId));
+    .where(activeTilesetBuild(params.tilesetId, params.processingJobId));
 
   if (params.uploadId) {
     await db
@@ -34,11 +35,12 @@ export async function setErrorStatus(params: {
   tilesetId: string;
   uploadId?: string;
   error: unknown;
+  processingJobId?: string;
 }) {
   await db
     .update(tilesets)
     .set({ status: "ERROR" })
-    .where(eq(tilesets.id, params.tilesetId));
+    .where(activeTilesetBuild(params.tilesetId, params.processingJobId));
 
   if (params.uploadId) {
     await db
@@ -59,6 +61,7 @@ export async function setErrorStatus(params: {
 export async function setCanceledStatus(params: {
   tilesetId: string;
   uploadId?: string;
+  processingJobId?: string;
 }) {
   const [versionState] = await db
     .select({ latest: max(tilesetVersions.version) })
@@ -68,7 +71,7 @@ export async function setCanceledStatus(params: {
   await db
     .update(tilesets)
     .set({ status: versionState?.latest ? "READY" : "DRAFT" })
-    .where(eq(tilesets.id, params.tilesetId));
+    .where(activeTilesetBuild(params.tilesetId, params.processingJobId));
 
   if (params.uploadId) {
     await db
@@ -86,7 +89,7 @@ export async function updateProgress(
   await db
     .update(processingJobs)
     .set({ progress, output, updatedAt: new Date() })
-    .where(eq(processingJobs.id, jobId));
+    .where(activeProcessingJob(jobId));
 }
 
 export async function logProcessingJob(
@@ -127,7 +130,13 @@ export async function markProcessingJobStarted(jobId: string) {
       startedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(processingJobs.id, jobId));
+    .where(
+      and(
+        eq(processingJobs.id, jobId),
+        inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
+        isNull(processingJobs.cancelRequestedAt),
+      ),
+    );
 }
 
 export async function markProcessingJobSucceeded(
@@ -147,7 +156,7 @@ export async function markProcessingJobSucceeded(
       completedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(processingJobs.id, jobId));
+    .where(activeProcessingJob(jobId));
 }
 
 export async function markProcessingJobFailed(
@@ -163,7 +172,7 @@ export async function markProcessingJobFailed(
       completedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(processingJobs.id, jobId));
+    .where(activeProcessingJob(jobId));
 }
 
 export async function markProcessingJobCanceled(
@@ -181,7 +190,12 @@ export async function markProcessingJobCanceled(
       completedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(processingJobs.id, jobId));
+    .where(
+      and(
+        eq(processingJobs.id, jobId),
+        inArray(processingJobs.status, ["PENDING", "PROCESSING", "CANCELED"]),
+      ),
+    );
 
   await logProcessingJob(
     jobId,
@@ -211,4 +225,19 @@ export class ProcessingJobCanceledError extends Error {
     super("Processing job cancellation requested");
     this.name = "ProcessingJobCanceledError";
   }
+}
+
+function activeProcessingJob(jobId: string) {
+  return and(
+    eq(processingJobs.id, jobId),
+    inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
+    isNull(processingJobs.cancelRequestedAt),
+  );
+}
+
+function activeTilesetBuild(tilesetId: string, processingJobId?: string) {
+  const base = eq(tilesets.id, tilesetId);
+  return processingJobId
+    ? and(base, eq(tilesets.buildJobId, processingJobId))
+    : base;
 }

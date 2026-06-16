@@ -1,5 +1,5 @@
 import { Queue } from "bullmq";
-import { and, asc, eq, inArray, lte, max, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, max, sql } from "drizzle-orm";
 import {
   SOURCE_PROCESSING_QUEUE_NAME,
   parseSourceProcessingJobInput as parseSharedSourceProcessingJobInput,
@@ -164,18 +164,16 @@ async function dispatchSourceImportRequested(event: OutboxEvent) {
     throw new Error(`Processing job not found: ${payload.jobId}`);
   }
 
-  const now = new Date();
-  await markSourceImportProcessing({
-    jobId: payload.jobId,
-    importId: payload.importId,
-    datasetId: payload.datasetId,
-    startedAt: processingJob.startedAt ?? now,
-  });
-
   try {
-    if (processingJob.status === "CANCELED" || processingJob.cancelRequestedAt) {
-      throw new Error("Source import skipped because processing job is canceled");
-    }
+    await throwIfSourceImportCanceled(payload.jobId);
+
+    const now = new Date();
+    await markSourceImportProcessing({
+      jobId: payload.jobId,
+      importId: payload.importId,
+      datasetId: payload.datasetId,
+      startedAt: processingJob.startedAt ?? now,
+    });
 
     const input = parseOvertureImportInput(processingJob.input);
     const result = await runOvertureImport(input, {
@@ -185,11 +183,14 @@ async function dispatchSourceImportRequested(event: OutboxEvent) {
       maxFeatures: env.SOURCE_IMPORT_MAX_FEATURES,
       timeoutMs: env.SOURCE_IMPORT_TIMEOUT_MS,
     });
+    await throwIfSourceImportCanceled(payload.jobId);
+
     const stored = await storeDatasetArtifact({
       accountId: payload.accountId,
       datasetId: payload.datasetId,
       result,
     });
+    await throwIfSourceImportCanceled(payload.jobId);
 
     const output = {
       provider: payload.provider,
@@ -215,6 +216,16 @@ async function dispatchSourceImportRequested(event: OutboxEvent) {
       output,
     });
   } catch (err) {
+    if (err instanceof SourceImportCanceledError) {
+      await markSourceImportCanceled({
+        jobId: payload.jobId,
+        importId: payload.importId,
+        datasetId: payload.datasetId,
+        error: err,
+      });
+      return;
+    }
+
     await markSourceImportFailed({
       jobId: payload.jobId,
       importId: payload.importId,
@@ -240,7 +251,7 @@ async function markSourceImportProcessing(params: {
         startedAt: params.startedAt,
         updatedAt: now,
       })
-      .where(eq(processingJobs.id, params.jobId));
+      .where(activeProcessingJob(params.jobId));
 
     await tx
       .update(sourceImports)
@@ -356,7 +367,7 @@ async function markSourceImportSucceeded(params: {
         completedAt: now,
         updatedAt: now,
       })
-      .where(eq(processingJobs.id, params.jobId));
+      .where(activeProcessingJob(params.jobId));
 
     await tx.insert(processingJobLogs).values({
       jobId: params.jobId,
@@ -374,7 +385,8 @@ async function markSourceImportFailed(params: {
   error: unknown;
 }) {
   const now = new Date();
-  const message = params.error instanceof Error ? params.error.message : String(params.error);
+  const message =
+    params.error instanceof Error ? params.error.message : String(params.error);
   await db.transaction(async (tx) => {
     await tx
       .update(datasets)
@@ -400,15 +412,96 @@ async function markSourceImportFailed(params: {
         completedAt: now,
         updatedAt: now,
       })
-      .where(eq(processingJobs.id, params.jobId));
+      .where(activeProcessingJob(params.jobId));
 
     await tx.insert(processingJobLogs).values({
       jobId: params.jobId,
       level: "error",
       message: "Overture DuckDB extract failed",
-      metadata: { importId: params.importId, datasetId: params.datasetId, message },
+      metadata: {
+        importId: params.importId,
+        datasetId: params.datasetId,
+        message,
+      },
     });
   });
+}
+
+async function markSourceImportCanceled(params: {
+  jobId: string;
+  importId: string;
+  datasetId: string;
+  error: SourceImportCanceledError;
+}) {
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(sourceImports)
+      .set({
+        status: "CANCELED",
+        errorCode: null,
+        errorMessage: null,
+        updatedAt: now,
+      })
+      .where(eq(sourceImports.id, params.importId));
+
+    await tx
+      .update(processingJobs)
+      .set({
+        status: "CANCELED",
+        errorCode: null,
+        errorMessage: null,
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(processingJobs.id, params.jobId),
+          inArray(processingJobs.status, ["PENDING", "PROCESSING", "CANCELED"]),
+        ),
+      );
+
+    await tx.insert(processingJobLogs).values({
+      jobId: params.jobId,
+      level: "warn",
+      message: "Overture DuckDB extract canceled",
+      metadata: {
+        importId: params.importId,
+        datasetId: params.datasetId,
+        cancelRequestedAt: params.error.cancelRequestedAt?.toISOString(),
+      },
+    });
+  });
+}
+
+async function throwIfSourceImportCanceled(jobId: string) {
+  const [job] = await db
+    .select({
+      status: processingJobs.status,
+      cancelRequestedAt: processingJobs.cancelRequestedAt,
+    })
+    .from(processingJobs)
+    .where(eq(processingJobs.id, jobId))
+    .limit(1);
+
+  if (job?.status === "CANCELED" || job?.cancelRequestedAt) {
+    throw new SourceImportCanceledError(job.cancelRequestedAt);
+  }
+}
+
+function activeProcessingJob(jobId: string) {
+  return and(
+    eq(processingJobs.id, jobId),
+    inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
+    isNull(processingJobs.cancelRequestedAt),
+  );
+}
+
+class SourceImportCanceledError extends Error {
+  constructor(readonly cancelRequestedAt?: Date | null) {
+    super("Source import cancellation requested");
+    this.name = "SourceImportCanceledError";
+  }
 }
 
 async function nextDatasetVersion(datasetId: string) {

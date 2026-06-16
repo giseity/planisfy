@@ -78,6 +78,13 @@
       "when": 1781364000000,
       "tag": "0010_subscription_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781365000000,
+      "tag": "0011_tileset_build_job_token",
+      "breakpoints": true
     }
   ]
 }
