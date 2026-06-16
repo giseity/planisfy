@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import {
   artifactBackups,
@@ -561,56 +561,91 @@ operationsRoute.post("/operations/artifact-backups", async (c) => {
   const storage = getStorage();
   const storageInfo = storage.getInfo();
   const backupKey = `backups/${accountId}/${object.id}/${Date.now()}-${object.fileName ?? "artifact"}`;
-  const [backup] = await db
-    .insert(artifactBackups)
-    .values({
-      accountId,
-      storageObjectId: object.id,
-      provider: storageInfo.provider,
-      bucket: storageInfo.bucket,
-      sourceStorageKey: object.storageKey,
-      backupStorageKey: backupKey,
-      size: object.size,
-      metadata: {
-        resourceType: object.resourceType,
-        resourceId: object.resourceId,
-      },
-    })
-    .returning();
-  try {
-    await storage.copy(object.storageKey, backupKey);
-    const [updated] = await db
-      .update(artifactBackups)
-      .set({ status: "completed", completedAt: new Date() })
-      .where(eq(artifactBackups.id, backup!.id))
-      .returning();
-    return c.json({ data: updated }, 201);
-  } catch (err) {
-    const [failed] = await db
-      .update(artifactBackups)
-      .set({
-        status: "failed",
-        errorMessage: errorMessage(err),
-        completedAt: new Date(),
+
+  const result = await db.transaction(async (tx) => {
+    await lockArtifactOperation(tx, object.id);
+
+    const [backup] = await tx
+      .insert(artifactBackups)
+      .values({
+        accountId,
+        storageObjectId: object.id,
+        provider: storageInfo.provider,
+        bucket: storageInfo.bucket,
+        sourceStorageKey: object.storageKey,
+        backupStorageKey: backupKey,
+        size: object.size,
+        metadata: {
+          resourceType: object.resourceType,
+          resourceId: object.resourceId,
+        },
       })
-      .where(eq(artifactBackups.id, backup!.id))
       .returning();
-    return c.json({ data: failed }, 500);
-  }
+
+    try {
+      await storage.copy(object.storageKey, backup!.backupStorageKey);
+      const [updated] = await tx
+        .update(artifactBackups)
+        .set({ status: "completed", completedAt: new Date() })
+        .where(eq(artifactBackups.id, backup!.id))
+        .returning();
+      return { data: updated, status: 201 as const };
+    } catch (err) {
+      const [failed] = await tx
+        .update(artifactBackups)
+        .set({
+          status: "failed",
+          errorMessage: errorMessage(err),
+          completedAt: new Date(),
+        })
+        .where(eq(artifactBackups.id, backup!.id))
+        .returning();
+      return { data: failed, status: 500 as const };
+    }
+  });
+
+  return c.json({ data: result.data }, result.status);
 });
 
 operationsRoute.post("/operations/artifact-backups/:id/restore", async (c) => {
   const accountId = c.get("ownerId");
   const id = c.req.param("id");
-  const [backup] = await db
-    .select()
-    .from(artifactBackups)
-    .where(
-      and(eq(artifactBackups.id, id), eq(artifactBackups.accountId, accountId)),
-    )
-    .limit(1);
-  if (!backup) return notFound(c, "Backup not found");
-  if (backup.status !== "completed" && backup.status !== "restored") {
+  const result = await db.transaction(async (tx) => {
+    const [backup] = await tx
+      .select()
+      .from(artifactBackups)
+      .where(
+        and(
+          eq(artifactBackups.id, id),
+          eq(artifactBackups.accountId, accountId),
+        ),
+      )
+      .limit(1);
+    if (!backup) return { kind: "not-found" as const };
+    if (backup.status !== "completed" && backup.status !== "restored") {
+      return { kind: "invalid-state" as const };
+    }
+
+    await lockArtifactOperation(tx, backup.storageObjectId ?? backup.id);
+    await getStorage().copy(backup.backupStorageKey, backup.sourceStorageKey);
+    const [updated] = await tx
+      .update(artifactBackups)
+      .set({ status: "restored", restoredAt: new Date() })
+      .where(
+        and(
+          eq(artifactBackups.id, id),
+          inArray(artifactBackups.status, ["completed", "restored"]),
+        ),
+      )
+      .returning();
+
+    return updated
+      ? { kind: "restored" as const, data: updated }
+      : { kind: "invalid-state" as const };
+  });
+
+  if (result.kind === "not-found") return notFound(c, "Backup not found");
+  if (result.kind === "invalid-state") {
     return c.json(
       {
         error: {
@@ -621,13 +656,7 @@ operationsRoute.post("/operations/artifact-backups/:id/restore", async (c) => {
       400,
     );
   }
-  await getStorage().copy(backup.backupStorageKey, backup.sourceStorageKey);
-  const [updated] = await db
-    .update(artifactBackups)
-    .set({ status: "restored", restoredAt: new Date() })
-    .where(eq(artifactBackups.id, id))
-    .returning();
-  return c.json({ data: updated });
+  return c.json({ data: result.data });
 });
 
 operationsRoute.post("/operations/worker-nodes", async (c) => {
@@ -1572,6 +1601,19 @@ function missingRouteParam(c: Context, param: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+type AdvisoryLockExecutor = {
+  execute(query: SQL): Promise<unknown>;
+};
+
+async function lockArtifactOperation(
+  tx: AdvisoryLockExecutor,
+  storageObjectId: string,
+) {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`artifactOperation:${storageObjectId}`}))`,
+  );
 }
 
 export function formatSseEvent(event: string, data: unknown) {
