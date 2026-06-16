@@ -872,8 +872,8 @@ resourcesRoute.post("/jobs/:id/retry", async (c) => {
   }
   const now = new Date();
 
-  await db.transaction(async (tx) => {
-    await tx
+  const updatedJob = await db.transaction(async (tx) => {
+    const [transitioned] = await tx
       .update(processingJobs)
       .set({
         status: "PENDING",
@@ -887,7 +887,16 @@ resourcesRoute.post("/jobs/:id/retry", async (c) => {
         completedAt: null,
         updatedAt: now,
       })
-      .where(eq(processingJobs.id, job.id));
+      .where(
+        and(
+          eq(processingJobs.id, job.id),
+          eq(processingJobs.accountId, accountId),
+          inArray(processingJobs.status, ["FAILED", "CANCELED"]),
+        ),
+      )
+      .returning();
+
+    if (!transitioned) return null;
 
     await tx.insert(processingJobLogs).values({
       jobId: job.id,
@@ -914,7 +923,21 @@ resourcesRoute.post("/jobs/:id/retry", async (c) => {
           and(eq(uploads.id, input.uploadId), eq(uploads.accountId, accountId)),
         );
     }
+
+    return transitioned;
   });
+
+  if (!updatedJob) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_JOB_STATE",
+          message: "Only failed or canceled jobs can be retried",
+        },
+      },
+      409,
+    );
+  }
 
   const retrySource = buildRetrySourceResource(input);
   await enqueueOutboxEvent({
@@ -933,13 +956,7 @@ resourcesRoute.post("/jobs/:id/retry", async (c) => {
     metadata: { requestedBy: "console", previousStatus: job.status },
   });
 
-  const [updated] = await db
-    .select()
-    .from(processingJobs)
-    .where(eq(processingJobs.id, job.id))
-    .limit(1);
-
-  return c.json({ data: updated });
+  return c.json({ data: updatedJob });
 });
 
 resourcesRoute.post("/jobs/:id/cancel", async (c) => {
@@ -974,22 +991,46 @@ resourcesRoute.post("/jobs/:id/cancel", async (c) => {
   const [updated] = await db
     .update(processingJobs)
     .set({
-      status: job.status === "PENDING" ? "CANCELED" : job.status,
+      status: sql<
+        typeof processingJobs.status
+      >`case when ${processingJobs.status} = 'PENDING' then 'CANCELED' else ${processingJobs.status} end`,
       cancelRequestedAt: now,
-      completedAt: job.status === "PENDING" ? now : job.completedAt,
+      completedAt: sql<
+        Date | null
+      >`case when ${processingJobs.status} = 'PENDING' then ${now} else ${processingJobs.completedAt} end`,
       updatedAt: now,
     })
-    .where(eq(processingJobs.id, id))
+    .where(
+      and(
+        eq(processingJobs.id, id),
+        eq(processingJobs.accountId, accountId),
+        inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
+      ),
+    )
     .returning();
 
+  if (!updated) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_JOB_STATE",
+          message: "Completed jobs cannot be canceled",
+        },
+      },
+      409,
+    );
+  }
+
+  const previousStatus =
+    updated.status === "CANCELED" ? "PENDING" : updated.status;
   await logProcessingJob(
     id,
-    job.status === "PENDING"
+    previousStatus === "PENDING"
       ? "Console canceled pending job"
       : "Console cancellation requested",
     {
       level: "warn",
-      metadata: { previousStatus: job.status },
+      metadata: { previousStatus },
     },
   );
 
