@@ -35,6 +35,7 @@ import {
   toStorageFileName,
   unsupportedUploadFormatMessage,
 } from "../lib/upload-policy";
+import { isRequestBodyTooLarge } from "../lib/request-size";
 import {
   ExecutionRuntimeSelectionError,
   resolveExecutionRuntimeSelection,
@@ -55,6 +56,7 @@ resourcesRoute.use(
 resourcesRoute.use("/jobs/*", requireOrgMutationPermission("resource.write"));
 
 const MAX_UPLOAD_SIZE = 250 * 1024 * 1024;
+const MAX_MULTIPART_UPLOAD_SIZE = MAX_UPLOAD_SIZE + 1024 * 1024;
 
 const createTilesetSchema = z.object({
   name: z.string().min(1).max(128),
@@ -86,6 +88,18 @@ resourcesRoute.get("/uploads", async (c) => {
 resourcesRoute.post("/uploads", async (c) => {
   const accountId = c.get("ownerId");
   const userId = c.get("userId");
+  if (isRequestBodyTooLarge(c.req.raw.headers, MAX_MULTIPART_UPLOAD_SIZE)) {
+    return c.json(
+      {
+        error: {
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Upload request too large (max ${MAX_UPLOAD_SIZE / 1024 / 1024}MB file)`,
+        },
+      },
+      413,
+    );
+  }
+
   const formData = await c.req.formData();
   const file = formData.get("file") as File | null;
   const optionsRaw = formData.get("options");
