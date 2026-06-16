@@ -11,7 +11,7 @@ import {
   type StorageProvider,
   type StorageProviderInfo,
 } from "@planisfy/storage";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import Protobuf from "pbf";
 import {
   PMTiles,
@@ -26,6 +26,12 @@ const pmtilesCache = new SharedPromiseCache(200);
 export type ResolvedTileset = NonNullable<
   Awaited<ReturnType<typeof resolveTileset>>
 >;
+
+export type ResolveTilesetAccess = "public" | "draft";
+
+export type ResolveTilesetOptions = {
+  access?: ResolveTilesetAccess;
+};
 
 export type TileCoordinates = {
   z: number;
@@ -98,7 +104,9 @@ export async function resolveTileset(
   ownerHandle: string,
   handle: string,
   versionNumber?: number,
+  options: ResolveTilesetOptions = {},
 ) {
+  const access = options.access ?? "public";
   const [owner] = await db
     .select({ id: accounts.id })
     .from(accounts)
@@ -121,14 +129,20 @@ export async function resolveTileset(
 
   if (!tileset) return null;
 
+  const publishedConstraint =
+    access === "public" ? isNotNull(tilesetVersions.publishedAt) : undefined;
   const versionWhere = versionNumber
     ? and(
         eq(tilesetVersions.tilesetId, tileset.id),
         eq(tilesetVersions.version, versionNumber),
+        publishedConstraint,
       )
-    : eq(
-        tilesetVersions.id,
-        tileset.currentVersionId ?? "00000000-0000-0000-0000-000000000000",
+    : and(
+        eq(
+          tilesetVersions.id,
+          tileset.currentVersionId ?? "00000000-0000-0000-0000-000000000000",
+        ),
+        publishedConstraint,
       );
   const [version] = await db
     .select()
@@ -144,7 +158,12 @@ export async function resolveTileset(
           storageKey: storageObjects.storageKey,
         })
         .from(storageObjects)
-        .where(eq(storageObjects.id, version.artifactStorageObjectId))
+        .where(
+          and(
+            eq(storageObjects.id, version.artifactStorageObjectId),
+            isNull(storageObjects.deletedAt),
+          ),
+        )
         .limit(1)
     : [];
 

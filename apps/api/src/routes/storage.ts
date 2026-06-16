@@ -1,6 +1,11 @@
 import { Hono } from "hono";
-import { and, eq, isNull } from "drizzle-orm";
-import { db, storageObjects } from "@planisfy/database";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import {
+  db,
+  storageObjects,
+  tilesetVersions,
+  tilesets,
+} from "@planisfy/database";
 import { getStorage } from "../lib/storage";
 
 export const storageRoute = new Hono();
@@ -15,20 +20,27 @@ storageRoute.get("/storage/*", async (c) => {
   const [object] = await db
     .select({
       contentType: storageObjects.contentType,
-      resourceType: storageObjects.resourceType,
-      artifactKind: storageObjects.artifactKind,
     })
     .from(storageObjects)
+    .innerJoin(
+      tilesetVersions,
+      eq(tilesetVersions.artifactStorageObjectId, storageObjects.id),
+    )
+    .innerJoin(tilesets, eq(tilesets.id, tilesetVersions.tilesetId))
     .where(
       and(
         eq(storageObjects.storageKey, key),
         eq(storageObjects.provider, "local"),
-        isNull(storageObjects.deletedAt)
-      )
+        eq(storageObjects.resourceType, "tileset"),
+        eq(storageObjects.artifactKind, "processed"),
+        isNull(storageObjects.deletedAt),
+        isNull(tilesets.deletedAt),
+        isNotNull(tilesetVersions.publishedAt),
+      ),
     )
     .limit(1);
 
-  if (!object || !isPublicStorageObject(object)) {
+  if (!object) {
     return c.json({ error: { code: "NOT_FOUND" } }, 404);
   }
 
@@ -36,7 +48,7 @@ storageRoute.get("/storage/*", async (c) => {
     const data = await getStorage().download(key);
     return new Response(new Uint8Array(data), {
       headers: {
-        "Content-Type": object?.contentType || "application/octet-stream",
+        "Content-Type": object.contentType || "application/octet-stream",
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
@@ -45,17 +57,12 @@ storageRoute.get("/storage/*", async (c) => {
   }
 });
 
-function isPublicStorageObject(object: {
-  resourceType: string | null;
-  artifactKind: string | null;
-}) {
-  return object.resourceType === "tileset" && object.artifactKind === "processed";
-}
-
 function isSafeStorageKey(key: string): boolean {
   if (!key || key.startsWith("/") || key.includes("\\")) {
     return false;
   }
 
-  return key.split("/").every((segment) => segment && segment !== "." && segment !== "..");
+  return key
+    .split("/")
+    .every((segment) => segment && segment !== "." && segment !== "..");
 }
