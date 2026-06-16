@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { forwardedAuthHeaders, normalizeStyleUrls } from "./render";
+import {
+  forwardedAuthHeaders,
+  headersForRouteRequest,
+  normalizeStyleUrls,
+} from "./render";
 
 test("normalizeStyleUrls absolutizes API-relative URLs", () => {
   const style = {
@@ -33,4 +37,36 @@ test("forwardedAuthHeaders keeps only auth-bearing headers", () => {
     "x-api-key": "pk_test",
     authorization: "Bearer test",
   });
+});
+
+test("headersForRouteRequest forwards auth only to the API origin", () => {
+  const requestHeaders = { accept: "*/*" };
+  const forwardedHeaders = {
+    authorization: "Bearer test",
+    cookie: "session=test",
+  };
+
+  assert.deepEqual(
+    headersForRouteRequest(
+      "http://api:4000/tiles/v1/demo/0/0/0.mvt",
+      requestHeaders,
+      forwardedHeaders,
+      "http://api:4000",
+    ),
+    {
+      accept: "*/*",
+      authorization: "Bearer test",
+      cookie: "session=test",
+    },
+  );
+
+  assert.deepEqual(
+    headersForRouteRequest(
+      "https://tiles.example.com/0/0/0.mvt",
+      requestHeaders,
+      forwardedHeaders,
+      "http://api:4000",
+    ),
+    { accept: "*/*" },
+  );
 });

@@ -30,6 +30,10 @@ import { env, redisConnection } from "../env";
 import { enqueueOutboxEvent } from "../lib/outbox";
 import { sendEmail } from "../lib/email";
 import { buildNotificationPayload } from "../lib/notification-adapters";
+import {
+  SourceUrlRejectedError,
+  validateOutboundUrl,
+} from "../lib/source-url-policy";
 
 export const operationsRoute = new Hono<AuthEnv>();
 
@@ -38,13 +42,28 @@ operationsRoute.use(
   requireOrgMutationPermission("operations.manage"),
 );
 
-const notificationSchema = z.object({
-  name: z.string().min(1).max(128),
-  provider: z.enum(["webhook", "email", "slack", "discord"]),
-  target: z.string().min(1).max(2048),
-  events: z.array(z.string().min(1).max(128)).default([]),
-  enabled: z.boolean().default(true),
-});
+const notificationSchema = z
+  .object({
+    name: z.string().min(1).max(128),
+    provider: z.enum(["webhook", "email", "slack", "discord"]),
+    target: z.string().min(1).max(2048),
+    events: z.array(z.string().min(1).max(128)).default([]),
+    enabled: z.boolean().default(true),
+  })
+  .superRefine((notification, ctx) => {
+    try {
+      validateNotificationTarget(notification.provider, notification.target);
+    } catch (err) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          err instanceof Error
+            ? err.message
+            : "Notification target is not allowed",
+        path: ["target"],
+      });
+    }
+  });
 
 const scheduleSchema = z
   .object({
@@ -68,12 +87,26 @@ const scheduleSchema = z
     }
   });
 
-const workerNodeSchema = z.object({
-  name: z.string().min(1).max(128),
-  kind: z.enum(["local", "remote", "cloud"]).default("local"),
-  endpoint: z.string().url().optional(),
-  metadata: z.record(z.string(), z.unknown()).default({}),
-});
+const workerNodeSchema = z
+  .object({
+    name: z.string().min(1).max(128),
+    kind: z.enum(["local", "remote", "cloud"]).default("local"),
+    endpoint: z.string().url().optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .superRefine((node, ctx) => {
+    if (node.kind === "local" || !node.endpoint) return;
+    try {
+      validateRemoteWorkerEndpoint(node.endpoint);
+    } catch (err) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          err instanceof Error ? err.message : "Worker endpoint is not allowed",
+        path: ["endpoint"],
+      });
+    }
+  });
 
 const previewLinkSchema = z.object({
   resourceType: z.string().min(1).max(64),
@@ -144,6 +177,9 @@ type WorkflowTemplateForApply = {
   category: string;
   template: unknown;
 };
+
+const slackWebhookHosts = ["hooks.slack.com", "hooks.slack-gov.com"] as const;
+const discordWebhookHosts = ["discord.com", "discordapp.com"] as const;
 
 export type WorkflowTemplateApplication =
   | {
@@ -1118,10 +1154,13 @@ async function validateWorkerNode(
     };
   }
   try {
+    const validatedEndpoint = validateRemoteWorkerEndpoint(endpoint);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    const response = await fetch(endpoint, { signal: controller.signal });
-    clearTimeout(timeout);
+    const response = await fetch(validatedEndpoint, {
+      redirect: "manual",
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
     return {
       ok: response.ok,
       checks: [
@@ -1140,6 +1179,35 @@ async function validateWorkerNode(
       ],
     };
   }
+}
+
+function validateRemoteWorkerEndpoint(endpoint: string) {
+  return validateOutboundUrl(endpoint);
+}
+
+export function validateNotificationTarget(
+  provider: "webhook" | "email" | "slack" | "discord",
+  target: string,
+) {
+  if (provider === "email") return target;
+  if (provider === "slack") {
+    return validateProviderWebhookUrl(target, slackWebhookHosts);
+  }
+  if (provider === "discord") {
+    return validateProviderWebhookUrl(target, discordWebhookHosts);
+  }
+  return validateOutboundUrl(target);
+}
+
+function validateProviderWebhookUrl(
+  target: string,
+  allowedHosts: readonly string[],
+) {
+  const href = validateOutboundUrl(target, { allowedHosts });
+  if (new URL(href).protocol !== "https:") {
+    throw new SourceUrlRejectedError("Webhook URL must use https");
+  }
+  return href;
 }
 
 async function sendTestNotification(
@@ -1199,8 +1267,26 @@ export async function deliverNotification(
   }
 
   const body = buildNotificationPayload(channel.provider, event);
-  const response = await fetch(channel.target, {
+  let target: string;
+  try {
+    target = validateNotificationTarget(channel.provider, channel.target);
+  } catch (err) {
+    return {
+      delivered: false,
+      adapter: channel.provider,
+      status: 400,
+      code: "NOTIFICATION_TARGET_REJECTED",
+      payload: body,
+      message:
+        err instanceof SourceUrlRejectedError
+          ? err.message
+          : "Notification target is not allowed",
+    };
+  }
+
+  const response = await fetch(target, {
     method: "POST",
+    redirect: "manual",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });

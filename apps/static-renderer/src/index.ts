@@ -2,10 +2,7 @@ import { serve } from "@hono/node-server";
 import { loadWorkspaceEnv } from "@planisfy/env/node";
 import { Hono } from "hono";
 import { z } from "zod";
-import {
-  forwardedAuthHeaders,
-  renderStaticMap,
-} from "./render";
+import { forwardedAuthHeaders, renderStaticMap } from "./render";
 
 loadWorkspaceEnv();
 
@@ -46,7 +43,8 @@ app.get("/render", async (c) => {
       {
         error: {
           code: "BAD_REQUEST",
-          message: "Expected owner, style, center=lon,lat, zoom, width, and height",
+          message:
+            "Expected owner, style, center=lon,lat, zoom, width, and height",
         },
       },
       400,
@@ -54,16 +52,20 @@ app.get("/render", async (c) => {
   }
 
   try {
+    const forwardedHeaders = forwardedAuthHeaders(c.req.raw.headers);
     const png = await renderStaticMap({
       ...parsed.data,
       apiBaseUrl,
-      forwardedHeaders: forwardedAuthHeaders(c.req.raw.headers),
+      forwardedHeaders,
     });
 
     return new Response(new Uint8Array(png), {
       headers: {
         "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=3600",
+        "Cache-Control":
+          Object.keys(forwardedHeaders).length > 0
+            ? "private, no-store"
+            : "public, max-age=3600",
       },
     });
   } catch (err) {

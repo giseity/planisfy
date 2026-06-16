@@ -6,6 +6,7 @@ import {
   operationsOverviewSignature,
   prepareWorkflowTemplateApplication,
   validateScheduleInput,
+  validateNotificationTarget,
 } from "./operations";
 
 test("formatSseEvent emits EventSource-compatible frames", () => {
@@ -148,7 +149,10 @@ test("Slack and Discord notification payloads post to target", async () => {
 
   try {
     await deliverNotification(
-      { provider: "slack", target: "https://hooks.example.com/slack" },
+      {
+        provider: "slack",
+        target: "https://hooks.slack.com/services/T000/B000/XXX",
+      },
       {
         event: "notification.test",
         message: "Planisfy test notification",
@@ -156,7 +160,10 @@ test("Slack and Discord notification payloads post to target", async () => {
       },
     );
     await deliverNotification(
-      { provider: "discord", target: "https://hooks.example.com/discord" },
+      {
+        provider: "discord",
+        target: "https://discord.com/api/webhooks/123/abc",
+      },
       {
         event: "notification.test",
         message: "Planisfy test notification",
@@ -169,14 +176,67 @@ test("Slack and Discord notification payloads post to target", async () => {
 
   assert.deepEqual(calls, [
     {
-      url: "https://hooks.example.com/slack",
+      url: "https://hooks.slack.com/services/T000/B000/XXX",
       body: { text: "Planisfy test notification\nnotification.test" },
     },
     {
-      url: "https://hooks.example.com/discord",
+      url: "https://discord.com/api/webhooks/123/abc",
       body: { content: "Planisfy test notification\nnotification.test" },
     },
   ]);
+});
+
+test("notification targets reject private hosts and wrong provider hosts", async () => {
+  assert.throws(
+    () => validateNotificationTarget("webhook", "http://127.0.0.1:8080/hook"),
+    /private|reserved/,
+  );
+  assert.throws(
+    () => validateNotificationTarget("slack", "https://example.com/slack"),
+    /not allowed/,
+  );
+  assert.throws(
+    () =>
+      validateNotificationTarget(
+        "discord",
+        "http://discord.com/api/webhooks/123/abc",
+      ),
+    /https/,
+  );
+  assert.equal(
+    validateNotificationTarget(
+      "discord",
+      "https://discordapp.com/api/webhooks/123/abc",
+    ),
+    "https://discordapp.com/api/webhooks/123/abc",
+  );
+});
+
+test("deliverNotification does not fetch rejected targets", async () => {
+  let called = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    called = true;
+    return new Response("", { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const result = await deliverNotification(
+      { provider: "webhook", target: "http://169.254.169.254/latest" },
+      {
+        event: "notification.test",
+        message: "Planisfy test notification",
+        timestamp: "2026-06-15T00:00:00.000Z",
+      },
+    );
+
+    assert.equal(called, false);
+    assert.equal(result.delivered, false);
+    assert.equal(result.status, 400);
+    assert.equal(result.code, "NOTIFICATION_TARGET_REJECTED");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("email notification adapter reports unavailable when email config is missing", async () => {

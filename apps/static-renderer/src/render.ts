@@ -24,6 +24,7 @@ export async function renderStaticMap(request: RenderRequest) {
   const { js, css } = await getMapLibreAssets();
   const styleJson = await fetchStyle(request);
   const normalizedStyle = normalizeStyleUrls(styleJson, request.apiBaseUrl);
+  const apiOrigin = new URL(request.apiBaseUrl).origin;
   const page = await browser.newPage({
     viewport: {
       width: request.width,
@@ -34,10 +35,12 @@ export async function renderStaticMap(request: RenderRequest) {
 
   try {
     await page.route("**/*", async (route) => {
-      const headers = {
-        ...route.request().headers(),
-        ...request.forwardedHeaders,
-      };
+      const headers = headersForRouteRequest(
+        route.request().url(),
+        route.request().headers(),
+        request.forwardedHeaders,
+        apiOrigin,
+      );
       await route.continue({ headers });
     });
 
@@ -85,7 +88,10 @@ export async function renderStaticMap(request: RenderRequest) {
   }
 }
 
-export function normalizeStyleUrls(value: unknown, apiBaseUrl: string): unknown {
+export function normalizeStyleUrls(
+  value: unknown,
+  apiBaseUrl: string,
+): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => normalizeStyleUrls(item, apiBaseUrl));
   }
@@ -113,6 +119,19 @@ export function forwardedAuthHeaders(headers: Headers) {
     if (value) forwarded[name] = value;
   }
   return forwarded;
+}
+
+export function headersForRouteRequest(
+  requestUrl: string,
+  requestHeaders: Record<string, string>,
+  forwardedHeaders: Record<string, string>,
+  apiOrigin: string,
+) {
+  if (new URL(requestUrl).origin !== apiOrigin) return requestHeaders;
+  return {
+    ...requestHeaders,
+    ...forwardedHeaders,
+  };
 }
 
 async function fetchStyle(request: RenderRequest) {

@@ -7,27 +7,58 @@ export class SourceUrlRejectedError extends Error {
   }
 }
 
-export function validateRemoteSourceUrl(
+export type OutboundUrlPolicyOptions = {
+  allowPrivateUrls?: boolean;
+  allowedHosts?: readonly string[];
+};
+
+export function validateOutboundUrl(
   value: string,
-  options: { allowPrivateUrls?: boolean } = {},
+  options: OutboundUrlPolicyOptions = {},
 ) {
   const url = new URL(value);
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new SourceUrlRejectedError("Source URL must use http or https");
+    throw new SourceUrlRejectedError("URL must use http or https");
   }
   if (url.username || url.password) {
-    throw new SourceUrlRejectedError("Source URL must not include credentials");
+    throw new SourceUrlRejectedError("URL must not include credentials");
   }
 
   if (!options.allowPrivateUrls) {
     assertPublicHostname(url.hostname);
   }
 
+  if (
+    options.allowedHosts &&
+    !hostAllowed(url.hostname, options.allowedHosts)
+  ) {
+    throw new SourceUrlRejectedError("URL host is not allowed");
+  }
+
   return url.href;
 }
 
+export function validateRemoteSourceUrl(
+  value: string,
+  options: { allowPrivateUrls?: boolean } = {},
+) {
+  try {
+    return validateOutboundUrl(value, options);
+  } catch (err) {
+    if (err instanceof SourceUrlRejectedError) {
+      throw new SourceUrlRejectedError(
+        err.message.replace(/^URL/, "Source URL"),
+      );
+    }
+    throw err;
+  }
+}
+
 function assertPublicHostname(hostname: string) {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const host = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
   if (
     host === "localhost" ||
     host.endsWith(".localhost") ||
@@ -46,10 +77,22 @@ function assertPublicHostname(hostname: string) {
   }
 }
 
+function hostAllowed(hostname: string, allowedHosts: readonly string[]) {
+  const host = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
+  return allowedHosts.some((allowedHost) => {
+    const allowed = allowedHost.toLowerCase().replace(/\.$/, "");
+    return host === allowed;
+  });
+}
+
 function isPrivateIpv4(host: string) {
   const parts = host.split(".").map(Number);
   const [a, b] = parts;
-  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) return true;
+  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part)))
+    return true;
   if (a === 0 || a === 10 || a === 127) return true;
   if (a === 100 && b !== undefined && b >= 64 && b <= 127) return true;
   if (a === 169 && b === 254) return true;
@@ -90,10 +133,7 @@ function ipv4MappedIpv6ToIpv4(host: string): string | null {
   }
 
   const [high, low] = parts as [number, number];
-  return [
-    (high >> 8) & 0xff,
-    high & 0xff,
-    (low >> 8) & 0xff,
-    low & 0xff,
-  ].join(".");
+  return [(high >> 8) & 0xff, high & 0xff, (low >> 8) & 0xff, low & 0xff].join(
+    ".",
+  );
 }

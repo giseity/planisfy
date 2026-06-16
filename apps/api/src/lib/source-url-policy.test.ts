@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   SourceUrlRejectedError,
+  validateOutboundUrl,
   validateRemoteSourceUrl,
 } from "./source-url-policy";
 
@@ -51,4 +52,29 @@ test("validateRemoteSourceUrl can allow private hosts for explicit deployments",
     }),
     "http://10.0.0.2/data",
   );
+});
+
+test("validateOutboundUrl rejects private hosts and enforces exact allowlists", () => {
+  assert.equal(
+    validateOutboundUrl("https://hooks.slack.com/services/T/B/C", {
+      allowedHosts: ["hooks.slack.com"],
+    }),
+    "https://hooks.slack.com/services/T/B/C",
+  );
+
+  for (const url of [
+    "http://169.254.169.254/latest/meta-data",
+    "https://evil.hooks.slack.com/services/T/B/C",
+    "https://hooks.slack.com.evil.example/services/T/B/C",
+    "https://user:pass@hooks.slack.com/services/T/B/C",
+  ]) {
+    assert.throws(
+      () =>
+        validateOutboundUrl(url, {
+          allowedHosts: ["hooks.slack.com"],
+        }),
+      SourceUrlRejectedError,
+      url,
+    );
+  }
 });
