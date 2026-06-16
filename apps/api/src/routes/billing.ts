@@ -25,6 +25,7 @@ import {
   tilesets,
   apiKeys,
   billingTransactions,
+  billingWebhookEvents,
 } from "@planisfy/database";
 import { eq, and, isNull, count, desc } from "drizzle-orm";
 import { env } from "../env";
@@ -249,12 +250,76 @@ billingWebhookRoute.post("/webhooks/dodo", async (c) => {
     throw err;
   }
 
-  const result = await applyDodoWebhookEvent(
-    payload as Record<string, unknown>,
-    {
-      webhookId: c.req.header("webhook-id"),
+  const webhookId = c.req.header("webhook-id");
+  const eventPayload = payload as Record<string, unknown>;
+  const claimed = webhookId
+    ? await claimDodoWebhookEvent(webhookId, eventPayload)
+    : true;
+  if (!claimed) {
+    return c.json({
+      data: {
+        applied: false,
+        reason: "duplicate-webhook",
+        webhookId,
+      },
+    });
+  }
+
+  try {
+    const result = await applyDodoWebhookEvent(eventPayload, {
+      webhookId,
       webhookTimestamp: c.req.header("webhook-timestamp"),
-    },
-  );
-  return c.json({ data: result });
+    });
+    if (webhookId) await markDodoWebhookProcessed(webhookId, result);
+    return c.json({ data: result });
+  } catch (err) {
+    if (webhookId) await releaseDodoWebhookClaim(webhookId);
+    throw err;
+  }
 });
+
+async function claimDodoWebhookEvent(
+  webhookId: string,
+  payload: Record<string, unknown>,
+) {
+  const [event] = await db
+    .insert(billingWebhookEvents)
+    .values({
+      provider: "DODO",
+      webhookId,
+      eventType: stringValue(payload.type),
+      payload,
+    })
+    .onConflictDoNothing()
+    .returning({ id: billingWebhookEvents.id });
+
+  return Boolean(event);
+}
+
+async function markDodoWebhookProcessed(webhookId: string, result: unknown) {
+  await db
+    .update(billingWebhookEvents)
+    .set({ result, processedAt: new Date() })
+    .where(
+      and(
+        eq(billingWebhookEvents.provider, "DODO"),
+        eq(billingWebhookEvents.webhookId, webhookId),
+      ),
+    );
+}
+
+async function releaseDodoWebhookClaim(webhookId: string) {
+  await db
+    .delete(billingWebhookEvents)
+    .where(
+      and(
+        eq(billingWebhookEvents.provider, "DODO"),
+        eq(billingWebhookEvents.webhookId, webhookId),
+        isNull(billingWebhookEvents.processedAt),
+      ),
+    );
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}

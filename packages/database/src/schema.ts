@@ -1570,3 +1570,25 @@ export const billingTransactions = pgTable(
     ),
   ],
 );
+
+export const billingWebhookEvents = pgTable(
+  "billing_webhook_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: billingProviderEnum("provider").notNull().default("DODO"),
+    webhookId: text("webhook_id").notNull(),
+    eventType: text("event_type"),
+    payload: jsonb("payload"),
+    result: jsonb("result"),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("billing_webhook_events_provider_id_unique").on(
+      table.provider,
+      table.webhookId,
+    ),
+  ],
+);
