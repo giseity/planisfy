@@ -771,38 +771,42 @@ async function publishStyleSnapshot({
     ...(sprite ? { sprite } : {}),
   };
 
-  await db
-    .delete(stylePublications)
-    .where(
-      and(
-        eq(stylePublications.styleId, styleId),
-        eq(stylePublications.alias, "latest"),
-      ),
-    );
+  const publication = await db.transaction(async (tx) => {
+    const [latest] = await tx
+      .insert(stylePublications)
+      .values({
+        styleId,
+        styleVersionId: snapshot.id,
+        accountId: ownerId,
+        alias: "latest",
+        publishedBy: userId,
+        metadata,
+      })
+      .onConflictDoUpdate({
+        target: [stylePublications.styleId, stylePublications.alias],
+        set: {
+          styleVersionId: snapshot.id,
+          accountId: ownerId,
+          publishedBy: userId,
+          metadata,
+        },
+      })
+      .returning();
 
-  const [publication] = await db
-    .insert(stylePublications)
-    .values({
-      styleId,
-      styleVersionId: snapshot.id,
-      accountId: ownerId,
-      alias: "latest",
-      publishedBy: userId,
-      metadata,
-    })
-    .returning();
+    await tx
+      .insert(stylePublications)
+      .values({
+        styleId,
+        styleVersionId: snapshot.id,
+        accountId: ownerId,
+        alias: `v${snapshot.version}`,
+        publishedBy: userId,
+        metadata,
+      })
+      .onConflictDoNothing();
 
-  await db
-    .insert(stylePublications)
-    .values({
-      styleId,
-      styleVersionId: snapshot.id,
-      accountId: ownerId,
-      alias: `v${snapshot.version}`,
-      publishedBy: userId,
-      metadata,
-    })
-    .onConflictDoNothing();
+    return latest;
+  });
 
   if (!publication) {
     throw new Error("Failed to publish style snapshot");
