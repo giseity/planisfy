@@ -6,6 +6,7 @@ import {
   styles,
   apiKeys,
   auditEvents,
+  sessions,
 } from "@planisfy/database";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { Badge } from "@planisfy/ui/components/badge";
@@ -62,7 +63,7 @@ export default async function UserDetailPage({
 
   if (!user) notFound();
 
-  const [userStyles, userKeys, recentAudit] = await Promise.all([
+  const [userStyles, userKeys, recentAudit, recentSessions] = await Promise.all([
     db
       .select({
         id: styles.id,
@@ -100,6 +101,19 @@ export default async function UserDetailPage({
       .where(eq(auditEvents.profileId, id))
       .orderBy(desc(auditEvents.timestamp))
       .limit(50),
+    db
+      .select({
+        id: sessions.id,
+        ipAddress: sessions.ipAddress,
+        userAgent: sessions.userAgent,
+        expiresAt: sessions.expiresAt,
+        createdAt: sessions.createdAt,
+        updatedAt: sessions.updatedAt,
+      })
+      .from(sessions)
+      .where(eq(sessions.userId, id))
+      .orderBy(desc(sessions.updatedAt))
+      .limit(25),
   ]);
 
   return (
@@ -157,7 +171,14 @@ export default async function UserDetailPage({
                 label="Joined"
                 value={new Date(user.createdAt).toLocaleDateString()}
               />
-              <Fact label="Last active" value="Activity tracked in sessions" />
+              <Fact
+                label="Last active"
+                value={
+                  recentSessions[0]
+                    ? new Date(recentSessions[0].updatedAt).toLocaleString()
+                    : "No sessions"
+                }
+              />
               <Fact label="Organization" value="See memberships" />
             </div>
           </div>
@@ -375,45 +396,44 @@ export default async function UserDetailPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {[
-                {
-                  device: "Chrome on macOS",
-                  ip: "192.168.1.42",
-                  location: "San Francisco, US",
-                  lastActive: "Active recently",
-                  current: true,
-                },
-                {
-                  device: "Safari on iPhone",
-                  ip: "10.0.0.15",
-                  location: "San Francisco, US",
-                  lastActive: "2h ago",
-                  current: false,
-                },
-              ].map((session) => (
-                <TableRow key={session.device}>
+              {recentSessions.map((session) => {
+                const active = session.expiresAt > new Date();
+                return (
+                <TableRow key={session.id}>
                   <TableCell>
                     <span className="flex items-center gap-2 font-medium">
                       <Monitor className="h-4 w-4 text-muted-foreground" />
-                      {session.device}
+                      {session.userAgent
+                        ? session.userAgent.slice(0, 80)
+                        : "Unknown device"}
                     </span>
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {session.ip}
+                    {session.ipAddress ?? "—"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {session.location}
+                    Created {new Date(session.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {session.lastActive}
+                    {new Date(session.updatedAt).toLocaleString()}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={session.current ? "success" : "secondary"}>
-                      {session.current ? "Current" : "Active"}
+                    <Badge variant={active ? "success" : "secondary"}>
+                      {active ? "Active" : "Expired"}
                     </Badge>
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
+              {recentSessions.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center py-8 text-muted-foreground"
+                  >
+                    No sessions
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TabsContent>

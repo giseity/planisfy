@@ -45,6 +45,8 @@ const betterAuthBaseURL = oauthProxyURL
 // Handle generation (OAuth users — no handle provided at signup)
 // ============================================================================
 
+const accountHandlePattern = /^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$/;
+
 function generateHandle(name: string): string {
   const base = name
     .toLowerCase()
@@ -53,6 +55,20 @@ function generateHandle(name: string): string {
     .slice(0, 48);
   const suffix = randomUUID().slice(0, 8);
   return `${base || "user"}_${suffix}`;
+}
+
+function normalizeAccountHandle(value: string): string {
+  const handle = value.trim().toLowerCase();
+  if (
+    handle.length < 2 ||
+    handle.length > 64 ||
+    !accountHandlePattern.test(handle)
+  ) {
+    throw new Error(
+      "Handle must be 2-64 lowercase letters, numbers, hyphens, or underscores, and must start and end with a letter or number",
+    );
+  }
+  return handle;
 }
 
 function internalHeaders(): HeadersInit {
@@ -277,7 +293,9 @@ export const auth = betterAuth({
           const rawHandle = (userData as Record<string, unknown>).handle as
             | string
             | undefined;
-          const handle = rawHandle ?? generateHandle(userData.name);
+          const handle = rawHandle?.trim()
+            ? normalizeAccountHandle(rawHandle)
+            : generateHandle(userData.name);
 
           // Generate a shared ID for both account and user
           const id = randomUUID();

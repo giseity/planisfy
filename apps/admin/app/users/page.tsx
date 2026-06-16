@@ -73,8 +73,19 @@ export default async function UsersPage({
     .limit(limit)
     .offset(offset);
 
-  const [totalRow] = await db.select({ count: count() }).from(users);
+  const [totalRow] = await db
+    .select({ count: count() })
+    .from(users)
+    .leftJoin(accounts, eq(users.id, accounts.id))
+    .where(whereClause);
   const total = totalRow?.count ?? 0;
+  const pageHref = (nextPage: number) => {
+    const query = new URLSearchParams();
+    query.set("page", String(nextPage));
+    if (search) query.set("q", search);
+    if (roleFilter) query.set("role", roleFilter);
+    return `/users?${query.toString()}`;
+  };
 
   return (
     <div className="p-6">
@@ -180,7 +191,7 @@ export default async function UsersPage({
           <div className="flex gap-1">
             {page > 1 && (
               <Link
-                href={`/users?page=${page - 1}&q=${search}&role=${roleFilter}`}
+                href={pageHref(page - 1)}
                 className="h-8 px-3 rounded-md border text-sm flex items-center"
               >
                 Previous
@@ -188,7 +199,7 @@ export default async function UsersPage({
             )}
             {offset + limit < total && (
               <Link
-                href={`/users?page=${page + 1}&q=${search}&role=${roleFilter}`}
+                href={pageHref(page + 1)}
                 className="h-8 px-3 rounded-md border text-sm flex items-center"
               >
                 Next

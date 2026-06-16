@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { eq, and, gte, lte, sql, desc, count, isNull } from "drizzle-orm";
 import { db, usageLogs, apiKeys } from "@planisfy/database";
 import type { AuthEnv } from "../middleware/auth";
@@ -111,7 +111,13 @@ usageRoute.get("/usage/summary", async (c) => {
 
 usageRoute.get("/usage/timeseries", async (c) => {
   const ownerId = c.get("ownerId");
-  const days = Number(c.req.query("days")) || 30;
+  const parsedDays = parseBoundedIntegerParam(c.req.query("days"), "days", {
+    defaultValue: 30,
+    min: 1,
+    max: 366,
+  });
+  if (!parsedDays.ok) return usageValidationError(c, parsedDays.message);
+  const days = parsedDays.value;
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
@@ -160,7 +166,13 @@ usageRoute.get("/usage/timeseries", async (c) => {
 
 usageRoute.get("/usage/by-key", async (c) => {
   const ownerId = c.get("ownerId");
-  const days = Number(c.req.query("days")) || 30;
+  const parsedDays = parseBoundedIntegerParam(c.req.query("days"), "days", {
+    defaultValue: 30,
+    min: 1,
+    max: 366,
+  });
+  if (!parsedDays.ok) return usageValidationError(c, parsedDays.message);
+  const days = parsedDays.value;
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
@@ -196,7 +208,13 @@ usageRoute.get("/usage/by-key", async (c) => {
 
 usageRoute.get("/usage/by-endpoint", async (c) => {
   const ownerId = c.get("ownerId");
-  const days = Number(c.req.query("days")) || 30;
+  const parsedDays = parseBoundedIntegerParam(c.req.query("days"), "days", {
+    defaultValue: 30,
+    min: 1,
+    max: 366,
+  });
+  if (!parsedDays.ok) return usageValidationError(c, parsedDays.message);
+  const days = parsedDays.value;
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
@@ -226,9 +244,24 @@ usageRoute.get("/usage/by-endpoint", async (c) => {
 
 usageRoute.get("/usage/logs", async (c) => {
   const ownerId = c.get("ownerId");
-  const page = Math.max(1, Number(c.req.query("page")) || 1);
-  const limit = Math.min(100, Math.max(1, Number(c.req.query("limit")) || 50));
+  const parsedPage = parseBoundedIntegerParam(c.req.query("page"), "page", {
+    defaultValue: 1,
+    min: 1,
+    max: 500,
+  });
+  if (!parsedPage.ok) return usageValidationError(c, parsedPage.message);
+  const parsedLimit = parseBoundedIntegerParam(c.req.query("limit"), "limit", {
+    defaultValue: 50,
+    min: 1,
+    max: 100,
+  });
+  if (!parsedLimit.ok) return usageValidationError(c, parsedLimit.message);
+  const page = parsedPage.value;
+  const limit = parsedLimit.value;
   const offset = (page - 1) * limit;
+  if (offset > 10_000) {
+    return usageValidationError(c, "Requested usage log offset is too large");
+  }
 
   const [totalRow] = await db
     .select({ total: count() })
@@ -266,6 +299,39 @@ usageRoute.get("/usage/logs", async (c) => {
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+export function parseBoundedIntegerParam(
+  value: string | undefined,
+  name: string,
+  options: { defaultValue: number; min: number; max: number },
+):
+  | { ok: true; value: number }
+  | { ok: false; message: string } {
+  if (value === undefined || value === "") {
+    return { ok: true, value: options.defaultValue };
+  }
+  if (!/^\d+$/.test(value)) {
+    return { ok: false, message: `${name} must be an integer` };
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    return { ok: false, message: `${name} is too large` };
+  }
+  if (parsed < options.min || parsed > options.max) {
+    return {
+      ok: false,
+      message: `${name} must be between ${options.min} and ${options.max}`,
+    };
+  }
+  return { ok: true, value: parsed };
+}
+
+function usageValidationError(c: Context<AuthEnv>, message: string) {
+  return c.json(
+    { error: { code: "VALIDATION_ERROR", message } },
+    400,
+  );
+}
 
 function categorizeEndpoint(endpoint: string): string {
   if (endpoint.startsWith("/tiles")) return "tiles";

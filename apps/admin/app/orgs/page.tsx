@@ -67,12 +67,15 @@ export default async function OrgsPage({
   const [totalRow] = await db
     .select({ count: count() })
     .from(organizations)
-    .where(
-      statusFilter === "deleted"
-        ? sql`${organizations.deletedAt} IS NOT NULL`
-        : isNull(organizations.deletedAt)
-    )
+    .where(whereClause)
   const total = totalRow?.count ?? 0
+  const pageHref = (nextPage: number) => {
+    const query = new URLSearchParams()
+    query.set("page", String(nextPage))
+    if (search) query.set("q", search)
+    if (statusFilter) query.set("status", statusFilter)
+    return `/orgs?${query.toString()}`
+  }
 
   return (
     <div className="p-6">
@@ -165,7 +168,7 @@ export default async function OrgsPage({
           <div className="flex gap-1">
             {page > 1 && (
               <Link
-                href={`/orgs?page=${page - 1}&q=${search}&status=${statusFilter}`}
+                href={pageHref(page - 1)}
                 className="h-8 px-3 rounded-md border text-sm flex items-center"
               >
                 Previous
@@ -173,7 +176,7 @@ export default async function OrgsPage({
             )}
             {offset + limit < total && (
               <Link
-                href={`/orgs?page=${page + 1}&q=${search}&status=${statusFilter}`}
+                href={pageHref(page + 1)}
                 className="h-8 px-3 rounded-md border text-sm flex items-center"
               >
                 Next
