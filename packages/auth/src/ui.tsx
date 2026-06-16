@@ -24,10 +24,31 @@ import { Field, FieldLabel } from "@planisfy/ui/components/field";
 import { cn } from "@planisfy/ui/lib/utils";
 import { toast } from "sonner";
 
+export function sanitizeCallbackUrl(
+  rawCallbackUrl: string | null | undefined,
+  fallback: string,
+  origin?: string,
+) {
+  if (!rawCallbackUrl) return fallback;
+  if (rawCallbackUrl.startsWith("/") && !rawCallbackUrl.startsWith("//")) {
+    return rawCallbackUrl;
+  }
+  if (!origin) return fallback;
+  try {
+    const parsed = new URL(rawCallbackUrl);
+    if (parsed.origin !== origin) return fallback;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return fallback;
+  }
+}
+
 function callbackUrl(fallback: string) {
   if (typeof window === "undefined") return fallback;
-  return (
-    new URLSearchParams(window.location.search).get("callbackUrl") ?? fallback
+  return sanitizeCallbackUrl(
+    new URLSearchParams(window.location.search).get("callbackUrl"),
+    fallback,
+    window.location.origin,
   );
 }
 
