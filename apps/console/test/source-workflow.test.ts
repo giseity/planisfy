@@ -415,6 +415,29 @@ describe("Console source workflow guide", () => {
     });
   });
 
+  it("does not recreate tilesets for imports that are already tiled", () => {
+    const guide = buildSourceWorkflowGuide({
+      tilesets: [
+        tilesetFixture({
+          linkedDatasetId: "dataset-1",
+          isPublished: true,
+          tilejsonUrl:
+            "https://api.planisfy.localhost/tilesets/acme.roads/tilejson.json",
+        }),
+      ],
+      sourceImports: [
+        sourceImportFixture({
+          status: "SUCCEEDED",
+          datasetId: "dataset-1",
+          output: { datasetVersionId: "dataset-version-1" },
+        }),
+      ],
+      styles: [],
+    });
+
+    expect(guide.nextAction.kind).toBe("create-style");
+  });
+
   it("points published tilesets without styles at style creation", () => {
     const guide = buildSourceWorkflowGuide({
       tilesets: [
@@ -453,6 +476,7 @@ function tilesetFixture(
   return {
     id: "tileset-1",
     accountId: "account-1",
+    linkedDatasetId: null,
     handle: "roads",
     name: "Roads",
     description: null,

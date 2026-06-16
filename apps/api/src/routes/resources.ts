@@ -397,6 +397,9 @@ resourcesRoute.get("/tilesets", async (c) => {
   const artifactById = await fetchArtifactMap(versions);
   const uploadAvailabilityById =
     await fetchUploadArtifactAvailabilityMap(linkedUploads);
+  const buildJobInputById = await fetchBuildJobInputMap(
+    rows.map((row) => row.buildJobId),
+  );
 
   return c.json({
     data: rows.map((row) =>
@@ -404,6 +407,7 @@ resourcesRoute.get("/tilesets", async (c) => {
         uploads: uploadsForTileset(linkedUploads, row.id),
         artifactById,
         uploadAvailabilityById,
+        buildJobInputById,
       }),
     ),
   });
@@ -451,12 +455,14 @@ resourcesRoute.get("/tilesets/:id", async (c) => {
   const artifactById = await fetchArtifactMap(versions);
   const uploadAvailabilityById =
     await fetchUploadArtifactAvailabilityMap(linkedUploads);
+  const buildJobInputById = await fetchBuildJobInputMap([tileset.buildJobId]);
 
   return c.json({
     data: toConsoleTileset(tileset, ownerHandle, versions, {
       uploads: linkedUploads,
       artifactById,
       uploadAvailabilityById,
+      buildJobInputById,
     }),
   });
 });
@@ -1199,6 +1205,18 @@ async function fetchUploadArtifactAvailabilityMap(
   return new Map(entries);
 }
 
+async function fetchBuildJobInputMap(jobIds: Array<string | null>) {
+  const ids = jobIds.filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return new Map<string, unknown>();
+
+  const rows = await db
+    .select({ id: processingJobs.id, input: processingJobs.input })
+    .from(processingJobs)
+    .where(inArray(processingJobs.id, ids));
+
+  return new Map(rows.map((row) => [row.id, row.input] as const));
+}
+
 function toConsoleTileset(
   tileset: typeof tilesets.$inferSelect,
   ownerHandle: string | null,
@@ -1207,6 +1225,7 @@ function toConsoleTileset(
     uploads?: Array<typeof uploads.$inferSelect>;
     artifactById?: Map<string, ConsoleArtifact>;
     uploadAvailabilityById?: Map<string, ConsoleArtifactAvailability>;
+    buildJobInputById?: Map<string, unknown>;
   } = {},
 ) {
   const currentVersion =
@@ -1229,6 +1248,10 @@ function toConsoleTileset(
 
   return {
     ...tileset,
+    linkedDatasetId: linkedDatasetIdForTileset(
+      tileset,
+      params.buildJobInputById,
+    ),
     ownerHandle,
     uploads: consoleUploads,
     latestUpload: consoleUploads[0] ?? null,
@@ -1242,6 +1265,23 @@ function toConsoleTileset(
         ? `/tiles/v1/${ownerHandle}/${tileset.handle}/versions/${currentVersion.version}.json`
         : null,
   };
+}
+
+function linkedDatasetIdForTileset(
+  tileset: typeof tilesets.$inferSelect,
+  buildJobInputById?: Map<string, unknown>,
+) {
+  if (!tileset.buildJobId) return null;
+  const input = buildJobInputById?.get(tileset.buildJobId);
+  if (
+    input &&
+    typeof input === "object" &&
+    "datasetId" in input &&
+    typeof input.datasetId === "string"
+  ) {
+    return input.datasetId;
+  }
+  return null;
 }
 
 function toConsoleUpload(

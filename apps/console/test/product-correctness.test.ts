@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { sanitizeCallbackUrl } from "@planisfy/auth/ui";
 import { canParseFilter } from "@/components/style-editor/fields/visual-filter-builder";
 
 describe("console product correctness regressions", () => {
@@ -48,5 +49,22 @@ describe("console product correctness regressions", () => {
     expect(canParseFilter(["in", "class", ["literal", ["park"]]])).toBe(
       false,
     );
+  });
+
+  it("allows explicit console-origin auth callbacks from a separate auth origin", () => {
+    expect(
+      sanitizeCallbackUrl(
+        "https://console.planisfy.localhost/styles",
+        "https://console.planisfy.localhost",
+        "https://auth.planisfy.localhost",
+      ),
+    ).toBe("https://console.planisfy.localhost/styles");
+    expect(
+      sanitizeCallbackUrl(
+        "https://evil.example/styles",
+        "https://console.planisfy.localhost",
+        "https://auth.planisfy.localhost",
+      ),
+    ).toBe("https://console.planisfy.localhost");
   });
 });

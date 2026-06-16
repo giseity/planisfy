@@ -33,13 +33,26 @@ export function sanitizeCallbackUrl(
   if (rawCallbackUrl.startsWith("/") && !rawCallbackUrl.startsWith("//")) {
     return rawCallbackUrl;
   }
-  if (!origin) return fallback;
+  const fallbackOrigin = originFromUrl(fallback);
   try {
     const parsed = new URL(rawCallbackUrl);
-    if (parsed.origin !== origin) return fallback;
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (origin && parsed.origin === origin) {
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+    if (fallbackOrigin && parsed.origin === fallbackOrigin) {
+      return parsed.toString();
+    }
+    return fallback;
   } catch {
     return fallback;
+  }
+}
+
+function originFromUrl(value: string) {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
   }
 }
 

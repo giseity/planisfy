@@ -36,7 +36,16 @@ export function buildSourceWorkflowGuide(params: {
 }): SourceWorkflowGuideModel {
   const { tilesets, sourceImports, styles } = params;
   const hasSourceData = tilesets.length > 0 || sourceImports.length > 0;
-  const readyImport = sourceImports.find(canCreateTilesetFromImport);
+  const tiledDatasetIds = new Set(
+    tilesets
+      .map((tileset) => tileset.linkedDatasetId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const readyImport = sourceImports.find(
+    (sourceImport) =>
+      canCreateTilesetFromImport(sourceImport) &&
+      (!sourceImport.datasetId || !tiledDatasetIds.has(sourceImport.datasetId)),
+  );
   const hasTileset = tilesets.length > 0;
   const buildingTileset = tilesets.some(
     (tileset) => tileset.status === "BUILDING",

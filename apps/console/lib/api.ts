@@ -112,6 +112,7 @@ export type ConsoleArtifactAvailability =
 export interface ConsoleTileset {
   id: string;
   accountId: string;
+  linkedDatasetId: string | null;
   ownerHandle: string | null;
   name: string;
   handle: string;
