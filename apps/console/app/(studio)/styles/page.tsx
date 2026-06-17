@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useMemo } from "react"
-import { StyleCard } from "@/components/style-editor/style-card"
-import { StyleListItem } from "@/components/style-editor/style-list-item"
-import { Button } from "@planisfy/ui/components/button"
-import { Input } from "@planisfy/ui/components/input"
-import { Skeleton } from "@planisfy/ui/components/skeleton"
+import { useEffect, useState, useMemo } from "react";
+import { StyleCard } from "@/components/style-editor/style-card";
+import { StyleListItem } from "@/components/style-editor/style-list-item";
+import { Button } from "@planisfy/ui/components/button";
+import { Input } from "@planisfy/ui/components/input";
+import { Skeleton } from "@planisfy/ui/components/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -14,72 +14,76 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@planisfy/ui/components/dialog"
+} from "@planisfy/ui/components/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@planisfy/ui/components/select"
-import { Plus, Map, Search, LayoutGrid, List } from "lucide-react"
-import { api, type ApiEnvelope } from "@/lib/api"
-import type { StudioStyleSummary } from "@/lib/studio/style-workflow"
-import { createStyle } from "./actions"
+} from "@planisfy/ui/components/select";
+import { Plus, Map, Search, LayoutGrid, List } from "lucide-react";
+import { api, type ApiEnvelope } from "@/lib/api";
+import type { StudioStyleSummary } from "@/lib/studio/style-workflow";
+import { createStyle } from "./actions";
 
-type SortMode = "updated" | "name" | "created"
-type ViewMode = "grid" | "list"
+type SortMode = "updated" | "name" | "created";
+type ViewMode = "grid" | "list";
 
 export default function StylesPage() {
-  const [styles, setStyles] = useState<StudioStyleSummary[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState("")
-  const [sort, setSort] = useState<SortMode>("updated")
-  const [view, setView] = useState<ViewMode>("grid")
+  const [styles, setStyles] = useState<StudioStyleSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortMode>("updated");
+  const [view, setView] = useState<ViewMode>("grid");
 
   const loadStyles = async () => {
     try {
-      const res = await api.get<ApiEnvelope<StudioStyleSummary[]>>("/styles")
-      setStyles(res.data)
+      const res = await api.get<ApiEnvelope<StudioStyleSummary[]>>("/styles");
+      setStyles(res.data);
     } catch {
       // ignore
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    loadStyles()
-  }, [])
+    loadStyles();
+  }, []);
 
   const filtered = useMemo(() => {
-    let result = styles
+    let result = styles;
 
     // Filter
     if (search.trim()) {
-      const q = search.toLowerCase()
+      const q = search.toLowerCase();
       result = result.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
-          s.handle.toLowerCase().includes(q)
-      )
+          s.handle.toLowerCase().includes(q),
+      );
     }
 
     // Sort
     result = [...result].sort((a, b) => {
       switch (sort) {
         case "name":
-          return a.name.localeCompare(b.name)
+          return a.name.localeCompare(b.name);
         case "created":
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          return (
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
         case "updated":
         default:
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          return (
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
       }
-    })
+    });
 
-    return result
-  }, [styles, search, sort])
+    return result;
+  }, [styles, search, sort]);
 
   return (
     <div className="container max-w-6xl py-8 px-4">
@@ -164,14 +168,14 @@ export default function StylesPage() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function CreateStyleButton() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button>
+        <Button data-testid="create-style">
           <Plus className="h-4 w-4 mr-2" />
           Create style
         </Button>
@@ -181,7 +185,8 @@ function CreateStyleButton() {
           <DialogHeader>
             <DialogTitle>Create a new style</DialogTitle>
             <DialogDescription>
-              Start with a blank style. You can import an existing style from JSON later.
+              Start with a blank style. You can import an existing style from
+              JSON later.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -190,13 +195,16 @@ function CreateStyleButton() {
               placeholder="Style name"
               required
               autoFocus
+              data-testid="create-style-name"
             />
           </div>
           <DialogFooter>
-            <Button type="submit">Create</Button>
+            <Button type="submit" data-testid="create-style-submit">
+              Create
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

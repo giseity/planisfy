@@ -1,0 +1,53 @@
+name: Product Loop Smoke
+
+on:
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "24"
+  PNPM_VERSION: "10.4.1"
+
+jobs:
+  full-product-loop:
+    name: Full Browser Product Loop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install browser runtime
+        run: pnpm --filter static-renderer exec playwright install --with-deps chromium
+
+      - name: Prepare self-host stack
+        run: scripts/self-host-setup.sh
+
+      - name: Start product-loop services
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml up -d postgres redis martin api console worker-geodata
+
+      - name: Run migrations
+        run: pnpm --filter @planisfy/database db:migrate
+
+      - name: Run full browser product-loop smoke
+        run: pnpm e2e:product-loop:full
+
+      - name: Upload smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-loop-smoke-screenshots
+          path: dogfood-output/screenshots
+          if-no-files-found: ignore
+
+      - name: Stop stack
+        if: always()
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml down -v --remove-orphans

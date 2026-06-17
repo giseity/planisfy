@@ -166,4 +166,37 @@ else
   echo "Demo PMTiles fixture is missing; skipping optional TileJSON check"
 fi
 
+if [[ "${SMOKE_BROWSER_PRODUCT_LOOP:-false}" =~ ^(1|true|TRUE|yes|YES)$ ]]; then
+  require_cmd pnpm
+  echo "Running database migrations for browser product-loop smoke"
+  (cd "$ROOT_DIR" && pnpm --filter @planisfy/database db:migrate)
+
+  echo "Starting Console for browser product-loop smoke"
+  compose_up console
+
+  echo "Waiting for Console"
+  for attempt in {1..90}; do
+    if curl -fsS http://localhost:3001 >/dev/null; then
+      break
+    fi
+
+    if [[ "$attempt" -eq 90 ]]; then
+      echo "Console did not become reachable in time" >&2
+      compose logs console >&2
+      exit 1
+    fi
+
+    sleep 2
+  done
+
+  echo "Running seeded browser product-loop smoke"
+  (
+    cd "$ROOT_DIR"
+    PLANISFY_E2E_CONSOLE_URL="${PLANISFY_E2E_CONSOLE_URL:-http://localhost:3001}" \
+    PLANISFY_E2E_API_URL="${PLANISFY_E2E_API_URL:-http://localhost:4000}" \
+    PLANISFY_E2E_ALLOW_MISSING_TILESET="${PLANISFY_E2E_ALLOW_MISSING_TILESET:-true}" \
+      pnpm e2e:product-loop
+  )
+fi
+
 echo "Docker Compose smoke test passed"

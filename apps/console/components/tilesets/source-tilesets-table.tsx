@@ -146,6 +146,7 @@ export function SourceTilesetsTable({
                       variant="ghost"
                       size="sm"
                       onClick={() => onPublish(tileset)}
+                      data-testid={`publish-tileset-version-${tileset.handle}`}
                       disabled={
                         !canPublish ||
                         publishingVersionId === tileset.latestVersion?.id
@@ -178,6 +179,7 @@ export function SourceTilesetsTable({
                       variant="ghost"
                       size="sm"
                       onClick={() => onCopyUrl(tileset)}
+                      data-testid={`tilejson-url-${tileset.handle}`}
                       disabled={!tileset.tilejsonUrl}
                       title="Copy TileJSON URL"
                     >

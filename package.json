@@ -7,6 +7,7 @@
     "dev": "turbo run dev",
     "dev:seed": "pnpm --filter @planisfy/auth exec tsx ../../scripts/dev-seed.ts",
     "e2e:product-loop": "node scripts/product-loop-browser-smoke.mjs",
+    "e2e:product-loop:full": "node scripts/product-loop-full-browser-smoke.mjs",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",

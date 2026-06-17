@@ -85,6 +85,10 @@ jobs:
             dockerfile: apps/marketing/Dockerfile
           - app: worker-geodata
             dockerfile: apps/worker-geodata/Dockerfile
+          - app: elevation
+            dockerfile: apps/elevation/Dockerfile
+          - app: static-renderer
+            dockerfile: apps/static-renderer/Dockerfile
           - app: tile-worker
             dockerfile: apps/tile-worker/Dockerfile
           - app: self-host-supervisor
@@ -130,5 +134,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Install browser runtime
+        run: pnpm --filter static-renderer exec playwright install --with-deps chromium
+
       - name: Non-binary self-host smoke
+        env:
+          SMOKE_BROWSER_PRODUCT_LOOP: "true"
+          PLANISFY_E2E_ALLOW_MISSING_TILESET: "true"
         run: scripts/docker-compose-smoke.sh

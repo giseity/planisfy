@@ -400,6 +400,7 @@ export default function StyleEditorPage() {
                     variant={isPublic ? "outline" : "default"}
                     onClick={handlePublishToggle}
                     disabled={publishing}
+                    data-testid="publish-style"
                   >
                     {publishing ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -446,6 +447,7 @@ export default function StyleEditorPage() {
                       className="h-7 justify-start gap-2 text-xs"
                       disabled={!isPublic || !ownerHandle}
                       onClick={() => copyUrl("Published", publicUrl())}
+                      data-testid="style-public-url"
                     >
                       {copiedUrl === "Published" ? (
                         <Check className="h-3 w-3" />

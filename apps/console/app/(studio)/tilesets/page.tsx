@@ -14,11 +14,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@planisfy/ui/components/button";
 import { Skeleton } from "@planisfy/ui/components/skeleton";
-import {
-  Plus,
-  Database,
-  Globe,
-} from "lucide-react";
+import { Plus, Database, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { OvertureImportDialog } from "@/components/tilesets/overture-import-dialog";
 import { SourceImportsTable } from "@/components/tilesets/source-imports-table";
@@ -37,8 +33,12 @@ export default function SourcesPage() {
   const [jobs, setJobs] = useState<ConsoleProcessingJob[]>([]);
   const [sourceImports, setSourceImports] = useState<ConsoleSourceImport[]>([]);
   const [styles, setStyles] = useState<SourceWorkflowStyleSummary[]>([]);
-  const [executionTargets, setExecutionTargets] = useState<ConsoleExecutionTarget[]>([]);
-  const [workerProfiles, setWorkerProfiles] = useState<ConsoleWorkerProfile[]>([]);
+  const [executionTargets, setExecutionTargets] = useState<
+    ConsoleExecutionTarget[]
+  >([]);
+  const [workerProfiles, setWorkerProfiles] = useState<ConsoleWorkerProfile[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -50,13 +50,24 @@ export default function SourcesPage() {
     null,
   );
   const [tilingImportId, setTilingImportId] = useState<string | null>(null);
-  const [selectedExecutionTargetId, setSelectedExecutionTargetId] = useState("default");
-  const [selectedWorkerProfileId, setSelectedWorkerProfileId] = useState("default");
-  const [importEstimates, setImportEstimates] = useState<Record<string, ProcessingEstimate>>({});
+  const [selectedExecutionTargetId, setSelectedExecutionTargetId] =
+    useState("default");
+  const [selectedWorkerProfileId, setSelectedWorkerProfileId] =
+    useState("default");
+  const [importEstimates, setImportEstimates] = useState<
+    Record<string, ProcessingEstimate>
+  >({});
 
   const fetchTilesets = useCallback(async () => {
     try {
-      const [tilesetsRes, jobsRes, importsRes, stylesRes, targetsRes, profilesRes] = await Promise.all([
+      const [
+        tilesetsRes,
+        jobsRes,
+        importsRes,
+        stylesRes,
+        targetsRes,
+        profilesRes,
+      ] = await Promise.all([
         api.listTilesets(),
         api.listJobs(),
         api.listSourceImports(),
@@ -99,7 +110,10 @@ export default function SourcesPage() {
     Promise.all(
       importsToEstimate.map(async (sourceImport) => {
         const res = await api.estimateProcessingJob({
-          ...runtimeSelectionPayload(selectedExecutionTargetId, selectedWorkerProfileId),
+          ...runtimeSelectionPayload(
+            selectedExecutionTargetId,
+            selectedWorkerProfileId,
+          ),
           featureCount: sourceImport.output?.featureCount,
           minZoom: 0,
           maxZoom: 14,
@@ -109,7 +123,10 @@ export default function SourcesPage() {
     )
       .then((entries) => {
         if (canceled) return;
-        setImportEstimates((current) => ({ ...current, ...Object.fromEntries(entries) }));
+        setImportEstimates((current) => ({
+          ...current,
+          ...Object.fromEntries(entries),
+        }));
       })
       .catch(() => {});
     return () => {
@@ -135,7 +152,9 @@ export default function SourcesPage() {
       fetchTilesets();
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Failed to promote tileset version",
+        err instanceof Error
+          ? err.message
+          : "Failed to promote tileset version",
       );
     } finally {
       setPublishingVersionId(null);
@@ -157,14 +176,20 @@ export default function SourcesPage() {
     }
   }
 
-  async function handleCreateTilesetFromImport(sourceImport: ConsoleSourceImport) {
-    if (!sourceImport.datasetId || !sourceImport.output?.datasetVersionId) return;
+  async function handleCreateTilesetFromImport(
+    sourceImport: ConsoleSourceImport,
+  ) {
+    if (!sourceImport.datasetId || !sourceImport.output?.datasetVersionId)
+      return;
     setTilingImportId(sourceImport.id);
     try {
       await api.createTilesetFromDataset(sourceImport.datasetId, {
         ...defaultTilesetOptionsForImport(sourceImport),
         datasetVersionId: sourceImport.output.datasetVersionId,
-        ...runtimeSelectionPayload(selectedExecutionTargetId, selectedWorkerProfileId),
+        ...runtimeSelectionPayload(
+          selectedExecutionTargetId,
+          selectedWorkerProfileId,
+        ),
       });
       toast.success("Dataset tiling queued");
       fetchTilesets();
@@ -268,7 +293,10 @@ export default function SourcesPage() {
               <Globe className="mr-2 h-4 w-4" />
               Import Overture
             </Button>
-            <Button onClick={() => setUploadOpen(true)}>
+            <Button
+              onClick={() => setUploadOpen(true)}
+              data-testid="upload-tileset-empty"
+            >
               <Plus className="mr-2 h-4 w-4" />
               Upload tileset
             </Button>

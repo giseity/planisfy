@@ -137,7 +137,7 @@ export function TilesetUploadDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button>
+        <Button data-testid="upload-tileset">
           <Plus className="mr-2 h-4 w-4" />
           Upload tileset
         </Button>
@@ -270,6 +270,7 @@ export function TilesetUploadDialog({
             <Button
               onClick={handleUpload}
               disabled={!newName || !newHandle || !file || uploading}
+              data-testid="upload-tileset-submit"
             >
               {uploading ? (
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />

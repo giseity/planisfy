@@ -1,16 +1,17 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { resolve } from "node:path";
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const staticRendererRequire = createRequire(
-  resolve(root, "apps/static-renderer/package.json"),
-);
-const { chromium } = staticRendererRequire("playwright");
+import { dirname, resolve } from "node:path";
+import {
+  chromium,
+  expectBrowserFetch,
+  expectText,
+  renderMapLibreStyle,
+  root,
+  run,
+  signIn,
+  waitForHttp,
+  waitForJson,
+} from "./browser-smoke-lib.mjs";
 
 const consoleUrl =
   process.env.PLANISFY_E2E_CONSOLE_URL ?? "http://localhost:3001";
@@ -18,9 +19,15 @@ const apiUrl = process.env.PLANISFY_E2E_API_URL ?? "http://localhost:4000";
 const email = process.env.PLANISFY_SEED_EMAIL ?? "demo@planisfy.localhost";
 const password = process.env.PLANISFY_SEED_PASSWORD ?? "Planisfy-demo-12345";
 const seedBeforeRun = process.env.PLANISFY_E2E_SKIP_SEED !== "true";
+const allowMissingTileset =
+  process.env.PLANISFY_E2E_ALLOW_MISSING_TILESET === "true";
 const failureScreenshotPath = resolve(
   root,
   "dogfood-output/screenshots/product-loop-browser-smoke-failure.png",
+);
+const renderScreenshotPath = resolve(
+  root,
+  "dogfood-output/screenshots/product-loop-browser-smoke-map.png",
 );
 
 if (seedBeforeRun) {
@@ -44,33 +51,61 @@ page.on("console", (message) => {
 });
 
 try {
-  await page.goto(`${consoleUrl}/sign-in`, { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await Promise.all([
-    page.waitForURL((url) => url.pathname !== "/sign-in", {
-      timeout: 20_000,
-    }),
-    page.getByRole("button", { name: /sign in/i }).click(),
-  ]);
+  await signIn(page, { consoleUrl, email, password });
 
-  await expectText("Dashboard");
-  await expectText("Planisfy Demo");
-  await expectText("Stuttgart Demo Style");
-  await expectText("Stuttgart Base");
+  await expectText(page, "Dashboard");
+  await expectText(page, "Planisfy Demo");
+  await expectText(page, "Stuttgart Demo Style");
+  await expectText(page, "Stuttgart Base");
 
   await page.goto(`${consoleUrl}/styles`, { waitUntil: "domcontentloaded" });
-  await expectText("Stuttgart Demo Style");
-  await expectText("Public");
+  await expectText(page, "Stuttgart Demo Style");
+  await expectText(page, "Public");
 
   await page.goto(`${consoleUrl}/tilesets`, { waitUntil: "domcontentloaded" });
-  await expectText("Stuttgart Base");
-  await expectText("PUBLISHED");
+  await expectText(page, "Stuttgart Base");
 
-  await page.goto(`${consoleUrl}/integration`, { waitUntil: "domcontentloaded" });
-  await expectText("API base URL");
-  await expectText("Public style URL");
-  await expectText("TileJSON URL");
+  const hasPublishedTileset = await page
+    .getByText("PUBLISHED", { exact: false })
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (!hasPublishedTileset && !allowMissingTileset) {
+    throw new Error(
+      "Seeded tileset is not published. Add infra/docker/data/pmtiles/stuttgart.pmtiles or set PLANISFY_E2E_ALLOW_MISSING_TILESET=true.",
+    );
+  }
+
+  await page.goto(`${consoleUrl}/integration`, {
+    waitUntil: "domcontentloaded",
+  });
+  await expectText(page, "API base URL");
+  await expectText(page, "Public style URL");
+
+  const publicStyleUrl = await readOptionalTestId(
+    page,
+    "style-public-url-value",
+  );
+  if (!publicStyleUrl) {
+    throw new Error("Integration page did not expose a public style URL");
+  }
+  await expectBrowserFetch(page, publicStyleUrl, "Public style URL");
+
+  const tilejsonUrl = await readOptionalTestId(page, "tilejson-url-value");
+  if (tilejsonUrl) {
+    await expectBrowserFetch(page, tilejsonUrl, "TileJSON URL");
+    const bytes = await renderMapLibreStyle(page, {
+      styleUrl: publicStyleUrl,
+      outputPath: renderScreenshotPath,
+    });
+    console.log(`Rendered seeded public style screenshot bytes=${bytes}`);
+  } else if (allowMissingTileset) {
+    console.warn(
+      "Skipping TileJSON and MapLibre render checks because no published seeded tileset is available.",
+    );
+  } else {
+    throw new Error("Integration page did not expose a TileJSON URL");
+  }
 
   if (errors.length > 0) {
     throw new Error(`Browser reported errors: ${errors.join("; ")}`);
@@ -91,49 +126,9 @@ try {
   await browser.close();
 }
 
-async function expectText(text) {
-  await page.getByText(text, { exact: false }).first().waitFor({
-    state: "visible",
-    timeout: 20_000,
-  });
-}
-
-async function waitForJson(url, label) {
-  await waitForHttp(url, label, async (response) => {
-    await response.json();
-  });
-}
-
-async function waitForHttp(url, label, validate = async () => {}) {
-  let lastError;
-  for (let attempt = 1; attempt <= 60; attempt += 1) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        await validate(response);
-        return;
-      }
-      lastError = new Error(`${label} returned HTTP ${response.status}`);
-    } catch (error) {
-      lastError = error;
-    }
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 1000));
-  }
-  throw lastError ?? new Error(`${label} did not become reachable`);
-}
-
-async function run(command, args) {
-  await new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, args, {
-      cwd: root,
-      env: process.env,
-      stdio: "inherit",
-      shell: process.platform === "win32",
-    });
-    child.on("error", rejectRun);
-    child.on("exit", (code) => {
-      if (code === 0) resolveRun();
-      else rejectRun(new Error(`${command} ${args.join(" ")} exited ${code}`));
-    });
-  });
+async function readOptionalTestId(page, testId) {
+  const locator = page.getByTestId(testId);
+  if (!(await locator.isVisible().catch(() => false))) return null;
+  const value = await locator.textContent();
+  return value?.trim() || null;
 }
