@@ -25,9 +25,11 @@ import { recordStorageObject } from "../lib/storage-ledger";
 import {
   buildSpriteSheet,
   extractSpriteImageIds,
+  normalizeSpriteAssetUpload,
   SpriteAssetValidationError,
   spriteIdForStyleVersion,
   spriteStorageKeys,
+  validateSpriteAssetFolder,
   styleReferencesSpriteAssets,
   validateSpriteAssetName,
   validateSpritePngUpload,
@@ -71,7 +73,10 @@ const updateStyleSchema = z.object({
 });
 
 const renameSpriteAssetSchema = z.object({
-  name: z.string().min(1).max(96),
+  name: z.string().min(1).max(96).optional(),
+  folder: z.string().max(128).optional(),
+  description: z.string().max(500).nullable().optional(),
+  tags: z.array(z.string().min(1).max(48)).max(20).optional(),
 });
 
 // ── Account sprite assets ──────────────────────────────────────────────────
@@ -82,23 +87,26 @@ stylesRoute.get("/sprite-assets", async (c) => {
     .select({
       id: spriteAssets.id,
       name: spriteAssets.name,
+      folder: spriteAssets.folder,
+      description: spriteAssets.description,
+      sourceFormat: spriteAssets.sourceFormat,
       width: spriteAssets.width,
       height: spriteAssets.height,
+      metadata: spriteAssets.metadata,
       createdAt: spriteAssets.createdAt,
       updatedAt: spriteAssets.updatedAt,
+      storageObjectId: spriteAssets.storageObjectId,
+      rasterStorageObjectId: spriteAssets.rasterStorageObjectId,
       storageKey: storageObjects.storageKey,
       size: storageObjects.size,
     })
     .from(spriteAssets)
     .innerJoin(storageObjects, eq(spriteAssets.storageObjectId, storageObjects.id))
     .where(and(eq(spriteAssets.accountId, accountId), isNull(spriteAssets.deletedAt)))
-    .orderBy(spriteAssets.name);
+    .orderBy(spriteAssets.folder, spriteAssets.name);
 
   return c.json({
-    data: rows.map((asset) => ({
-      ...asset,
-      previewUrl: `/console/sprite-assets/${asset.id}/image`,
-    })),
+    data: rows.map(serializeSpriteAsset),
   });
 });
 
@@ -108,14 +116,17 @@ stylesRoute.post("/sprite-assets", async (c) => {
   const body = await c.req.parseBody();
   const file = body.file;
   const name = String(body.name ?? "").trim();
+  const folder = normalizeSpriteFolder(body.folder) ?? "";
+  const description = normalizeOptionalString(body.description, 500);
+  const tags = parseSpriteTags(body.tags);
 
-  if (!validateSpriteAssetName(name)) {
+  if (!validateSpriteAssetName(name) || !validateSpriteAssetFolder(folder)) {
     return c.json(
       {
         error: {
           code: "VALIDATION_ERROR",
           message:
-            "Sprite asset names must be 1-96 characters of letters, numbers, dot, underscore, or dash.",
+            "Sprite asset names and folders can contain letters, numbers, spaces, dot, underscore, slash, or dash.",
         },
       },
       400,
@@ -123,7 +134,12 @@ stylesRoute.post("/sprite-assets", async (c) => {
   }
   if (!(file instanceof File)) {
     return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "PNG file is required" } },
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "PNG or SVG file is required",
+        },
+      },
       400,
     );
   }
@@ -152,11 +168,12 @@ stylesRoute.post("/sprite-assets", async (c) => {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  let validated: ReturnType<typeof validateSpritePngUpload>;
+  let normalized: Awaited<ReturnType<typeof normalizeSpriteAssetUpload>>;
   try {
-    validated = validateSpritePngUpload({
+    normalized = await normalizeSpriteAssetUpload({
       buffer,
-      contentType: file.type || "image/png",
+      contentType: file.type || null,
+      fileName: file.name,
       size: file.size,
     });
   } catch (err) {
@@ -172,13 +189,30 @@ stylesRoute.post("/sprite-assets", async (c) => {
   const assetId = randomUUID();
   const storage = getStorage();
   const storageInfo = storage.getInfo();
-  const fileName = `${name}.png`;
+  const fileName = `${name}.${normalized.format}`;
   const storageKey = StoragePaths.accountSpriteAsset(
     accountId,
     assetId,
     fileName,
   );
-  const stored = await storage.upload(storageKey, buffer, "image/png");
+  const stored = await storage.upload(
+    storageKey,
+    normalized.sourceBuffer,
+    normalized.contentType,
+  );
+  const rasterFileName = `${name}.png`;
+  const rasterStorageKey =
+    normalized.format === "png"
+      ? storageKey
+      : StoragePaths.accountSpriteAsset(accountId, assetId, rasterFileName);
+  const rasterStored =
+    normalized.format === "png"
+      ? stored
+      : await storage.upload(
+          rasterStorageKey,
+          normalized.rasterBuffer,
+          normalized.rasterContentType,
+        );
 
   const created = await db.transaction(async (tx) => {
     const [storageObject] = await tx
@@ -193,10 +227,39 @@ stylesRoute.post("/sprite-assets", async (c) => {
         size: stored.size,
         resourceType: "sprite_asset",
         resourceId: assetId,
-        artifactKind: "original-png",
-        metadata: { width: validated.width, height: validated.height },
+        artifactKind: `original-${normalized.format}`,
+        metadata: {
+          width: normalized.raster.width,
+          height: normalized.raster.height,
+          sourceFormat: normalized.format,
+        },
       })
       .returning();
+    const rasterStorageObject =
+      normalized.format === "png"
+        ? storageObject!
+        : (
+            await tx
+              .insert(storageObjects)
+              .values({
+                accountId,
+                provider: storageInfo.provider,
+                bucket: storageInfo.bucket,
+                storageKey: rasterStorageKey,
+                fileName: rasterFileName,
+                contentType: rasterStored.contentType,
+                size: rasterStored.size,
+                resourceType: "sprite_asset",
+                resourceId: assetId,
+                artifactKind: "raster-png",
+                metadata: {
+                  width: normalized.raster.width,
+                  height: normalized.raster.height,
+                  sourceFormat: normalized.format,
+                },
+              })
+              .returning()
+          )[0]!;
 
     const [asset] = await tx
       .insert(spriteAssets)
@@ -204,9 +267,14 @@ stylesRoute.post("/sprite-assets", async (c) => {
         id: assetId,
         accountId,
         name,
+        folder,
+        description,
+        sourceFormat: normalized.format,
         storageObjectId: storageObject!.id,
-        width: validated.width,
-        height: validated.height,
+        rasterStorageObjectId: rasterStorageObject.id,
+        width: normalized.raster.width,
+        height: normalized.raster.height,
+        metadata: { tags },
       })
       .returning();
     return asset!;
@@ -217,12 +285,18 @@ stylesRoute.post("/sprite-assets", async (c) => {
     action: "sprite_asset.created",
     resourceType: "sprite_asset",
     resourceId: created.id,
-    metadata: { name, width: created.width, height: created.height },
+    metadata: {
+      name,
+      folder,
+      sourceFormat: normalized.format,
+      width: created.width,
+      height: created.height,
+    },
     ipAddress: getClientIp(c.req.raw),
   });
 
   return c.json(
-    { data: { ...created, previewUrl: `/console/sprite-assets/${created.id}/image` } },
+    { data: serializeSpriteAsset(created) },
     201,
   );
 });
@@ -237,7 +311,8 @@ stylesRoute.get("/sprite-assets/:id/image", async (c) => {
     );
   }
 
-  const data = await getStorage().download(asset.storageKey);
+  const rasterKey = await resolveSpriteRasterStorageKey(asset);
+  const data = await getStorage().download(rasterKey);
   return new Response(new Uint8Array(data), {
     headers: {
       "Content-Type": "image/png",
@@ -250,13 +325,22 @@ stylesRoute.patch("/sprite-assets/:id", async (c) => {
   const accountId = c.get("ownerId");
   const userId = c.get("userId");
   const parsed = renameSpriteAssetSchema.safeParse(await c.req.json());
-  if (!parsed.success || !validateSpriteAssetName(parsed.data.name)) {
+  const nextName = parsed.success ? parsed.data.name?.trim() : undefined;
+  const nextFolder =
+    parsed.success && parsed.data.folder !== undefined
+      ? normalizeSpriteFolder(parsed.data.folder)
+      : undefined;
+  if (
+    !parsed.success ||
+    (nextName !== undefined && !validateSpriteAssetName(nextName)) ||
+    (nextFolder !== undefined && !validateSpriteAssetFolder(nextFolder))
+  ) {
     return c.json(
       {
         error: {
           code: "VALIDATION_ERROR",
           message:
-            "Sprite asset names must be 1-96 characters of letters, numbers, dot, underscore, or dash.",
+            "Sprite asset names and folders can contain letters, numbers, spaces, dot, underscore, slash, or dash.",
         },
       },
       400,
@@ -271,32 +355,46 @@ stylesRoute.patch("/sprite-assets/:id", async (c) => {
     );
   }
 
-  const [nameConflict] = await db
-    .select({ id: spriteAssets.id })
-    .from(spriteAssets)
-    .where(
-      and(
-        eq(spriteAssets.accountId, accountId),
-        eq(spriteAssets.name, parsed.data.name),
-        isNull(spriteAssets.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (nameConflict && nameConflict.id !== existing.id) {
-    return c.json(
-      {
-        error: {
-          code: "CONFLICT",
-          message: "A sprite asset with that name already exists.",
+  if (nextName && nextName !== existing.name) {
+    const [nameConflict] = await db
+      .select({ id: spriteAssets.id })
+      .from(spriteAssets)
+      .where(
+        and(
+          eq(spriteAssets.accountId, accountId),
+          eq(spriteAssets.name, nextName),
+          isNull(spriteAssets.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (nameConflict && nameConflict.id !== existing.id) {
+      return c.json(
+        {
+          error: {
+            code: "CONFLICT",
+            message: "A sprite asset with that name already exists.",
+          },
         },
-      },
-      409,
-    );
+        409,
+      );
+    }
   }
 
+  const metadata = mergeSpriteMetadata(existing.metadata, parsed.data.tags);
+  const nextDescription =
+    parsed.data.description !== undefined
+      ? normalizeOptionalString(parsed.data.description, 500)
+      : undefined;
   const [updated] = await db
     .update(spriteAssets)
-    .set({ name: parsed.data.name })
+    .set({
+      ...(nextName !== undefined ? { name: nextName } : {}),
+      ...(nextFolder !== undefined ? { folder: nextFolder } : {}),
+      ...(parsed.data.description !== undefined
+        ? { description: nextDescription }
+        : {}),
+      ...(parsed.data.tags !== undefined ? { metadata } : {}),
+    })
     .where(and(eq(spriteAssets.id, existing.id), eq(spriteAssets.accountId, accountId)))
     .returning();
 
@@ -305,15 +403,16 @@ stylesRoute.patch("/sprite-assets/:id", async (c) => {
     action: "sprite_asset.renamed",
     resourceType: "sprite_asset",
     resourceId: existing.id,
-    metadata: { previousName: existing.name, name: parsed.data.name },
+    metadata: {
+      previousName: existing.name,
+      name: updated!.name,
+      folder: updated!.folder,
+    },
     ipAddress: getClientIp(c.req.raw),
   });
 
   return c.json({
-    data: {
-      ...updated!,
-      previewUrl: `/console/sprite-assets/${updated!.id}/image`,
-    },
+    data: serializeSpriteAsset(updated!),
   });
 });
 
@@ -1141,6 +1240,8 @@ async function createStyleSpriteAssets({
     .select({
       id: spriteAssets.id,
       name: spriteAssets.name,
+      storageObjectId: spriteAssets.storageObjectId,
+      rasterStorageObjectId: spriteAssets.rasterStorageObjectId,
       storageKey: storageObjects.storageKey,
     })
     .from(spriteAssets)
@@ -1173,7 +1274,7 @@ async function createStyleSpriteAssets({
   const assetImages = await Promise.all(
     imageIds.map(async (name) => {
       const row = byName.get(name)!;
-      const data = await storage.download(row.storageKey);
+      const data = await storage.download(await resolveSpriteRasterStorageKey(row));
       const validated = validateSpritePngUpload({
         buffer: data,
         contentType: "image/png",
@@ -1266,17 +1367,133 @@ async function createStyleSpriteAssets({
   };
 }
 
+function normalizeSpriteFolder(value: unknown) {
+  if (value === undefined || value === null) return undefined;
+  return String(value).trim().replace(/^\/+|\/+$/g, "");
+}
+
+function normalizeOptionalString(value: unknown, maxLength: number) {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  return text.slice(0, maxLength);
+}
+
+function parseSpriteTags(value: unknown) {
+  const raw =
+    typeof value === "string"
+      ? value.trim().startsWith("[")
+        ? parseJsonStringArray(value)
+        : value.split(",")
+      : Array.isArray(value)
+        ? value
+        : [];
+  return [...new Set(raw.map((tag) => String(tag).trim()).filter(Boolean))]
+    .filter((tag) => tag.length <= 48)
+    .slice(0, 20);
+}
+
+function parseJsonStringArray(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function mergeSpriteMetadata(current: unknown, tags?: string[]) {
+  const base = isJsonObject(current) ? { ...current } : {};
+  if (tags !== undefined) {
+    base.tags = [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]
+      .filter((tag) => tag.length <= 48)
+      .slice(0, 20);
+  }
+  return base;
+}
+
+function serializeSpriteAsset(asset: {
+  id: string;
+  name: string;
+  folder?: string | null;
+  description?: string | null;
+  sourceFormat?: string | null;
+  width: number;
+  height: number;
+  metadata?: unknown;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+  size?: number | null;
+}) {
+  const metadata = isJsonObject(asset.metadata) ? asset.metadata : {};
+  const tags = Array.isArray(metadata.tags)
+    ? metadata.tags.filter((tag): tag is string => typeof tag === "string")
+    : [];
+  return {
+    id: asset.id,
+    name: asset.name,
+    folder: asset.folder ?? "",
+    description: asset.description ?? null,
+    sourceFormat: asset.sourceFormat ?? "png",
+    width: asset.width,
+    height: asset.height,
+    size: asset.size ?? null,
+    tags,
+    previewUrl: `/console/sprite-assets/${asset.id}/image`,
+    createdAt: asset.createdAt,
+    updatedAt: asset.updatedAt,
+  };
+}
+
+async function resolveSpriteRasterStorageKey(asset: {
+  id: string;
+  storageObjectId: string;
+  rasterStorageObjectId?: string | null;
+  storageKey: string;
+}) {
+  const rasterStorageObjectId =
+    asset.rasterStorageObjectId ?? asset.storageObjectId;
+  if (rasterStorageObjectId === asset.storageObjectId) return asset.storageKey;
+
+  const [object] = await db
+    .select({ storageKey: storageObjects.storageKey })
+    .from(storageObjects)
+    .where(
+      and(
+        eq(storageObjects.id, rasterStorageObjectId),
+        isNull(storageObjects.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!object) {
+    throw new SpriteAssetValidationError(
+      "MISSING_SPRITE_RASTER",
+      `Sprite asset ${asset.id} is missing its rasterized PNG copy.`,
+    );
+  }
+  return object.storageKey;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 async function findSpriteAssetForAccount(accountId: string, assetId: string) {
   const [asset] = await db
     .select({
       id: spriteAssets.id,
       accountId: spriteAssets.accountId,
       name: spriteAssets.name,
+      folder: spriteAssets.folder,
+      description: spriteAssets.description,
+      sourceFormat: spriteAssets.sourceFormat,
       width: spriteAssets.width,
       height: spriteAssets.height,
+      metadata: spriteAssets.metadata,
       createdAt: spriteAssets.createdAt,
       updatedAt: spriteAssets.updatedAt,
       storageObjectId: spriteAssets.storageObjectId,
+      rasterStorageObjectId: spriteAssets.rasterStorageObjectId,
       storageKey: storageObjects.storageKey,
       size: storageObjects.size,
     })

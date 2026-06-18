@@ -182,6 +182,9 @@ importers:
       rate-limiter-flexible:
         specifier: ^9.1.1
         version: 9.1.1
+      sharp:
+        specifier: 0.34.5
+        version: 0.34.5
       standardwebhooks:
         specifier: ^1.0.0
         version: 1.0.0

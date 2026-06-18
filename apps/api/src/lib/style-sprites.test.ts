@@ -5,6 +5,8 @@ import {
   buildSpriteSheet,
   buildSpriteJson,
   extractSpriteImageIds,
+  normalizeSpriteAssetUpload,
+  SpriteAssetValidationError,
   spriteStorageKeys,
   styleReferencesSpriteAssets,
   validateSpritePngUpload,
@@ -86,4 +88,44 @@ test("sprite helpers validate PNG uploads and build real sheets", () => {
   assert.equal(decoded.height, 2);
   assert.deepEqual([...decoded.data.slice(0, 4)], [255, 0, 0, 255]);
   assert.deepEqual([...decoded.data.slice(8, 12)], [0, 255, 0, 255]);
+});
+
+test("sprite helpers normalize safe SVG uploads into raster PNGs", async () => {
+  const svg = Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="12" viewBox="0 0 16 12"><rect width="16" height="12" fill="#0f766e"/></svg>',
+  );
+
+  const normalized = await normalizeSpriteAssetUpload({
+    buffer: svg,
+    contentType: "image/svg+xml",
+    fileName: "marker.svg",
+    size: svg.byteLength,
+  });
+
+  assert.equal(normalized.format, "svg");
+  assert.equal(normalized.contentType, "image/svg+xml");
+  assert.equal(normalized.rasterContentType, "image/png");
+  assert.ok(normalized.raster.width > normalized.raster.height);
+  assert.ok(normalized.raster.width <= 512);
+  assert.ok(normalized.raster.height <= 512);
+  assert.ok(normalized.rasterBuffer.byteLength > 0);
+});
+
+test("sprite helpers reject unsafe SVG uploads", async () => {
+  const svg = Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><script>alert(1)</script></svg>',
+  );
+
+  await assert.rejects(
+    () =>
+      normalizeSpriteAssetUpload({
+        buffer: svg,
+        contentType: "image/svg+xml",
+        fileName: "bad.svg",
+        size: svg.byteLength,
+      }),
+    (err) =>
+      err instanceof SpriteAssetValidationError &&
+      err.code === "UNSAFE_SPRITE_SVG",
+  );
 });

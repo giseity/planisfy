@@ -463,6 +463,10 @@ export const spriteAssetsRelations = relations(spriteAssets, ({ one }) => ({
     fields: [spriteAssets.storageObjectId],
     references: [storageObjects.id],
   }),
+  rasterStorageObject: one(storageObjects, {
+    fields: [spriteAssets.rasterStorageObjectId],
+    references: [storageObjects.id],
+  }),
 }));
 
 export const basemapReleasesRelations = relations(basemapReleases, ({ one }) => ({

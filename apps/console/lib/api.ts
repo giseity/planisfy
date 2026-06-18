@@ -112,9 +112,13 @@ export type ConsoleArtifactAvailability =
 export interface ConsoleSpriteAsset {
   id: string;
   name: string;
+  folder: string;
+  description: string | null;
+  sourceFormat: "png" | "svg" | string;
   width: number;
   height: number;
   size?: number | null;
+  tags: string[];
   previewUrl: string;
   createdAt: string;
   updatedAt: string;
@@ -849,9 +853,18 @@ class ApiClient {
     );
   }
 
-  uploadSpriteAsset(options: { name: string; file: File }) {
+  uploadSpriteAsset(options: {
+    name: string;
+    file: File;
+    folder?: string;
+    description?: string | null;
+    tags?: string[];
+  }) {
     const body = new FormData();
     body.set("name", options.name);
+    if (options.folder) body.set("folder", options.folder);
+    if (options.description) body.set("description", options.description);
+    if (options.tags?.length) body.set("tags", JSON.stringify(options.tags));
     body.set("file", options.file);
     return this.formRequest<ApiEnvelope<ConsoleSpriteAsset>>(
       "/sprite-assets",
@@ -861,12 +874,25 @@ class ApiClient {
     }));
   }
 
-  renameSpriteAsset(id: string, name: string) {
-    return this.patch<ApiEnvelope<ConsoleSpriteAsset>>(`/sprite-assets/${id}`, {
-      name,
-    }).then((res) => ({
+  updateSpriteAsset(
+    id: string,
+    options: {
+      name?: string;
+      folder?: string;
+      description?: string | null;
+      tags?: string[];
+    },
+  ) {
+    return this.patch<ApiEnvelope<ConsoleSpriteAsset>>(
+      `/sprite-assets/${id}`,
+      options,
+    ).then((res) => ({
       data: normalizeSpriteAssetPreviewUrl(res.data),
     }));
+  }
+
+  renameSpriteAsset(id: string, name: string) {
+    return this.updateSpriteAsset(id, { name });
   }
 
   deleteSpriteAsset(id: string) {

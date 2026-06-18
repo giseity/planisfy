@@ -28,7 +28,7 @@ Implemented today:
 ## Current Gaps
 
 - Browser, backup/restore, tile-worker, and managed-staging workflows are wired, but they still need to run against the real protected CI/staging/self-host environments and have their required secrets validated.
-- Account sprite assets support PNG icons and patterns; broader style asset management remains future work, including SVG import, asset folders, richer metadata, and raster sprite/vector icon parity.
+- Account sprite assets support PNG/SVG icons and patterns with folders and basic metadata; broader style asset management remains future work, including asset folders as a first-class management surface, richer search/governance metadata, and raster sprite/vector icon parity.
 - Tilequery is implemented for PMTiles-backed vector tilesets. Raster tilequery is intentionally not required or planned for v1; raster value sampling can be revisited later if a concrete product use case appears.
 - Larger Overture import UX, managed basemap releases, and global release packaging need more product and QA work.
 - Operations still need schedule execution hardening, notification delivery proof, retention-aware usage summaries, and upgrade-path smoke coverage.
@@ -41,7 +41,7 @@ Implemented today:
 - Self-host backup/restore smoke coverage now verifies health, preflight, style URLs, and TileJSON after restore.
 - Stale `processing_jobs` are reconciled from worker-geodata and exposed through operations.
 - Managed-mode staging proof now validates startup config, preflight, storage, billing adapter availability, email adapter availability, and the full product loop.
-- Account-level PNG sprite assets are reusable in Studio and publish into real MapLibre sprite sheets.
+- Account-level PNG/SVG sprite assets are reusable in Studio, include folders and basic tags, and publish into real MapLibre sprite sheets.
 - `TILE_DELIVERY_MODE=api|worker` is implemented with API-to-tile-worker proxying, health/preflight visibility, and a `with-tile-worker` Compose profile.
 
 ## Future Work

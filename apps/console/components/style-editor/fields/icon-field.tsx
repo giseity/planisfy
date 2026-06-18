@@ -10,7 +10,7 @@ import {
   PopoverTrigger,
 } from "@planisfy/ui/components/popover";
 import { useState, useEffect, useMemo } from "react";
-import { Image, Upload } from "lucide-react";
+import { FolderOpen, Image, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 interface SpriteMetadata {
@@ -30,6 +30,19 @@ interface IconFieldProps {
   spriteUrl?: string;
 }
 
+interface PickerSprite {
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  pixelRatio: number;
+  previewUrl?: string;
+  folder?: string;
+  sourceFormat?: string;
+  tags?: string[];
+  description?: string | null;
+}
+
 /**
  * Icon/pattern picker — fetches available sprites and shows a visual grid.
  */
@@ -44,6 +57,9 @@ export function IconField({
     data: SpriteMetadata | null;
   } | null>(null);
   const [filter, setFilter] = useState("");
+  const [folderFilter, setFolderFilter] = useState("");
+  const [uploadFolder, setUploadFolder] = useState("");
+  const [uploadTags, setUploadTags] = useState("");
   const [open, setOpen] = useState(false);
   const [assetMetadata, setAssetMetadata] = useState<ConsoleSpriteAsset[] | null>(
     null,
@@ -90,8 +106,20 @@ export function IconField({
     };
   }, []);
 
+  const folders = useMemo(
+    () =>
+      [
+        ...new Set(
+          (assetMetadata ?? [])
+            .map((asset) => asset.folder)
+            .filter((folder) => folder.length > 0),
+        ),
+      ].sort((a, b) => a.localeCompare(b)),
+    [assetMetadata],
+  );
+
   const filteredSprites = useMemo(() => {
-    const accountEntries =
+    const accountEntries: Array<readonly [string, PickerSprite]> =
       assetMetadata?.map((asset) => [
         asset.name,
         {
@@ -101,26 +129,52 @@ export function IconField({
           y: 0,
           pixelRatio: 1,
           previewUrl: asset.previewUrl,
+          folder: asset.folder,
+          sourceFormat: asset.sourceFormat,
+          tags: asset.tags,
+          description: asset.description,
         },
       ] as const) ?? [];
-    const entries =
-      accountEntries.length > 0 ? accountEntries : Object.entries(sprites ?? {});
-    if (!filter) return entries;
-    return entries.filter(([name]) =>
-      name.toLowerCase().includes(filter.toLowerCase()),
-    );
-  }, [assetMetadata, sprites, filter]);
+    const spriteEntries: Array<readonly [string, PickerSprite]> = Object.entries(
+      sprites ?? {},
+    ).map(([name, meta]) => [name, meta] as const);
+    const entries = accountEntries.length > 0 ? accountEntries : spriteEntries;
+    const query = filter.trim().toLowerCase();
+    return entries.filter(([name, meta]) => {
+      const folderMatch = !folderFilter || meta.folder === folderFilter;
+      if (!folderMatch) return false;
+      if (!query) return true;
+      return [
+        name,
+        meta.folder,
+        meta.sourceFormat,
+        meta.description,
+        ...(meta.tags ?? []),
+      ]
+        .filter(Boolean)
+        .some((text) => String(text).toLowerCase().includes(query));
+    });
+  }, [assetMetadata, sprites, filter, folderFilter]);
 
   async function uploadAsset(file: File | null) {
     if (!file) return;
     const baseName = file.name.replace(/\.[^.]+$/, "");
     const name = baseName.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 96);
+    const tags = uploadTags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
     setUploading(true);
     try {
-      const res = await api.uploadSpriteAsset({ name, file });
+      const res = await api.uploadSpriteAsset({
+        name,
+        file,
+        folder: uploadFolder.trim(),
+        tags,
+      });
       setAssetMetadata((current) =>
         [...(current ?? []), res.data].sort((a, b) =>
-          a.name.localeCompare(b.name),
+          `${a.folder}/${a.name}`.localeCompare(`${b.folder}/${b.name}`),
         ),
       );
       onChange(res.data.name);
@@ -129,6 +183,21 @@ export function IconField({
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function deleteAsset(assetName: string) {
+    const asset = assetMetadata?.find((item) => item.name === assetName);
+    if (!asset) return;
+    try {
+      await api.deleteSpriteAsset(asset.id);
+      setAssetMetadata((current) =>
+        (current ?? []).filter((item) => item.id !== asset.id),
+      );
+      if (value === asset.name) onChange("");
+      toast.success("Sprite asset deleted");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
     }
   }
 
@@ -150,18 +219,49 @@ export function IconField({
               onChange={(e) => setFilter(e.target.value)}
               className="h-7 text-xs"
             />
+            {folders.length > 0 ? (
+              <label className="flex items-center gap-1.5">
+                <FolderOpen className="h-3 w-3 text-muted-foreground" />
+                <select
+                  value={folderFilter}
+                  onChange={(e) => setFolderFilter(e.target.value)}
+                  className="h-7 min-w-0 flex-1 rounded border bg-background px-2 text-xs"
+                >
+                  <option value="">All folders</option>
+                  {folders.map((folder) => (
+                    <option key={folder} value={folder}>
+                      {folder}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <Input
               placeholder="Type icon name..."
               value={value}
               onChange={(e) => onChange(e.target.value)}
               className="h-7 text-xs font-mono"
             />
+            <div className="grid grid-cols-2 gap-1">
+              <Input
+                placeholder="Folder"
+                value={uploadFolder}
+                onChange={(e) => setUploadFolder(e.target.value)}
+                className="h-7 text-xs"
+              />
+              <Input
+                placeholder="Tags"
+                value={uploadTags}
+                onChange={(e) => setUploadTags(e.target.value)}
+                className="h-7 text-xs"
+              />
+            </div>
             <label className="flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded border text-xs hover:bg-accent">
               <Upload className="h-3 w-3" />
-              {uploading ? "Uploading..." : "Upload PNG"}
+              {uploading ? "Uploading..." : "Upload PNG/SVG"}
               <input
                 type="file"
-                accept="image/png"
+                accept="image/png,image/svg+xml"
                 className="sr-only"
                 disabled={uploading}
                 onChange={(event) => {
@@ -174,40 +274,76 @@ export function IconField({
               <ScrollArea className="h-48">
                 <div className="grid grid-cols-4 gap-1">
                   {filteredSprites.map(([name, meta]) => (
-                    <button
+                    <div
                       key={name}
-                      className={`flex flex-col items-center gap-0.5 rounded p-1 text-[9px] hover:bg-accent ${
-                        name === value ? "bg-accent ring-1 ring-primary" : ""
-                      }`}
-                      onClick={() => {
-                        onChange(name);
-                        setOpen(false);
-                      }}
-                      title={name}
+                      className="group relative"
                     >
-                      {"previewUrl" in meta ? (
-                        <div
-                          className="h-6 w-6 bg-contain bg-center bg-no-repeat"
-                          style={{ backgroundImage: `url(${meta.previewUrl})` }}
-                        />
-                      ) : spriteUrl ? (
-                        <div
-                          className="h-6 w-6"
-                          style={{
-                            backgroundImage: `url(${spriteUrl}.png)`,
-                            backgroundPosition: `-${meta.x}px -${meta.y}px`,
-                            backgroundSize: "auto",
-                            width: Math.min(meta.width, 24),
-                            height: Math.min(meta.height, 24),
+                      <button
+                        className={`flex w-full flex-col items-center gap-0.5 rounded p-1 text-[9px] hover:bg-accent ${
+                          name === value ? "bg-accent ring-1 ring-primary" : ""
+                        }`}
+                        onClick={() => {
+                          onChange(name);
+                          setOpen(false);
+                        }}
+                        title={[
+                          name,
+                          meta.folder,
+                          meta.sourceFormat?.toUpperCase(),
+                          ...(meta.tags ?? []),
+                        ]
+                          .filter(Boolean)
+                          .join(" - ")}
+                      >
+                        {meta.previewUrl ? (
+                          <div
+                            className="h-6 w-6 bg-contain bg-center bg-no-repeat"
+                            style={{
+                              backgroundImage: `url(${meta.previewUrl})`,
+                            }}
+                          />
+                        ) : spriteUrl ? (
+                          <div
+                            className="h-6 w-6"
+                            style={{
+                              backgroundImage: `url(${spriteUrl}.png)`,
+                              backgroundPosition: `-${meta.x}px -${meta.y}px`,
+                              backgroundSize: "auto",
+                              width: Math.min(meta.width, 24),
+                              height: Math.min(meta.height, 24),
+                            }}
+                          />
+                        ) : (
+                          <Image className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <span className="truncate w-full text-center">
+                          {name}
+                        </span>
+                        {meta.folder ? (
+                          <span className="max-w-full truncate rounded bg-muted px-1 text-[8px] text-muted-foreground">
+                            {meta.folder}
+                          </span>
+                        ) : null}
+                        {meta.previewUrl ? (
+                          <span className="rounded bg-muted px-1 text-[8px] uppercase text-muted-foreground">
+                            {meta.sourceFormat ?? "png"}
+                          </span>
+                        ) : null}
+                      </button>
+                      {meta.previewUrl ? (
+                        <button
+                          type="button"
+                          className="absolute right-0.5 top-0.5 hidden rounded bg-background/90 p-0.5 text-muted-foreground shadow-sm hover:text-destructive group-hover:block"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void deleteAsset(name);
                           }}
-                        />
-                      ) : (
-                        <Image className="h-4 w-4 text-muted-foreground" />
-                      )}
-                      <span className="truncate w-full text-center">
-                        {name}
-                      </span>
-                    </button>
+                          title="Delete asset"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      ) : null}
+                    </div>
                   ))}
                 </div>
                 {filteredSprites.length === 0 && (

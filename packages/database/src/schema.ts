@@ -1401,9 +1401,16 @@ export const spriteAssets = pgTable(
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 96 }).notNull(),
+    folder: varchar("folder", { length: 128 }).notNull().default(""),
+    description: text("description"),
+    sourceFormat: varchar("source_format", { length: 16 }).notNull().default("png"),
     storageObjectId: uuid("storage_object_id")
       .notNull()
       .references(() => storageObjects.id, { onDelete: "restrict" }),
+    rasterStorageObjectId: uuid("raster_storage_object_id").references(
+      () => storageObjects.id,
+      { onDelete: "restrict" },
+    ),
     width: integer("width").notNull(),
     height: integer("height").notNull(),
     metadata: jsonb("metadata").notNull().default({}),
@@ -1418,6 +1425,10 @@ export const spriteAssets = pgTable(
   (table) => [
     index("sprite_assets_account_idx").on(table.accountId),
     index("sprite_assets_storage_object_idx").on(table.storageObjectId),
+    index("sprite_assets_raster_storage_object_idx").on(
+      table.rasterStorageObjectId,
+    ),
+    index("sprite_assets_account_folder_idx").on(table.accountId, table.folder),
     uniqueIndex("sprite_assets_account_name_unique")
       .on(table.accountId, table.name)
       .where(sql`${table.deletedAt} IS NULL`),

@@ -99,6 +99,13 @@
       "when": 1781367000000,
       "tag": "0013_sprite_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1781368000000,
+      "tag": "0014_sprite_asset_metadata",
+      "breakpoints": true
     }
   ]
 }

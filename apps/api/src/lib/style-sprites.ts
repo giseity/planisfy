@@ -1,12 +1,16 @@
 import { createHash } from "node:crypto";
 import { StoragePaths } from "@planisfy/storage-paths";
 import { PNG } from "pngjs";
+import sharp from "sharp";
 
 export type SpriteVariant = "json" | "png" | "json2x" | "png2x";
 
 export const SPRITE_ASSET_MAX_BYTES = 512 * 1024;
 export const SPRITE_ASSET_MAX_DIMENSION = 512;
 export const SPRITE_ASSET_NAME_PATTERN = /^[A-Za-z0-9._-]{1,96}$/;
+export const SPRITE_ASSET_FOLDER_PATTERN = /^[A-Za-z0-9._/ -]{0,128}$/;
+
+export type SpriteAssetSourceFormat = "png" | "svg";
 
 export interface PublishedSpriteMetadata {
   id: string;
@@ -40,6 +44,15 @@ export interface ValidatedSpritePng {
   height: number;
 }
 
+export interface NormalizedSpriteUpload {
+  format: SpriteAssetSourceFormat;
+  sourceBuffer: Buffer;
+  rasterBuffer: Buffer;
+  raster: ValidatedSpritePng;
+  contentType: "image/png" | "image/svg+xml";
+  rasterContentType: "image/png";
+}
+
 export function styleReferencesSpriteAssets(styleJson: unknown) {
   if (!isRecord(styleJson)) return false;
   if (typeof styleJson.sprite === "string" && styleJson.sprite.length > 0) {
@@ -67,6 +80,61 @@ export function extractSpriteImageIds(styleJson: unknown) {
 
 export function validateSpriteAssetName(name: string) {
   return SPRITE_ASSET_NAME_PATTERN.test(name);
+}
+
+export function validateSpriteAssetFolder(folder: string) {
+  return SPRITE_ASSET_FOLDER_PATTERN.test(folder);
+}
+
+export async function normalizeSpriteAssetUpload(params: {
+  buffer: Buffer;
+  contentType?: string | null;
+  fileName?: string | null;
+  size?: number | null;
+}): Promise<NormalizedSpriteUpload> {
+  const contentType = normalizedSpriteContentType(
+    params.contentType,
+    params.fileName,
+  );
+
+  if (contentType === "image/png") {
+    const raster = validateSpritePngUpload({
+      buffer: params.buffer,
+      contentType,
+      size: params.size,
+    });
+    return {
+      format: "png",
+      sourceBuffer: params.buffer,
+      rasterBuffer: params.buffer,
+      raster,
+      contentType,
+      rasterContentType: "image/png",
+    };
+  }
+
+  if (contentType === "image/svg+xml") {
+    validateSvgText(params.buffer, params.size);
+    const rasterBuffer = await rasterizeSvgToPng(params.buffer);
+    const raster = validateSpritePngUpload({
+      buffer: rasterBuffer,
+      contentType: "image/png",
+      size: rasterBuffer.byteLength,
+    });
+    return {
+      format: "svg",
+      sourceBuffer: params.buffer,
+      rasterBuffer,
+      raster,
+      contentType,
+      rasterContentType: "image/png",
+    };
+  }
+
+  throw new SpriteAssetValidationError(
+    "UNSUPPORTED_SPRITE_TYPE",
+    "Sprite assets must be PNG or SVG images.",
+  );
 }
 
 export function validateSpritePngUpload(params: {
@@ -111,6 +179,72 @@ export function validateSpritePngUpload(params: {
   }
 
   return { png, width: png.width, height: png.height };
+}
+
+function normalizedSpriteContentType(
+  contentType?: string | null,
+  fileName?: string | null,
+): "image/png" | "image/svg+xml" | null {
+  const normalized = contentType?.split(";")[0]?.trim().toLowerCase();
+  if (normalized === "image/png") return "image/png";
+  if (normalized === "image/svg+xml" || normalized === "application/svg+xml") {
+    return "image/svg+xml";
+  }
+  const extension = fileName?.split(".").pop()?.toLowerCase();
+  if (extension === "png") return "image/png";
+  if (extension === "svg") return "image/svg+xml";
+  return null;
+}
+
+function validateSvgText(buffer: Buffer, size?: number | null) {
+  const byteLength = size ?? buffer.byteLength;
+  if (byteLength <= 0 || byteLength > SPRITE_ASSET_MAX_BYTES) {
+    throw new SpriteAssetValidationError(
+      "SPRITE_TOO_LARGE",
+      `Sprite assets must be between 1 byte and ${SPRITE_ASSET_MAX_BYTES} bytes.`,
+    );
+  }
+
+  const text = buffer.toString("utf8");
+  if (!/<svg[\s>]/i.test(text)) {
+    throw new SpriteAssetValidationError(
+      "INVALID_SPRITE_SVG",
+      "Sprite asset must be a valid SVG image.",
+    );
+  }
+  if (
+    /<\s*(script|foreignObject|iframe|object|embed|image)\b/i.test(text) ||
+    /\son[a-z]+\s*=/i.test(text) ||
+    /\b(?:href|xlink:href)\s*=\s*["'](?!#)/i.test(text)
+  ) {
+    throw new SpriteAssetValidationError(
+      "UNSAFE_SPRITE_SVG",
+      "SVG sprite assets cannot include scripts, embedded images, event handlers, or external references.",
+    );
+  }
+}
+
+async function rasterizeSvgToPng(buffer: Buffer) {
+  try {
+    return await sharp(buffer, {
+      density: 192,
+      limitInputPixels:
+        SPRITE_ASSET_MAX_DIMENSION * SPRITE_ASSET_MAX_DIMENSION * 4,
+    })
+      .resize({
+        width: SPRITE_ASSET_MAX_DIMENSION,
+        height: SPRITE_ASSET_MAX_DIMENSION,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .png()
+      .toBuffer();
+  } catch {
+    throw new SpriteAssetValidationError(
+      "INVALID_SPRITE_SVG",
+      "Sprite asset must be a valid SVG image.",
+    );
+  }
 }
 
 export function buildSpriteSheet(
