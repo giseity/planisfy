@@ -176,6 +176,7 @@ async function buildPreflightChecks(
       action: "Configure MARTIN_URL and publish matching source aliases.",
       value: env.MARTIN_URL,
     }),
+    await tileDeliveryModeCheck(),
     valhalla,
     check({
       id: "geocoding",
@@ -610,6 +611,70 @@ async function buildProductLoopChecks(
     }),
     await pmtilesFixtureCheck(demoPmtilesPath),
   ];
+}
+
+async function tileDeliveryModeCheck(): Promise<PreflightCheck> {
+  if (env.TILE_DELIVERY_MODE === "api") {
+    return check({
+      id: "tile-delivery-mode",
+      group: "Geospatial engines",
+      label: "Tile delivery mode",
+      severity: "required",
+      ok: true,
+      message: "Published PMTiles are served directly by the API.",
+      value: "api",
+    });
+  }
+
+  if (!env.TILE_WORKER_URL) {
+    return check({
+      id: "tile-delivery-mode",
+      group: "Geospatial engines",
+      label: "Tile delivery mode",
+      severity: "required",
+      ok: false,
+      message: "Tile worker mode is enabled but TILE_WORKER_URL is missing.",
+      action:
+        "Set TILE_WORKER_URL to the internal tile-worker origin or switch TILE_DELIVERY_MODE back to api.",
+      value: "worker",
+    });
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const response = await fetch(
+      `${env.TILE_WORKER_URL.replace(/\/$/, "")}/health`,
+      { signal: controller.signal },
+    );
+    clearTimeout(timeout);
+
+    return check({
+      id: "tile-delivery-mode",
+      group: "Geospatial engines",
+      label: "Tile delivery mode",
+      severity: "required",
+      ok: response.ok,
+      message: response.ok
+        ? `Tile worker is reachable at ${env.TILE_WORKER_URL}.`
+        : `Tile worker health returned HTTP ${response.status}.`,
+      action:
+        "Start the with-tile-worker Compose profile or point TILE_WORKER_URL at a healthy worker.",
+      value: "worker",
+    });
+  } catch (err) {
+    return check({
+      id: "tile-delivery-mode",
+      group: "Geospatial engines",
+      label: "Tile delivery mode",
+      severity: "required",
+      ok: false,
+      message: `Tile worker is unreachable: ${err instanceof Error ? err.message : String(err)}.`,
+      action:
+        "Start the with-tile-worker Compose profile or point TILE_WORKER_URL at a healthy worker.",
+      value: "worker",
+    });
+  }
 }
 
 async function styleFixtureCheck(storagePath: string): Promise<PreflightCheck> {

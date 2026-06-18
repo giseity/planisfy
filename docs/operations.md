@@ -5,7 +5,7 @@
 The API exposes:
 
 - `GET /health`: basic liveness.
-- `GET /health/detailed`: Postgres, Redis, worker heartbeat, storage, Martin, and Valhalla readiness.
+- `GET /health/detailed`: Postgres, Redis, worker heartbeat, storage, Martin, tile-worker mode, and Valhalla readiness.
 - `GET /metrics`: Prometheus text metrics for the API process.
 - `GET /setup/preflight`: deployment-mode capability and product-loop checks.
 

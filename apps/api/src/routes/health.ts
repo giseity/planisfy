@@ -117,6 +117,14 @@ healthRoute.get("/health/detailed", async (c) => {
     // Martin being down is degraded, not critical
   }
 
+  checks.tileWorker = await checkTileWorkerHealth();
+  if (
+    env.TILE_DELIVERY_MODE === "worker" &&
+    checks.tileWorker.status === "error"
+  ) {
+    healthy = false;
+  }
+
   // Valhalla (routing)
   const valhalla = await probeValhallaReadiness(env.VALHALLA_URL);
   checks.valhalla = {
@@ -141,6 +149,39 @@ healthRoute.get("/health/detailed", async (c) => {
 
 function getRedisConnection() {
   return redisConnection;
+}
+
+async function checkTileWorkerHealth(): Promise<HealthCheck> {
+  if (env.TILE_DELIVERY_MODE !== "worker") {
+    return { status: "disabled" };
+  }
+  if (!env.TILE_WORKER_URL) {
+    return {
+      status: "error",
+      error: "TILE_WORKER_URL is required when TILE_DELIVERY_MODE=worker",
+    };
+  }
+
+  const start = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${env.TILE_WORKER_URL.replace(/\/$/, "")}/health`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    return {
+      status: res.ok ? "ok" : "error",
+      latency: Date.now() - start,
+      error: res.ok ? undefined : `HTTP ${res.status}`,
+    };
+  } catch (err) {
+    return {
+      status: "error",
+      latency: Date.now() - start,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 export async function checkStorageHealth(

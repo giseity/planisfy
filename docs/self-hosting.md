@@ -11,7 +11,7 @@ pnpm --filter @planisfy/database db:migrate
 
 ## Compose Services
 
-The stack defines API, Console, Admin, Docs, Marketing, worker-geodata, Postgres, Redis, Martin, Valhalla, local elevation, static renderer, Pelias API, Pelias Elasticsearch, optional Pelias fixture import jobs, optional MinIO, optional Traefik, and optional self-host supervisor.
+The stack defines API, Console, Admin, Docs, Marketing, worker-geodata, Postgres, Redis, Martin, Valhalla, local elevation, static renderer, Pelias API, Pelias Elasticsearch, optional Pelias fixture import jobs, optional MinIO, optional Traefik, optional tile-worker, and optional self-host supervisor.
 
 ## Runtime Data
 
@@ -39,9 +39,16 @@ Optional profiles:
 
 ```bash
 docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
+TILE_DELIVERY_MODE=worker docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-tile-worker up -d api tile-worker
 docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-supervisor up -d self-host-supervisor admin
 docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-proxy up -d traefik
 ```
+
+## Tile Worker Mode
+
+`TILE_DELIVERY_MODE=api` is the default. In that mode, `apps/api` reads published PMTiles artifacts directly and only falls back to Martin for legacy/non-PMTiles sources.
+
+Set `TILE_DELIVERY_MODE=worker` and run the `with-tile-worker` profile when you want public tile and tilequery reads isolated from the API process. Keep `TILE_WORKER_URL` pointed at the internal worker origin (`http://tile-worker:4020` inside Compose). TileJSON URLs remain API URLs, so clients do not need to change.
 
 ## First Account
 
@@ -50,7 +57,7 @@ After migrations complete, create a Console account at `http://localhost:3001/si
 ## Verification
 
 - `/health` checks basic API readiness.
-- `/health/detailed` probes Postgres, Redis, worker heartbeat, storage, Martin, and Valhalla readiness.
-- `/setup/preflight` reports product-loop and deployment-mode readiness.
+- `/health/detailed` probes Postgres, Redis, worker heartbeat, storage, Martin, tile-worker mode, and Valhalla readiness.
+- `/setup/preflight` reports product-loop, tile delivery, and deployment-mode readiness.
 - `scripts/self-host-default-map-smoke.mjs` checks the local PMTiles fixture when present.
 - `pnpm e2e:product-loop` runs the browser product-loop smoke against a running stack.

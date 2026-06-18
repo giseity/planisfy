@@ -24,7 +24,7 @@ Important packages include `@planisfy/auth`, `@planisfy/database`, `@planisfy/en
 1. Console creates resources through Hono console routes or colocated server code that uses shared database helpers.
 2. Uploads and imports create `processing_jobs`, `storage_objects`, and `event_outbox` rows.
 3. The geodata worker claims outbox events, dispatches BullMQ work, invokes DuckDB/GDAL/Tippecanoe as needed, writes artifacts to local/S3/R2 storage, and updates job status.
-4. Published style and tileset routes read publication state from PostgreSQL and artifacts from the configured storage backend.
+4. Published style and tileset routes read publication state from PostgreSQL and artifacts from the configured storage backend. When `TILE_DELIVERY_MODE=worker`, API tile and tilequery routes proxy published PMTiles reads to `apps/tile-worker` while keeping TileJSON URLs stable.
 5. External APIs proxy to Martin, Valhalla, Pelias, local elevation, or static renderer.
 
 ## Boundaries

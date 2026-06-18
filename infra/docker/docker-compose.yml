@@ -8,6 +8,7 @@
 #
 # Services:
 #   - api:        API Gateway (port 4000)
+#   - tile-worker: Optional isolated PMTiles delivery worker (port 4020)
 #   - console:    Customer Console (port 3001)
 #   - admin:      Super Admin (port 3003)
 #   - docs:       Documentation (port 3002)
@@ -66,6 +67,8 @@ services:
       - SOURCE_IMPORT_TIMEOUT_MS=${SOURCE_IMPORT_TIMEOUT_MS:-900000}
       - DEMO_PMTILES_PATH=${DEMO_PMTILES_PATH:-/data/pmtiles/stuttgart.pmtiles}
       - MARTIN_URL=http://martin:3000
+      - TILE_DELIVERY_MODE=${TILE_DELIVERY_MODE:-api}
+      - TILE_WORKER_URL=${TILE_WORKER_URL:-http://tile-worker:4020}
       - PELIAS_URL=${CONTAINER_PELIAS_URL:-http://pelias:4000}
       - GLYPHS_URL=${GLYPHS_URL:-http://martin:3000/font}
       - STATIC_MAP_URL=${STATIC_MAP_URL:-http://static-renderer:4300}
@@ -124,6 +127,56 @@ services:
         condition: service_healthy
       elevation:
         condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  tile-worker:
+    build:
+      context: ../../
+      dockerfile: apps/tile-worker/Dockerfile
+    image: planisfy/tile-worker:${PLANISFY_IMAGE_TAG:-dev}
+    profiles:
+      - with-tile-worker
+    ports:
+      - "4020:4020"
+    environment:
+      - PORT=4020
+      - HOST=0.0.0.0
+      - APP_VERSION=${APP_VERSION:-self-host}
+      - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
+      - LOCAL_STORAGE_PATH=/data/storage
+      - LOCAL_STORAGE_URL=${LOCAL_STORAGE_URL:-http://localhost:4000/storage}
+      - LOCAL_STORAGE_BUCKET=${LOCAL_STORAGE_BUCKET:-planisfy-local}
+      - S3_BUCKET=${S3_BUCKET:-planisfy-uploads}
+      - S3_REGION=${S3_REGION:-auto}
+      - S3_ENDPOINT=${CONTAINER_S3_ENDPOINT:-${S3_ENDPOINT:-}}
+      - S3_PUBLIC_URL=${S3_PUBLIC_URL:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+      - R2_BUCKET=${R2_BUCKET:-}
+      - R2_ENDPOINT=${R2_ENDPOINT:-}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+      - NODE_ENV=production
+    volumes:
+      - ${LOCAL_STORAGE_HOST_PATH:-./data/storage}:/data/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:4020/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
     networks:
       - planisfy-network

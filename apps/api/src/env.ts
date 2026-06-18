@@ -32,6 +32,8 @@ const schema = z.object({
   BETTER_AUTH_SECRET: z.string().min(1),
 
   MARTIN_URL: z.string().url(),
+  TILE_DELIVERY_MODE: z.enum(["api", "worker"]).default("api"),
+  TILE_WORKER_URL: emptyableUrl.default(""),
   VALHALLA_URL: z.string().url(),
   PELIAS_URL: z.string().url(),
   GLYPHS_URL: z.string().url(),

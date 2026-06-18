@@ -250,6 +250,10 @@ tilesRoute.get("/v4/:tileset/tilequery/:coords.json", async (c) => {
       404,
     );
   }
+  if (shouldProxyToTileWorker(resolved)) {
+    const url = new URL(c.req.url);
+    return proxyTileWorker(c, `${url.pathname}${url.search}`);
+  }
   const result = await queryResolvedTileset(resolved, coords, options);
   if (!result.ok) {
     if (result.cause) console.error("[tiles] tilequery error:", result.cause);
@@ -372,6 +376,10 @@ async function serveResolvedTile(
     return fallback();
   }
 
+  if (shouldProxyToTileWorker(resolved)) {
+    return proxyTileWorker(c, new URL(c.req.url).pathname);
+  }
+
   const result = await readResolvedTile(resolved, coords);
   if (!result.ok) {
     if (result.cause) {
@@ -460,6 +468,80 @@ export function buildMartinTileUrl(baseUrl: string, path: string) {
     segments.map((segment) => encodeURIComponent(segment)).join("/"),
     `${baseUrl.replace(/\/$/, "")}/`,
   ).toString();
+}
+
+export function tileWorkerUrlForPath(baseUrl: string, pathWithQuery: string) {
+  if (!baseUrl) return null;
+  if (!pathWithQuery.startsWith("/")) return null;
+  const url = new URL(pathWithQuery, `${baseUrl.replace(/\/$/, "")}/`);
+  if (!url.pathname.startsWith("/tiles/") && !url.pathname.startsWith("/v4/")) {
+    return null;
+  }
+  return url.toString();
+}
+
+function shouldProxyToTileWorker(resolved: ResolvedTileset) {
+  return (
+    env.TILE_DELIVERY_MODE === "worker" &&
+    resolved.version?.format === "PMTILES" &&
+    Boolean(resolved.artifact)
+  );
+}
+
+async function proxyTileWorker(c: ApiContext, pathWithQuery: string) {
+  const tileWorkerUrl = tileWorkerUrlForPath(env.TILE_WORKER_URL, pathWithQuery);
+  if (!tileWorkerUrl) {
+    return c.json(
+      {
+        error: {
+          code: "TILE_WORKER_UNCONFIGURED",
+          message: "Tile worker delivery mode requires TILE_WORKER_URL.",
+        },
+      },
+      503,
+    );
+  }
+
+  try {
+    const res = await fetch(tileWorkerUrl, {
+      headers: { Accept: c.req.header("accept") ?? "*/*" },
+      redirect: "manual",
+    });
+    const headers = new Headers();
+    for (const [name, value] of res.headers.entries()) {
+      if (isForwardableResponseHeader(name)) headers.set(name, value);
+    }
+    headers.set("X-Planisfy-Tile-Delivery", "worker");
+    return new Response(await res.arrayBuffer(), {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
+  } catch (err) {
+    console.error("[tiles] Tile worker proxy error:", err);
+    return c.json(
+      {
+        error: {
+          code: "TILE_WORKER_UNAVAILABLE",
+          message: "Tile worker unavailable",
+        },
+      },
+      503,
+    );
+  }
+}
+
+function isForwardableResponseHeader(name: string) {
+  return ![
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+  ].includes(name.toLowerCase());
 }
 
 function isSafeMartinSource(source: string) {

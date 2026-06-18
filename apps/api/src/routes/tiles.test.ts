@@ -17,7 +17,11 @@ import {
   publicTilesetBaseUrl,
   verifyTileJsonArtifact,
 } from "@planisfy/tile-runtime";
-import { buildMartinSourceUrl, buildMartinTileUrl } from "./tiles";
+import {
+  buildMartinSourceUrl,
+  buildMartinTileUrl,
+  tileWorkerUrlForPath,
+} from "./tiles";
 
 test("parsePublicTilesetSlug accepts stable and immutable dotted aliases", () => {
   assert.deepEqual(parsePublicTilesetSlug("acme.roads"), {
@@ -140,6 +144,32 @@ test("Martin tile URLs validate coordinates and encode path segments", () => {
   assert.equal(buildMartinTileUrl("http://martin:3000", "owner/3/8/0"), null);
   assert.equal(buildMartinTileUrl("http://martin:3000", "owner/3/0/0?x=1"), null);
   assert.equal(buildMartinTileUrl("http://martin:3000", "../owner/0/0/0"), null);
+});
+
+test("tile worker proxy URLs preserve public tile paths only", () => {
+  assert.equal(
+    tileWorkerUrlForPath(
+      "http://tile-worker:4020/",
+      "/tiles/v1/acme.roads/1/0/1",
+    ),
+    "http://tile-worker:4020/tiles/v1/acme.roads/1/0/1",
+  );
+  assert.equal(
+    tileWorkerUrlForPath(
+      "http://tile-worker:4020",
+      "/v4/acme.roads/tilequery/0,0.json?limit=1",
+    ),
+    "http://tile-worker:4020/v4/acme.roads/tilequery/0,0.json?limit=1",
+  );
+  assert.equal(tileWorkerUrlForPath("", "/tiles/v1/acme.roads/1/0/1"), null);
+  assert.equal(
+    tileWorkerUrlForPath("http://tile-worker:4020", "tiles/v1"),
+    null,
+  );
+  assert.equal(
+    tileWorkerUrlForPath("http://tile-worker:4020", "/internal/health"),
+    null,
+  );
 });
 
 test("tilequery coordinate parsing and options validate inputs", () => {
