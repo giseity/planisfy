@@ -10,6 +10,7 @@ Planisfy uses Better Auth sessions and API keys. API keys must start with `pk_`,
 - Service APIs require API key or session auth.
 - `/console/*` requires a session.
 - `/internal/*` requires `INTERNAL_API_SECRET`.
+- Production diagnostics under `/health/detailed`, `/metrics`, and root `/setup/preflight` require internal authorization.
 - Dodo webhooks verify the configured webhook secret.
 
 ## Secrets

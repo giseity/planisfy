@@ -13,7 +13,7 @@ Planisfy wraps open geospatial engines with a TypeScript platform layer. The API
 - `apps/elevation`: local HGT DEM lookup service.
 - `apps/static-renderer`: local MapLibre PNG renderer.
 - `apps/self-host-supervisor`: optional local-only upgrade/backup/rollback API.
-- `apps/tile-worker`: placeholder only.
+- `apps/tile-worker`: optional isolated tile delivery runtime for PMTiles-backed published tilesets. The API app serves public tiles directly by default.
 
 ## Shared Packages
 

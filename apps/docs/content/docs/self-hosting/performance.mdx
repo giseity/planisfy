@@ -5,6 +5,6 @@ description: Basic operational checks for self-hosting.
 
 # Operations And Performance
 
-Use `/health/detailed` and `/setup/preflight` before debugging clients. They report degraded dependencies such as missing worker heartbeat, storage issues, unavailable Martin, Valhalla readiness failures, missing Pelias, or missing static renderer.
+Use `/health/detailed` and `/setup/preflight` before debugging clients. Together they report degraded dependencies such as missing worker heartbeat, storage issues, unavailable Martin, Valhalla readiness failures, missing Pelias, or missing static renderer. In production, call root diagnostics with internal authorization or use the authenticated Console preflight view.
 
 Use object storage for production-like artifact serving. Keep geodata worker concurrency conservative until CPU, memory, and disk behavior are measured with your imports. Use versioned published URLs for long-lived client caching.

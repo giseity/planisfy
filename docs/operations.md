@@ -9,6 +9,8 @@ The API exposes:
 - `GET /metrics`: Prometheus text metrics for the API process.
 - `GET /setup/preflight`: deployment-mode capability and product-loop checks.
 
+In production, `/health/detailed`, `/metrics`, and the root `/setup/preflight` route require internal authorization. Console uses the authenticated `/console/setup/preflight` mount for operator-facing checks.
+
 ## Worker Operations
 
 `apps/worker-geodata` writes a Redis heartbeat used by detailed health. It claims outbox events, dispatches BullMQ jobs, updates processing jobs, and stores logs. Run locally with:

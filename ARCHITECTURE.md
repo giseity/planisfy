@@ -20,6 +20,9 @@ apps/api (Hono)
   |
   +-- apps/worker-geodata: upload/import processing through outbox + BullMQ
 
+Optional runtimes
+  |-- apps/tile-worker: isolated PMTiles delivery using the shared tile resolver
+
 Next.js apps
   |-- apps/marketing: public site and managed auth entry
   |-- apps/console: authenticated customer workflows and Studio
@@ -50,8 +53,8 @@ Next.js apps
 
 ## Public APIs
 
-Implemented public route groups are tiles, styles, fonts/glyphs, geocoding, directions, isochrone, matching, matrix, optimized trips, elevation, and static maps. Sprite paths exist under published style URLs but currently return `404 Sprite not configured` until sprite publication is wired.
+Implemented public route groups are tiles, styles, fonts/glyphs, geocoding, directions, isochrone, matching, matrix, optimized trips, elevation, and static maps. Sprite paths exist under published style URLs and are served when the published style snapshot includes generated sprite metadata; styles without sprite assets return `404 Sprite not configured`.
 
 ## Operations
 
-The API exposes `/health`, `/health/detailed`, `/metrics`, and `/setup/preflight`. Admin and Console provide operations views over jobs, storage, service readiness, upgrade state, usage, and audit data. Backup, restore, support bundle, and optional supervisor scripts are under `scripts/`.
+The API exposes `/health`, `/health/detailed`, `/metrics`, and `/setup/preflight`; production diagnostics require internal authorization except for authenticated Console preflight. Admin and Console provide operations views over jobs, storage, service readiness, upgrade state, usage, and audit data. Backup, restore, support bundle, and optional supervisor scripts are under `scripts/`.
