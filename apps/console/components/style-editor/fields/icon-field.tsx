@@ -1,5 +1,6 @@
 "use client";
 
+import { api, type ConsoleSpriteAsset } from "@/lib/api";
 import { Label } from "@planisfy/ui/components/label";
 import { Input } from "@planisfy/ui/components/input";
 import { ScrollArea } from "@planisfy/ui/components/scroll-area";
@@ -9,7 +10,8 @@ import {
   PopoverTrigger,
 } from "@planisfy/ui/components/popover";
 import { useState, useEffect, useMemo } from "react";
-import { Image } from "lucide-react";
+import { Image, Upload } from "lucide-react";
+import { toast } from "sonner";
 
 interface SpriteMetadata {
   [name: string]: {
@@ -43,6 +45,10 @@ export function IconField({
   } | null>(null);
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState(false);
+  const [assetMetadata, setAssetMetadata] = useState<ConsoleSpriteAsset[] | null>(
+    null,
+  );
+  const [uploading, setUploading] = useState(false);
   const sprites =
     spriteMetadata && spriteMetadata.url === spriteUrl
       ? spriteMetadata.data
@@ -68,14 +74,63 @@ export function IconField({
     };
   }, [spriteUrl]);
 
+  useEffect(() => {
+    let canceled = false;
+    api
+      .getSpriteAssets()
+      .then((res) => {
+        if (!canceled) setAssetMetadata(res.data);
+      })
+      .catch(() => {
+        if (!canceled) setAssetMetadata([]);
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
   const filteredSprites = useMemo(() => {
-    if (!sprites) return [];
-    const entries = Object.entries(sprites);
+    const accountEntries =
+      assetMetadata?.map((asset) => [
+        asset.name,
+        {
+          width: asset.width,
+          height: asset.height,
+          x: 0,
+          y: 0,
+          pixelRatio: 1,
+          previewUrl: asset.previewUrl,
+        },
+      ] as const) ?? [];
+    const entries =
+      accountEntries.length > 0 ? accountEntries : Object.entries(sprites ?? {});
     if (!filter) return entries;
     return entries.filter(([name]) =>
       name.toLowerCase().includes(filter.toLowerCase()),
     );
-  }, [sprites, filter]);
+  }, [assetMetadata, sprites, filter]);
+
+  async function uploadAsset(file: File | null) {
+    if (!file) return;
+    const baseName = file.name.replace(/\.[^.]+$/, "");
+    const name = baseName.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 96);
+    setUploading(true);
+    try {
+      const res = await api.uploadSpriteAsset({ name, file });
+      setAssetMetadata((current) =>
+        [...(current ?? []), res.data].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      );
+      onChange(res.data.name);
+      toast.success("Sprite asset uploaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <div className="flex items-center justify-between gap-2">
@@ -101,7 +156,21 @@ export function IconField({
               onChange={(e) => onChange(e.target.value)}
               className="h-7 text-xs font-mono"
             />
-            {sprites ? (
+            <label className="flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded border text-xs hover:bg-accent">
+              <Upload className="h-3 w-3" />
+              {uploading ? "Uploading..." : "Upload PNG"}
+              <input
+                type="file"
+                accept="image/png"
+                className="sr-only"
+                disabled={uploading}
+                onChange={(event) => {
+                  void uploadAsset(event.currentTarget.files?.[0] ?? null);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+            {assetMetadata || sprites ? (
               <ScrollArea className="h-48">
                 <div className="grid grid-cols-4 gap-1">
                   {filteredSprites.map(([name, meta]) => (
@@ -116,7 +185,12 @@ export function IconField({
                       }}
                       title={name}
                     >
-                      {spriteUrl ? (
+                      {"previewUrl" in meta ? (
+                        <div
+                          className="h-6 w-6 bg-contain bg-center bg-no-repeat"
+                          style={{ backgroundImage: `url(${meta.previewUrl})` }}
+                        />
+                      ) : spriteUrl ? (
                         <div
                           className="h-6 w-6"
                           style={{

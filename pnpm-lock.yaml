@@ -176,6 +176,9 @@ importers:
       pmtiles:
         specifier: 4.4.1
         version: 4.4.1
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
       rate-limiter-flexible:
         specifier: ^9.1.1
         version: 9.1.1
@@ -195,6 +198,9 @@ importers:
       "@types/node":
         specifier: ^22.15.3
         version: 22.15.3
+      "@types/pngjs":
+        specifier: ^6.0.5
+        version: 6.0.5
       eslint:
         specifier: ^9.39.1
         version: 9.39.1(jiti@2.6.1)
@@ -4452,6 +4458,12 @@ packages:
         integrity: sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==,
       }
 
+  "@types/pngjs@6.0.5":
+    resolution:
+      {
+        integrity: sha512-0k5eKfrA83JOZPppLtS2C7OUtyNAl2wKNxfyYl9Q5g9lPkgBl/9hNyAu6HuEH2J4XmIv2znEpkDd0SaZVxW6iQ==,
+      }
+
   "@types/react-dom@19.2.3":
     resolution:
       {
@@ -7919,6 +7931,13 @@ packages:
       {
         integrity: sha512-5oTeQc/yX/ft1evbpIlnoCZugQuug/iYIAj/ZTqIqzdGek4uZEho99En890EE6NOSI3JTI3IG8R7r8+SltphxA==,
       }
+
+  pngjs@7.0.0:
+    resolution:
+      {
+        integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==,
+      }
+    engines: { node: ">=14.19.0" }
 
   portless@0.13.1:
     resolution:
@@ -11787,6 +11806,8 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
+  "@types/pngjs@6.0.5": {}
+
   "@types/react-dom@19.2.3(@types/react@19.2.14)":
     dependencies:
       "@types/react": 19.2.14
@@ -14300,6 +14321,8 @@ snapshots:
   pmtiles@4.4.1:
     dependencies:
       fflate: 0.8.3
+
+  pngjs@7.0.0: {}
 
   portless@0.13.1: {}
 

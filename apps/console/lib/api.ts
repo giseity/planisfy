@@ -109,6 +109,17 @@ export type ConsoleArtifactAvailability =
   | { ok: true }
   | { ok: false; code: string; message: string };
 
+export interface ConsoleSpriteAsset {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  size?: number | null;
+  previewUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConsoleTileset {
   id: string;
   accountId: string;
@@ -788,6 +799,28 @@ class ApiClient {
     return json as T;
   }
 
+  private async formRequest<T>(path: string, body: FormData): Promise<T> {
+    const res = await fetch(`${BASE}${path}`, {
+      method: "POST",
+      body,
+      credentials: "include",
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      const err = json as ApiError;
+      throw new ApiRequestError(
+        err.error?.message || res.statusText,
+        res.status,
+        err.error?.code || "UNKNOWN",
+        err.error?.details,
+      );
+    }
+
+    return json as T;
+  }
+
   get<T>(path: string) {
     return this.request<T>("GET", path);
   }
@@ -806,6 +839,40 @@ class ApiClient {
 
   delete<T>(path: string, body?: unknown) {
     return this.request<T>("DELETE", path, body);
+  }
+
+  getSpriteAssets() {
+    return this.get<ApiEnvelope<ConsoleSpriteAsset[]>>("/sprite-assets").then(
+      (res) => ({
+        data: res.data.map(normalizeSpriteAssetPreviewUrl),
+      }),
+    );
+  }
+
+  uploadSpriteAsset(options: { name: string; file: File }) {
+    const body = new FormData();
+    body.set("name", options.name);
+    body.set("file", options.file);
+    return this.formRequest<ApiEnvelope<ConsoleSpriteAsset>>(
+      "/sprite-assets",
+      body,
+    ).then((res) => ({
+      data: normalizeSpriteAssetPreviewUrl(res.data),
+    }));
+  }
+
+  renameSpriteAsset(id: string, name: string) {
+    return this.patch<ApiEnvelope<ConsoleSpriteAsset>>(`/sprite-assets/${id}`, {
+      name,
+    }).then((res) => ({
+      data: normalizeSpriteAssetPreviewUrl(res.data),
+    }));
+  }
+
+  deleteSpriteAsset(id: string) {
+    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
+      `/sprite-assets/${id}`,
+    );
   }
 
   getProfile() {
@@ -1320,4 +1387,12 @@ function normalizeDashboardUrls(dashboard: ConsoleDashboard): ConsoleDashboard {
 export function normalizeApiUrl(url: string | null) {
   if (!url || /^https?:\/\//.test(url)) return url;
   return `${API_ROOT}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
+function normalizeSpriteAssetPreviewUrl(
+  asset: ConsoleSpriteAsset,
+): ConsoleSpriteAsset {
+  if (/^https?:\/\//.test(asset.previewUrl)) return asset;
+  const path = asset.previewUrl.replace(/^\/console/, "");
+  return { ...asset, previewUrl: `${BASE}${path}` };
 }

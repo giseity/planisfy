@@ -1,13 +1,17 @@
+import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import {
   db,
+  spriteAssets,
+  storageObjects,
   styles,
   stylePublications,
   styleVersions,
 } from "@planisfy/database";
 import { getStorage } from "@planisfy/storage";
+import { StoragePaths } from "@planisfy/storage-paths";
 import { validateMapLibreStyle } from "@planisfy/style-spec";
 import {
   createStyleRecord,
@@ -19,12 +23,14 @@ import { checkResourceLimit } from "../lib/plan-check";
 import { requireOrgMutationPermission, type AuthEnv } from "../middleware/auth";
 import { recordStorageObject } from "../lib/storage-ledger";
 import {
-  buildSpriteJson,
+  buildSpriteSheet,
   extractSpriteImageIds,
+  SpriteAssetValidationError,
   spriteIdForStyleVersion,
   spriteStorageKeys,
   styleReferencesSpriteAssets,
-  transparentPng,
+  validateSpriteAssetName,
+  validateSpritePngUpload,
   type PublishedSpriteMetadata,
 } from "../lib/style-sprites";
 
@@ -32,6 +38,11 @@ export const stylesRoute = new Hono<AuthEnv>();
 
 stylesRoute.use("/styles", requireOrgMutationPermission("resource.write"));
 stylesRoute.use("/styles/*", requireOrgMutationPermission("resource.write"));
+stylesRoute.use("/sprite-assets", requireOrgMutationPermission("resource.write"));
+stylesRoute.use(
+  "/sprite-assets/*",
+  requireOrgMutationPermission("resource.write"),
+);
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -57,6 +68,281 @@ const updateStyleSchema = z.object({
   description: z.string().max(1000).optional(),
   styleJson: z.record(z.string(), z.unknown()).optional(),
   version: z.number().int().positive(),
+});
+
+const renameSpriteAssetSchema = z.object({
+  name: z.string().min(1).max(96),
+});
+
+// ── Account sprite assets ──────────────────────────────────────────────────
+
+stylesRoute.get("/sprite-assets", async (c) => {
+  const accountId = c.get("ownerId");
+  const rows = await db
+    .select({
+      id: spriteAssets.id,
+      name: spriteAssets.name,
+      width: spriteAssets.width,
+      height: spriteAssets.height,
+      createdAt: spriteAssets.createdAt,
+      updatedAt: spriteAssets.updatedAt,
+      storageKey: storageObjects.storageKey,
+      size: storageObjects.size,
+    })
+    .from(spriteAssets)
+    .innerJoin(storageObjects, eq(spriteAssets.storageObjectId, storageObjects.id))
+    .where(and(eq(spriteAssets.accountId, accountId), isNull(spriteAssets.deletedAt)))
+    .orderBy(spriteAssets.name);
+
+  return c.json({
+    data: rows.map((asset) => ({
+      ...asset,
+      previewUrl: `/console/sprite-assets/${asset.id}/image`,
+    })),
+  });
+});
+
+stylesRoute.post("/sprite-assets", async (c) => {
+  const accountId = c.get("ownerId");
+  const userId = c.get("userId");
+  const body = await c.req.parseBody();
+  const file = body.file;
+  const name = String(body.name ?? "").trim();
+
+  if (!validateSpriteAssetName(name)) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message:
+            "Sprite asset names must be 1-96 characters of letters, numbers, dot, underscore, or dash.",
+        },
+      },
+      400,
+    );
+  }
+  if (!(file instanceof File)) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "PNG file is required" } },
+      400,
+    );
+  }
+
+  const [existing] = await db
+    .select({ id: spriteAssets.id })
+    .from(spriteAssets)
+    .where(
+      and(
+        eq(spriteAssets.accountId, accountId),
+        eq(spriteAssets.name, name),
+        isNull(spriteAssets.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    return c.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message: "A sprite asset with that name already exists.",
+        },
+      },
+      409,
+    );
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  let validated: ReturnType<typeof validateSpritePngUpload>;
+  try {
+    validated = validateSpritePngUpload({
+      buffer,
+      contentType: file.type || "image/png",
+      size: file.size,
+    });
+  } catch (err) {
+    if (err instanceof SpriteAssetValidationError) {
+      return c.json(
+        { error: { code: err.code, message: err.message } },
+        400,
+      );
+    }
+    throw err;
+  }
+
+  const assetId = randomUUID();
+  const storage = getStorage();
+  const storageInfo = storage.getInfo();
+  const fileName = `${name}.png`;
+  const storageKey = StoragePaths.accountSpriteAsset(
+    accountId,
+    assetId,
+    fileName,
+  );
+  const stored = await storage.upload(storageKey, buffer, "image/png");
+
+  const created = await db.transaction(async (tx) => {
+    const [storageObject] = await tx
+      .insert(storageObjects)
+      .values({
+        accountId,
+        provider: storageInfo.provider,
+        bucket: storageInfo.bucket,
+        storageKey,
+        fileName,
+        contentType: stored.contentType,
+        size: stored.size,
+        resourceType: "sprite_asset",
+        resourceId: assetId,
+        artifactKind: "original-png",
+        metadata: { width: validated.width, height: validated.height },
+      })
+      .returning();
+
+    const [asset] = await tx
+      .insert(spriteAssets)
+      .values({
+        id: assetId,
+        accountId,
+        name,
+        storageObjectId: storageObject!.id,
+        width: validated.width,
+        height: validated.height,
+      })
+      .returning();
+    return asset!;
+  });
+
+  logAudit({
+    profileId: userId,
+    action: "sprite_asset.created",
+    resourceType: "sprite_asset",
+    resourceId: created.id,
+    metadata: { name, width: created.width, height: created.height },
+    ipAddress: getClientIp(c.req.raw),
+  });
+
+  return c.json(
+    { data: { ...created, previewUrl: `/console/sprite-assets/${created.id}/image` } },
+    201,
+  );
+});
+
+stylesRoute.get("/sprite-assets/:id/image", async (c) => {
+  const accountId = c.get("ownerId");
+  const asset = await findSpriteAssetForAccount(accountId, c.req.param("id"));
+  if (!asset) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Sprite asset not found" } },
+      404,
+    );
+  }
+
+  const data = await getStorage().download(asset.storageKey);
+  return new Response(new Uint8Array(data), {
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": "private, max-age=300",
+    },
+  });
+});
+
+stylesRoute.patch("/sprite-assets/:id", async (c) => {
+  const accountId = c.get("ownerId");
+  const userId = c.get("userId");
+  const parsed = renameSpriteAssetSchema.safeParse(await c.req.json());
+  if (!parsed.success || !validateSpriteAssetName(parsed.data.name)) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message:
+            "Sprite asset names must be 1-96 characters of letters, numbers, dot, underscore, or dash.",
+        },
+      },
+      400,
+    );
+  }
+
+  const existing = await findSpriteAssetForAccount(accountId, c.req.param("id"));
+  if (!existing) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Sprite asset not found" } },
+      404,
+    );
+  }
+
+  const [nameConflict] = await db
+    .select({ id: spriteAssets.id })
+    .from(spriteAssets)
+    .where(
+      and(
+        eq(spriteAssets.accountId, accountId),
+        eq(spriteAssets.name, parsed.data.name),
+        isNull(spriteAssets.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (nameConflict && nameConflict.id !== existing.id) {
+    return c.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message: "A sprite asset with that name already exists.",
+        },
+      },
+      409,
+    );
+  }
+
+  const [updated] = await db
+    .update(spriteAssets)
+    .set({ name: parsed.data.name })
+    .where(and(eq(spriteAssets.id, existing.id), eq(spriteAssets.accountId, accountId)))
+    .returning();
+
+  logAudit({
+    profileId: userId,
+    action: "sprite_asset.renamed",
+    resourceType: "sprite_asset",
+    resourceId: existing.id,
+    metadata: { previousName: existing.name, name: parsed.data.name },
+    ipAddress: getClientIp(c.req.raw),
+  });
+
+  return c.json({
+    data: {
+      ...updated!,
+      previewUrl: `/console/sprite-assets/${updated!.id}/image`,
+    },
+  });
+});
+
+stylesRoute.delete("/sprite-assets/:id", async (c) => {
+  const accountId = c.get("ownerId");
+  const userId = c.get("userId");
+  const existing = await findSpriteAssetForAccount(accountId, c.req.param("id"));
+  if (!existing) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Sprite asset not found" } },
+      404,
+    );
+  }
+
+  await db
+    .update(spriteAssets)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(spriteAssets.id, existing.id), eq(spriteAssets.accountId, accountId)));
+
+  logAudit({
+    profileId: userId,
+    action: "sprite_asset.deleted",
+    resourceType: "sprite_asset",
+    resourceId: existing.id,
+    metadata: { name: existing.name },
+    ipAddress: getClientIp(c.req.raw),
+  });
+
+  return c.json({ data: { id: existing.id, deleted: true } });
 });
 
 // ── POST /console/styles — Create ───────────────────────────────────────────
@@ -407,12 +693,23 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
     );
   }
 
-  const publication = await publishStyleSnapshot({
-    styleId,
-    ownerId,
-    userId,
-    snapshot,
-  });
+  let publication: Awaited<ReturnType<typeof publishStyleSnapshot>>;
+  try {
+    publication = await publishStyleSnapshot({
+      styleId,
+      ownerId,
+      userId,
+      snapshot,
+    });
+  } catch (err) {
+    if (err instanceof SpriteAssetValidationError) {
+      return c.json(
+        { error: { code: err.code, message: err.message } },
+        400,
+      );
+    }
+    throw err;
+  }
 
   const [updated] = await db
     .update(styles)
@@ -512,12 +809,23 @@ stylesRoute.post("/styles/:id/versions/:versionNum/publish", async (c) => {
     );
   }
 
-  const publication = await publishStyleSnapshot({
-    styleId,
-    ownerId,
-    userId,
-    snapshot,
-  });
+  let publication: Awaited<ReturnType<typeof publishStyleSnapshot>>;
+  try {
+    publication = await publishStyleSnapshot({
+      styleId,
+      ownerId,
+      userId,
+      snapshot,
+    });
+  } catch (err) {
+    if (err instanceof SpriteAssetValidationError) {
+      return c.json(
+        { error: { code: err.code, message: err.message } },
+        400,
+      );
+    }
+    throw err;
+  }
 
   const [updated] = await db
     .update(styles)
@@ -827,6 +1135,33 @@ async function createStyleSpriteAssets({
   if (!styleReferencesSpriteAssets(snapshot.styleJson)) return null;
 
   const imageIds = extractSpriteImageIds(snapshot.styleJson);
+  if (imageIds.length === 0) return null;
+
+  const rows = await db
+    .select({
+      id: spriteAssets.id,
+      name: spriteAssets.name,
+      storageKey: storageObjects.storageKey,
+    })
+    .from(spriteAssets)
+    .innerJoin(storageObjects, eq(spriteAssets.storageObjectId, storageObjects.id))
+    .where(
+      and(
+        eq(spriteAssets.accountId, ownerId),
+        inArray(spriteAssets.name, imageIds),
+        isNull(spriteAssets.deletedAt),
+        isNull(storageObjects.deletedAt),
+      ),
+    );
+  const byName = new Map(rows.map((row) => [row.name, row]));
+  const missing = imageIds.filter((id) => !byName.has(id));
+  if (missing.length > 0) {
+    throw new SpriteAssetValidationError(
+      "MISSING_SPRITE_ASSETS",
+      `Style references missing sprite assets: ${missing.join(", ")}.`,
+    );
+  }
+
   const spriteId = `${spriteIdForStyleVersion(
     styleId,
     snapshot.version,
@@ -835,14 +1170,28 @@ async function createStyleSpriteAssets({
   const keys = spriteStorageKeys(spriteId);
   const storage = getStorage();
   const info = storage.getInfo();
-  const json = Buffer.from(JSON.stringify(buildSpriteJson(imageIds, 1)));
-  const json2x = Buffer.from(JSON.stringify(buildSpriteJson(imageIds, 2)));
+  const assetImages = await Promise.all(
+    imageIds.map(async (name) => {
+      const row = byName.get(name)!;
+      const data = await storage.download(row.storageKey);
+      const validated = validateSpritePngUpload({
+        buffer: data,
+        contentType: "image/png",
+        size: data.byteLength,
+      });
+      return { id: row.id, name, png: validated.png };
+    }),
+  );
+  const sheet = buildSpriteSheet(assetImages, 1);
+  const sheet2x = buildSpriteSheet(assetImages, 2);
+  const json = Buffer.from(JSON.stringify(sheet.json));
+  const json2x = Buffer.from(JSON.stringify(sheet2x.json));
 
   const uploads = await Promise.all([
     storage.upload(keys.json, json, "application/json"),
-    storage.upload(keys.png, transparentPng, "image/png"),
+    storage.upload(keys.png, sheet.png, "image/png"),
     storage.upload(keys.json2x, json2x, "application/json"),
-    storage.upload(keys.png2x, transparentPng, "image/png"),
+    storage.upload(keys.png2x, sheet2x.png, "image/png"),
   ]);
 
   const objects = await Promise.all([
@@ -858,7 +1207,7 @@ async function createStyleSpriteAssets({
       resourceId: styleId,
       artifactKind: "sprite-json",
       version: String(snapshot.version),
-      metadata: { spriteId, scale: 1 },
+      metadata: { spriteId, scale: 1, imageIds },
     }),
     recordStorageObject({
       accountId: ownerId,
@@ -872,7 +1221,7 @@ async function createStyleSpriteAssets({
       resourceId: styleId,
       artifactKind: "sprite-png",
       version: String(snapshot.version),
-      metadata: { spriteId, scale: 1 },
+      metadata: { spriteId, scale: 1, imageIds },
     }),
     recordStorageObject({
       accountId: ownerId,
@@ -886,7 +1235,7 @@ async function createStyleSpriteAssets({
       resourceId: styleId,
       artifactKind: "sprite-json-2x",
       version: String(snapshot.version),
-      metadata: { spriteId, scale: 2 },
+      metadata: { spriteId, scale: 2, imageIds },
     }),
     recordStorageObject({
       accountId: ownerId,
@@ -900,7 +1249,7 @@ async function createStyleSpriteAssets({
       resourceId: styleId,
       artifactKind: "sprite-png-2x",
       version: String(snapshot.version),
-      metadata: { spriteId, scale: 2 },
+      metadata: { spriteId, scale: 2, imageIds },
     }),
   ]);
 
@@ -915,6 +1264,35 @@ async function createStyleSpriteAssets({
     },
     storageKeys: keys,
   };
+}
+
+async function findSpriteAssetForAccount(accountId: string, assetId: string) {
+  const [asset] = await db
+    .select({
+      id: spriteAssets.id,
+      accountId: spriteAssets.accountId,
+      name: spriteAssets.name,
+      width: spriteAssets.width,
+      height: spriteAssets.height,
+      createdAt: spriteAssets.createdAt,
+      updatedAt: spriteAssets.updatedAt,
+      storageObjectId: spriteAssets.storageObjectId,
+      storageKey: storageObjects.storageKey,
+      size: storageObjects.size,
+    })
+    .from(spriteAssets)
+    .innerJoin(storageObjects, eq(spriteAssets.storageObjectId, storageObjects.id))
+    .where(
+      and(
+        eq(spriteAssets.id, assetId),
+        eq(spriteAssets.accountId, accountId),
+        isNull(spriteAssets.deletedAt),
+        isNull(storageObjects.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  return asset ?? null;
 }
 
 async function resolveLatestPublishedStyleVersion(styleId: string) {

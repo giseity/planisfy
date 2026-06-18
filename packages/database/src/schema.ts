@@ -1393,6 +1393,37 @@ export const storageObjects = pgTable(
   ],
 );
 
+export const spriteAssets = pgTable(
+  "sprite_assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 96 }).notNull(),
+    storageObjectId: uuid("storage_object_id")
+      .notNull()
+      .references(() => storageObjects.id, { onDelete: "restrict" }),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("sprite_assets_account_idx").on(table.accountId),
+    index("sprite_assets_storage_object_idx").on(table.storageObjectId),
+    uniqueIndex("sprite_assets_account_name_unique")
+      .on(table.accountId, table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ],
+);
+
 export const basemapReleases = pgTable(
   "basemap_releases",
   {

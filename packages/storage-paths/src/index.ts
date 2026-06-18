@@ -62,6 +62,9 @@ export const StoragePaths = {
   styleThumbnail: (accountId: string, styleId: string, version: number) =>
     `accounts/${safeSegment(accountId)}/styles/${safeSegment(styleId)}/v${version}/thumbnail.png`,
 
+  accountSpriteAsset: (accountId: string, assetId: string, fileName: string) =>
+    `accounts/${safeSegment(accountId)}/sprite-assets/${safeSegment(assetId)}/${safeSegment(fileName)}`,
+
   basemapRelease: (
     name: string,
     version: string,

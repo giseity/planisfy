@@ -92,6 +92,13 @@
       "when": 1781366000000,
       "tag": "0012_billing_webhook_events",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781367000000,
+      "tag": "0013_sprite_assets",
+      "breakpoints": true
     }
   ]
 }

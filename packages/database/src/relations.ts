@@ -35,6 +35,7 @@ import {
   workflowTemplates,
   eventOutbox,
   storageObjects,
+  spriteAssets,
   basemapReleases,
   usageLogs,
   usageRollups,
@@ -81,6 +82,7 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   customDomains: many(customDomains),
   workflowTemplates: many(workflowTemplates),
   storageObjects: many(storageObjects),
+  spriteAssets: many(spriteAssets),
   usageLogs: many(usageLogs),
   usageRollups: many(usageRollups),
   auditEvents: many(auditEvents),
@@ -449,6 +451,17 @@ export const storageObjectsRelations = relations(storageObjects, ({ one }) => ({
   account: one(accounts, {
     fields: [storageObjects.accountId],
     references: [accounts.id],
+  }),
+}));
+
+export const spriteAssetsRelations = relations(spriteAssets, ({ one }) => ({
+  account: one(accounts, {
+    fields: [spriteAssets.accountId],
+    references: [accounts.id],
+  }),
+  storageObject: one(storageObjects, {
+    fields: [spriteAssets.storageObjectId],
+    references: [storageObjects.id],
   }),
 }));
 
