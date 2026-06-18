@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   deliverNotification,
+  buildNotificationDeliveryProof,
   formatSseEvent,
   isValidScheduleTimezone,
   nextScheduleRunAt,
@@ -374,6 +375,29 @@ test("deliverNotification does not fetch rejected targets", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("buildNotificationDeliveryProof stores sanitized adapter evidence", () => {
+  assert.deepEqual(
+    buildNotificationDeliveryProof(
+      {
+        delivered: false,
+        adapter: "email",
+        status: 503,
+        code: "EMAIL_UNAVAILABLE",
+        message: "Email delivery is unavailable because Resend is not configured.",
+      },
+      new Date("2026-06-18T12:00:00.000Z"),
+    ),
+    {
+      checkedAt: "2026-06-18T12:00:00.000Z",
+      delivered: false,
+      adapter: "email",
+      status: 503,
+      code: "EMAIL_UNAVAILABLE",
+      message: "Email delivery is unavailable because Resend is not configured.",
+    },
+  );
 });
 
 test("email notification adapter reports unavailable when email config is missing", async () => {

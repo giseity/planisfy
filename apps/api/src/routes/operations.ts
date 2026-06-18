@@ -72,6 +72,21 @@ const notificationSchema = z
     }
   });
 
+const notificationDeliveryProofSchema = z.object({
+  checkedAt: z.string().datetime().nullable(),
+  delivered: z.boolean().default(false),
+  adapter: z.string().min(1).default("unknown"),
+  status: z.number().int().min(100).max(599).nullable(),
+  code: z.string().nullable().default(null),
+  message: z.string().nullable().default(null),
+});
+
+const notificationConfigSchema = z
+  .object({
+    lastDeliveryProof: notificationDeliveryProofSchema.optional(),
+  })
+  .passthrough();
+
 const scheduleSchema = z
   .object({
     name: z.string().min(1).max(128),
@@ -539,7 +554,17 @@ operationsRoute.post(
     if (!channel) return notFound(c, "Notification channel not found");
 
     const result = await sendTestNotification(channel);
-    return c.json({ data: result });
+    const proof = buildNotificationDeliveryProof(result);
+    await db
+      .update(notificationChannels)
+      .set({
+        encryptedConfig: mergeNotificationConfig(channel.encryptedConfig, {
+          lastDeliveryProof: proof,
+        }),
+        updatedAt: new Date(),
+      })
+      .where(eq(notificationChannels.id, id));
+    return c.json({ data: { ...result, proof } });
   },
 );
 
@@ -1460,6 +1485,26 @@ export async function deliverNotification(
   };
 }
 
+export function buildNotificationDeliveryProof(
+  result: {
+    delivered: boolean;
+    adapter: string;
+    status: number;
+    code?: string;
+    message?: string;
+  },
+  checkedAt = new Date(),
+) {
+  return {
+    checkedAt: checkedAt.toISOString(),
+    delivered: result.delivered,
+    adapter: result.adapter,
+    status: result.status,
+    code: result.code ?? null,
+    message: result.message ?? null,
+  };
+}
+
 async function verifyDomainDns(host: string, token: string) {
   const checkedAt = new Date().toISOString();
   const candidates = [`_planisfy.${host}`, host];
@@ -1509,12 +1554,29 @@ function stripNotificationSecrets(
   return {
     ...channel,
     encryptedConfig: undefined,
+    deliveryProof: lastNotificationDeliveryProof(channel.encryptedConfig),
     hasConfig: Boolean(
       channel.encryptedConfig &&
       typeof channel.encryptedConfig === "object" &&
       Object.keys(channel.encryptedConfig).length > 0,
     ),
   };
+}
+
+function mergeNotificationConfig(
+  current: unknown,
+  patch: Record<string, unknown>,
+) {
+  const parsed = notificationConfigSchema.safeParse(current);
+  return {
+    ...(parsed.success ? parsed.data : {}),
+    ...patch,
+  };
+}
+
+function lastNotificationDeliveryProof(config: unknown) {
+  const parsed = notificationConfigSchema.safeParse(config);
+  return parsed.success ? (parsed.data.lastDeliveryProof ?? null) : null;
 }
 
 function timelineEvent(

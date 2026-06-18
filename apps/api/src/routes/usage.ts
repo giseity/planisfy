@@ -11,6 +11,7 @@ import {
 import { getMonthlyUsagePeriod } from "../lib/usage-quota";
 
 export const usageRoute = new Hono<AuthEnv>();
+export const USAGE_LOG_RETENTION_DAYS = 90;
 
 // ── GET /console/usage/summary — Aggregated usage stats ─────────────────────
 
@@ -21,6 +22,7 @@ usageRoute.get("/usage/summary", async (c) => {
     getAccountPlanLimits(ownerId),
   ]);
   const period = getMonthlyUsagePeriod();
+  const retention = usageRetentionWindow();
   const startOfMonth = period.start;
   const startOfLastMonth = new Date(
     Date.UTC(
@@ -41,7 +43,7 @@ usageRoute.get("/usage/summary", async (c) => {
     .where(
       and(
         eq(usageLogs.profileId, ownerId),
-        gte(usageLogs.timestamp, startOfMonth)
+        gte(usageLogs.timestamp, laterDate(startOfMonth, retention.oldestAt))
       )
     );
 
@@ -55,7 +57,10 @@ usageRoute.get("/usage/summary", async (c) => {
     .where(
       and(
         eq(usageLogs.profileId, ownerId),
-        gte(usageLogs.timestamp, startOfLastMonth),
+        gte(
+          usageLogs.timestamp,
+          laterDate(startOfLastMonth, retention.oldestAt),
+        ),
         lte(usageLogs.timestamp, startOfMonth)
       )
     );
@@ -103,6 +108,7 @@ usageRoute.get("/usage/summary", async (c) => {
         totalRequests: lastMonth?.totalRequests ?? 0,
         totalUnits: Number(lastMonth?.totalUnits ?? 0),
       },
+      retention: serializeUsageRetention(retention),
     },
   });
 });
@@ -111,15 +117,17 @@ usageRoute.get("/usage/summary", async (c) => {
 
 usageRoute.get("/usage/timeseries", async (c) => {
   const ownerId = c.get("ownerId");
-  const parsedDays = parseBoundedIntegerParam(c.req.query("days"), "days", {
-    defaultValue: 30,
-    min: 1,
-    max: 366,
-  });
+  const parsedDays = parseBoundedIntegerParam(
+    c.req.query("days"),
+    "days",
+    usageDaysLimit(),
+  );
   if (!parsedDays.ok) return usageValidationError(c, parsedDays.message);
   const days = parsedDays.value;
+  const retention = usageRetentionWindow();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
+  const effectiveStartDate = laterDate(startDate, retention.oldestAt);
 
   const rows = await db
     .select({
@@ -132,7 +140,7 @@ usageRoute.get("/usage/timeseries", async (c) => {
     .where(
       and(
         eq(usageLogs.profileId, ownerId),
-        gte(usageLogs.timestamp, startDate)
+        gte(usageLogs.timestamp, effectiveStartDate)
       )
     )
     .groupBy(
@@ -166,15 +174,17 @@ usageRoute.get("/usage/timeseries", async (c) => {
 
 usageRoute.get("/usage/by-key", async (c) => {
   const ownerId = c.get("ownerId");
-  const parsedDays = parseBoundedIntegerParam(c.req.query("days"), "days", {
-    defaultValue: 30,
-    min: 1,
-    max: 366,
-  });
+  const parsedDays = parseBoundedIntegerParam(
+    c.req.query("days"),
+    "days",
+    usageDaysLimit(),
+  );
   if (!parsedDays.ok) return usageValidationError(c, parsedDays.message);
   const days = parsedDays.value;
+  const retention = usageRetentionWindow();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
+  const effectiveStartDate = laterDate(startDate, retention.oldestAt);
 
   const rows = await db
     .select({
@@ -188,7 +198,7 @@ usageRoute.get("/usage/by-key", async (c) => {
     .where(
       and(
         eq(usageLogs.profileId, ownerId),
-        gte(usageLogs.timestamp, startDate)
+        gte(usageLogs.timestamp, effectiveStartDate)
       )
     )
     .groupBy(usageLogs.apiKeyId, apiKeys.name)
@@ -208,15 +218,17 @@ usageRoute.get("/usage/by-key", async (c) => {
 
 usageRoute.get("/usage/by-endpoint", async (c) => {
   const ownerId = c.get("ownerId");
-  const parsedDays = parseBoundedIntegerParam(c.req.query("days"), "days", {
-    defaultValue: 30,
-    min: 1,
-    max: 366,
-  });
+  const parsedDays = parseBoundedIntegerParam(
+    c.req.query("days"),
+    "days",
+    usageDaysLimit(),
+  );
   if (!parsedDays.ok) return usageValidationError(c, parsedDays.message);
   const days = parsedDays.value;
+  const retention = usageRetentionWindow();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
+  const effectiveStartDate = laterDate(startDate, retention.oldestAt);
 
   const rows = await db
     .select({
@@ -231,7 +243,7 @@ usageRoute.get("/usage/by-endpoint", async (c) => {
     .where(
       and(
         eq(usageLogs.profileId, ownerId),
-        gte(usageLogs.timestamp, startDate)
+        gte(usageLogs.timestamp, effectiveStartDate)
       )
     )
     .groupBy(usageLogs.endpoint, usageLogs.method)
@@ -259,6 +271,7 @@ usageRoute.get("/usage/logs", async (c) => {
   const page = parsedPage.value;
   const limit = parsedLimit.value;
   const offset = (page - 1) * limit;
+  const retention = usageRetentionWindow();
   if (offset > 10_000) {
     return usageValidationError(c, "Requested usage log offset is too large");
   }
@@ -266,7 +279,12 @@ usageRoute.get("/usage/logs", async (c) => {
   const [totalRow] = await db
     .select({ total: count() })
     .from(usageLogs)
-    .where(eq(usageLogs.profileId, ownerId));
+    .where(
+      and(
+        eq(usageLogs.profileId, ownerId),
+        gte(usageLogs.timestamp, retention.oldestAt),
+      ),
+    );
 
   const total = totalRow?.total ?? 0;
 
@@ -282,7 +300,12 @@ usageRoute.get("/usage/logs", async (c) => {
       timestamp: usageLogs.timestamp,
     })
     .from(usageLogs)
-    .where(eq(usageLogs.profileId, ownerId))
+    .where(
+      and(
+        eq(usageLogs.profileId, ownerId),
+        gte(usageLogs.timestamp, retention.oldestAt),
+      ),
+    )
     .orderBy(desc(usageLogs.timestamp))
     .limit(limit)
     .offset(offset);
@@ -295,6 +318,7 @@ usageRoute.get("/usage/logs", async (c) => {
       total,
       totalPages: Math.ceil(total / limit),
     },
+    retention: serializeUsageRetention(retention),
   });
 });
 
@@ -324,6 +348,39 @@ export function parseBoundedIntegerParam(
     };
   }
   return { ok: true, value: parsed };
+}
+
+export function usageRetentionWindow(now = new Date()) {
+  const oldestAt = new Date(now);
+  oldestAt.setUTCDate(oldestAt.getUTCDate() - USAGE_LOG_RETENTION_DAYS + 1);
+  oldestAt.setUTCHours(0, 0, 0, 0);
+  return {
+    days: USAGE_LOG_RETENTION_DAYS,
+    oldestAt,
+    newestAt: now,
+  };
+}
+
+export function usageDaysLimit() {
+  return {
+    defaultValue: Math.min(30, USAGE_LOG_RETENTION_DAYS),
+    min: 1,
+    max: USAGE_LOG_RETENTION_DAYS,
+  };
+}
+
+function serializeUsageRetention(
+  retention: ReturnType<typeof usageRetentionWindow>,
+) {
+  return {
+    days: retention.days,
+    oldestAt: retention.oldestAt.toISOString(),
+    newestAt: retention.newestAt.toISOString(),
+  };
+}
+
+function laterDate(left: Date, right: Date) {
+  return left > right ? left : right;
 }
 
 function usageValidationError(c: Context<AuthEnv>, message: string) {
