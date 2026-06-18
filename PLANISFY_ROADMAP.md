@@ -8,12 +8,13 @@ Implemented today:
 
 - Explicit `self_host` and `managed` deployment modes.
 - API, Console, Admin, Docs, Marketing, geodata worker, local elevation service, static renderer, optional tile-worker, and optional supervisor apps.
-- Docker Compose services for Postgres, Redis, Martin, Valhalla, Pelias, Pelias Elasticsearch, optional MinIO, optional Traefik, and optional supervisor.
+- Docker Compose services for Postgres, Redis, Martin, Valhalla, Pelias, Pelias Elasticsearch, optional MinIO, optional Traefik, optional tile-worker, and optional supervisor.
 - Better Auth sessions, organization context, API keys, scopes, origin restrictions, rate limits, quota headers, usage logs, and audit records.
-- Style CRUD, versioning, publication state, generated sprite assets for published styles that reference sprites, stable style URLs, and version-pinned style URLs.
-- Tileset uploads, processing jobs, outbox dispatch, worker builds, storage ledger rows, PMTiles artifacts, promotion controls, and published TileJSON/tile URLs.
+- Style CRUD, versioning, publication state, account-level reusable sprite assets, generated real sprite sheets for published styles, stable style URLs, and version-pinned style URLs.
+- Tileset uploads, processing jobs, stale-job reconciliation, outbox dispatch, worker builds, storage ledger rows, PMTiles artifacts, promotion controls, published TileJSON/tile URLs, and optional tile-worker delivery mode.
 - Public service proxies for Pelias geocoding, Valhalla routing APIs, local elevation, and static image rendering.
-- Health, metrics, setup preflight, backup, restore, support bundle, and guarded supervisor operations.
+- Health, metrics, setup preflight, backup, restore, backup/restore smoke coverage, support bundle, and guarded supervisor operations.
+- Blocking product-loop CI, managed-staging proof workflow, and self-host backup/restore smoke workflow.
 
 ## V1 Gates
 
@@ -26,18 +27,27 @@ Implemented today:
 
 ## Current Gaps
 
-- Broader style asset management and raster parity remain future work; sprite publishing is limited to generated transparent sprite sheets for referenced image IDs.
-- Tilequery is implemented for PMTiles-backed vector tilesets; raster tilequery is not supported.
-- Tile-worker is available as an optional internal runtime; it is not part of the default Compose stack and API proxying to it remains deployment work.
+- Browser, backup/restore, tile-worker, and managed-staging workflows are wired, but they still need to run against the real protected CI/staging/self-host environments and have their required secrets validated.
+- Account sprite assets support PNG icons and patterns; broader style asset management remains future work, including SVG import, asset folders, richer metadata, and raster sprite/vector icon parity.
+- Tilequery is implemented for PMTiles-backed vector tilesets. Raster tilequery is intentionally not required or planned for v1; raster value sampling can be revisited later if a concrete product use case appears.
 - Larger Overture import UX, managed basemap releases, and global release packaging need more product and QA work.
-- Browser coverage for the full Console product loop is still limited.
-- Operations need stronger stuck-job reconciliation, schedule execution, notification delivery, and retention-aware usage summaries.
-- Restore and upgrade paths need broader automated smoke coverage.
-- Managed-mode launch still needs provider proof for billing, email, R2/S3-compatible storage, secrets, ingress, and operational runbooks.
+- Operations still need schedule execution hardening, notification delivery proof, retention-aware usage summaries, and upgrade-path smoke coverage.
+- Managed-mode launch still needs ingress hardening, real protected environment runs, provider dashboards/runbooks, and operator sign-off.
+- Self-host launch still needs a clean-machine rehearsal with real Docker volumes and documented recovery from intentionally missing datasets.
+
+## Recently Closed Launch Gaps
+
+- Product-loop browser CI now runs as a blocking workflow on PRs and `main`.
+- Self-host backup/restore smoke coverage now verifies health, preflight, style URLs, and TileJSON after restore.
+- Stale `processing_jobs` are reconciled from worker-geodata and exposed through operations.
+- Managed-mode staging proof now validates startup config, preflight, storage, billing adapter availability, email adapter availability, and the full product loop.
+- Account-level PNG sprite assets are reusable in Studio and publish into real MapLibre sprite sheets.
+- `TILE_DELIVERY_MODE=api|worker` is implemented with API-to-tile-worker proxying, health/preflight visibility, and a `with-tile-worker` Compose profile.
 
 ## Future Work
 
 - Managed basemap release pipeline and downloadable self-host data packs.
+- Raster value sampling for imagery, DEM, or raster-array products if a future workflow needs it.
 - Cloudflare Worker/R2 tile delivery path.
 - Public SDKs and copy-paste examples once the API contract stabilizes.
 - More geocoder/routing provider adapters if the API keeps the current provider abstraction.
