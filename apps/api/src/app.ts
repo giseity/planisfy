@@ -32,6 +32,7 @@ import { setupRoute } from "./routes/setup";
 import { auth } from "@planisfy/auth/auth";
 import { env } from "./env";
 import { apiCorsOrigins } from "./lib/cors-origins";
+import { buildPublicOpenApiDocument } from "./openapi/public";
 
 const app = new Hono<AuthEnv>();
 
@@ -63,6 +64,7 @@ app.on(["GET", "POST"], "/api/auth/**", (c) => {
 });
 
 // ── Public routes ───────────────────────────────────────────────────────────
+app.get("/openapi.json", (c) => c.json(buildPublicOpenApiDocument()));
 app.route("/", healthRoute);
 app.route("/", storageRoute);
 app.route("/", setupRoute);
