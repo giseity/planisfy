@@ -82,6 +82,21 @@ const scheduleSchema = z
     payload: z.record(z.string(), z.unknown()).default({}),
   })
   .superRefine((schedule, ctx) => {
+    const cronValidation = parseCronExpression(schedule.cron);
+    if (!cronValidation.ok) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: cronValidation.message,
+        path: ["cron"],
+      });
+    }
+    if (!isValidScheduleTimezone(schedule.timezone)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Schedule timezone must be a valid IANA time zone",
+        path: ["timezone"],
+      });
+    }
     if (
       schedule.kind === "tileset_rebuild" &&
       typeof schedule.payload.tilesetId !== "string"
@@ -537,7 +552,11 @@ operationsRoute.post("/operations/schedules", async (c) => {
     .values({
       accountId,
       ...parsed.data,
-      nextRunAt: roughNextRunAt(parsed.data.status),
+      nextRunAt: nextScheduleRunAt(
+        parsed.data.status,
+        parsed.data.cron,
+        parsed.data.timezone,
+      ),
     })
     .returning();
   return c.json({ data: created }, 201);
@@ -558,25 +577,24 @@ operationsRoute.post("/operations/schedules/:id/run", async (c) => {
     )
     .limit(1);
   if (!schedule) return notFound(c, "Schedule not found");
+  const prepared = prepareScheduledOperationRun(schedule);
+  if (!prepared.success) {
+    return c.json(
+      {
+        error: {
+          code: prepared.code,
+          message: prepared.message,
+        },
+      },
+      409,
+    );
+  }
   const [updated] = await db
     .update(scheduledOperations)
-    .set({
-      lastRunAt: new Date(),
-      nextRunAt: roughNextRunAt(schedule.status),
-      updatedAt: new Date(),
-    })
+    .set(prepared.update)
     .where(eq(scheduledOperations.id, id))
     .returning();
-  await enqueueOutboxEvent({
-    eventName: "scheduled_operation.run_requested",
-    payload: {
-      accountId,
-      scheduleId: schedule.id,
-      kind: schedule.kind,
-      payload: isObjectRecord(schedule.payload) ? schedule.payload : {},
-      requestedAt: new Date().toISOString(),
-    },
-  });
+  await enqueueOutboxEvent(prepared.outbox);
   return c.json({ data: { schedule: updated, queued: true } });
 });
 
@@ -870,7 +888,11 @@ operationsRoute.post("/operations/workflow-templates/:id/apply", async (c) => {
       .values({
         accountId,
         ...application.values,
-        nextRunAt: roughNextRunAt(application.values.status),
+        nextRunAt: nextScheduleRunAt(
+          application.values.status,
+          application.values.cron,
+          application.values.timezone,
+        ),
       })
       .returning();
     return c.json(
@@ -1660,8 +1682,236 @@ async function softDeleteWorkflowTemplate(c: Context) {
   return c.json({ data: { id, deleted: true } });
 }
 
-function roughNextRunAt(status: "active" | "paused") {
-  return status === "active" ? new Date(Date.now() + 60 * 60 * 1000) : null;
+type CronFieldName = "minute" | "hour" | "dayOfMonth" | "month" | "dayOfWeek";
+type ParsedCronField = {
+  values: Set<number>;
+  wildcard: boolean;
+};
+type ParsedCronExpression = Record<CronFieldName, ParsedCronField>;
+type ScheduledOperationForRun = Pick<
+  typeof scheduledOperations.$inferSelect,
+  | "id"
+  | "accountId"
+  | "kind"
+  | "status"
+  | "cron"
+  | "timezone"
+  | "payload"
+  | "deletedAt"
+>;
+
+export function prepareScheduledOperationRun(
+  schedule: ScheduledOperationForRun,
+  now = new Date(),
+) {
+  if (schedule.deletedAt) {
+    return {
+      success: false as const,
+      code: "SCHEDULE_DELETED",
+      message: "Deleted schedules cannot be run.",
+    };
+  }
+  if (schedule.status !== "active") {
+    return {
+      success: false as const,
+      code: "SCHEDULE_PAUSED",
+      message: "Paused schedules cannot be run until they are reactivated.",
+    };
+  }
+
+  return {
+    success: true as const,
+    update: {
+      lastRunAt: now,
+      nextRunAt: nextScheduleRunAt(
+        schedule.status,
+        schedule.cron,
+        schedule.timezone,
+        now,
+      ),
+      updatedAt: now,
+    },
+    outbox: {
+      eventName: "scheduled_operation.run_requested" as const,
+      payload: {
+        accountId: schedule.accountId,
+        scheduleId: schedule.id,
+        kind: schedule.kind,
+        payload: isObjectRecord(schedule.payload) ? schedule.payload : {},
+        requestedAt: now.toISOString(),
+      },
+    },
+  };
+}
+
+export function nextScheduleRunAt(
+  status: "active" | "paused",
+  cron: string,
+  timezone: string,
+  from = new Date(),
+) {
+  if (status === "paused") return null;
+  const parsed = parseCronExpression(cron);
+  if (!parsed.ok) return null;
+
+  const candidate = new Date(from);
+  candidate.setUTCSeconds(0, 0);
+  candidate.setUTCMinutes(candidate.getUTCMinutes() + 1);
+
+  const maxMinutes = 366 * 24 * 60;
+  for (let i = 0; i < maxMinutes; i += 1) {
+    if (cronMatches(candidate, parsed.expression, timezone)) {
+      return new Date(candidate);
+    }
+    candidate.setUTCMinutes(candidate.getUTCMinutes() + 1);
+  }
+  return null;
+}
+
+function parseCronExpression(cron: string):
+  | { ok: true; expression: ParsedCronExpression }
+  | { ok: false; message: string } {
+  const fields = cron.trim().split(/\s+/);
+  if (fields.length !== 5) {
+    return {
+      ok: false,
+      message: "Schedule cron must use five fields: minute hour day month weekday",
+    };
+  }
+
+  const minute = parseCronField(fields[0]!, 0, 59);
+  const hour = parseCronField(fields[1]!, 0, 23);
+  const dayOfMonth = parseCronField(fields[2]!, 1, 31);
+  const month = parseCronField(fields[3]!, 1, 12);
+  const dayOfWeek = parseCronField(fields[4]!, 0, 7, { normalizeSeven: true });
+  if (!minute || !hour || !dayOfMonth || !month || !dayOfWeek) {
+    return {
+      ok: false,
+      message:
+        "Schedule cron fields may use *, numbers, ranges, lists, and steps.",
+    };
+  }
+
+  return {
+    ok: true,
+    expression: {
+      minute,
+      hour,
+      dayOfMonth,
+      month,
+      dayOfWeek,
+    },
+  };
+}
+
+function parseCronField(
+  field: string,
+  min: number,
+  max: number,
+  options: { normalizeSeven?: boolean } = {},
+): ParsedCronField | null {
+  const values = new Set<number>();
+  const tokens = field.split(",");
+  let wildcard = tokens.length === 1 && tokens[0] === "*";
+
+  for (const token of tokens) {
+    if (!token) return null;
+    const [rangeToken, stepToken] = token.split("/");
+    const step = stepToken === undefined ? 1 : Number(stepToken);
+    if (!Number.isInteger(step) || step < 1) return null;
+
+    let start: number;
+    let end: number;
+    if (rangeToken === "*") {
+      start = min;
+      end = max;
+    } else if (rangeToken?.includes("-")) {
+      const [rawStart, rawEnd] = rangeToken.split("-");
+      start = Number(rawStart);
+      end = Number(rawEnd);
+    } else {
+      start = Number(rangeToken);
+      end = start;
+    }
+
+    if (
+      !Number.isInteger(start) ||
+      !Number.isInteger(end) ||
+      start < min ||
+      end > max ||
+      start > end
+    ) {
+      return null;
+    }
+
+    for (let value = start; value <= end; value += step) {
+      values.add(options.normalizeSeven && value === 7 ? 0 : value);
+    }
+  }
+
+  if (values.size === 0) return null;
+  wildcard ||= values.size === max - min + 1;
+  return { values, wildcard };
+}
+
+export function isValidScheduleTimezone(timezone: string) {
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function cronMatches(
+  date: Date,
+  cron: ParsedCronExpression,
+  timezone: string,
+) {
+  const parts = zonedDateParts(date, timezone);
+  const dayOfMonthMatches = cron.dayOfMonth.values.has(parts.day);
+  const dayOfWeekMatches = cron.dayOfWeek.values.has(parts.dayOfWeek);
+  const dayMatches =
+    cron.dayOfMonth.wildcard && cron.dayOfWeek.wildcard
+      ? true
+      : cron.dayOfMonth.wildcard
+        ? dayOfWeekMatches
+        : cron.dayOfWeek.wildcard
+          ? dayOfMonthMatches
+          : dayOfMonthMatches || dayOfWeekMatches;
+
+  return (
+    cron.minute.values.has(parts.minute) &&
+    cron.hour.values.has(parts.hour) &&
+    cron.month.values.has(parts.month) &&
+    dayMatches
+  );
+}
+
+function zonedDateParts(date: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+
+  return {
+    year,
+    month,
+    day,
+    hour: get("hour"),
+    minute: get("minute"),
+    dayOfWeek: new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
+  };
 }
 
 function previewSlug(resourceType: string) {

@@ -3,7 +3,10 @@ import test from "node:test";
 import {
   deliverNotification,
   formatSseEvent,
+  isValidScheduleTimezone,
+  nextScheduleRunAt,
   operationsOverviewSignature,
+  prepareScheduledOperationRun,
   prepareWorkflowTemplateApplication,
   validateScheduleInput,
   validateNotificationTarget,
@@ -91,6 +94,99 @@ test("validateScheduleInput requires tilesetId for rebuild schedules", () => {
     }).success,
     true,
   );
+});
+
+test("validateScheduleInput rejects invalid cron and timezone values", () => {
+  const baseSchedule = {
+    name: "Nightly rebuild",
+    kind: "source_import",
+    cron: "0 2 * * *",
+    timezone: "UTC",
+    payload: {},
+  };
+
+  assert.equal(
+    validateScheduleInput({ ...baseSchedule, cron: "whenever" }).success,
+    false,
+  );
+  assert.equal(
+    validateScheduleInput({
+      ...baseSchedule,
+      timezone: "Mars/OlympusMons",
+    }).success,
+    false,
+  );
+  assert.equal(isValidScheduleTimezone("Africa/Lagos"), true);
+});
+
+test("nextScheduleRunAt evaluates standard five-field cron expressions", () => {
+  const next = nextScheduleRunAt(
+    "active",
+    "*/15 9-17 * * 1-5",
+    "UTC",
+    new Date("2026-06-18T16:46:30.000Z"),
+  );
+
+  assert.equal(next?.toISOString(), "2026-06-18T17:00:00.000Z");
+  assert.equal(
+    nextScheduleRunAt(
+      "paused",
+      "*/15 9-17 * * 1-5",
+      "UTC",
+      new Date("2026-06-18T16:46:30.000Z"),
+    ),
+    null,
+  );
+});
+
+test("prepareScheduledOperationRun blocks inactive schedules and shapes outbox", () => {
+  const now = new Date("2026-06-18T16:46:30.000Z");
+  const paused = prepareScheduledOperationRun(
+    {
+      id: "schedule-1",
+      accountId: "account-1",
+      kind: "source_import",
+      status: "paused",
+      cron: "0 * * * *",
+      timezone: "UTC",
+      payload: {},
+      deletedAt: null,
+    },
+    now,
+  );
+  assert.equal(paused.success, false);
+  if (!paused.success) {
+    assert.equal(paused.code, "SCHEDULE_PAUSED");
+  }
+
+  const prepared = prepareScheduledOperationRun(
+    {
+      id: "schedule-1",
+      accountId: "account-1",
+      kind: "source_import",
+      status: "active",
+      cron: "0 * * * *",
+      timezone: "UTC",
+      payload: { provider: "OVERTURE" },
+      deletedAt: null,
+    },
+    now,
+  );
+  assert.equal(prepared.success, true);
+  if (prepared.success) {
+    assert.equal(prepared.update.lastRunAt, now);
+    assert.equal(prepared.update.nextRunAt?.toISOString(), "2026-06-18T17:00:00.000Z");
+    assert.deepEqual(prepared.outbox, {
+      eventName: "scheduled_operation.run_requested",
+      payload: {
+        accountId: "account-1",
+        scheduleId: "schedule-1",
+        kind: "source_import",
+        payload: { provider: "OVERTURE" },
+        requestedAt: "2026-06-18T16:46:30.000Z",
+      },
+    });
+  }
 });
 
 test("applying schedule template prepares a schedule payload", () => {
