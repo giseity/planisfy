@@ -400,6 +400,32 @@ export interface ConsoleWorkerHealth {
   toolchain?: unknown;
 }
 
+export interface ConsoleStaleJobReconciliation {
+  reconciled: number;
+  latest: Array<{
+    id: string;
+    type: string;
+    status: string;
+    errorMessage: string | null;
+    updatedAt: string;
+  }>;
+}
+
+export interface ConsoleStaleJobReconciliationRun {
+  scanned: number;
+  reconciled: number;
+  skippedActive: number;
+  latest: Array<{
+    id: string;
+    accountId: string;
+    type: string;
+    previousStatus: string;
+    updatedAt: string;
+    queueState: string | null;
+    reason: string;
+  }>;
+}
+
 export interface ConsoleOperationsOverview {
   recentJobs: ConsoleProcessingJob[];
   notificationChannels: ConsoleNotificationChannel[];
@@ -410,6 +436,7 @@ export interface ConsoleOperationsOverview {
   customDomains: ConsoleCustomDomain[];
   workflowTemplates: ConsoleWorkflowTemplate[];
   workerHealth: ConsoleWorkerHealth;
+  staleJobReconciliation: ConsoleStaleJobReconciliation;
 }
 
 export interface ConsoleJobTimelineEvent {
@@ -971,6 +998,12 @@ class ApiClient {
   getJobTimeline(jobId: string) {
     return this.get<ApiEnvelope<ConsoleJobTimeline>>(
       `/operations/jobs/${jobId}/timeline`,
+    );
+  }
+
+  reconcileStaleJobs() {
+    return this.post<ApiEnvelope<ConsoleStaleJobReconciliationRun>>(
+      "/operations/jobs/reconcile-stale",
     );
   }
 

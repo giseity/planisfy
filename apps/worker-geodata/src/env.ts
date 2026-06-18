@@ -20,6 +20,16 @@ const schema = z.object({
   GEODATA_WORKER_HEARTBEAT_TTL_MS: z.coerce.number().int().positive(),
   GEODATA_OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().positive(),
   GEODATA_OUTBOX_BATCH_SIZE: z.coerce.number().int().positive(),
+  GEODATA_STALE_JOB_RECONCILE_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60_000),
+  GEODATA_STALE_JOB_THRESHOLD_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60 * 1000),
   DUCKDB_PATH: z.string().min(1),
   TIPPECANOE_PATH: z.string().min(1),
   OGR2OGR_PATH: z.string().min(1),

@@ -22,25 +22,43 @@ import {
   TableHeader,
   TableRow,
 } from "@planisfy/ui/components/table";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, RefreshCw } from "lucide-react";
 
 export function JobsTab({
   jobs,
+  staleJobReconciliation,
   timeline,
   onTimeline,
+  onReconcileStale,
 }: {
   jobs: ConsoleOperationsOverview["recentJobs"];
+  staleJobReconciliation: ConsoleOperationsOverview["staleJobReconciliation"];
   timeline: ConsoleJobTimeline | null;
   onTimeline: (jobId: string) => void;
+  onReconcileStale: () => void;
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
       <Card>
         <CardHeader>
-          <CardTitle>Recent Processing Jobs</CardTitle>
-          <CardDescription>
-            Timeline entries come from job logs and terminal status.
-          </CardDescription>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Recent Processing Jobs</CardTitle>
+              <CardDescription>
+                {staleJobReconciliation.reconciled} stale reconciliations
+                recorded.
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              title="Reconcile stale jobs"
+              onClick={onReconcileStale}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Reconcile
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>

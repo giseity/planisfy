@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
+import { Queue } from "bullmq";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { and, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
@@ -21,6 +22,12 @@ import {
   workflowTemplates,
 } from "@planisfy/database";
 import {
+  isQueueStateActive,
+  reconcileStaleProcessingJobs,
+  STALE_JOB_RECONCILED_CODE,
+} from "@planisfy/database/processing-job-reconciliation";
+import {
+  SOURCE_PROCESSING_QUEUE_NAME,
   WORKER_GEODATA_HEARTBEAT_KEY,
   WORKER_GEODATA_HEARTBEAT_STALE_MS,
 } from "@planisfy/geodata-contracts";
@@ -288,6 +295,7 @@ async function buildOperationsOverview(accountId: string) {
     domains,
     templates,
     workerHealth,
+    staleJobReconciliation,
   ] = await Promise.all([
     db
       .select()
@@ -353,6 +361,7 @@ async function buildOperationsOverview(accountId: string) {
       .orderBy(desc(customDomains.createdAt)),
     listTemplates(accountId),
     fetchWorkerHealth(),
+    fetchStaleJobReconciliationSummary(accountId),
   ]);
 
   return {
@@ -365,6 +374,7 @@ async function buildOperationsOverview(accountId: string) {
     customDomains: domains,
     workflowTemplates: templates,
     workerHealth,
+    staleJobReconciliation,
   };
 }
 
@@ -419,8 +429,27 @@ export function operationsOverviewSignature(overview: OperationsOverview) {
       createdAt: template.builtIn ? null : template.createdAt,
     })),
     workerHealth: { status: overview.workerHealth.status },
+    staleJobReconciliation: {
+      reconciled: overview.staleJobReconciliation.reconciled,
+      latest: overview.staleJobReconciliation.latest.map((job) => ({
+        id: job.id,
+        updatedAt: job.updatedAt,
+      })),
+    },
   });
 }
+
+operationsRoute.post("/operations/jobs/reconcile-stale", async (c) => {
+  const accountId = c.get("ownerId");
+  const workerHealth = await fetchWorkerHealth();
+  const result = await reconcileStaleProcessingJobs({
+    accountId,
+    staleMs: env.GEODATA_STALE_JOB_THRESHOLD_MS,
+    hasFreshWorkerHeartbeat: workerHealth.status === "healthy",
+    getQueueJobLiveness: sourceQueueJobLiveness,
+  });
+  return c.json({ data: result });
+});
 
 operationsRoute.get("/operations/jobs/:id/timeline", async (c) => {
   const accountId = c.get("ownerId");
@@ -1177,6 +1206,55 @@ async function fetchWorkerHealth() {
       message: errorMessage(err),
       latencyMs: Date.now() - startedAt,
     };
+  }
+}
+
+async function fetchStaleJobReconciliationSummary(accountId: string) {
+  const [[countRow], latest] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(processingJobs)
+      .where(
+        and(
+          eq(processingJobs.accountId, accountId),
+          eq(processingJobs.errorCode, STALE_JOB_RECONCILED_CODE),
+        ),
+      ),
+    db
+      .select({
+        id: processingJobs.id,
+        type: processingJobs.type,
+        status: processingJobs.status,
+        errorMessage: processingJobs.errorMessage,
+        updatedAt: processingJobs.updatedAt,
+      })
+      .from(processingJobs)
+      .where(
+        and(
+          eq(processingJobs.accountId, accountId),
+          eq(processingJobs.errorCode, STALE_JOB_RECONCILED_CODE),
+        ),
+      )
+      .orderBy(desc(processingJobs.updatedAt))
+      .limit(5),
+  ]);
+
+  return {
+    reconciled: countRow?.count ?? 0,
+    latest,
+  };
+}
+
+async function sourceQueueJobLiveness(jobId: string) {
+  const queue = new Queue(SOURCE_PROCESSING_QUEUE_NAME, {
+    connection: redisConnection,
+  });
+  try {
+    const job = await queue.getJob(jobId);
+    const state = job ? await job.getState() : null;
+    return { state, active: isQueueStateActive(state) };
+  } finally {
+    await queue.close();
   }
 }
 

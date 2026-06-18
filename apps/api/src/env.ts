@@ -20,6 +20,11 @@ const schema = z.object({
   REDIS_URL: z.string().url(),
   REDIS_HOST: z.string().min(1),
   REDIS_PORT: portSchema,
+  GEODATA_STALE_JOB_THRESHOLD_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60 * 1000),
 
   NEXT_PUBLIC_API_URL: z.string().url(),
   NEXT_PUBLIC_CONSOLE_URL: z.string().url(),

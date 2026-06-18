@@ -1,5 +1,9 @@
-import { Worker } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import Redis from "ioredis";
+import {
+  isQueueStateActive,
+  reconcileStaleProcessingJobs,
+} from "@planisfy/database/processing-job-reconciliation";
 import {
   SOURCE_PROCESSING_QUEUE_NAME,
   WORKER_GEODATA_HEARTBEAT_KEY,
@@ -27,6 +31,9 @@ const sourceWorker = new Worker<SourceProcessingJob>(
     concurrency: env.GEODATA_WORKER_CONCURRENCY,
   }
 );
+const sourceQueue = new Queue<SourceProcessingJob>(SOURCE_PROCESSING_QUEUE_NAME, {
+  connection: REDIS_CONNECTION,
+});
 const heartbeatRedis = new Redis(REDIS_CONNECTION);
 const outboxDispatcher = startOutboxDispatcher({
   intervalMs: env.GEODATA_OUTBOX_POLL_INTERVAL_MS,
@@ -37,6 +44,11 @@ const heartbeat = setInterval(() => {
     console.error("[worker-geodata] heartbeat failed:", err);
   });
 }, HEARTBEAT_INTERVAL_MS);
+const staleJobReconciler = setInterval(() => {
+  reconcileStaleJobs().catch((err) => {
+    console.error("[worker-geodata] stale job reconciliation failed:", err);
+  });
+}, env.GEODATA_STALE_JOB_RECONCILE_INTERVAL_MS);
 
 refreshToolchainCapabilities().catch((err) => {
   console.error("[worker-geodata] toolchain capability check failed:", err);
@@ -59,8 +71,10 @@ sourceWorker.on("failed", (job, err) => {
 
 async function shutdown() {
   clearInterval(heartbeat);
+  clearInterval(staleJobReconciler);
   await outboxDispatcher.close();
   await sourceWorker.close();
+  await sourceQueue.close();
   await heartbeatRedis.quit();
 }
 
@@ -94,4 +108,22 @@ async function refreshToolchainCapabilities() {
   console.log(
     `[worker-geodata] toolchain ${summarizeToolchainCapabilities(toolchainCapabilities)}`,
   );
+}
+
+async function reconcileStaleJobs() {
+  const result = await reconcileStaleProcessingJobs({
+    staleMs: env.GEODATA_STALE_JOB_THRESHOLD_MS,
+    hasFreshWorkerHeartbeat: true,
+    getQueueJobLiveness: async (jobId) => {
+      const job = await sourceQueue.getJob(jobId);
+      const state = job ? await job.getState() : null;
+      return { state, active: isQueueStateActive(state) };
+    },
+  });
+
+  if (result.reconciled > 0) {
+    console.warn(
+      `[worker-geodata] reconciled ${result.reconciled} stale processing job(s)`,
+    );
+  }
 }

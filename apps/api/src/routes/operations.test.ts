@@ -45,6 +45,10 @@ test("operationsOverviewSignature ignores volatile display-only fields", () => {
       message: "Heartbeat 1s ago",
       latencyMs: 1,
     },
+    staleJobReconciliation: {
+      reconciled: 0,
+      latest: [],
+    },
   };
   const changedOnlyVolatileFields = {
     ...overview,

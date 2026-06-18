@@ -45,6 +45,7 @@ const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
   customDomains: [],
   workflowTemplates: [],
   workerHealth: { status: "offline", message: "Not checked", latencyMs: null },
+  staleJobReconciliation: { reconciled: 0, latest: [] },
 };
 
 const operationRoutes = [
@@ -66,6 +67,7 @@ interface OperationsContextValue {
   loading: boolean;
   load: (options?: { silent?: boolean }) => void;
   openTimeline: (jobId: string) => void;
+  reconcileStaleJobs: () => void;
 }
 
 const OperationsContext = React.createContext<OperationsContextValue | null>(
@@ -175,6 +177,20 @@ export function OperationsProvider({
     }
   }, []);
 
+  const reconcileStaleJobs = React.useCallback(async () => {
+    try {
+      const res = await api.reconcileStaleJobs();
+      toast.success(
+        `Reconciled ${res.data.reconciled} stale job${res.data.reconciled === 1 ? "" : "s"}.`,
+      );
+      await load({ silent: true });
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to reconcile stale jobs",
+      );
+    }
+  }, [load]);
+
   const value = React.useMemo(
     () => ({
       overview,
@@ -185,12 +201,14 @@ export function OperationsProvider({
       loading,
       load,
       openTimeline,
+      reconcileStaleJobs,
     }),
     [
       executionTargets,
       load,
       loading,
       openTimeline,
+      reconcileStaleJobs,
       overview,
       tilesets,
       timeline,
