@@ -1,11 +1,13 @@
 import { Hono } from "hono";
-import { z } from "zod";
 import { eq, and, isNull } from "drizzle-orm";
 import { apiKeys, db, profiles, sessions, users } from "@planisfy/database";
+import {
+  deleteConsoleProfileSchema,
+  updateConsoleProfileSchema,
+} from "@planisfy/api-contracts";
 import { logAudit } from "../lib/audit";
+import { jsonValidator } from "../lib/validation";
 import type { AuthEnv } from "../middleware/auth";
-
-export const profileRoute = new Hono<AuthEnv>();
 
 function getClientIp(req: Request): string | undefined {
   return (
@@ -15,9 +17,11 @@ function getClientIp(req: Request): string | undefined {
   );
 }
 
-// ── GET /console/profile — Get current user profile ─────────────────────────
+const profileBaseRoute = new Hono<AuthEnv>();
 
-profileRoute.get("/profile", async (c) => {
+// ── GET /console/profile - Get current user profile ─────────────────────────
+
+export const profileRoute = profileBaseRoute.get("/profile", async (c) => {
   const userId = c.get("userId");
 
   const [profile] = await db
@@ -41,34 +45,14 @@ profileRoute.get("/profile", async (c) => {
   }
 
   return c.json({ data: profile });
-});
-
-// ── PUT /console/profile — Update profile ───────────────────────────────────
-
-const updateProfileSchema = z.object({
-  displayName: z.string().min(1).max(128).optional(),
-  handle: z
-    .string()
-    .min(2)
-    .max(64)
-    .regex(/^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$/, "Handle must be lowercase alphanumeric with hyphens or underscores")
-    .optional(),
-  bio: z.string().max(500).optional(),
-});
-
-profileRoute.put("/profile", async (c) => {
+})
+// ── PUT /console/profile - Update profile ───────────────────────────────────
+.put(
+  "/profile",
+  jsonValidator(updateConsoleProfileSchema),
+  async (c) => {
   const userId = c.get("userId");
-  const body = await c.req.json();
-
-  const parsed = updateProfileSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid input", details: parsed.error.flatten() } },
-      400
-    );
-  }
-
-  const { displayName, handle, bio } = parsed.data;
+  const { displayName, handle, bio } = c.req.valid("json");
 
   if (!displayName && !handle && bio === undefined) {
     return c.json({ error: { code: "VALIDATION_ERROR", message: "No fields to update" } }, 400);
@@ -128,25 +112,15 @@ profileRoute.put("/profile", async (c) => {
   });
 
   return c.json({ data: updated });
-});
-
-// ── DELETE /console/profile — Delete account ────────────────────────────────
-
-const deleteAccountSchema = z.object({
-  confirmation: z.string(),
-});
-
-profileRoute.delete("/profile", async (c) => {
+  },
+)
+// ── DELETE /console/profile - Delete account ────────────────────────────────
+.delete(
+  "/profile",
+  jsonValidator(deleteConsoleProfileSchema),
+  async (c) => {
   const userId = c.get("userId");
-  const body = await c.req.json();
-
-  const parsed = deleteAccountSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid input" } },
-      400
-    );
-  }
+  const { confirmation } = c.req.valid("json");
 
   // Get user email to verify confirmation
   const [user] = await db
@@ -159,7 +133,7 @@ profileRoute.delete("/profile", async (c) => {
     return c.json({ error: { code: "NOT_FOUND", message: "User not found" } }, 404);
   }
 
-  if (parsed.data.confirmation !== user.email) {
+  if (confirmation !== user.email) {
     return c.json(
       { error: { code: "VALIDATION_ERROR", message: "Email confirmation does not match" } },
       400
@@ -190,4 +164,5 @@ profileRoute.delete("/profile", async (c) => {
   });
 
   return c.json({ data: { deleted: true } });
-});
+  },
+);

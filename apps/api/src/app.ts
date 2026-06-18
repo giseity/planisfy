@@ -16,10 +16,6 @@ import { internalAuthMiddleware } from "./middleware/internal-auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { usageLogMiddleware } from "./middleware/usage-log";
 import { healthRoute } from "./routes/health";
-import { stylesRoute } from "./routes/styles";
-import { auditRoute } from "./routes/audit";
-import { keysRoute } from "./routes/keys";
-import { usageRoute } from "./routes/usage";
 import { tilesRoute } from "./routes/tiles";
 import { publicStylesRoute } from "./routes/public-styles";
 import { fontsRoute } from "./routes/fonts";
@@ -30,14 +26,8 @@ import { staticMapRoute } from "./routes/static-map";
 import { storageRoute } from "./routes/storage";
 import { emailRoute } from "./routes/email";
 import { internalSmokeRoute } from "./routes/internal-smoke";
-import { billingRoute, billingWebhookRoute } from "./routes/billing";
-import { profileRoute } from "./routes/profile";
-import { securityRoute } from "./routes/security";
-import { resourcesRoute } from "./routes/resources";
-import { importsRoute } from "./routes/imports";
-import { executionTargetsRoute } from "./routes/execution-targets";
-import { operationsRoute } from "./routes/operations";
-import { dashboardRoute } from "./routes/dashboard";
+import { billingWebhookRoute } from "./routes/billing";
+import { consoleRoute } from "./routes/console";
 import { setupRoute } from "./routes/setup";
 import { auth } from "@planisfy/auth/auth";
 import { env } from "./env";
@@ -129,19 +119,7 @@ app.route("/", billingWebhookRoute);
 
 // ── Protected routes (require session cookie) ───────────────────────────────
 app.use("/console/*", authMiddleware);
-app.route("/console", dashboardRoute);
-app.route("/console", stylesRoute);
-app.route("/console", auditRoute);
-app.route("/console", keysRoute);
-app.route("/console", usageRoute);
-app.route("/console", billingRoute);
-app.route("/console", profileRoute);
-app.route("/console", securityRoute);
-app.route("/console", resourcesRoute);
-app.route("/console", importsRoute);
-app.route("/console", executionTargetsRoute);
-app.route("/console", operationsRoute);
-app.route("/console", setupRoute);
+app.route("/console", consoleRoute);
 
 // ── Centralized error handler ─────────────────────────────────────────────
 app.onError((err, c) => {

@@ -1,6 +1,10 @@
 import { Hono, type Context } from "hono";
 import { eq, and, gte, lte, sql, desc, count, isNull } from "drizzle-orm";
 import { db, usageLogs, apiKeys } from "@planisfy/database";
+import {
+  usageDaysQuerySchema,
+  usageLogsQuerySchema,
+} from "@planisfy/api-contracts";
 import type { AuthEnv } from "../middleware/auth";
 import {
   getAccountPlan,
@@ -9,6 +13,7 @@ import {
   serializePlanLimits,
 } from "../lib/billing";
 import { getMonthlyUsagePeriod } from "../lib/usage-quota";
+import { queryValidator } from "../lib/validation";
 
 export const usageRoute = new Hono<AuthEnv>();
 export const USAGE_LOG_RETENTION_DAYS = 90;
@@ -115,15 +120,12 @@ usageRoute.get("/usage/summary", async (c) => {
 
 // ── GET /console/usage/timeseries — Usage over time ─────────────────────────
 
-usageRoute.get("/usage/timeseries", async (c) => {
+usageRoute.get(
+  "/usage/timeseries",
+  queryValidator(usageDaysQuerySchema),
+  async (c) => {
   const ownerId = c.get("ownerId");
-  const parsedDays = parseBoundedIntegerParam(
-    c.req.query("days"),
-    "days",
-    usageDaysLimit(),
-  );
-  if (!parsedDays.ok) return usageValidationError(c, parsedDays.message);
-  const days = parsedDays.value;
+  const { days } = c.req.valid("query");
   const retention = usageRetentionWindow();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
@@ -168,19 +170,17 @@ usageRoute.get("/usage/timeseries", async (c) => {
       total: Object.values(services).reduce((a, b) => a + b, 0),
     })),
   });
-});
+  },
+);
 
 // ── GET /console/usage/by-key — Usage by API key ────────────────────────────
 
-usageRoute.get("/usage/by-key", async (c) => {
+usageRoute.get(
+  "/usage/by-key",
+  queryValidator(usageDaysQuerySchema),
+  async (c) => {
   const ownerId = c.get("ownerId");
-  const parsedDays = parseBoundedIntegerParam(
-    c.req.query("days"),
-    "days",
-    usageDaysLimit(),
-  );
-  if (!parsedDays.ok) return usageValidationError(c, parsedDays.message);
-  const days = parsedDays.value;
+  const { days } = c.req.valid("query");
   const retention = usageRetentionWindow();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
@@ -212,19 +212,17 @@ usageRoute.get("/usage/by-key", async (c) => {
       units: Number(row.units),
     })),
   });
-});
+  },
+);
 
 // ── GET /console/usage/by-endpoint — Usage by endpoint ──────────────────────
 
-usageRoute.get("/usage/by-endpoint", async (c) => {
+usageRoute.get(
+  "/usage/by-endpoint",
+  queryValidator(usageDaysQuerySchema),
+  async (c) => {
   const ownerId = c.get("ownerId");
-  const parsedDays = parseBoundedIntegerParam(
-    c.req.query("days"),
-    "days",
-    usageDaysLimit(),
-  );
-  if (!parsedDays.ok) return usageValidationError(c, parsedDays.message);
-  const days = parsedDays.value;
+  const { days } = c.req.valid("query");
   const retention = usageRetentionWindow();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
@@ -250,26 +248,17 @@ usageRoute.get("/usage/by-endpoint", async (c) => {
     .orderBy(desc(sql`count(*)`));
 
   return c.json({ data: rows });
-});
+  },
+);
 
 // ── GET /console/usage/logs — Raw usage logs ────────────────────────────────
 
-usageRoute.get("/usage/logs", async (c) => {
+usageRoute.get(
+  "/usage/logs",
+  queryValidator(usageLogsQuerySchema),
+  async (c) => {
   const ownerId = c.get("ownerId");
-  const parsedPage = parseBoundedIntegerParam(c.req.query("page"), "page", {
-    defaultValue: 1,
-    min: 1,
-    max: 500,
-  });
-  if (!parsedPage.ok) return usageValidationError(c, parsedPage.message);
-  const parsedLimit = parseBoundedIntegerParam(c.req.query("limit"), "limit", {
-    defaultValue: 50,
-    min: 1,
-    max: 100,
-  });
-  if (!parsedLimit.ok) return usageValidationError(c, parsedLimit.message);
-  const page = parsedPage.value;
-  const limit = parsedLimit.value;
+  const { page, limit } = c.req.valid("query");
   const offset = (page - 1) * limit;
   const retention = usageRetentionWindow();
   if (offset > 10_000) {
@@ -320,7 +309,8 @@ usageRoute.get("/usage/logs", async (c) => {
     },
     retention: serializeUsageRetention(retention),
   });
-});
+  },
+);
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 

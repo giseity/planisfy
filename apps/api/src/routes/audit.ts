@@ -1,37 +1,24 @@
 import { Hono } from "hono";
-import { z } from "zod";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 import { db, auditEvents, accounts } from "@planisfy/database";
+import { auditQuerySchema } from "@planisfy/api-contracts";
+import { queryValidator } from "../lib/validation";
 import type { AuthEnv } from "../middleware/auth";
 import { requireOrgPermission } from "../middleware/auth";
 
-export const auditRoute = new Hono<AuthEnv>();
+const auditBaseRoute = new Hono<AuthEnv>();
 
-auditRoute.use("/audit", requireOrgPermission("members.manage"));
+auditBaseRoute.use("/audit", requireOrgPermission("members.manage"));
 
-const querySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  action: z.string().optional(),
-  resourceType: z.string().optional(),
-  from: z.string().datetime().optional(),
-  to: z.string().datetime().optional(),
-});
+// ── GET /console/audit - Audit events for current owner ─────────────────────
 
-// ── GET /console/audit — Audit events for current owner ─────────────────────
-
-auditRoute.get("/audit", async (c) => {
+export const auditRoute = auditBaseRoute.get(
+  "/audit",
+  queryValidator(auditQuerySchema),
+  async (c) => {
   const ownerId = c.get("ownerId");
-  const query = querySchema.safeParse(c.req.query());
-
-  if (!query.success) {
-    return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Invalid query", details: query.error.flatten() } },
-      400
-    );
-  }
-
-  const { page, limit, action, resourceType, from, to } = query.data;
+  const { page, limit, action, resourceType, from, to } =
+    c.req.valid("query");
   const offset = (page - 1) * limit;
 
   const conditions = [eq(auditEvents.profileId, ownerId)];
@@ -77,4 +64,5 @@ auditRoute.get("/audit", async (c) => {
       totalPages: Math.ceil(total / limit),
     },
   });
-});
+  },
+);
