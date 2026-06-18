@@ -1,0 +1,61 @@
+name: Self-Host Backup Restore Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/self-host-backup-restore-smoke.yml"
+      - "apps/api/**"
+      - "apps/console/**"
+      - "apps/worker-geodata/**"
+      - "infra/docker/**"
+      - "packages/database/**"
+      - "packages/storage/**"
+      - "scripts/browser-smoke-lib.mjs"
+      - "scripts/dev-seed.ts"
+      - "scripts/product-loop-full-browser-smoke.mjs"
+      - "scripts/self-host-backup.sh"
+      - "scripts/self-host-restore.sh"
+      - "scripts/self-host-setup.sh"
+      - "scripts/self-host-backup-restore-smoke.sh"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "24"
+  PNPM_VERSION: "10.4.1"
+
+jobs:
+  backup-restore:
+    name: Self-Host Backup Restore
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install browser runtime
+        run: pnpm --filter static-renderer exec playwright install --with-deps chromium
+
+      - name: Run backup/restore smoke
+        run: pnpm smoke:self-host-backup-restore
+
+      - name: Upload backup/restore diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-host-backup-restore-diagnostics
+          path: dogfood-output/self-host-backup-restore
+          if-no-files-found: ignore
