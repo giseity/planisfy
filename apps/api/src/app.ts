@@ -41,6 +41,7 @@ import { dashboardRoute } from "./routes/dashboard";
 import { setupRoute } from "./routes/setup";
 import { auth } from "@planisfy/auth/auth";
 import { env } from "./env";
+import { apiCorsOrigins } from "./lib/cors-origins";
 
 const app = new Hono<AuthEnv>();
 
@@ -54,15 +55,10 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    origin: [
-      "https://planisfy.localhost",
-      "https://console.planisfy.localhost",
-      "https://admin.planisfy.localhost",
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://localhost:3003",
-      "https://console.planisfy.com",
-    ],
+    origin: apiCorsOrigins({
+      apiUrl: env.NEXT_PUBLIC_API_URL,
+      consoleUrl: env.NEXT_PUBLIC_CONSOLE_URL,
+    }),
     credentials: true,
   }),
 );

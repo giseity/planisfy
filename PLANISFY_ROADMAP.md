@@ -31,9 +31,8 @@ Implemented today:
 - Account sprite assets support PNG/SVG icons and patterns with folders and basic metadata; broader style asset management remains future work, including asset folders as a first-class management surface, richer search/governance metadata, and raster sprite/vector icon parity.
 - Tilequery is implemented for PMTiles-backed vector tilesets. Raster tilequery is intentionally not required or planned for v1; raster value sampling can be revisited later if a concrete product use case appears.
 - Larger Overture import UX, managed basemap releases, and global release packaging need more product and QA work.
-- Operations still need schedule execution hardening, notification delivery proof, retention-aware usage summaries, and upgrade-path smoke coverage.
-- Managed-mode launch still needs ingress hardening, real protected environment runs, provider dashboards/runbooks, and operator sign-off.
-- Self-host launch still needs a clean-machine rehearsal with real Docker volumes and documented recovery from intentionally missing datasets.
+- Managed-mode launch still needs real protected environment runs, provider dashboard evidence, and operator sign-off.
+- Self-host launch still needs a clean-machine rehearsal with real Docker volumes.
 
 ## Recently Closed Launch Gaps
 
@@ -43,6 +42,9 @@ Implemented today:
 - Managed-mode staging proof now validates startup config, preflight, storage, billing adapter availability, email adapter availability, and the full product loop.
 - Account-level PNG/SVG sprite assets are reusable in Studio, include folders and basic tags, and publish into real MapLibre sprite sheets.
 - `TILE_DELIVERY_MODE=api|worker` is implemented with API-to-tile-worker proxying, health/preflight visibility, and a `with-tile-worker` Compose profile.
+- Operations now validate scheduled run timing, persist notification delivery proof, expose retention-aware usage windows, and include a supervisor upgrade smoke.
+- Managed staging smoke now checks public HTTPS ingress and API CORS for the configured Console origin.
+- Self-host clean-machine rehearsal and missing-dataset recovery are documented.
 
 ## Future Work
 

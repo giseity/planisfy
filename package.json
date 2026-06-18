@@ -10,6 +10,7 @@
     "e2e:product-loop:full": "node scripts/product-loop-full-browser-smoke.mjs",
     "smoke:managed-staging": "node scripts/managed-staging-smoke.mjs",
     "smoke:self-host-backup-restore": "scripts/self-host-backup-restore-smoke.sh",
+    "smoke:self-host-upgrade": "node scripts/self-host-upgrade-smoke.mjs",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
