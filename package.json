@@ -8,6 +8,7 @@
     "dev:seed": "pnpm --filter @planisfy/auth exec tsx ../../scripts/dev-seed.ts",
     "e2e:product-loop": "node scripts/product-loop-browser-smoke.mjs",
     "e2e:product-loop:full": "node scripts/product-loop-full-browser-smoke.mjs",
+    "smoke:managed-staging": "node scripts/managed-staging-smoke.mjs",
     "smoke:self-host-backup-restore": "scripts/self-host-backup-restore-smoke.sh",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",

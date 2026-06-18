@@ -29,6 +29,7 @@ import { elevationRoute } from "./routes/elevation";
 import { staticMapRoute } from "./routes/static-map";
 import { storageRoute } from "./routes/storage";
 import { emailRoute } from "./routes/email";
+import { internalSmokeRoute } from "./routes/internal-smoke";
 import { billingRoute, billingWebhookRoute } from "./routes/billing";
 import { profileRoute } from "./routes/profile";
 import { securityRoute } from "./routes/security";
@@ -127,6 +128,7 @@ app.route("/", staticMapRoute);
 // ── Internal routes (called by platform services only) ───────────────────────
 app.use("/internal/*", internalAuthMiddleware);
 app.route("/", emailRoute);
+app.route("/", internalSmokeRoute);
 app.route("/", billingWebhookRoute);
 
 // ── Protected routes (require session cookie) ───────────────────────────────
