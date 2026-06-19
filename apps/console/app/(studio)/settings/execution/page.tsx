@@ -1,6 +1,6 @@
 "use client"
 
-import { ExecutionTab } from "@/components/settings/tabs"
+import { ExecutionTab } from "@/features/settings/tabs"
 
 export default function SettingsExecutionPage() {
   return <ExecutionTab />

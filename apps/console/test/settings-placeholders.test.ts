@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 describe("settings placeholder removal", () => {
   it("billing tab does not render static invoice IDs", () => {
     const source = readFileSync(
-      resolve(__dirname, "../components/settings/billing-tab.tsx"),
+      resolve(__dirname, "../features/settings/billing-tab.tsx"),
       "utf8",
     );
 
@@ -15,7 +15,7 @@ describe("settings placeholder removal", () => {
 
   it("account tab renders empty security activity without fake IPs", () => {
     const source = readFileSync(
-      resolve(__dirname, "../components/settings/account-tab.tsx"),
+      resolve(__dirname, "../features/settings/account-tab.tsx"),
       "utf8",
     );
 
@@ -26,11 +26,11 @@ describe("settings placeholder removal", () => {
 
   it("operations tabs do not render adapter placeholder copy", () => {
     const templatesSource = readFileSync(
-      resolve(__dirname, "../components/operations/templates-tab.tsx"),
+      resolve(__dirname, "../features/operations/templates-tab.tsx"),
       "utf8",
     );
     const notificationsSource = readFileSync(
-      resolve(__dirname, "../components/operations/notifications-tab.tsx"),
+      resolve(__dirname, "../features/operations/notifications-tab.tsx"),
       "utf8",
     );
 
@@ -42,7 +42,7 @@ describe("settings placeholder removal", () => {
 
   it("Overture import dialog does not initialize demo region values", () => {
     const source = readFileSync(
-      resolve(__dirname, "../components/tilesets/overture-import-dialog.tsx"),
+      resolve(__dirname, "../features/tilesets/components/overture-import-dialog.tsx"),
       "utf8",
     );
 

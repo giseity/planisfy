@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { sanitizeCallbackUrl } from "@planisfy/auth/ui";
-import { canParseFilter } from "@/components/style-editor/fields/visual-filter-builder";
+import { canParseFilter } from "@/features/style-editor/components/fields/visual-filter-builder";
 
 describe("console product correctness regressions", () => {
   it("uses Better Auth member IDs when removing team members", () => {
@@ -32,7 +32,7 @@ describe("console product correctness regressions", () => {
     const source = readFileSync(
       resolve(
         __dirname,
-        "../components/style-editor/fields/icon-field.tsx",
+        "../features/style-editor/components/fields/icon-field.tsx",
       ),
       "utf8",
     );

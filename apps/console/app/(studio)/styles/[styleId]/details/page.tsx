@@ -42,11 +42,11 @@ import {
 import type { ApiEnvelope } from "@/lib/api"
 import { api } from "@/lib/api"
 import { deleteStyle, duplicateStyle, togglePublish } from "@/app/(studio)/styles/actions"
-import { StyleActionsMenu } from "@/components/style-editor/style-actions-menu"
+import { StyleActionsMenu } from "@/features/style-editor/components/style-actions-menu"
 import {
   styleEditorHref,
   type StudioStyleSummary,
-} from "@/lib/studio/style-workflow"
+} from "@/features/style-editor/workflow/style-workflow"
 import { toast } from "sonner"
 
 interface StyleJsonResponse {

@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@planisfy/ui/components/table"
-import { useOperations } from "@/components/operations/provider"
+import { useOperations } from "@/features/operations/provider"
 import { api } from "@/lib/api"
 import { toast } from "sonner"
 

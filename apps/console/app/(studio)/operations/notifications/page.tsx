@@ -1,7 +1,7 @@
 "use client"
 
-import { NotificationsTab } from "@/components/operations/tabs"
-import { useOperations } from "@/components/operations/provider"
+import { NotificationsTab } from "@/features/operations/tabs"
+import { useOperations } from "@/features/operations/provider"
 
 export default function OperationsNotificationsPage() {
   const { overview, load } = useOperations()

@@ -1,7 +1,7 @@
 "use client"
 
-import { WorkersTab } from "@/components/operations/tabs"
-import { useOperations } from "@/components/operations/provider"
+import { WorkersTab } from "@/features/operations/tabs"
+import { useOperations } from "@/features/operations/provider"
 
 export default function OperationsWorkersPage() {
   const { overview, load } = useOperations()

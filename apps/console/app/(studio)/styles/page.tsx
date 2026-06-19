@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { StyleCard } from "@/components/style-editor/style-card";
-import { StyleListItem } from "@/components/style-editor/style-list-item";
+import { StyleCard } from "@/features/style-editor/components/style-card";
+import { StyleListItem } from "@/features/style-editor/components/style-list-item";
 import { Button } from "@planisfy/ui/components/button";
 import { Input } from "@planisfy/ui/components/input";
 import { Skeleton } from "@planisfy/ui/components/skeleton";
@@ -24,7 +24,7 @@ import {
 } from "@planisfy/ui/components/select";
 import { Plus, Map, Search, LayoutGrid, List } from "lucide-react";
 import { api, type ApiEnvelope } from "@/lib/api";
-import type { StudioStyleSummary } from "@/lib/studio/style-workflow";
+import type { StudioStyleSummary } from "@/features/style-editor/workflow/style-workflow";
 import { createStyle } from "./actions";
 
 type SortMode = "updated" | "name" | "created";

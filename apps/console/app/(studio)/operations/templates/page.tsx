@@ -1,7 +1,7 @@
 "use client"
 
-import { TemplatesTab } from "@/components/operations/tabs"
-import { useOperations } from "@/components/operations/provider"
+import { TemplatesTab } from "@/features/operations/tabs"
+import { useOperations } from "@/features/operations/provider"
 
 export default function OperationsTemplatesPage() {
   const { overview, load } = useOperations()

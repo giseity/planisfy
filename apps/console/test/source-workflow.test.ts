@@ -5,13 +5,13 @@ import type {
   ConsoleTilesetVersion,
 } from "@/lib/api";
 import { normalizeApiUrl } from "@/lib/api";
-import { useStyleStore } from "@/lib/store/style-store";
+import { useStyleStore } from "@/features/style-editor/store/style-store";
 import {
   canRebuildTileset,
   jobStateMessage,
   tilesetVersionActionLabel,
   tilesetWorkflowMessage,
-} from "@/lib/studio/tileset-workflow";
+} from "@/features/tilesets/workflow/tileset-workflow";
 import {
   defaultLayerOptionsForTileset,
   layerTypesForSource,
@@ -19,7 +19,7 @@ import {
   styleSourceIdForTileset,
   tilesetToStyleSource,
   vectorLayersForTileset,
-} from "@/lib/studio/source-workflow";
+} from "@/features/tilesets/workflow/source-workflow";
 import {
   canRequestOvertureImport,
   canCreateTilesetFromImport,
@@ -29,12 +29,12 @@ import {
   defaultTilesetOptionsForImport,
   sourceImportStatusVariant,
   sourceImportSummary,
-} from "@/lib/studio/import-workflow";
-import { buildSourceWorkflowGuide } from "@/lib/studio/source-workflow-guide";
+} from "@/features/tilesets/workflow/import-workflow";
+import { buildSourceWorkflowGuide } from "@/features/tilesets/workflow/source-workflow-guide";
 import {
   mapLibreEmbedSnippet,
   stylePublicUrl,
-} from "@/lib/studio/style-workflow";
+} from "@/features/style-editor/workflow/style-workflow";
 
 describe("Studio source workflow", () => {
   it("creates stable source IDs and vector sources from published tilesets", () => {

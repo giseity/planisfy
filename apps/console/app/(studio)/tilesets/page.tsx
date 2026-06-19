@@ -16,17 +16,17 @@ import { Button } from "@planisfy/ui/components/button";
 import { Skeleton } from "@planisfy/ui/components/skeleton";
 import { Plus, Database, Globe } from "lucide-react";
 import { toast } from "sonner";
-import { OvertureImportDialog } from "@/components/tilesets/overture-import-dialog";
-import { SourceImportsTable } from "@/components/tilesets/source-imports-table";
-import { SourceTilesetsTable } from "@/components/tilesets/source-tilesets-table";
-import { SourceWorkflowGuide } from "@/components/tilesets/source-workflow-guide";
-import { TilesetUploadDialog } from "@/components/tilesets/tileset-upload-dialog";
+import { OvertureImportDialog } from "@/features/tilesets/components/overture-import-dialog";
+import { SourceImportsTable } from "@/features/tilesets/components/source-imports-table";
+import { SourceTilesetsTable } from "@/features/tilesets/components/source-tilesets-table";
+import { SourceWorkflowGuide } from "@/features/tilesets/components/source-workflow-guide";
+import { TilesetUploadDialog } from "@/features/tilesets/components/tileset-upload-dialog";
 import {
   canCreateTilesetFromImport,
   defaultTilesetOptionsForImport,
-} from "@/lib/studio/import-workflow";
-import { runtimeSelectionPayload } from "@/lib/studio/source-runtime";
-import type { SourceWorkflowStyleSummary } from "@/lib/studio/source-workflow-guide";
+} from "@/features/tilesets/workflow/import-workflow";
+import { runtimeSelectionPayload } from "@/features/tilesets/workflow/source-runtime";
+import type { SourceWorkflowStyleSummary } from "@/features/tilesets/workflow/source-workflow-guide";
 
 export default function SourcesPage() {
   const [tilesets, setTilesets] = useState<ConsoleTileset[]>([]);

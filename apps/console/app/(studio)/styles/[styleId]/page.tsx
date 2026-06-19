@@ -5,14 +5,14 @@ import NextLink from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { clientEnv } from "@/env.client";
-import { useStyleStore } from "@/lib/store/style-store";
+import { useStyleStore } from "@/features/style-editor/store/style-store";
 import { sampleStyle } from "@/lib/sample-style";
-import { MapPreview } from "@/components/style-editor/map-preview";
-import { LayerList } from "@/components/style-editor/layer-list";
-import { PropertyPanel } from "@/components/style-editor/property-panel";
-import { SourcePanel } from "@/components/style-editor/source-panel";
-import { StyleSettingsPanel } from "@/components/style-editor/style-settings-panel";
-import { JsonEditor } from "@/components/style-editor/json-editor";
+import { MapPreview } from "@/features/style-editor/components/map-preview";
+import { LayerList } from "@/features/style-editor/components/layer-list";
+import { PropertyPanel } from "@/features/style-editor/components/property-panel";
+import { SourcePanel } from "@/features/style-editor/components/source-panel";
+import { StyleSettingsPanel } from "@/features/style-editor/components/style-settings-panel";
+import { JsonEditor } from "@/features/style-editor/components/json-editor";
 import { Separator } from "@planisfy/ui/components/separator";
 import { Button } from "@planisfy/ui/components/button";
 import { LoadingState } from "@planisfy/ui/components/loading-state";
@@ -22,8 +22,8 @@ import {
   ResizablePanelGroup,
 } from "@planisfy/ui/components/resizable";
 import { StatusAlert } from "@planisfy/ui/components/status-alert";
-import { ValidationPanel } from "@/components/style-editor/validation-panel";
-import { VersionHistoryButton } from "@/components/style-editor/version-history";
+import { ValidationPanel } from "@/features/style-editor/components/validation-panel";
+import { VersionHistoryButton } from "@/features/style-editor/components/version-history";
 import { toast } from "sonner";
 import {
   Popover,

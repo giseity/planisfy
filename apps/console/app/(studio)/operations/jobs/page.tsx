@@ -1,7 +1,7 @@
 "use client"
 
-import { JobsTab } from "@/components/operations/tabs"
-import { useOperations } from "@/components/operations/provider"
+import { JobsTab } from "@/features/operations/tabs"
+import { useOperations } from "@/features/operations/provider"
 
 export default function OperationsJobsPage() {
   const { overview, timeline, openTimeline, reconcileStaleJobs } =
