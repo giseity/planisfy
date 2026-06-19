@@ -1,6 +1,6 @@
 import { clientEnv } from "@/env.client";
 import { hc } from "hono/client";
-import type { ConsoleAppType } from "../../../api/src/routes/console";
+import type { ConsoleAppType } from "../../../api/src/domains/console/route";
 
 export const CONSOLE_API_BASE =
   typeof window !== "undefined"
