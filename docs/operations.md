@@ -22,8 +22,8 @@ pnpm --filter worker-geodata dev
 ## Backup And Restore
 
 ```bash
-scripts/self-host-backup.sh
-scripts/self-host-restore.sh --backup backups/planisfy-YYYYMMDDTHHMMSSZ --confirm
+pnpm self-host:backup
+pnpm self-host:restore --backup backups/planisfy-YYYYMMDDTHHMMSSZ --confirm
 ```
 
 Backups include Postgres, Redis snapshot when reachable, local storage, PMTiles, Valhalla data, and a manifest. Restore is guarded because it overwrites local data.
@@ -31,7 +31,7 @@ Backups include Postgres, Redis snapshot when reachable, local storage, PMTiles,
 ## Support Bundles
 
 ```bash
-scripts/self-host-support-bundle.sh
+pnpm self-host:support-bundle
 ```
 
 The bundle captures redacted environment presence, Compose config/status/logs, and reachable API health/metrics responses.

@@ -7,8 +7,9 @@
     "build": "next build",
     "dev": "portless docs.planisfy next dev",
     "start": "next start",
+    "lint": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
+    "lint:fix": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --fix",
     "check-types": "fumadocs-mdx && next typegen && tsc --noEmit",
-    "types:check": "fumadocs-mdx && next typegen && tsc --noEmit",
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {

@@ -9,7 +9,7 @@ description: Start and inspect the current Compose stack.
 cp .env.example .env
 scripts/self-host-setup.sh
 docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
-pnpm --filter @planisfy/database db:migrate
+pnpm db:migrate
 ```
 
 Useful checks:

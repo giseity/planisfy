@@ -78,6 +78,7 @@ Local dev uses `portless` hostnames for web apps:
 Common verification commands are turbo-backed at the root:
 
 ```bash
+pnpm verify
 pnpm check-types
 pnpm lint
 pnpm test
@@ -89,7 +90,7 @@ Package-specific examples:
 ```bash
 pnpm --filter api test
 pnpm --filter docs check-types
-pnpm --filter @planisfy/database db:migrate
+pnpm db:migrate
 ```
 
 ### TypeScript and module conventions
@@ -119,9 +120,9 @@ From the repository root:
 
 ```bash
 cp .env.example .env
-scripts/self-host-setup.sh
+pnpm self-host:setup
 docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
-pnpm --filter @planisfy/database db:migrate
+pnpm db:migrate
 ```
 
 Default local ports:

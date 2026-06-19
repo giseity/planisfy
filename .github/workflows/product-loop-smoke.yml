@@ -33,13 +33,13 @@ jobs:
         run: pnpm --filter static-renderer exec playwright install --with-deps chromium
 
       - name: Prepare self-host stack
-        run: scripts/self-host-setup.sh
+        run: pnpm self-host:setup
 
       - name: Start product-loop services
         run: docker compose --env-file .env -f infra/docker/docker-compose.yml up -d postgres redis martin api console worker-geodata
 
       - name: Run migrations
-        run: pnpm --filter @planisfy/database db:migrate
+        run: pnpm db:migrate
 
       - name: Run full browser product-loop smoke
         run: pnpm e2e:product-loop:full

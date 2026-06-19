@@ -38,7 +38,7 @@ jobs:
         env:
           DEMO_PMTILES_SHA256: ${{ inputs.demo_pmtiles_sha256 }}
           DEMO_PMTILES_URL: ${{ inputs.demo_pmtiles_url }}
-        run: scripts/self-host-setup.sh --demo-data
+        run: pnpm self-host:setup --demo-data
 
       - name: Compose smoke with PMTiles
-        run: scripts/docker-compose-smoke.sh
+        run: pnpm smoke:self-host-compose

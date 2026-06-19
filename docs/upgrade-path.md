@@ -6,7 +6,7 @@
 2. Review release notes and `.env.example` changes.
 3. Pull or checkout the target version.
 4. Rebuild or pull containers.
-5. Run `pnpm --filter @planisfy/database db:migrate`.
+5. Run `pnpm db:migrate`.
 6. Start the stack.
 7. Check `/health/detailed`, `/setup/preflight`, one published style URL, and one TileJSON URL.
 

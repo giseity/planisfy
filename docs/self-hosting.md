@@ -4,9 +4,9 @@ The local self-host path is Docker Compose from the repository root:
 
 ```bash
 cp .env.example .env
-scripts/self-host-setup.sh
+pnpm self-host:setup
 docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
-pnpm --filter @planisfy/database db:migrate
+pnpm db:migrate
 ```
 
 ## Compose Services
@@ -59,5 +59,5 @@ After migrations complete, create a Console account at `http://localhost:3001/si
 - `/health` checks basic API readiness.
 - `/health/detailed` probes Postgres, Redis, worker heartbeat, storage, Martin, tile-worker mode, and Valhalla readiness.
 - `/setup/preflight` reports product-loop, tile delivery, and deployment-mode readiness.
-- `scripts/self-host-default-map-smoke.mjs` checks the local PMTiles fixture when present.
+- `pnpm smoke:self-host-default-map` checks the local PMTiles fixture when present.
 - `pnpm e2e:product-loop` runs the browser product-loop smoke against a running stack.

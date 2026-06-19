@@ -141,4 +141,4 @@ jobs:
         env:
           SMOKE_BROWSER_PRODUCT_LOOP: "true"
           PLANISFY_E2E_ALLOW_MISSING_TILESET: "true"
-        run: scripts/docker-compose-smoke.sh
+        run: pnpm smoke:self-host-compose

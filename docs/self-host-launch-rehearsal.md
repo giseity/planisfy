@@ -11,7 +11,7 @@ Run this on a clean machine before tagging a self-host release.
 
    ```bash
    docker compose --env-file .env -f infra/docker/docker-compose.yml up -d postgres redis martin api console worker-geodata
-   pnpm --filter @planisfy/database db:migrate
+   pnpm db:migrate
    ```
 
 5. Verify:

@@ -70,7 +70,7 @@ compose down -v --remove-orphans >/dev/null 2>&1 || true
 compose up -d postgres redis martin api console worker-geodata
 
 echo "Running database migrations"
-(cd "$ROOT_DIR" && pnpm --filter @planisfy/database db:migrate)
+(cd "$ROOT_DIR" && pnpm db:migrate)
 
 wait_for_http "$API_URL/health" "API"
 wait_for_http "$CONSOLE_URL" "Console"

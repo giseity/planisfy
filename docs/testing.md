@@ -3,6 +3,7 @@
 Use root turbo-backed commands when checking the whole repository:
 
 ```bash
+pnpm verify
 pnpm check-types
 pnpm lint
 pnpm test
@@ -30,6 +31,7 @@ Focused commands:
 
 ```bash
 pnpm --filter docs check-types
+pnpm --filter docs lint
 pnpm --filter api test
 pnpm --filter worker-geodata test
 pnpm --filter @planisfy/events test

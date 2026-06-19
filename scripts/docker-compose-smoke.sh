@@ -169,7 +169,7 @@ fi
 if [[ "${SMOKE_BROWSER_PRODUCT_LOOP:-false}" =~ ^(1|true|TRUE|yes|YES)$ ]]; then
   require_cmd pnpm
   echo "Running database migrations for browser product-loop smoke"
-  (cd "$ROOT_DIR" && pnpm --filter @planisfy/database db:migrate)
+  (cd "$ROOT_DIR" && pnpm db:migrate)
 
   echo "Starting Console for browser product-loop smoke"
   compose_up console
