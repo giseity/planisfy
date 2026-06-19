@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { shouldReconcileStaleProcessingJob } from "@planisfy/database/processing-job-reconciliation";
+import { shouldReconcileStaleProcessingJob } from "@planisfy/database/jobs/reconciliation";
 
 const now = new Date("2026-06-18T12:00:00.000Z");
 const staleMs = 60_000;

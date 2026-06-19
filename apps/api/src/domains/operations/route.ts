@@ -25,7 +25,7 @@ import {
   isQueueStateActive,
   reconcileStaleProcessingJobs,
   STALE_JOB_RECONCILED_CODE,
-} from "@planisfy/database/processing-job-reconciliation";
+} from "@planisfy/database/jobs/reconciliation";
 import {
   SOURCE_PROCESSING_QUEUE_NAME,
   WORKER_GEODATA_HEARTBEAT_KEY,

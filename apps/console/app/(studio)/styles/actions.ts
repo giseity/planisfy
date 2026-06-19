@@ -8,7 +8,7 @@ import {
   duplicateStyleRecord,
   softDeleteStyleRecord,
   toggleStylePublishRecord,
-} from "@planisfy/database/style-service"
+} from "@planisfy/database/styles/service"
 import { canOrg, type OrgPermission } from "@planisfy/utils"
 import { eq, and, isNull, desc } from "drizzle-orm"
 import { redirect } from "next/navigation"

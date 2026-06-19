@@ -5,7 +5,10 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./*": "./src/*.ts"
+    "./schema": "./src/schema/index.ts",
+    "./relations": "./src/relations/index.ts",
+    "./styles/service": "./src/styles/service.ts",
+    "./jobs/reconciliation": "./src/jobs/reconciliation.ts"
   },
   "scripts": {
     "lint": "node ../eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",

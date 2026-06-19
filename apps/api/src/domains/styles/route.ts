@@ -17,7 +17,7 @@ import {
   createStyleRecord,
   duplicateStyleRecord,
   softDeleteStyleRecord,
-} from "@planisfy/database/style-service";
+} from "@planisfy/database/styles/service";
 import { logAudit } from "../../shared/audit";
 import { checkResourceLimit } from "../../shared/policy/plan-check";
 import { requireOrgMutationPermission, type AuthEnv } from "../../middleware/auth";

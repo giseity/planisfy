@@ -44,7 +44,7 @@ import {
   plans,
   subscriptions,
   billingTransactions,
-} from "./schema";
+} from "../schema";
 
 // ============================================================================
 // Account relations (canonical identity anchor)

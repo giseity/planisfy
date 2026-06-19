@@ -1,12 +1,12 @@
 import { and, eq, inArray, lt } from "drizzle-orm";
-import { db } from "./index";
+import { db } from "../index";
 import {
   processingJobLogs,
   processingJobs,
   sourceImports,
   tilesets,
   uploads,
-} from "./schema";
+} from "../schema";
 
 export const STALE_JOB_RECONCILED_CODE = "STALE_JOB_RECONCILED";
 export const DEFAULT_STALE_PROCESSING_JOB_MS = 60 * 60 * 1000;

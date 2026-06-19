@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { db } from "./index";
-import { stylePublications, styles, styleVersions } from "./schema";
+import { db } from "../index";
+import { stylePublications, styles, styleVersions } from "../schema";
 
 export const BLANK_STYLE = {
   version: 8,

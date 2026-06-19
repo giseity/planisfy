@@ -3,7 +3,7 @@ import Redis from "ioredis";
 import {
   isQueueStateActive,
   reconcileStaleProcessingJobs,
-} from "@planisfy/database/processing-job-reconciliation";
+} from "@planisfy/database/jobs/reconciliation";
 import {
   SOURCE_PROCESSING_QUEUE_NAME,
   WORKER_GEODATA_HEARTBEAT_KEY,
