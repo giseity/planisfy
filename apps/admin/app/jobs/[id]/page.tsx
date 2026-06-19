@@ -14,12 +14,12 @@ import {
   TableHeader,
   TableRow,
 } from "@planisfy/ui/components/table"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requireAdmin } from "@/features/auth/admin-auth"
 import { Download, Pause, RefreshCcw, Terminal, X } from "lucide-react"
 import {
   cancelProcessingJobAction,
   retryProcessingJobAction,
-} from "@/lib/ops-actions"
+} from "@/features/operations/ops-actions"
 import {
   formatDate,
   isStaleProcessing,
@@ -28,7 +28,7 @@ import {
   statusBadgeVariant,
   stringifyJson,
   truncate,
-} from "@/lib/ops"
+} from "@/features/operations/ops"
 
 export const dynamic = "force-dynamic"
 

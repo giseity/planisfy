@@ -18,7 +18,7 @@ import {
 import {
   adminNavGroups,
   isAdminNavActive,
-} from "@/lib/admin-navigation"
+} from "@/features/navigation/admin-navigation"
 
 export function AdminSidebar({ pathname }: { pathname: string }) {
   return (

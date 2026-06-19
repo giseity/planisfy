@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table"
 import Link from "next/link"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requireAdmin } from "@/features/auth/admin-auth"
 
 export const dynamic = "force-dynamic"
 

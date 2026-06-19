@@ -21,12 +21,12 @@ import {
 } from "@planisfy/ui/components/page-header"
 import { Textarea } from "@planisfy/ui/components/textarea"
 import { Archive, Flag, Plus } from "lucide-react"
-import { requirePlatformPermission } from "@/lib/admin-auth"
+import { requirePlatformPermission } from "@/features/auth/admin-auth"
 import {
   archiveFeatureFlagAction,
   createFeatureFlagAction,
   updateFeatureFlagAction,
-} from "@/lib/platform-admin-actions"
+} from "@/features/platform/platform-admin-actions"
 
 export const dynamic = "force-dynamic"
 

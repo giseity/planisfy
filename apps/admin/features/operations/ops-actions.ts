@@ -16,8 +16,8 @@ import {
   buildRetrySourceResource,
   parseSourceProcessingJobInput,
 } from "@planisfy/geodata-contracts"
-import { requireAdmin } from "@/lib/admin-auth"
-import { isStaleProcessing, staleOutboxCutoff } from "@/lib/ops"
+import { requireAdmin } from "@/features/auth/admin-auth"
+import { isStaleProcessing, staleOutboxCutoff } from "@/features/operations/ops"
 
 function requireString(formData: FormData, key: string) {
   const value = formData.get(key)

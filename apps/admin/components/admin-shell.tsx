@@ -14,7 +14,7 @@ import {
 } from "@planisfy/ui/components/sidebar"
 import { AdminSidebar, AdminSidebarContent } from "@/components/admin-sidebar"
 import { AdminThemeToggle } from "@/components/admin-theme-toggle"
-import { adminBreadcrumbs } from "@/lib/admin-navigation"
+import { adminBreadcrumbs } from "@/features/navigation/admin-navigation"
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

@@ -21,11 +21,11 @@ import {
   TableHeader,
   TableRow,
 } from "@planisfy/ui/components/table"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requireAdmin } from "@/features/auth/admin-auth"
 import {
   restoreArtifactAction,
   softDeleteArtifactAction,
-} from "@/lib/ops-actions"
+} from "@/features/operations/ops-actions"
 import {
   formatBytes,
   formatDate,
@@ -34,7 +34,7 @@ import {
   parsePositiveInt,
   shortId,
   truncate,
-} from "@/lib/ops"
+} from "@/features/operations/ops"
 
 export const dynamic = "force-dynamic"
 

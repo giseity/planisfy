@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table"
 import { UsageCharts } from "./charts"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requireAdmin } from "@/features/auth/admin-auth"
 
 export const dynamic = "force-dynamic"
 

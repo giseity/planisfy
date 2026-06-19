@@ -12,13 +12,13 @@ import {
   TableHeader,
   TableRow,
 } from "@planisfy/ui/components/table"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requireAdmin } from "@/features/auth/admin-auth"
 import {
   archiveOutboxEventAction,
   cancelProcessingJobAction,
   retryOutboxEventAction,
   retryProcessingJobAction,
-} from "@/lib/ops-actions"
+} from "@/features/operations/ops-actions"
 import {
   formatDate,
   shortId,
@@ -26,7 +26,7 @@ import {
   staleOutboxCutoff,
   statusBadgeVariant,
   truncate,
-} from "@/lib/ops"
+} from "@/features/operations/ops"
 
 export const dynamic = "force-dynamic"
 

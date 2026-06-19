@@ -29,8 +29,8 @@ import {
 } from "@planisfy/ui/components/table"
 import { Textarea } from "@planisfy/ui/components/textarea"
 import { Database, Save, SlidersHorizontal } from "lucide-react"
-import { requirePlatformPermission } from "@/lib/admin-auth"
-import { upsertPlatformConfigAction } from "@/lib/platform-admin-actions"
+import { requirePlatformPermission } from "@/features/auth/admin-auth"
+import { upsertPlatformConfigAction } from "@/features/platform/platform-admin-actions"
 
 export const dynamic = "force-dynamic"
 

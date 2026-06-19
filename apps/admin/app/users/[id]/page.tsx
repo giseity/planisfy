@@ -33,7 +33,7 @@ import {
 } from "@planisfy/ui/components/tabs";
 import Link from "next/link";
 import { Ban, LogIn, Monitor, Shield } from "lucide-react";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdmin } from "@/features/auth/admin-auth";
 
 export const dynamic = "force-dynamic";
 

@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePlatformRole } from "@/lib/admin-auth";
+import { requirePlatformRole } from "@/features/auth/admin-auth";
 import {
   runSupervisorApply,
   runSupervisorBackup,
   runSupervisorPreflight,
   runSupervisorRollback,
-} from "@/lib/supervisor";
+} from "@/features/supervisor/supervisor";
 
 export async function supervisorPreflightAction() {
   await requirePlatformRole("OWNER");

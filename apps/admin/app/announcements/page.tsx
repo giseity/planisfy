@@ -21,11 +21,11 @@ import {
 import { StatusAlert } from "@planisfy/ui/components/status-alert"
 import { Textarea } from "@planisfy/ui/components/textarea"
 import { Megaphone, Plus } from "lucide-react"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requireAdmin } from "@/features/auth/admin-auth"
 import {
   createAnnouncementAction,
   updateAnnouncementStatusAction,
-} from "@/lib/platform-admin-actions"
+} from "@/features/platform/platform-admin-actions"
 import type { ComponentProps } from "react"
 
 export const dynamic = "force-dynamic"

@@ -25,7 +25,7 @@ import {
   PageTitle,
 } from "@planisfy/ui/components/page-header"
 import { Users, Building2, Key, Activity, Palette, AlertTriangle, ArrowRight } from "lucide-react"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requireAdmin } from "@/features/auth/admin-auth"
 
 export const dynamic = "force-dynamic"
 

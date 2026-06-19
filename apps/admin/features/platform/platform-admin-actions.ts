@@ -9,7 +9,7 @@ import {
   featureFlags,
   platformConfig,
 } from "@planisfy/database"
-import { requireAdmin, requirePlatformPermission } from "@/lib/admin-auth"
+import { requireAdmin, requirePlatformPermission } from "@/features/auth/admin-auth"
 
 function stringValue(formData: FormData, key: string) {
   const value = formData.get(key)

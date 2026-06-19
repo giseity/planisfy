@@ -36,17 +36,17 @@ import {
   UploadCloud,
 } from "lucide-react";
 
-import { requirePlatformRole } from "@/lib/admin-auth";
+import { requirePlatformRole } from "@/features/auth/admin-auth";
 import {
   supervisorApplyAction,
   supervisorBackupAction,
   supervisorPreflightAction,
   supervisorRollbackAction,
-} from "@/lib/supervisor-actions";
+} from "@/features/supervisor/supervisor-actions";
 import {
   getUpgradeCenterData,
   type SupervisorOperation,
-} from "@/lib/supervisor";
+} from "@/features/supervisor/supervisor";
 
 export const dynamic = "force-dynamic";
 

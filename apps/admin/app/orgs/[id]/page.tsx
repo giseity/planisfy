@@ -15,7 +15,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@planisfy/ui/components/tabs"
 import Link from "next/link"
 import { Settings, Trash2 } from "lucide-react"
-import { requireAdmin } from "@/lib/admin-auth"
+import { requireAdmin } from "@/features/auth/admin-auth"
 
 export const dynamic = "force-dynamic"
 
