@@ -1,7 +1,6 @@
 {
   "extends": "@planisfy/typescript-config/source-package.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }

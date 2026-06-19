@@ -1,7 +1,6 @@
 {
   "extends": "@planisfy/typescript-config/react-library.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@planisfy/ui/*": ["./src/*"]
     }

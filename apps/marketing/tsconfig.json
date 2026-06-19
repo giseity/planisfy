@@ -1,7 +1,6 @@
 {
   "extends": "@planisfy/typescript-config/nextjs.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
       "@planisfy/ui/*": ["../../packages/ui/src/*"]
