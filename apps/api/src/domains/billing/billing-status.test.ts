@@ -54,8 +54,20 @@ describe("Dodo billing status normalization", () => {
       "PAST_DUE",
     );
     assert.equal(
+      normalizeDodoSubscriptionStatus("subscription.paused", null),
+      "PAST_DUE",
+    );
+    assert.equal(
       normalizeDodoSubscriptionStatus("subscription.expired", null),
       "CANCELED",
+    );
+    assert.equal(
+      normalizeDodoSubscriptionStatus("subscription.renewed", null),
+      "ACTIVE",
+    );
+    assert.equal(
+      normalizeDodoSubscriptionStatus("subscription.plan_changed", null),
+      "ACTIVE",
     );
     assert.equal(
       normalizeDodoSubscriptionStatus("subscription.updated", "trialing"),

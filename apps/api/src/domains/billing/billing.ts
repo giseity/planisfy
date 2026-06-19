@@ -76,6 +76,28 @@ export interface DodoWebhookContext {
   webhookTimestamp?: string | null;
 }
 
+export const DODO_PAYMENT_WEBHOOK_EVENTS = [
+  "payment.processing",
+  "payment.succeeded",
+  "payment.failed",
+  "payment.cancelled",
+  "payment.canceled",
+  "payment.refunded",
+] as const;
+
+export const DODO_SUBSCRIPTION_WEBHOOK_EVENTS = [
+  "subscription.active",
+  "subscription.updated",
+  "subscription.renewed",
+  "subscription.plan_changed",
+  "subscription.on_hold",
+  "subscription.paused",
+  "subscription.failed",
+  "subscription.cancelled",
+  "subscription.canceled",
+  "subscription.expired",
+] as const;
+
 export function serializePlanLimits(limits: PlanLimits): SerializedPlanLimits {
   return {
     monthlyUnits: limits.monthlyUnits === Infinity ? null : limits.monthlyUnits,
@@ -337,11 +359,19 @@ export async function applyDodoWebhookEvent(
   const checkoutId = readFirstString(data, [
     "checkout_id",
     "checkoutId",
+    "checkout_session_id",
+    "checkoutSessionId",
     "checkout.session_id",
     "checkout.sessionId",
     "session_id",
   ]);
-  const orderId = readFirstString(data, ["order_id", "orderId", "payment_id"]);
+  const orderId = readFirstString(data, [
+    "order_id",
+    "orderId",
+    "payment_id",
+    "paymentId",
+    "id",
+  ]);
 
   if (customerId) {
     await upsertDodoCustomerMapping({
@@ -403,10 +433,20 @@ export async function applyDodoWebhookEvent(
     stringValue(data.status),
   );
   const periodStart = dateValue(
-    readFirst(data, ["current_period_start", "currentPeriodStart"]),
+    readFirst(data, [
+      "current_period_start",
+      "currentPeriodStart",
+      "previous_billing_date",
+      "previousBillingDate",
+    ]),
   );
   const periodEnd = dateValue(
-    readFirst(data, ["current_period_end", "currentPeriodEnd"]),
+    readFirst(data, [
+      "current_period_end",
+      "currentPeriodEnd",
+      "next_billing_date",
+      "nextBillingDate",
+    ]),
   );
 
   if (subscriptionId) {
@@ -431,6 +471,35 @@ export async function applyDodoWebhookEvent(
           updatedAt: new Date(),
         },
       });
+  } else {
+    const [existing] = await db
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(eq(subscriptions.accountId, accountId))
+      .orderBy(desc(subscriptions.updatedAt))
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(subscriptions)
+        .set({
+          planId: product.planId,
+          status,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscriptions.id, existing.id));
+    } else {
+      await db.insert(subscriptions).values({
+        accountId,
+        planId: product.planId,
+        status,
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        providerSubscriptionId: null,
+      });
+    }
   }
 
   return {
@@ -570,28 +639,13 @@ function readSubscriptionProduct(
 }
 
 function isPaymentEvent(eventType: string): boolean {
-  return [
-    "payment.processing",
-    "payment.succeeded",
-    "payment.failed",
-    "payment.cancelled",
-    "payment.canceled",
-    "payment.refunded",
-  ].includes(eventType);
+  return (DODO_PAYMENT_WEBHOOK_EVENTS as readonly string[]).includes(eventType);
 }
 
 function isSubscriptionEvent(eventType: string): boolean {
-  return [
-    "subscription.active",
-    "subscription.updated",
-    "subscription.renewed",
-    "subscription.plan_changed",
-    "subscription.on_hold",
-    "subscription.failed",
-    "subscription.cancelled",
-    "subscription.canceled",
-    "subscription.expired",
-  ].includes(eventType);
+  return (DODO_SUBSCRIPTION_WEBHOOK_EVENTS as readonly string[]).includes(
+    eventType,
+  );
 }
 
 export function normalizeDodoBillingTransactionStatus(
@@ -635,11 +689,18 @@ export function normalizeDodoSubscriptionStatus(
   if (
     status.includes("past_due") ||
     status.includes("failed") ||
-    status.includes("unpaid")
+    status.includes("unpaid") ||
+    status.includes("on_hold") ||
+    status.includes("paused")
   ) {
     return "PAST_DUE";
   }
-  if (status.includes("active") || status.includes("success")) {
+  if (
+    status.includes("active") ||
+    status.includes("renewed") ||
+    status.includes("plan_changed") ||
+    status.includes("success")
+  ) {
     return "ACTIVE";
   }
   return "INACTIVE";

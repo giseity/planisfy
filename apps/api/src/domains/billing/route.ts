@@ -287,7 +287,7 @@ async function claimDodoWebhookEvent(
     .values({
       provider: "DODO",
       webhookId,
-      eventType: stringValue(payload.type),
+      eventType: stringValue(payload.type) ?? stringValue(payload.event_type),
       payload,
     })
     .onConflictDoNothing()
