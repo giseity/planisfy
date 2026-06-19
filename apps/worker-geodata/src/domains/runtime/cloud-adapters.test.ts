@@ -9,7 +9,7 @@ import {
   type GcpBatchClient,
 } from "./cloud-adapters";
 import type { LocalExecutionRuntime } from "./execution-runtime";
-import type { SourceProcessingJob } from "./source-worker";
+import type { SourceProcessingJob } from "../sources/source-worker";
 
 const sourceJob: SourceProcessingJob = {
   ownerId: "account-1",

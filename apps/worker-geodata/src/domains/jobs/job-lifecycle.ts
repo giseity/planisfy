@@ -7,11 +7,11 @@ import {
   tilesetVersions,
   uploads,
 } from "@planisfy/database";
-import { env } from "./env";
+import { env } from "../../env";
 import {
   getToolchainCapabilities,
   summarizeToolchainCapabilities,
-} from "./toolchain";
+} from "../toolchain/toolchain";
 
 export async function setProcessingStatus(params: {
   tilesetId: string;

@@ -17,14 +17,14 @@ import {
 import { parseEventPayload } from "@planisfy/events";
 import { getStorage } from "@planisfy/storage";
 import { StoragePaths } from "@planisfy/storage-paths";
-import { env, redisConnection } from "./env";
+import { env, redisConnection } from "../../env";
 import {
   parseOvertureImportInput,
   runOvertureImport,
   type OvertureImportResult,
-} from "./overture-import";
-import { resolveLocalExecutionRuntime } from "./execution-runtime";
-import type { SourceProcessingJob } from "./source-worker";
+} from "../imports/overture-import";
+import { resolveLocalExecutionRuntime } from "../runtime/execution-runtime";
+import type { SourceProcessingJob } from "../sources/source-worker";
 
 const DISPATCHABLE_EVENTS = [
   "tileset.build.requested",

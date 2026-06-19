@@ -11,8 +11,8 @@ import {
   StoragePaths,
   type TilesetArtifactFormat,
 } from "@planisfy/storage-paths";
-import { markProcessingJobSucceeded } from "./job-lifecycle";
-import type { SourceFormat } from "./upload-tiling";
+import { markProcessingJobSucceeded } from "../jobs/job-lifecycle";
+import type { SourceFormat } from "../sources/upload-tiling";
 
 export async function storeProcessedArtifact(params: {
   ownerId: string;

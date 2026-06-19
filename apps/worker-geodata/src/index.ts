@@ -9,13 +9,13 @@ import {
   WORKER_GEODATA_HEARTBEAT_KEY,
 } from "@planisfy/geodata-contracts";
 import { env, redisConnection } from "./env";
-import { startOutboxDispatcher } from "./outbox-dispatcher";
-import { processSourceJob, type SourceProcessingJob } from "./source-worker";
+import { startOutboxDispatcher } from "./domains/outbox/outbox-dispatcher";
+import { processSourceJob, type SourceProcessingJob } from "./domains/sources/source-worker";
 import {
   getToolchainCapabilities,
   summarizeToolchainCapabilities,
   type ToolchainCapabilities,
-} from "./toolchain";
+} from "./domains/toolchain/toolchain";
 
 const REDIS_CONNECTION = redisConnection;
 

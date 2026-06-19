@@ -7,7 +7,7 @@ import { promisify } from "util";
 import { eq } from "drizzle-orm";
 import { db, uploads } from "@planisfy/database";
 import { getStorage } from "@planisfy/storage";
-import { env } from "./env";
+import { env } from "../../env";
 import {
   logProcessingJob,
   logToolchainCapabilities,
@@ -20,18 +20,18 @@ import {
   setProcessingStatus,
   throwIfCancellationRequested,
   updateProgress,
-} from "./job-lifecycle";
+} from "../jobs/job-lifecycle";
 import {
   finalizeProcessedArtifact,
   storeProcessedArtifact,
-} from "./tileset-artifacts";
+} from "../tilesets/tileset-artifacts";
 import {
   buildTippecanoeArgs,
   missingTippecanoeMessage,
   shouldStoreRawFallback,
   validateUpload,
   type SourceFormat,
-} from "./upload-tiling";
+} from "../sources/upload-tiling";
 
 const execFileAsync = promisify(execFile);
 

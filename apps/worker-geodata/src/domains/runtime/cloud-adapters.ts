@@ -1,5 +1,5 @@
-import type { LocalExecutionRuntime } from "./execution-runtime";
-import type { SourceProcessingJob } from "./source-worker";
+import type { LocalExecutionRuntime } from "../runtime/execution-runtime";
+import type { SourceProcessingJob } from "../sources/source-worker";
 
 export type CloudProvider = "aws_batch" | "gcp_batch";
 export type CloudJobState =
