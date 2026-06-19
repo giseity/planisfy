@@ -38,7 +38,7 @@ export async function checkResourceLimit(
     const [row] = await db
       .select({ count: count() })
       .from(apiKeys)
-      .where(and(eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt)));
+      .where(and(eq(apiKeys.referenceId, ownerId), eq(apiKeys.enabled, true)));
     current = row?.count ?? 0;
   }
 

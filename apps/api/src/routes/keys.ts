@@ -1,13 +1,19 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
-import { eq, and, isNull, desc, count, sql } from "drizzle-orm";
-import { db, apiKeys, users } from "@planisfy/database";
+import { and, count, desc, eq, sql } from "drizzle-orm";
+import { auth } from "@planisfy/auth/auth";
+import { accounts, apiKeys, db, users } from "@planisfy/database";
 import { logAudit } from "../lib/audit";
 import {
-  generateApiKey,
-  hashKey,
   ALL_SCOPES,
+  metadataAllowedDomains,
+  metadataWithAllowedDomains,
   normalizeAllowedDomains,
+  ORG_API_KEY_CONFIG_ID,
+  permissionsToScopes,
+  scopesToPermissions,
+  USER_API_KEY_CONFIG_ID,
+  type ApiKeyScope,
 } from "../lib/api-key";
 import { getAccountPlanLimits } from "../lib/billing";
 import { requireOrgMutationPermission, type AuthEnv } from "../middleware/auth";
@@ -19,6 +25,14 @@ export const keysRoute = new Hono<AuthEnv>();
 keysRoute.use("/keys", requireOrgMutationPermission("api_key.manage"));
 keysRoute.use("/keys/*", requireOrgMutationPermission("api_key.manage"));
 
+type BetterAuthApiKeyRow = Omit<
+  typeof apiKeys.$inferSelect,
+  "key" | "metadata" | "permissions"
+> & {
+  metadata: unknown;
+  permissions: unknown;
+};
+
 function getClientIp(req: Request): string | undefined {
   return (
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -27,7 +41,79 @@ function getClientIp(req: Request): string | undefined {
   );
 }
 
-// ── Validation schemas ──────────────────────────────────────────────────────
+function serializeApiKey(row: BetterAuthApiKeyRow) {
+  return {
+    id: row.id,
+    name: row.name ?? "Untitled key",
+    scopes: permissionsToScopes(row.permissions),
+    allowedDomains: metadataAllowedDomains(row.metadata),
+    expiresAt: row.expiresAt,
+    lastUsedAt: row.lastRequest,
+    createdAt: row.createdAt,
+    status:
+      row.expiresAt && new Date(row.expiresAt) < new Date()
+        ? "expired"
+        : "active",
+    prefix: row.start ?? row.prefix ?? "pk_",
+  };
+}
+
+function secondsUntil(date: string | Date | null | undefined) {
+  if (!date) return null;
+  const expiresAt = typeof date === "string" ? new Date(date) : date;
+  const seconds = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+  return seconds > 0 ? seconds : null;
+}
+
+async function getApiKeyConfig(ownerId: string) {
+  const [account] = await db
+    .select({ type: accounts.type })
+    .from(accounts)
+    .where(eq(accounts.id, ownerId))
+    .limit(1);
+
+  if (!account) return null;
+  return account.type === "ORGANIZATION"
+    ? ORG_API_KEY_CONFIG_ID
+    : USER_API_KEY_CONFIG_ID;
+}
+
+async function findOwnedEnabledKey(keyId: string, ownerId: string) {
+  const [key] = await db
+    .select()
+    .from(apiKeys)
+    .where(
+      and(
+        eq(apiKeys.id, keyId),
+        eq(apiKeys.referenceId, ownerId),
+        eq(apiKeys.enabled, true),
+      ),
+    )
+    .limit(1);
+
+  return key ?? null;
+}
+
+async function withApiKeyOwnerLock<T>(ownerId: string, fn: () => Promise<T>) {
+  await db.execute(
+    sql`select pg_advisory_lock(hashtext(${`apiKeys:${ownerId}`}))`,
+  );
+  try {
+    return await fn();
+  } finally {
+    await db.execute(
+      sql`select pg_advisory_unlock(hashtext(${`apiKeys:${ownerId}`}))`,
+    );
+  }
+}
+
+function scopesFromExistingKey(value: unknown): ApiKeyScope[] {
+  return permissionsToScopes(value).filter((scope): scope is ApiKeyScope =>
+    ALL_SCOPES.includes(scope as ApiKeyScope),
+  );
+}
+
+// -- Validation schemas -------------------------------------------------------
 
 const createKeySchema = z.object({
   name: z.string().min(1).max(128),
@@ -42,7 +128,7 @@ const updateKeySchema = z.object({
   allowedDomains: z.array(z.string().max(255)).max(20).optional(),
 });
 
-// ── POST /console/keys — Create ─────────────────────────────────────────────
+// -- POST /console/keys - Create ---------------------------------------------
 
 keysRoute.post("/keys", async (c) => {
   const ownerId = c.get("ownerId");
@@ -50,9 +136,7 @@ keysRoute.post("/keys", async (c) => {
   const verificationError = await requireManagedEmailVerification(c);
   if (verificationError) return verificationError;
 
-  const body = await c.req.json();
-
-  const parsed = createKeySchema.safeParse(body);
+  const parsed = createKeySchema.safeParse(await c.req.json());
   if (!parsed.success) {
     return c.json(
       {
@@ -67,6 +151,19 @@ keysRoute.post("/keys", async (c) => {
   }
 
   const { name, scopes, expiresAt } = parsed.data;
+  const expiresIn = secondsUntil(expiresAt);
+  if (expiresAt && expiresIn === null) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Expiration must be in the future",
+        },
+      },
+      400,
+    );
+  }
+
   const normalizedDomains = normalizeAllowedDomains(parsed.data.allowedDomains);
   if (normalizedDomains.errors.length > 0) {
     return c.json(
@@ -80,39 +177,49 @@ keysRoute.post("/keys", async (c) => {
       400,
     );
   }
-  const limits = await getAccountPlanLimits(ownerId);
-  const created = await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext(${`apiKeys:${ownerId}`}))`,
-    );
 
+  const [limits, configId] = await Promise.all([
+    getAccountPlanLimits(ownerId),
+    getApiKeyConfig(ownerId),
+  ]);
+  if (!configId) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Account not found" } },
+      404,
+    );
+  }
+
+  const created = await withApiKeyOwnerLock(ownerId, async () => {
     if (limits.maxApiKeys !== Infinity) {
-      const [row] = await tx
+      const [row] = await db
         .select({ count: count() })
         .from(apiKeys)
-        .where(and(eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt)));
+        .where(
+          and(eq(apiKeys.referenceId, ownerId), eq(apiKeys.enabled, true)),
+        );
       const current = row?.count ?? 0;
       if (current >= limits.maxApiKeys) {
-        return {
-          ok: false as const,
-          limit: limits.maxApiKeys,
-        };
+        return { ok: false as const, limit: limits.maxApiKeys };
       }
     }
 
-    const { id, fullKey, keyHash } = generateApiKey();
-    await tx.insert(apiKeys).values({
-      id,
-      keyHash,
-      ownerId,
-      name,
-      scopes: scopes as string[],
-      allowedDomains:
-        normalizedDomains.domains.length > 0 ? normalizedDomains.domains : null,
-      expiresAt: expiresAt ? new Date(expiresAt) : null,
+    const apiKey = await auth.api.createApiKey({
+      body: {
+        configId,
+        name,
+        expiresIn,
+        userId,
+        ...(configId === ORG_API_KEY_CONFIG_ID
+          ? { organizationId: ownerId }
+          : {}),
+        metadata: metadataWithAllowedDomains(normalizedDomains.domains),
+        permissions: scopesToPermissions(scopes),
+        rateLimitEnabled: false,
+        remaining: null,
+      },
     });
 
-    return { ok: true as const, id, fullKey };
+    return { ok: true as const, apiKey };
   });
 
   if (!created.ok) {
@@ -131,85 +238,46 @@ keysRoute.post("/keys", async (c) => {
     profileId: userId,
     action: "key.created",
     resourceType: "api_key",
-    resourceId: created.id,
+    resourceId: created.apiKey.id,
     metadata: { name, scopes },
     ipAddress: getClientIp(c.req.raw),
   });
 
-  // Return the full key — this is the ONLY time it's visible
   return c.json(
     {
       data: {
-        id: created.id,
-        key: created.fullKey,
+        id: created.apiKey.id,
+        key: created.apiKey.key,
         name,
         scopes,
         allowedDomains: normalizedDomains.domains,
         expiresAt: expiresAt ?? null,
-        createdAt: new Date().toISOString(),
+        createdAt: created.apiKey.createdAt.toISOString(),
+        prefix: created.apiKey.start ?? created.apiKey.prefix ?? "pk_",
       },
     },
     201,
   );
 });
 
-// ── GET /console/keys — List ────────────────────────────────────────────────
+// -- GET /console/keys - List ------------------------------------------------
 
 keysRoute.get("/keys", async (c) => {
   const ownerId = c.get("ownerId");
 
   const results = await db
-    .select({
-      id: apiKeys.id,
-      name: apiKeys.name,
-      scopes: apiKeys.scopes,
-      allowedDomains: apiKeys.allowedDomains,
-      expiresAt: apiKeys.expiresAt,
-      lastUsedAt: apiKeys.lastUsedAt,
-      createdAt: apiKeys.createdAt,
-    })
+    .select()
     .from(apiKeys)
-    .where(and(eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt)))
+    .where(and(eq(apiKeys.referenceId, ownerId), eq(apiKeys.enabled, true)))
     .orderBy(desc(apiKeys.createdAt));
 
-  // Add computed status field
-  const data = results.map((key) => ({
-    ...key,
-    status:
-      key.expiresAt && new Date(key.expiresAt) < new Date()
-        ? "expired"
-        : "active",
-    prefix: key.id, // pk_xxxx — the public prefix
-  }));
-
-  return c.json({ data });
+  return c.json({ data: results.map(serializeApiKey) });
 });
 
-// ── GET /console/keys/:id — Get single key ──────────────────────────────────
+// -- GET /console/keys/:id - Get single key ----------------------------------
 
 keysRoute.get("/keys/:id", async (c) => {
-  const keyId = c.req.param("id");
-  const ownerId = c.get("ownerId");
-
-  const [key] = await db
-    .select({
-      id: apiKeys.id,
-      name: apiKeys.name,
-      scopes: apiKeys.scopes,
-      allowedDomains: apiKeys.allowedDomains,
-      expiresAt: apiKeys.expiresAt,
-      lastUsedAt: apiKeys.lastUsedAt,
-      createdAt: apiKeys.createdAt,
-    })
-    .from(apiKeys)
-    .where(
-      and(
-        eq(apiKeys.id, keyId),
-        eq(apiKeys.ownerId, ownerId),
-        isNull(apiKeys.deletedAt),
-      ),
-    )
-    .limit(1);
+  const key = await findOwnedEnabledKey(c.req.param("id"), c.get("ownerId"));
 
   if (!key) {
     return c.json(
@@ -218,19 +286,10 @@ keysRoute.get("/keys/:id", async (c) => {
     );
   }
 
-  return c.json({
-    data: {
-      ...key,
-      status:
-        key.expiresAt && new Date(key.expiresAt) < new Date()
-          ? "expired"
-          : "active",
-      prefix: key.id,
-    },
-  });
+  return c.json({ data: serializeApiKey(key) });
 });
 
-// ── PUT /console/keys/:id — Update ──────────────────────────────────────────
+// -- PUT /console/keys/:id - Update ------------------------------------------
 
 keysRoute.put("/keys/:id", async (c) => {
   const keyId = c.req.param("id");
@@ -239,9 +298,7 @@ keysRoute.put("/keys/:id", async (c) => {
   const verificationError = await requireManagedEmailVerification(c);
   if (verificationError) return verificationError;
 
-  const body = await c.req.json();
-
-  const parsed = updateKeySchema.safeParse(body);
+  const parsed = updateKeySchema.safeParse(await c.req.json());
   if (!parsed.success) {
     return c.json(
       {
@@ -255,9 +312,15 @@ keysRoute.put("/keys/:id", async (c) => {
     );
   }
 
-  const updates: Record<string, unknown> = {};
+  const updates: {
+    name?: string;
+    permissions?: ReturnType<typeof scopesToPermissions>;
+    metadata?: ReturnType<typeof metadataWithAllowedDomains>;
+  } = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
-  if (parsed.data.scopes !== undefined) updates.scopes = parsed.data.scopes;
+  if (parsed.data.scopes !== undefined) {
+    updates.permissions = scopesToPermissions(parsed.data.scopes);
+  }
   if (parsed.data.allowedDomains !== undefined) {
     const normalizedDomains = normalizeAllowedDomains(
       parsed.data.allowedDomains,
@@ -274,8 +337,7 @@ keysRoute.put("/keys/:id", async (c) => {
         400,
       );
     }
-    updates.allowedDomains =
-      normalizedDomains.domains.length > 0 ? normalizedDomains.domains : null;
+    updates.metadata = metadataWithAllowedDomains(normalizedDomains.domains);
   }
 
   if (Object.keys(updates).length === 0) {
@@ -285,29 +347,22 @@ keysRoute.put("/keys/:id", async (c) => {
     );
   }
 
-  const result = await db
-    .update(apiKeys)
-    .set(updates)
-    .where(
-      and(
-        eq(apiKeys.id, keyId),
-        eq(apiKeys.ownerId, ownerId),
-        isNull(apiKeys.deletedAt),
-      ),
-    )
-    .returning({
-      id: apiKeys.id,
-      name: apiKeys.name,
-      scopes: apiKeys.scopes,
-      allowedDomains: apiKeys.allowedDomains,
-    });
-
-  if (result.length === 0) {
+  const existing = await findOwnedEnabledKey(keyId, ownerId);
+  if (!existing) {
     return c.json(
       { error: { code: "NOT_FOUND", message: "API key not found" } },
       404,
     );
   }
+
+  const result = await auth.api.updateApiKey({
+    body: {
+      configId: existing.configId,
+      keyId,
+      userId,
+      ...updates,
+    },
+  });
 
   logAudit({
     profileId: userId,
@@ -318,48 +373,46 @@ keysRoute.put("/keys/:id", async (c) => {
     ipAddress: getClientIp(c.req.raw),
   });
 
-  return c.json({ data: result[0] });
+  return c.json({ data: serializeApiKey(result) });
 });
 
-// ── DELETE /console/keys/:id — Revoke ───────────────────────────────────────
+// -- DELETE /console/keys/:id - Revoke ---------------------------------------
 
 keysRoute.delete("/keys/:id", async (c) => {
   const keyId = c.req.param("id");
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
 
-  const result = await db
-    .update(apiKeys)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(
-        eq(apiKeys.id, keyId),
-        eq(apiKeys.ownerId, ownerId),
-        isNull(apiKeys.deletedAt),
-      ),
-    )
-    .returning({ id: apiKeys.id, name: apiKeys.name });
-
-  if (result.length === 0) {
+  const existing = await findOwnedEnabledKey(keyId, ownerId);
+  if (!existing) {
     return c.json(
       { error: { code: "NOT_FOUND", message: "API key not found" } },
       404,
     );
   }
 
+  await auth.api.updateApiKey({
+    body: {
+      configId: existing.configId,
+      keyId,
+      userId,
+      enabled: false,
+    },
+  });
+
   logAudit({
     profileId: userId,
     action: "key.revoked",
     resourceType: "api_key",
     resourceId: keyId,
-    metadata: { name: result[0]!.name },
+    metadata: { name: existing.name },
     ipAddress: getClientIp(c.req.raw),
   });
 
   return c.json({ data: { id: keyId, revoked: true } });
 });
 
-// ── POST /console/keys/:id/rotate — Rotate ─────────────────────────────────
+// -- POST /console/keys/:id/rotate - Rotate ----------------------------------
 
 keysRoute.post("/keys/:id/rotate", async (c) => {
   const keyId = c.req.param("id");
@@ -368,19 +421,7 @@ keysRoute.post("/keys/:id/rotate", async (c) => {
   const verificationError = await requireManagedEmailVerification(c);
   if (verificationError) return verificationError;
 
-  // Verify the key exists and belongs to the owner
-  const [existing] = await db
-    .select({ id: apiKeys.id, name: apiKeys.name })
-    .from(apiKeys)
-    .where(
-      and(
-        eq(apiKeys.id, keyId),
-        eq(apiKeys.ownerId, ownerId),
-        isNull(apiKeys.deletedAt),
-      ),
-    )
-    .limit(1);
-
+  const existing = await findOwnedEnabledKey(keyId, ownerId);
   if (!existing) {
     return c.json(
       { error: { code: "NOT_FOUND", message: "API key not found" } },
@@ -388,31 +429,47 @@ keysRoute.post("/keys/:id/rotate", async (c) => {
     );
   }
 
-  // Generate a new secret but keep the same id
-  const { randomBytes } = await import("node:crypto");
-  const newSecret = randomBytes(32).toString("hex");
-  const newFullKey = `${keyId}_${newSecret}`;
-  const newHash = hashKey(newFullKey);
+  const replacement = await auth.api.createApiKey({
+    body: {
+      configId: existing.configId,
+      name: existing.name ?? undefined,
+      expiresIn: secondsUntil(existing.expiresAt),
+      userId,
+      ...(existing.configId === ORG_API_KEY_CONFIG_ID
+        ? { organizationId: ownerId }
+        : {}),
+      metadata: metadataWithAllowedDomains(
+        metadataAllowedDomains(existing.metadata),
+      ),
+      permissions: scopesToPermissions(scopesFromExistingKey(existing.permissions)),
+      rateLimitEnabled: false,
+      remaining: null,
+    },
+  });
 
-  await db
-    .update(apiKeys)
-    .set({ keyHash: newHash })
-    .where(eq(apiKeys.id, keyId));
+  await auth.api.updateApiKey({
+    body: {
+      configId: existing.configId,
+      keyId,
+      userId,
+      enabled: false,
+    },
+  });
 
   logAudit({
     profileId: userId,
     action: "key.rotated",
     resourceType: "api_key",
     resourceId: keyId,
-    metadata: { name: existing.name },
+    metadata: { name: existing.name, replacementId: replacement.id },
     ipAddress: getClientIp(c.req.raw),
   });
 
   return c.json({
     data: {
-      id: keyId,
-      key: newFullKey,
-      name: existing.name,
+      id: replacement.id,
+      key: replacement.key,
+      name: replacement.name ?? existing.name,
     },
   });
 });

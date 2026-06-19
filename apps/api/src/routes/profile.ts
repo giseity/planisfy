@@ -159,8 +159,8 @@ export const profileRoute = profileBaseRoute.get("/profile", async (c) => {
     await tx.delete(sessions).where(eq(sessions.userId, userId));
     await tx
       .update(apiKeys)
-      .set({ deletedAt: now })
-      .where(and(eq(apiKeys.ownerId, userId), isNull(apiKeys.deletedAt)));
+      .set({ enabled: false, updatedAt: now })
+      .where(and(eq(apiKeys.referenceId, userId), eq(apiKeys.enabled, true)));
   });
 
   return c.json({ data: { deleted: true } });

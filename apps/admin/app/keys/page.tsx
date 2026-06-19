@@ -1,5 +1,5 @@
 import { db, apiKeys, accounts } from "@planisfy/database"
-import { eq, isNull, desc, count, ilike, sql } from "drizzle-orm"
+import { eq, desc, count, ilike, sql } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"
 import {
   Table,
@@ -33,13 +33,13 @@ export default async function KeysPage({
   switch (statusFilter) {
     case "expired":
       conditions.push(sql`${apiKeys.expiresAt} IS NOT NULL AND ${apiKeys.expiresAt} < ${now}`)
-      conditions.push(isNull(apiKeys.deletedAt))
+      conditions.push(eq(apiKeys.enabled, true))
       break
     case "revoked":
-      conditions.push(sql`${apiKeys.deletedAt} IS NOT NULL`)
+      conditions.push(eq(apiKeys.enabled, false))
       break
     default:
-      conditions.push(isNull(apiKeys.deletedAt))
+      conditions.push(eq(apiKeys.enabled, true))
       break
   }
 
@@ -57,18 +57,18 @@ export default async function KeysPage({
     .select({
       id: apiKeys.id,
       name: apiKeys.name,
-      ownerId: apiKeys.ownerId,
-      scopes: apiKeys.scopes,
-      allowedDomains: apiKeys.allowedDomains,
+      ownerId: apiKeys.referenceId,
+      permissions: apiKeys.permissions,
+      metadata: apiKeys.metadata,
       expiresAt: apiKeys.expiresAt,
-      lastUsedAt: apiKeys.lastUsedAt,
+      lastUsedAt: apiKeys.lastRequest,
       createdAt: apiKeys.createdAt,
-      deletedAt: apiKeys.deletedAt,
+      enabled: apiKeys.enabled,
       ownerHandle: accounts.handle,
       ownerDisplayName: accounts.displayName,
     })
     .from(apiKeys)
-    .leftJoin(accounts, eq(apiKeys.ownerId, accounts.id))
+    .leftJoin(accounts, eq(apiKeys.referenceId, accounts.id))
     .where(whereClause)
     .orderBy(desc(apiKeys.createdAt))
     .limit(limit)
@@ -77,14 +77,24 @@ export default async function KeysPage({
   const [totalRow] = await db
     .select({ count: count() })
     .from(apiKeys)
-    .leftJoin(accounts, eq(apiKeys.ownerId, accounts.id))
+    .leftJoin(accounts, eq(apiKeys.referenceId, accounts.id))
     .where(whereClause)
   const total = totalRow?.count ?? 0
 
-  function getKeyStatus(key: { expiresAt: Date | null; deletedAt: Date | null }) {
-    if (key.deletedAt) return { label: "Revoked", variant: "destructive" as const }
+  function getKeyStatus(key: { expiresAt: Date | null; enabled: boolean }) {
+    if (!key.enabled) return { label: "Revoked", variant: "destructive" as const }
     if (key.expiresAt && new Date(key.expiresAt) < now) return { label: "Expired", variant: "warning" as const }
     return { label: "Active", variant: "success" as const }
+  }
+
+  function keyScopes(permissions: string | null) {
+    if (!permissions) return []
+    try {
+      const parsed = JSON.parse(permissions) as { scopes?: unknown }
+      return Array.isArray(parsed.scopes) ? parsed.scopes.filter((scope): scope is string => typeof scope === "string") : []
+    } catch {
+      return []
+    }
   }
 
   return (
@@ -132,6 +142,7 @@ export default async function KeysPage({
         <TableBody>
           {keyList.map((key) => {
             const status = getKeyStatus(key)
+            const scopes = keyScopes(key.permissions)
             return (
               <TableRow key={key.id}>
                 <TableCell className="font-mono text-xs">{key.id.slice(0, 16)}...</TableCell>
@@ -143,12 +154,12 @@ export default async function KeysPage({
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
-                    {(key.scopes as string[]).slice(0, 3).map((s) => (
+                    {scopes.slice(0, 3).map((s) => (
                       <Badge key={s} variant="secondary" className="text-[10px]">{s}</Badge>
                     ))}
-                    {(key.scopes as string[]).length > 3 && (
+                    {scopes.length > 3 && (
                       <Badge variant="secondary" className="text-[10px]">
-                        +{(key.scopes as string[]).length - 3}
+                        +{scopes.length - 3}
                       </Badge>
                     )}
                   </div>

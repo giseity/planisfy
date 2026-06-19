@@ -93,6 +93,53 @@ export const ALL_SCOPES = [
 
 export type ApiKeyScope = (typeof ALL_SCOPES)[number];
 
+export const USER_API_KEY_CONFIG_ID = "user-keys";
+export const ORG_API_KEY_CONFIG_ID = "org-keys";
+
+export type ApiKeyPermissions = {
+  scopes?: string[];
+};
+
+export type ApiKeyMetadata = {
+  allowedDomains?: string[];
+};
+
+export function scopesToPermissions(
+  scopes: readonly ApiKeyScope[],
+): ApiKeyPermissions {
+  return { scopes: [...scopes] };
+}
+
+export function permissionsToScopes(value: unknown): string[] {
+  const parsed = parseJsonValue(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return [];
+  }
+
+  const scopes = (parsed as ApiKeyPermissions).scopes;
+  return Array.isArray(scopes)
+    ? scopes.filter((scope): scope is string => typeof scope === "string")
+    : [];
+}
+
+export function metadataAllowedDomains(value: unknown): string[] {
+  const parsed = parseJsonValue(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return [];
+  }
+
+  const allowedDomains = (parsed as ApiKeyMetadata).allowedDomains;
+  return Array.isArray(allowedDomains)
+    ? allowedDomains.filter((domain): domain is string => typeof domain === "string")
+    : [];
+}
+
+export function metadataWithAllowedDomains(
+  allowedDomains: readonly string[],
+): ApiKeyMetadata {
+  return { allowedDomains: [...allowedDomains] };
+}
+
 /**
  * Map endpoint categories to required scopes.
  */
@@ -203,4 +250,13 @@ function isValidHostname(host: string) {
       !label.endsWith("-")
     );
   });
+}
+
+function parseJsonValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }

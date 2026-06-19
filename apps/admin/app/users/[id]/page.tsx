@@ -80,13 +80,13 @@ export default async function UserDetailPage({
       .select({
         id: apiKeys.id,
         name: apiKeys.name,
-        scopes: apiKeys.scopes,
-        lastUsedAt: apiKeys.lastUsedAt,
+        permissions: apiKeys.permissions,
+        lastUsedAt: apiKeys.lastRequest,
         createdAt: apiKeys.createdAt,
         expiresAt: apiKeys.expiresAt,
       })
       .from(apiKeys)
-      .where(and(eq(apiKeys.ownerId, id), isNull(apiKeys.deletedAt)))
+      .where(and(eq(apiKeys.referenceId, id), eq(apiKeys.enabled, true)))
       .orderBy(desc(apiKeys.createdAt)),
     db
       .select({
@@ -289,7 +289,9 @@ export default async function UserDetailPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {userKeys.map((key) => (
+              {userKeys.map((key) => {
+                const scopes = keyScopes(key.permissions)
+                return (
                 <TableRow key={key.id}>
                   <TableCell className="font-medium">{key.name}</TableCell>
                   <TableCell className="font-mono text-xs">
@@ -297,7 +299,7 @@ export default async function UserDetailPage({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {(key.scopes as string[]).slice(0, 3).map((s) => (
+                      {scopes.slice(0, 3).map((s) => (
                         <Badge
                           key={s}
                           variant="secondary"
@@ -306,9 +308,9 @@ export default async function UserDetailPage({
                           {s}
                         </Badge>
                       ))}
-                      {(key.scopes as string[]).length > 3 && (
+                      {scopes.length > 3 && (
                         <Badge variant="secondary" className="text-[10px]">
-                          +{(key.scopes as string[]).length - 3}
+                          +{scopes.length - 3}
                         </Badge>
                       )}
                     </div>
@@ -322,7 +324,8 @@ export default async function UserDetailPage({
                     {new Date(key.createdAt).toLocaleDateString()}
                   </TableCell>
                 </TableRow>
-              ))}
+                )
+              })}
               {userKeys.length === 0 && (
                 <TableRow>
                   <TableCell
@@ -467,6 +470,18 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
   );
+}
+
+function keyScopes(permissions: string | null) {
+  if (!permissions) return [];
+  try {
+    const parsed = JSON.parse(permissions) as { scopes?: unknown };
+    return Array.isArray(parsed.scopes)
+      ? parsed.scopes.filter((scope): scope is string => typeof scope === "string")
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function initials(name: string | null) {

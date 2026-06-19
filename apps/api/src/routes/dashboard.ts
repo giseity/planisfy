@@ -199,10 +199,10 @@ async function fetchApiKeys(accountId: string) {
     .select({
       id: apiKeys.id,
       name: apiKeys.name,
-      lastUsedAt: apiKeys.lastUsedAt,
+      lastUsedAt: apiKeys.lastRequest,
     })
     .from(apiKeys)
-    .where(and(eq(apiKeys.ownerId, accountId), isNull(apiKeys.deletedAt)))
+    .where(and(eq(apiKeys.referenceId, accountId), eq(apiKeys.enabled, true)))
     .orderBy(desc(apiKeys.createdAt));
 }
 

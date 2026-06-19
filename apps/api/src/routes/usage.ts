@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { eq, and, gte, lte, sql, desc, count, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, count } from "drizzle-orm";
 import { db, usageLogs, apiKeys } from "@planisfy/database";
 import {
   usageDaysQuerySchema,
@@ -76,8 +76,8 @@ usageRoute.get("/usage/summary", async (c) => {
     .from(apiKeys)
     .where(
       and(
-        eq(apiKeys.ownerId, ownerId),
-        isNull(apiKeys.deletedAt)
+        eq(apiKeys.referenceId, ownerId),
+        eq(apiKeys.enabled, true)
       )
     );
 

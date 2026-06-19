@@ -203,7 +203,7 @@ export const stylePublicationsRelations = relations(stylePublications, ({ one })
 
 export const apiKeysRelations = relations(apiKeys, ({ one, many }) => ({
   owner: one(accounts, {
-    fields: [apiKeys.ownerId],
+    fields: [apiKeys.referenceId],
     references: [accounts.id],
   }),
   usageLogs: many(usageLogs),

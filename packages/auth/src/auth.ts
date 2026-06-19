@@ -1,7 +1,8 @@
 import { betterAuth } from "better-auth";
-import { organization } from "better-auth/plugins";
+import { createAccessControl, organization } from "better-auth/plugins";
 import { oAuthProxy } from "better-auth/plugins/oauth-proxy";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { apiKey } from "@better-auth/api-key";
 import {
   db,
   users,
@@ -12,6 +13,7 @@ import {
   sessions,
   oauthAccounts,
   verifications,
+  apiKeys,
 } from "@planisfy/database";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -40,6 +42,42 @@ const betterAuthBaseURL = oauthProxyURL
       fallback: authBaseURL,
     }
   : authBaseURL;
+
+const organizationAccessControl = createAccessControl({
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"],
+  team: ["create", "update", "delete"],
+  ac: ["create", "read", "update", "delete"],
+  apiKey: ["create", "read", "update", "delete"],
+});
+
+const organizationRoles = {
+  owner: organizationAccessControl.newRole({
+    organization: ["update", "delete"],
+    member: ["create", "update", "delete"],
+    invitation: ["create", "cancel"],
+    team: ["create", "update", "delete"],
+    ac: ["create", "read", "update", "delete"],
+    apiKey: ["create", "read", "update", "delete"],
+  }),
+  admin: organizationAccessControl.newRole({
+    organization: ["update"],
+    member: ["create", "update", "delete"],
+    invitation: ["create", "cancel"],
+    team: ["create", "update", "delete"],
+    ac: ["create", "read", "update", "delete"],
+    apiKey: ["create", "read", "update", "delete"],
+  }),
+  member: organizationAccessControl.newRole({
+    organization: [],
+    member: [],
+    invitation: [],
+    team: [],
+    ac: ["read"],
+    apiKey: [],
+  }),
+};
 
 // ============================================================================
 // Handle generation (OAuth users — no handle provided at signup)
@@ -134,6 +172,7 @@ export const auth = betterAuth({
       organization: organizations,
       member: members,
       invitation: invitations,
+      apikey: apiKeys,
     },
   }),
 
@@ -148,6 +187,8 @@ export const auth = betterAuth({
         ]
       : []),
     organization({
+      ac: organizationAccessControl,
+      roles: organizationRoles,
       sendInvitationEmail: async ({ invitation, organization, inviter }) => {
         // Email sending delegated to API email service
         // The API hooks into this via the onInviteSent callback pattern
@@ -213,6 +254,34 @@ export const auth = betterAuth({
         },
       },
     }),
+    apiKey([
+      {
+        configId: "user-keys",
+        references: "user",
+        defaultPrefix: "pk_",
+        enableMetadata: true,
+        maximumNameLength: 128,
+        rateLimit: { enabled: false },
+        keyExpiration: {
+          defaultExpiresIn: null,
+          minExpiresIn: 0,
+          maxExpiresIn: 3650,
+        },
+      },
+      {
+        configId: "org-keys",
+        references: "organization",
+        defaultPrefix: "pk_",
+        enableMetadata: true,
+        maximumNameLength: 128,
+        rateLimit: { enabled: false },
+        keyExpiration: {
+          defaultExpiresIn: null,
+          minExpiresIn: 0,
+          maxExpiresIn: 3650,
+        },
+      },
+    ]),
   ],
 
   emailAndPassword: {

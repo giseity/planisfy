@@ -1,10 +1,14 @@
 import { createMiddleware } from "hono/factory";
-import { accounts, apiKeys, db } from "@planisfy/database";
-import { eq, and, isNull } from "drizzle-orm";
+import { auth } from "@planisfy/auth/auth";
+import { accounts, db } from "@planisfy/database";
+import { and, eq, isNull } from "drizzle-orm";
 import {
-  hashKey,
   isRequestOriginAllowed,
+  metadataAllowedDomains,
+  ORG_API_KEY_CONFIG_ID,
+  permissionsToScopes,
   requiredScopeForPath,
+  USER_API_KEY_CONFIG_ID,
 } from "../lib/api-key";
 
 export type ApiKeyEnv = {
@@ -15,12 +19,16 @@ export type ApiKeyEnv = {
   };
 };
 
+type VerifiedApiKey = NonNullable<
+  Awaited<ReturnType<typeof auth.api.verifyApiKey>>["key"]
+>;
+
 /**
  * Validates an API key from the X-API-Key header.
  * Sets apiKeyId, apiKeyOwnerId, apiKeyScopes on the context.
  *
- * Does NOT reject missing keys — that's handled by the dual-auth middleware.
- * This only rejects INVALID keys (bad hash, expired, wrong domain, missing scope).
+ * Missing keys are allowed so dual-auth middleware can fall back to sessions.
+ * Invalid, disabled, expired, wrong-domain, or under-scoped keys are rejected.
  */
 export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
   c.set("apiKeyId", null);
@@ -33,7 +41,6 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
     return;
   }
 
-  // Validate key format
   if (!rawKey.startsWith("pk_")) {
     return c.json(
       { error: { code: "UNAUTHORIZED", message: "Invalid API key format" } },
@@ -41,46 +48,40 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
     );
   }
 
-  // Hash and look up
-  const keyHash = hashKey(rawKey);
-  const [key] = await db
-    .select({
-      id: apiKeys.id,
-      ownerId: apiKeys.ownerId,
-      scopes: apiKeys.scopes,
-      allowedDomains: apiKeys.allowedDomains,
-      expiresAt: apiKeys.expiresAt,
-    })
-    .from(apiKeys)
-    .innerJoin(accounts, eq(accounts.id, apiKeys.ownerId))
+  const verified = await verifyApiKeyAcrossConfigs(rawKey);
+  if ("status" in verified) {
+    return c.json(
+      {
+        error: {
+          code: verified.code,
+          message: verified.message,
+        },
+      },
+      verified.status,
+    );
+  }
+
+  const [account] = await db
+    .select({ id: accounts.id })
+    .from(accounts)
     .where(
       and(
-        eq(apiKeys.keyHash, keyHash),
-        isNull(apiKeys.deletedAt),
+        eq(accounts.id, verified.key.referenceId),
         eq(accounts.lifecycleStatus, "ACTIVE"),
         isNull(accounts.deletedAt),
       ),
     )
     .limit(1);
 
-  if (!key) {
+  if (!account) {
     return c.json(
       { error: { code: "UNAUTHORIZED", message: "Invalid API key" } },
       401,
     );
   }
 
-  // Check expiry
-  if (key.expiresAt && new Date(key.expiresAt) < new Date()) {
-    return c.json(
-      { error: { code: "KEY_EXPIRED", message: "API key has expired" } },
-      401,
-    );
-  }
-
-  // Check allowed domains (Origin or Referer header)
-  const domains = key.allowedDomains as string[] | null;
-  if (domains && domains.length > 0) {
+  const domains = metadataAllowedDomains(verified.key.metadata);
+  if (domains.length > 0) {
     const origin = c.req.header("origin") || c.req.header("referer");
     if (!isRequestOriginAllowed(origin, domains)) {
       return c.json(
@@ -97,8 +98,7 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
     }
   }
 
-  // Check scope for this endpoint
-  const scopes = key.scopes as string[];
+  const scopes = permissionsToScopes(verified.key.permissions);
   const requiredScope = requiredScopeForPath(c.req.path);
   if (requiredScope && !scopes.includes(requiredScope)) {
     return c.json(
@@ -112,18 +112,50 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
     );
   }
 
-  // Set context variables
-  c.set("apiKeyId", key.id);
-  c.set("apiKeyOwnerId", key.ownerId);
+  c.set("apiKeyId", verified.key.id);
+  c.set("apiKeyOwnerId", verified.key.referenceId);
   c.set("apiKeyScopes", scopes);
-
-  // Update lastUsedAt in the background (fire-and-forget)
-  db.update(apiKeys)
-    .set({ lastUsedAt: new Date() })
-    .where(eq(apiKeys.id, key.id))
-    .catch((err: unknown) => {
-      console.error("[api-key] Failed to update lastUsedAt:", err);
-    });
 
   await next();
 });
+
+async function verifyApiKeyAcrossConfigs(rawKey: string): Promise<
+  | { valid: true; key: VerifiedApiKey }
+  | { valid: false; status: 401; code: string; message: string }
+> {
+  let lastError: { code?: string; message?: string } | null = null;
+
+  for (const configId of [USER_API_KEY_CONFIG_ID, ORG_API_KEY_CONFIG_ID]) {
+    const result = await auth.api.verifyApiKey({
+      body: {
+        configId,
+        key: rawKey,
+      },
+    });
+
+    if (result.valid && result.key) {
+      return { valid: true, key: result.key };
+    }
+    lastError = result.error
+      ? {
+          code: result.error.code,
+          message: result.error.message
+            ? String(result.error.message)
+            : undefined,
+        }
+      : null;
+  }
+
+  const code = lastError?.code ?? "UNAUTHORIZED";
+  const publicCode =
+    code === "KEY_DISABLED" || code === "KEY_EXPIRED" ? code : "UNAUTHORIZED";
+  return {
+    valid: false,
+    status: 401,
+    code: publicCode,
+    message:
+      code === "KEY_DISABLED"
+        ? "API key is disabled"
+        : lastError?.message || "Invalid API key",
+  };
+}

@@ -12,10 +12,11 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@better-auth/api-key": "1.6.11",
     "@planisfy/database": "workspace:*",
     "@planisfy/env": "workspace:*",
-    "@planisfy/utils": "workspace:*",
     "@planisfy/ui": "workspace:*",
+    "@planisfy/utils": "workspace:*",
     "bcrypt": "^5.1.1",
     "better-auth": "1.6.11",
     "drizzle-kit": "^0.31.9",

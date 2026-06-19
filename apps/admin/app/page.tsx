@@ -50,7 +50,7 @@ async function getStats() {
     await Promise.all([
       db.select({ count: count() }).from(users),
       db.select({ count: count() }).from(organizations).where(isNull(organizations.deletedAt)),
-      db.select({ count: count() }).from(apiKeys).where(isNull(apiKeys.deletedAt)),
+      db.select({ count: count() }).from(apiKeys).where(eq(apiKeys.enabled, true)),
       db.select({ count: count() }).from(styles).where(isNull(styles.deletedAt)),
       db.select({ count: count() }).from(usageLogs).where(gte(usageLogs.timestamp, today)),
       db

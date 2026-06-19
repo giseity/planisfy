@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,16 +29,12 @@ const seed = {
   handle: process.env.PLANISFY_SEED_HANDLE ?? "planisfy-demo",
   orgName: process.env.PLANISFY_SEED_ORG_NAME ?? "Planisfy Demo Team",
   orgSlug: process.env.PLANISFY_SEED_ORG_SLUG ?? "planisfy-demo-team",
-  apiKeyId: process.env.PLANISFY_SEED_API_KEY_ID ?? "pk_0000000000000001",
-  apiKeySecret:
-    process.env.PLANISFY_SEED_API_KEY_SECRET ??
-    "0000000000000000000000000000000000000000000000000000000000000001",
   styleHandle: process.env.PLANISFY_SEED_STYLE_HANDLE ?? "stuttgart-demo",
   tilesetHandle: process.env.PLANISFY_SEED_TILESET_HANDLE ?? "stuttgart-base",
 };
 
 const now = new Date();
-const fullApiKey = `${seed.apiKeyId}_${seed.apiKeySecret}`;
+let fullApiKey = "";
 
 main()
   .then(() => process.exit(0))
@@ -190,7 +186,6 @@ async function insertOrganization(input: { name: string; slug: string }) {
 }
 
 async function ensureApiKey(ownerId: string) {
-  const keyHash = createHash("sha256").update(fullApiKey).digest("hex");
   const scopes = [
     "tiles:read",
     "styles:read",
@@ -204,41 +199,29 @@ async function ensureApiKey(ownerId: string) {
     "usage:read",
   ];
 
-  const [existing] = await db
-    .select()
-    .from(apiKeys)
-    .where(eq(apiKeys.id, seed.apiKeyId))
-    .limit(1);
+  await db
+    .delete(apiKeys)
+    .where(
+      and(
+        eq(apiKeys.referenceId, ownerId),
+        eq(apiKeys.name, "Local development key"),
+      ),
+    );
 
-  if (existing) {
-    const [updated] = await db
-      .update(apiKeys)
-      .set({
-        keyHash,
-        ownerId,
-        name: "Local development key",
-        scopes,
-        allowedDomains: [],
-        expiresAt: null,
-        deletedAt: null,
-      })
-      .where(eq(apiKeys.id, seed.apiKeyId))
-      .returning();
-    return updated!;
-  }
-
-  const [created] = await db
-    .insert(apiKeys)
-    .values({
-      id: seed.apiKeyId,
-      keyHash,
-      ownerId,
+  const created = await auth.api.createApiKey({
+    body: {
+      configId: "user-keys",
+      userId: ownerId,
       name: "Local development key",
-      scopes,
-      allowedDomains: [],
-    })
-    .returning();
-  return created!;
+      metadata: { allowedDomains: [] },
+      permissions: { scopes },
+      rateLimitEnabled: false,
+      remaining: null,
+      expiresIn: null,
+    },
+  });
+  fullApiKey = created.key;
+  return created;
 }
 
 async function ensureStyle(ownerId: string) {

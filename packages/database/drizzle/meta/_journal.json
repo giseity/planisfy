@@ -106,6 +106,13 @@
       "when": 1781368000000,
       "tag": "0014_sprite_asset_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1781852202099,
+      "tag": "0015_better_auth_api_keys",
+      "breakpoints": true
     }
   ]
 }

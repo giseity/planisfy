@@ -448,29 +448,42 @@ export const styleVersions = pgTable(
 );
 
 export const apiKeys = pgTable(
-  "api_keys",
+  "apikey",
   {
-    id: varchar("id", { length: 64 }).primaryKey(), // Public ID (pk_...)
-    keyHash: varchar("key_hash", { length: 256 }).notNull(),
-    ownerId: uuid("owner_id")
+    id: varchar("id", { length: 64 }).primaryKey(),
+    configId: varchar("config_id", { length: 64 }).notNull().default("default"),
+    name: varchar("name", { length: 128 }),
+    start: varchar("start", { length: 32 }),
+    prefix: varchar("prefix", { length: 32 }),
+    key: varchar("key", { length: 256 }).notNull(),
+    referenceId: uuid("reference_id")
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 128 }).notNull(),
-
-    scopes: jsonb("scopes").notNull().default([]),
-    allowedDomains: jsonb("allowed_domains").default([]),
-
+    refillInterval: integer("refill_interval"),
+    refillAmount: integer("refill_amount"),
+    lastRefillAt: timestamp("last_refill_at", { withTimezone: true }),
+    enabled: boolean("enabled").notNull().default(true),
+    rateLimitEnabled: boolean("rate_limit_enabled").notNull().default(false),
+    rateLimitTimeWindow: integer("rate_limit_time_window"),
+    rateLimitMax: integer("rate_limit_max"),
+    requestCount: integer("request_count").notNull().default(0),
+    remaining: integer("remaining"),
+    lastRequest: timestamp("last_request", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    permissions: text("permissions"),
+    metadata: text("metadata"),
   },
   (table) => [
-    index("api_keys_owner_idx").on(table.ownerId),
-    index("api_keys_hash_idx").on(table.keyHash),
-    index("api_keys_scopes_idx").using("gin", table.scopes),
+    index("apikey_config_id_idx").on(table.configId),
+    index("apikey_reference_id_idx").on(table.referenceId),
+    index("apikey_key_idx").on(table.key),
   ],
 );
 

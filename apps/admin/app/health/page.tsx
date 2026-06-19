@@ -1,5 +1,5 @@
 import { db, users, apiKeys, sessions, usageLogs, styles } from "@planisfy/database"
-import { count, sql, gte, lt, lte, isNull, isNotNull, and, desc } from "drizzle-orm"
+import { and, count, desc, eq, gte, isNotNull, isNull, lt, lte, sql } from "drizzle-orm"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
 import { Badge } from "@planisfy/ui/components/badge"
 import {
@@ -44,7 +44,7 @@ async function getHealthData() {
       .from(apiKeys)
       .where(
         and(
-          isNull(apiKeys.deletedAt),
+          eq(apiKeys.enabled, true),
           isNotNull(apiKeys.expiresAt),
           gte(apiKeys.expiresAt, now),
           lte(apiKeys.expiresAt, sevenDaysFromNow)
@@ -55,7 +55,7 @@ async function getHealthData() {
       .from(apiKeys)
       .where(
         and(
-          isNull(apiKeys.deletedAt),
+          eq(apiKeys.enabled, true),
           isNotNull(apiKeys.expiresAt),
           lt(apiKeys.expiresAt, now)
         )

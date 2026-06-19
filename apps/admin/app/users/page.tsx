@@ -62,7 +62,7 @@ export default async function UsersPage({
           "style_count",
         ),
       keyCount:
-        sql<number>`(SELECT count(*) FROM api_keys WHERE api_keys.owner_id = ${users.id} AND api_keys.deleted_at IS NULL)`.as(
+        sql<number>`(SELECT count(*) FROM apikey WHERE apikey.reference_id = ${users.id} AND apikey.enabled = true)`.as(
           "key_count",
         ),
     })

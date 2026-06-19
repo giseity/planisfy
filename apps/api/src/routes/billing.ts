@@ -89,7 +89,7 @@ billingRoute.get("/billing", async (c) => {
       db
         .select({ count: count() })
         .from(apiKeys)
-        .where(and(eq(apiKeys.ownerId, ownerId), isNull(apiKeys.deletedAt))),
+        .where(and(eq(apiKeys.referenceId, ownerId), eq(apiKeys.enabled, true))),
       getMonthlyUsageUnits(ownerId, period.start),
     ]);
 
