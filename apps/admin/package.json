@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
     "lint:fix": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --fix",
-    "check-types": "tsc --noEmit"
+    "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@planisfy/auth": "workspace:^",

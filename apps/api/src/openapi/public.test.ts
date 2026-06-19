@@ -10,7 +10,13 @@ test("serves a public OpenAPI document", async () => {
   const response = await app.request("/openapi.json");
   assert.equal(response.status, 200);
 
-  const spec = await response.json();
+  const spec = (await response.json()) as {
+    openapi: string;
+    paths: Record<string, unknown>;
+    components: {
+      securitySchemes: Record<string, unknown>;
+    };
+  };
   assert.equal(spec.openapi, "3.1.0");
   assert.ok(spec.paths["/styles/v1/{owner}/{handle}"]);
   assert.ok(spec.paths["/tiles/v1/{owner}/{handle}.json"]);

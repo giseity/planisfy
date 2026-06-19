@@ -1,5 +1,5 @@
 {
-  "extends": "@planisfy/typescript-config/base.json",
+  "extends": "@planisfy/typescript-config/node-service.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
