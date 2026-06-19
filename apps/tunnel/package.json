@@ -1,0 +1,23 @@
+{
+  "name": "tunnel",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "lint": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@planisfy/env": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@planisfy/eslint-config": "workspace:*",
+    "@planisfy/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "eslint": "^9.39.1",
+    "tsx": "^4.19.4",
+    "typescript": "5.9.2"
+  }
+}

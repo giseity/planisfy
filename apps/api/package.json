@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "portless api.planisfy tsx watch src/index.ts",
+    "dev": "portless api.planisfy --app-port 4000 tsx watch src/index.ts",
     "build": "tsup",
     "start": "node dist/index.js",
     "lint": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",

@@ -59,7 +59,7 @@ app.use("*", metricsMiddleware());
 // ── better-auth handler (signup, login, session, org endpoints) ─────────
 // better-auth's handler accepts a standard Request and returns a Response,
 // which maps directly to Hono's fetch-based API.
-app.on(["GET", "POST"], "/api/auth/**", (c) => {
+app.on(["GET", "POST"], "/api/auth/*", (c) => {
   return auth.handler(c.req.raw);
 });
 
