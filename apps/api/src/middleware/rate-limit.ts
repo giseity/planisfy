@@ -6,16 +6,16 @@ import {
   RateLimiterRes,
 } from "rate-limiter-flexible";
 import Redis from "ioredis";
-import { getEndpointCost } from "../lib/api-key";
-import { getAccountPlanLimits } from "../lib/billing";
-import { normalizeRequestsPerMinute } from "../lib/rate-limit-policy";
+import { getEndpointCost } from "../domains/keys/api-key";
+import { getAccountPlanLimits } from "../domains/billing/billing";
+import { normalizeRequestsPerMinute } from "../shared/policy/rate-limit-policy";
 import {
   checkMonthlyUsageQuota,
   evaluateMonthlyQuota,
   getMonthlyUsagePeriod,
   getMonthlyUsageUnits,
   type QuotaEvaluation,
-} from "../lib/usage-quota";
+} from "../domains/usage/usage-quota";
 import { redisConnection } from "../env";
 import type { AuthEnv } from "./auth";
 

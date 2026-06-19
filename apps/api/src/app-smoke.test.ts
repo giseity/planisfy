@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Hono } from "hono";
-import { healthRoute } from "./routes/health";
+import { healthRoute } from "./domains/health/route";
 import { apiKeyMiddleware } from "./middleware/api-key";
 import {
   dualAuthMiddleware,

@@ -1,0 +1,421 @@
+import { Hono } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { z } from "zod";
+import type { AuthEnv } from "../../middleware/auth";
+import { env } from "../../env";
+
+const MAX_ROUTE_COORDINATES = 25;
+const MAX_TRACE_COORDINATES = 100;
+const MAX_OPTIMIZED_TRIP_COORDINATES = 12;
+const MAX_MATRIX_LOCATIONS = 25;
+const MAX_MATRIX_CELLS = 100;
+const MAX_ISOCHRONE_CONTOURS = 4;
+const MAX_ISOCHRONE_MINUTES = 240;
+const MAX_ISOCHRONE_KILOMETERS = 500;
+
+type Coordinate = { lon: number; lat: number };
+
+const directionsBodySchema = z.object({
+  locations: z.array(
+    z.object({
+      lon: z.number().min(-180).max(180),
+      lat: z.number().min(-90).max(90),
+    })
+  ).min(2).max(MAX_ROUTE_COORDINATES),
+  costing: z.string().optional(),
+  units: z.enum(["kilometers", "miles"]).optional(),
+  language: z.string().max(8).optional(),
+  alternates: z.number().int().min(0).max(3).optional(),
+  directions_options: z.record(z.string(), z.unknown()).optional(),
+}).passthrough();
+
+export const directionsRoute = new Hono<AuthEnv>();
+
+// ── Valhalla proxy helper ────────────────────────────────────────────────────
+
+async function valhallaProxy(
+  action: string,
+  body: Record<string, unknown>
+): Promise<{ ok: boolean; status: ContentfulStatusCode; data: unknown }> {
+  try {
+    const res = await fetch(`${env.VALHALLA_URL}/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    return { ok: res.ok, status: res.status as ContentfulStatusCode, data };
+  } catch (err) {
+    console.error(`[valhalla] ${action} proxy error:`, err);
+    return { ok: false, status: 503 as ContentfulStatusCode, data: { error: "Routing service unavailable" } };
+  }
+}
+
+export function parseCoords(coords: string): Coordinate[] {
+  return coords.split(";").map((pair) => {
+    const [lon, lat] = pair.split(",").map(Number);
+    return { lon: lon!, lat: lat! };
+  });
+}
+
+function toValhallaLocations(coords: Coordinate[]) {
+  return coords.map((c) => ({ lon: c.lon, lat: c.lat }));
+}
+
+export function validateCoordinateList(
+  points: Coordinate[],
+  params: { min: number; max: number },
+): string | null {
+  if (points.length < params.min) {
+    return `At least ${params.min} coordinates required`;
+  }
+  if (points.length > params.max) {
+    return `At most ${params.max} coordinates allowed`;
+  }
+  if (
+    points.some(
+      (point) =>
+        !Number.isFinite(point.lon) ||
+        !Number.isFinite(point.lat) ||
+        point.lon < -180 ||
+        point.lon > 180 ||
+        point.lat < -90 ||
+        point.lat > 90,
+    )
+  ) {
+    return "Coordinates must be valid longitude,latitude pairs";
+  }
+  return null;
+}
+
+export function validateMatrixWorkload(
+  sources: Coordinate[],
+  targets: Coordinate[],
+): string | null {
+  const locationCount = Math.max(sources.length, targets.length);
+  if (locationCount > MAX_MATRIX_LOCATIONS) {
+    return `At most ${MAX_MATRIX_LOCATIONS} matrix locations allowed`;
+  }
+  if (sources.length * targets.length > MAX_MATRIX_CELLS) {
+    return `At most ${MAX_MATRIX_CELLS} matrix cells allowed`;
+  }
+  return null;
+}
+
+export function selectIndexedCoordinates(
+  points: Coordinate[],
+  indexesParam: string | undefined,
+): Coordinate[] | null {
+  if (!indexesParam) return points;
+  const selected: Coordinate[] = [];
+  for (const indexValue of indexesParam.split(";")) {
+    const index = Number(indexValue);
+    if (!Number.isInteger(index) || index < 0 || index >= points.length) {
+      return null;
+    }
+    selected.push(points[index]!);
+  }
+  return selected;
+}
+
+// ── GET /directions/v1/:profile/:coords ─────────────────────────────────────
+
+directionsRoute.get("/directions/v1/:profile/:coords", async (c) => {
+  const { profile, coords } = c.req.param();
+  const points = parseCoords(coords);
+  const coordinateError = validateCoordinateList(points, {
+    min: 2,
+    max: MAX_ROUTE_COORDINATES,
+  });
+  if (coordinateError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: coordinateError } },
+      400,
+    );
+  }
+
+  const costing = mapProfileToCosting(profile);
+  if (!costing) {
+    return c.json({ error: { code: "BAD_REQUEST", message: `Unknown profile: ${profile}` } }, 400);
+  }
+
+  const alternates = Number(c.req.query("alternatives")) || 0;
+  const units = c.req.query("units") || "kilometers";
+  const language = c.req.query("language") || "en";
+
+  const result = await valhallaProxy("route", {
+    locations: toValhallaLocations(points),
+    costing,
+    units,
+    language,
+    alternates: Math.min(alternates, 3),
+    directions_options: { units },
+  });
+
+  if (!result.ok) {
+    return c.json({ error: result.data }, result.status);
+  }
+
+  c.header("Cache-Control", "public, max-age=300");
+  return c.json(result.data);
+});
+
+// ── POST /directions/v1/:profile — Accept body instead of URL coords ────────
+
+directionsRoute.post("/directions/v1/:profile", async (c) => {
+  const { profile } = c.req.param();
+  const body = directionsBodySchema.parse(await c.req.json());
+
+  const costing = mapProfileToCosting(profile);
+  if (!costing) {
+    return c.json({ error: { code: "BAD_REQUEST", message: `Unknown profile: ${profile}` } }, 400);
+  }
+
+  const result = await valhallaProxy("route", {
+    ...body,
+    costing: body.costing || costing,
+  });
+
+  if (!result.ok) {
+    return c.json({ error: result.data }, result.status);
+  }
+
+  return c.json(result.data);
+});
+
+// ── GET /isochrone/v1/:profile/:coord ───────────────────────────────────────
+
+directionsRoute.get("/isochrone/v1/:profile/:coord", async (c) => {
+  const { profile, coord } = c.req.param();
+  const [lon, lat] = coord.split(",").map(Number);
+  const coordinateError = validateCoordinateList([{ lon: lon!, lat: lat! }], {
+    min: 1,
+    max: 1,
+  });
+  if (coordinateError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: coordinateError } },
+      400,
+    );
+  }
+
+  const costing = mapProfileToCosting(profile);
+  if (!costing) {
+    return c.json({ error: { code: "BAD_REQUEST", message: `Unknown profile: ${profile}` } }, 400);
+  }
+
+  const contours: { time?: number; distance?: number }[] = [];
+  const timeParam = c.req.query("contours_minutes");
+  const distParam = c.req.query("contours_meters");
+
+  if (timeParam) {
+    for (const t of timeParam.split(",")) {
+      const time = Number(t);
+      if (!Number.isFinite(time) || time <= 0 || time > MAX_ISOCHRONE_MINUTES) {
+        return c.json(
+          {
+            error: {
+              code: "BAD_REQUEST",
+              message: `Contour minutes must be between 1 and ${MAX_ISOCHRONE_MINUTES}`,
+            },
+          },
+          400,
+        );
+      }
+      contours.push({ time });
+    }
+  } else if (distParam) {
+    for (const d of distParam.split(",")) {
+      const distance = Number(d) / 1000;
+      if (
+        !Number.isFinite(distance) ||
+        distance <= 0 ||
+        distance > MAX_ISOCHRONE_KILOMETERS
+      ) {
+        return c.json(
+          {
+            error: {
+              code: "BAD_REQUEST",
+              message: `Contour distance must be between 1 and ${MAX_ISOCHRONE_KILOMETERS} kilometers`,
+            },
+          },
+          400,
+        );
+      }
+      contours.push({ distance });
+    }
+  } else {
+    contours.push({ time: 15 });
+  }
+  if (contours.length > MAX_ISOCHRONE_CONTOURS) {
+    return c.json(
+      {
+        error: {
+          code: "BAD_REQUEST",
+          message: `At most ${MAX_ISOCHRONE_CONTOURS} contours allowed`,
+        },
+      },
+      400,
+    );
+  }
+
+  const polygons = c.req.query("polygons") !== "false";
+
+  const result = await valhallaProxy("isochrone", {
+    locations: [{ lon, lat }],
+    costing,
+    contours,
+    polygons,
+  });
+
+  if (!result.ok) {
+    return c.json({ error: result.data }, result.status);
+  }
+
+  c.header("Cache-Control", "public, max-age=300");
+  return c.json(result.data);
+});
+
+// ── GET /matching/v1/:profile/:coords — Map matching (trace_route) ──────────
+
+directionsRoute.get("/matching/v1/:profile/:coords", async (c) => {
+  const { profile, coords } = c.req.param();
+  const points = parseCoords(coords);
+  const coordinateError = validateCoordinateList(points, {
+    min: 2,
+    max: MAX_TRACE_COORDINATES,
+  });
+  if (coordinateError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: coordinateError } },
+      400,
+    );
+  }
+
+  const costing = mapProfileToCosting(profile);
+  if (!costing) {
+    return c.json({ error: { code: "BAD_REQUEST", message: `Unknown profile: ${profile}` } }, 400);
+  }
+
+  const result = await valhallaProxy("trace_route", {
+    shape: points.map((p) => ({ lon: p.lon, lat: p.lat })),
+    costing,
+    shape_match: "map_snap",
+  });
+
+  if (!result.ok) {
+    return c.json({ error: result.data }, result.status);
+  }
+
+  return c.json(result.data);
+});
+
+// ── GET /matrix/v1/:profile/:coords — Distance/duration matrix ──────────────
+
+directionsRoute.get("/matrix/v1/:profile/:coords", async (c) => {
+  const { profile, coords } = c.req.param();
+  const points = parseCoords(coords);
+  const coordinateError = validateCoordinateList(points, {
+    min: 2,
+    max: MAX_MATRIX_LOCATIONS,
+  });
+  if (coordinateError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: coordinateError } },
+      400,
+    );
+  }
+
+  const costing = mapProfileToCosting(profile);
+  if (!costing) {
+    return c.json({ error: { code: "BAD_REQUEST", message: `Unknown profile: ${profile}` } }, 400);
+  }
+
+  const sourcesParam = c.req.query("sources");
+  const destinationsParam = c.req.query("destinations");
+
+  const sources = selectIndexedCoordinates(points, sourcesParam);
+  const targets = selectIndexedCoordinates(points, destinationsParam);
+  if (!sources || !targets) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: "Invalid matrix indexes" } },
+      400,
+    );
+  }
+  const matrixError =
+    validateCoordinateList(sources, { min: 1, max: MAX_MATRIX_LOCATIONS }) ??
+    validateCoordinateList(targets, { min: 1, max: MAX_MATRIX_LOCATIONS }) ??
+    validateMatrixWorkload(sources, targets);
+  if (matrixError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: matrixError } },
+      400,
+    );
+  }
+
+  const result = await valhallaProxy("sources_to_targets", {
+    sources: toValhallaLocations(sources),
+    targets: toValhallaLocations(targets),
+    costing,
+  });
+
+  if (!result.ok) {
+    return c.json({ error: result.data }, result.status);
+  }
+
+  return c.json(result.data);
+});
+
+// ── GET /optimized-trips/v1/:profile/:coords — TSP ──────────────────────────
+
+directionsRoute.get("/optimized-trips/v1/:profile/:coords", async (c) => {
+  const { profile, coords } = c.req.param();
+  const points = parseCoords(coords);
+  const coordinateError = validateCoordinateList(points, {
+    min: 3,
+    max: MAX_OPTIMIZED_TRIP_COORDINATES,
+  });
+  if (coordinateError) {
+    return c.json(
+      { error: { code: "BAD_REQUEST", message: coordinateError } },
+      400,
+    );
+  }
+
+  const costing = mapProfileToCosting(profile);
+  if (!costing) {
+    return c.json({ error: { code: "BAD_REQUEST", message: `Unknown profile: ${profile}` } }, 400);
+  }
+
+  const result = await valhallaProxy("optimized_route", {
+    locations: toValhallaLocations(points),
+    costing,
+  });
+
+  if (!result.ok) {
+    return c.json({ error: result.data }, result.status);
+  }
+
+  return c.json(result.data);
+});
+
+// ── Profile mapping ──────────────────────────────────────────────────────────
+
+function mapProfileToCosting(profile: string): string | null {
+  const map: Record<string, string> = {
+    driving: "auto",
+    "driving-traffic": "auto",
+    car: "auto",
+    auto: "auto",
+    walking: "pedestrian",
+    pedestrian: "pedestrian",
+    cycling: "bicycle",
+    bicycle: "bicycle",
+    bike: "bicycle",
+    truck: "truck",
+    bus: "bus",
+    motor_scooter: "motor_scooter",
+    motorcycle: "motorcycle",
+  };
+  return map[profile] ?? null;
+}

@@ -9,7 +9,7 @@ import {
   permissionsToScopes,
   requiredScopeForPath,
   USER_API_KEY_CONFIG_ID,
-} from "../lib/api-key";
+} from "../domains/keys/api-key";
 
 export type ApiKeyEnv = {
   Variables: {

@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
-import { enqueueUsageLog } from "../lib/usage-queue";
-import { getEndpointCost } from "../lib/api-key";
+import { enqueueUsageLog } from "../domains/usage/usage-queue";
+import { getEndpointCost } from "../domains/keys/api-key";
 import type { AuthEnv } from "./auth";
 
 /**
