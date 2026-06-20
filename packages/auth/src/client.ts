@@ -34,6 +34,7 @@ export type AuthClient = {
   revokeOtherSessions: AuthMethod;
   revokeSession: AuthMethod;
   sendVerificationEmail: AuthMethod;
+  signOut: AuthMethod;
   signIn: { email: AuthMethod; social: AuthMethod };
   signUp: { email: AuthMethod };
   useSession: AuthHook;

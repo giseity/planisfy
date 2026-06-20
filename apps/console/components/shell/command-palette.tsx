@@ -63,6 +63,7 @@ export function CommandPalette() {
       <Button
         type="button"
         variant="outline"
+        size="sm"
         className="hidden min-w-48 justify-between gap-3 px-2 text-muted-foreground md:flex"
         onClick={() => setOpen(true)}
       >
