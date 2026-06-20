@@ -18,6 +18,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
+  --color-card-border: var(--card-border);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
@@ -59,6 +60,7 @@
   --background: oklch(0.995 0.003 90);
   --foreground: oklch(0.24 0.04 55);
   --card: oklch(0.95 0.008 85);
+  --card-border: color-mix(in oklch, var(--card) 55%, var(--background));
   --card-foreground: oklch(0.2 0.02 55);
   --popover: oklch(0.995 0.003 90);
   --popover-foreground: oklch(0.2 0.02 55);
@@ -99,6 +101,7 @@
   --background: oklch(0.16 0.005 55);
   --foreground: oklch(0.93 0.005 80);
   --card: oklch(0.21 0.006 55);
+  --card-border: color-mix(in oklch, var(--card) 65%, var(--background));
   --card-foreground: oklch(0.93 0.005 80);
   --popover: oklch(0.21 0.006 55);
   --popover-foreground: oklch(0.93 0.005 80);

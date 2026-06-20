@@ -83,6 +83,9 @@ const quickActions = [
   { label: "Settings", href: "/settings", icon: Settings },
 ]
 
+const HEALTH_PREVIEW_COUNT = 4
+const READINESS_PREVIEW_COUNT = 3
+
 export default function StudioDashboardPage() {
   const [dashboard, setDashboard] = useState<ConsoleDashboard | null>(null)
   const [loading, setLoading] = useState(true)
@@ -373,6 +376,12 @@ function SignalTile({ label, value }: { label: string; value: number }) {
 }
 
 function HealthRail({ dashboard }: { dashboard: ConsoleDashboard }) {
+  const [expanded, setExpanded] = useState(false)
+  const visibleHealth = expanded
+    ? dashboard.health
+    : dashboard.health.slice(0, HEALTH_PREVIEW_COUNT)
+  const hiddenCount = dashboard.health.length - visibleHealth.length
+
   return (
     <Card>
       <CardHeader className="p-4 pb-2">
@@ -382,7 +391,7 @@ function HealthRail({ dashboard }: { dashboard: ConsoleDashboard }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2 p-4 pt-0">
-        {dashboard.health.map((entry) => (
+        {visibleHealth.map((entry) => (
           <div
             key={entry.id}
             className="flex min-h-11 items-center justify-between gap-3 rounded-md border px-3 py-2"
@@ -399,6 +408,17 @@ function HealthRail({ dashboard }: { dashboard: ConsoleDashboard }) {
             <Badge variant={statusVariant(entry.status)}>{statusLabel(entry.status)}</Badge>
           </div>
         ))}
+        {dashboard.health.length > HEALTH_PREVIEW_COUNT && (
+          <Button
+            className="mt-1 justify-center"
+            onClick={() => setExpanded((current) => !current)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {expanded ? "Show less" : `Show ${hiddenCount} more`}
+          </Button>
+        )}
       </CardContent>
     </Card>
   )
@@ -735,14 +755,29 @@ function QuickActions() {
 }
 
 function SetupReadiness({ dashboard }: { dashboard: ConsoleDashboard }) {
+  const [expanded, setExpanded] = useState(false)
+  const sortedReadiness = useMemo(
+    () =>
+      [...dashboard.readiness].sort((a, b) => {
+        const aPriority = Number(a.complete) + Number(!a.required)
+        const bPriority = Number(b.complete) + Number(!b.required)
+        return aPriority - bPriority
+      }),
+    [dashboard.readiness],
+  )
+  const visibleReadiness = expanded
+    ? sortedReadiness
+    : sortedReadiness.slice(0, READINESS_PREVIEW_COUNT)
+  const hiddenCount = sortedReadiness.length - visibleReadiness.length
+
   return (
     <Card>
       <CardHeader className="p-4 pb-2">
         <CardTitle className="text-base">Setup readiness</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 p-4 pt-0">
-        {dashboard.readiness.map((item) => (
-          <div key={item.id} className="flex items-start gap-3 rounded-md border p-3">
+        {visibleReadiness.map((item) => (
+          <div key={item.id} className="flex items-start gap-3 rounded-md border px-3 py-2">
             {item.complete ? (
               <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />
             ) : (
@@ -755,10 +790,21 @@ function SetupReadiness({ dashboard }: { dashboard: ConsoleDashboard }) {
                   {item.required ? "Required" : "Optional"}
                 </Badge>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
             </div>
           </div>
         ))}
+        {sortedReadiness.length > READINESS_PREVIEW_COUNT && (
+          <Button
+            className="mt-1 w-full justify-center"
+            onClick={() => setExpanded((current) => !current)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {expanded ? "Show less" : `Show ${hiddenCount} more`}
+          </Button>
+        )}
       </CardContent>
     </Card>
   )

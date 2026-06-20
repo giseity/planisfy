@@ -69,7 +69,11 @@ export default function StudioLayout({
           </div>
         </AppShellHeader>
         <EmailVerificationBanner />
-        <AppShellContent>{children}</AppShellContent>
+        <AppShellContent>
+          <div className="mx-auto w-full max-w-[1400px] [&_.container]:mx-auto">
+            {children}
+          </div>
+        </AppShellContent>
       </SidebarInset>
     </SidebarProvider>
   )
