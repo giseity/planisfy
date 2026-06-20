@@ -23,9 +23,11 @@ import {
   SelectValue,
 } from "@planisfy/ui/components/select";
 import { Plus, Map, Search, LayoutGrid, List } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { api, type ApiEnvelope } from "@/lib/api";
+import { createStyle } from "@/features/style-editor/workflow/style-actions";
 import type { StudioStyleSummary } from "@/features/style-editor/workflow/style-workflow";
-import { createStyle } from "./actions";
 
 type SortMode = "updated" | "name" | "created";
 type ViewMode = "grid" | "list";
@@ -172,8 +174,25 @@ export default function StylesPage() {
 }
 
 function CreateStyleButton() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  async function handleCreate(formData: FormData) {
+    setCreating(true);
+    try {
+      const created = await createStyle(String(formData.get("name") ?? ""));
+      setOpen(false);
+      router.push(`/styles/${created.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create style");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button data-testid="create-style">
           <Plus className="h-4 w-4 mr-2" />
@@ -181,7 +200,7 @@ function CreateStyleButton() {
         </Button>
       </DialogTrigger>
       <DialogContent>
-        <form action={createStyle}>
+        <form action={handleCreate}>
           <DialogHeader>
             <DialogTitle>Create a new style</DialogTitle>
             <DialogDescription>
@@ -199,8 +218,12 @@ function CreateStyleButton() {
             />
           </div>
           <DialogFooter>
-            <Button type="submit" data-testid="create-style-submit">
-              Create
+            <Button
+              type="submit"
+              data-testid="create-style-submit"
+              disabled={creating}
+            >
+              {creating ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>
         </form>

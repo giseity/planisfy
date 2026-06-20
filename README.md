@@ -27,6 +27,19 @@ This README describes what is implemented in this repository today. Known launch
 | `infra/docker` | Docker Compose stack, engine configs, and ignored runtime data mounts. |
 | `docs` | Durable contributor and operator references. |
 
+## Application Boundaries
+
+Planisfy keeps user-facing app surfaces behind explicit package and HTTP
+contracts. The Console should call the API through `@planisfy/api-contracts` and
+its local API client, and should not import API route internals, the database
+package, or Drizzle directly. The Console ESLint config enforces this boundary;
+the only allowed server-auth exception is the Next.js auth route adapter.
+
+Admin is an internal operator surface and may depend on server-side packages
+such as `@planisfy/database` when it needs direct control-plane access. Shared
+runtime behavior that crosses apps should live in a package under `packages/*`
+or behind an API route rather than as app-to-app imports.
+
 ## Implemented Public API Surface
 
 The API gateway mounts these route groups:

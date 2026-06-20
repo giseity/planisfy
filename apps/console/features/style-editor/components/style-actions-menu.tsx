@@ -32,7 +32,7 @@ import {
   deleteStyle,
   duplicateStyle,
   togglePublish,
-} from "@/app/(studio)/styles/actions";
+} from "@/features/style-editor/workflow/style-actions";
 import { api, type ApiEnvelope } from "@/lib/api";
 import {
   styleEditorHref,
@@ -63,7 +63,7 @@ export function StyleActionsMenu({
   };
 
   const handleTogglePublish = async () => {
-    await togglePublish(style.id);
+    await togglePublish(style);
     onMutate?.();
   };
 

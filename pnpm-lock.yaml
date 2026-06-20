@@ -253,9 +253,6 @@ importers:
       '@planisfy/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@planisfy/database':
-        specifier: workspace:*
-        version: link:../../packages/database
       '@planisfy/env':
         specifier: workspace:*
         version: link:../../packages/env
@@ -277,9 +274,6 @@ importers:
       better-auth:
         specifier: 1.6.11
         version: 1.6.11(drizzle-kit@0.31.9)(drizzle-orm@0.45.2(kysely@0.28.17)(postgres@3.4.8))(next@16.2.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@24.13.2)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(kysely@0.28.17)(postgres@3.4.8)
       immer:
         specifier: ^11.1.4
         version: 11.1.4
