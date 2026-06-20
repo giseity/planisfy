@@ -48,9 +48,9 @@
   "devDependencies": {
     "@planisfy/eslint-config": "workspace:*",
     "@planisfy/typescript-config": "workspace:*",
-    "@types/node": "^22.15.3",
+    "@types/node": "^24.0.0",
     "@types/pngjs": "^6.0.5",
-    "eslint": "^9.39.1",
+    "eslint": "^9.39.2",
     "tsup": "^8.4.0",
     "tsx": "^4.19.4",
     "typescript": "5.9.2"

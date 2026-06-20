@@ -13,7 +13,7 @@
   "devDependencies": {
     "@planisfy/eslint-config": "workspace:*",
     "@planisfy/typescript-config": "workspace:*",
-    "@types/node": "^22.15.3",
-    "typescript": "^5.9.2"
+    "@types/node": "^24.0.0",
+    "typescript": "5.9.2"
   }
 }

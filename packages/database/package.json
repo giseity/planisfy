@@ -27,8 +27,8 @@
   "devDependencies": {
     "@planisfy/eslint-config": "workspace:*",
     "@planisfy/typescript-config": "workspace:*",
-    "@types/node": "^25.2.3",
+    "@types/node": "^24.0.0",
     "drizzle-kit": "^0.31.9",
-    "typescript": "^5.9.2"
+    "typescript": "5.9.2"
   }
 }

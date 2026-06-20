@@ -47,10 +47,10 @@
     "@planisfy/eslint-config": "workspace:*",
     "@planisfy/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "^4.1.18",
-    "@types/node": "^25.1.0",
+    "@types/node": "^24.0.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.2",
-    "typescript": "^5.9.3"
+    "typescript": "5.9.2"
   }
 }
