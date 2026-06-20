@@ -2,6 +2,7 @@ import { Queue } from "bullmq";
 import { and, asc, eq, inArray, isNull, lte, max, sql } from "drizzle-orm";
 import {
   SOURCE_PROCESSING_QUEUE_NAME,
+  buildDatasetTilesetProcessingInput,
   parseSourceProcessingJobInput as parseSharedSourceProcessingJobInput,
 } from "@planisfy/geodata-contracts";
 import {
@@ -13,6 +14,7 @@ import {
   processingJobs,
   sourceImports,
   storageObjects,
+  tilesets,
 } from "@planisfy/database";
 import { parseEventPayload } from "@planisfy/events";
 import { getStorage } from "@planisfy/storage";
@@ -215,6 +217,26 @@ async function dispatchSourceImportRequested(event: OutboxEvent) {
       datasetVersionId: stored.datasetVersionId,
       output,
     });
+    try {
+      await queueTargetTilesetBuildFromImport({
+        accountId: payload.accountId,
+        importId: payload.importId,
+        datasetId: payload.datasetId,
+        datasetVersionId: stored.datasetVersionId,
+        storageObjectId: stored.storageObjectId,
+        storageKey: stored.storageKey,
+      });
+    } catch (err) {
+      await db.insert(processingJobLogs).values({
+        jobId: payload.jobId,
+        level: "warn",
+        message: "Source import succeeded but automatic tileset build failed",
+        metadata: {
+          importId: payload.importId,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      });
+    }
   } catch (err) {
     if (err instanceof SourceImportCanceledError) {
       await markSourceImportCanceled({
@@ -374,6 +396,104 @@ async function markSourceImportSucceeded(params: {
       level: "info",
       message: "Overture import extracted and stored",
       metadata: params.output,
+    });
+  });
+}
+
+async function queueTargetTilesetBuildFromImport(params: {
+  accountId: string;
+  importId: string;
+  datasetId: string;
+  datasetVersionId: string;
+  storageObjectId: string;
+  storageKey: string;
+}) {
+  const [sourceImport] = await db
+    .select()
+    .from(sourceImports)
+    .where(eq(sourceImports.id, params.importId))
+    .limit(1);
+  if (!sourceImport?.targetTilesetId) return;
+
+  const [tileset] = await db
+    .select()
+    .from(tilesets)
+    .where(
+      and(
+        eq(tilesets.id, sourceImport.targetTilesetId),
+        eq(tilesets.accountId, params.accountId),
+        isNull(tilesets.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!tileset) {
+    if (sourceImport.processingJobId) {
+      await db.insert(processingJobLogs).values({
+        jobId: sourceImport.processingJobId,
+        level: "warn",
+        message:
+          "Skipped automatic tileset build because target tileset was not found",
+        metadata: { targetTilesetId: sourceImport.targetTilesetId },
+      });
+    }
+    return;
+  }
+
+  const minZoom = tileset.minZoom ?? 0;
+  const maxZoom = tileset.maxZoom ?? 14;
+  const jobInput = buildDatasetTilesetProcessingInput({
+    tilesetId: tileset.id,
+    datasetId: params.datasetId,
+    datasetVersionId: params.datasetVersionId,
+    storageObjectId: params.storageObjectId,
+    storageKey: params.storageKey,
+    options: { minZoom, maxZoom },
+  });
+
+  const [processingJob] = await db
+    .insert(processingJobs)
+    .values({
+      accountId: params.accountId,
+      type: "tileset.process_dataset",
+      input: jobInput,
+    })
+    .returning();
+  if (!processingJob) {
+    throw new Error("Failed to create automatic tileset build job");
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(tilesets)
+      .set({
+        status: "BUILDING",
+        buildJobId: processingJob.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(tilesets.id, tileset.id));
+
+    await tx.insert(processingJobLogs).values({
+      jobId: processingJob.id,
+      level: "info",
+      message: "Automatic dataset tiling queued after source import",
+      metadata: {
+        importId: params.importId,
+        datasetId: params.datasetId,
+        datasetVersionId: params.datasetVersionId,
+        tilesetId: tileset.id,
+      },
+    });
+
+    await tx.insert(eventOutbox).values({
+      eventName: "tileset.build.requested",
+      payload: {
+        accountId: params.accountId,
+        tilesetId: tileset.id,
+        jobId: processingJob.id,
+        sourceResourceType: "dataset",
+        sourceResourceId: params.datasetVersionId,
+        options: { minZoom, maxZoom },
+      },
     });
   });
 }

@@ -300,6 +300,10 @@ export const sourceImportsRelations = relations(sourceImports, ({ one }) => ({
     fields: [sourceImports.datasetId],
     references: [datasets.id],
   }),
+  targetTileset: one(tilesets, {
+    fields: [sourceImports.targetTilesetId],
+    references: [tilesets.id],
+  }),
   processingJob: one(processingJobs, {
     fields: [sourceImports.processingJobId],
     references: [processingJobs.id],
@@ -312,6 +316,7 @@ export const tilesetsRelations = relations(tilesets, ({ one, many }) => ({
     references: [accounts.id],
   }),
   versions: many(tilesetVersions),
+  sourceImports: many(sourceImports),
 }));
 
 export const tilesetVersionsRelations = relations(tilesetVersions, ({ one }) => ({

@@ -35,6 +35,7 @@ export const sourceImportRequestedPayloadSchema = z
     accountId: uuid,
     jobId: uuid,
     datasetId: uuid,
+    targetTilesetId: uuid.optional(),
     provider: z.enum(["OVERTURE", "NATURAL_EARTH", "CUSTOM"]),
   })
   .strict();

@@ -536,6 +536,7 @@ function sourceImportFixture(
     sourceConnectionId: null,
     regionId: "region-1",
     datasetId: "dataset-1",
+    targetTilesetId: null,
     processingJobId: "job-1",
     provider: "OVERTURE",
     sourceName: "places",

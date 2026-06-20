@@ -27,7 +27,6 @@ import {
   SourceUrlRejectedError,
   validateRemoteSourceUrl,
 } from "./source-url-policy";
-import { checkResourceLimit } from "../../shared/policy/plan-check";
 import { buildOvertureImportEstimate } from "./import-estimates";
 import {
   UnsupportedOvertureTypeError,
@@ -59,6 +58,7 @@ importsRoute.use(
   requireOrgMutationPermission("resource.write"),
 );
 importsRoute.use("/datasets/*", requireOrgMutationPermission("resource.write"));
+importsRoute.use("/tilesets/*", requireOrgMutationPermission("resource.write"));
 importsRoute.use(
   "/source-credentials",
   requireOrgMutationPermission("integration.manage"),
@@ -109,9 +109,7 @@ const sourceConnectionSchema = z.object({
 });
 
 const datasetTilesetSchema = z.object({
-  handle: handleSchema,
-  name: z.string().min(1).max(128),
-  description: z.string().max(1000).optional(),
+  datasetId: z.string().uuid(),
   datasetVersionId: z.string().uuid().optional(),
   minZoom: z.number().int().min(0).max(24).optional(),
   maxZoom: z.number().int().min(0).max(24).optional(),
@@ -328,6 +326,27 @@ importsRoute.post("/source-imports/overture", async (c) => {
     );
   }
   const catalogEntry = parsed.catalogEntry;
+  let targetTileset: typeof tilesets.$inferSelect | null = null;
+  if (parsed.data.targetTilesetId) {
+    const [row] = await db
+      .select()
+      .from(tilesets)
+      .where(
+        and(
+          eq(tilesets.id, parsed.data.targetTilesetId),
+          eq(tilesets.accountId, accountId),
+          isNull(tilesets.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Target tileset not found" } },
+        404,
+      );
+    }
+    targetTileset = row;
+  }
 
   const [existing] = await db
     .select({ id: datasets.id })
@@ -393,6 +412,7 @@ importsRoute.post("/source-imports/overture", async (c) => {
       input: {
         provider: "OVERTURE",
         datasetId: dataset.id,
+        targetTilesetId: targetTileset?.id,
         regionId: region.id,
         bbox: region.bbox,
         estimate: importEstimate,
@@ -422,6 +442,7 @@ importsRoute.post("/source-imports/overture", async (c) => {
       sourceConnectionId: parsed.data.sourceConnectionId ?? null,
       regionId: region.id,
       datasetId: dataset.id,
+      targetTilesetId: targetTileset?.id ?? null,
       processingJobId: job.id,
       input: job.input,
     })
@@ -431,6 +452,7 @@ importsRoute.post("/source-imports/overture", async (c) => {
     metadata: {
       importId: sourceImport?.id,
       datasetId: dataset.id,
+      targetTilesetId: targetTileset?.id,
       regionId: region.id,
       theme: parsed.data.theme,
       type: parsed.data.type,
@@ -445,6 +467,7 @@ importsRoute.post("/source-imports/overture", async (c) => {
       accountId,
       jobId: job.id,
       datasetId: dataset.id,
+      targetTilesetId: targetTileset?.id,
       provider: "OVERTURE",
     },
   });
@@ -456,6 +479,7 @@ importsRoute.post("/source-imports/overture", async (c) => {
     metadata: {
       importId: sourceImport?.id,
       jobId: job.id,
+      targetTilesetId: targetTileset?.id,
       estimate: importEstimate,
     },
   });
@@ -466,32 +490,78 @@ importsRoute.post("/source-imports/overture", async (c) => {
   );
 });
 
-importsRoute.post("/datasets/:id/tilesets", async (c) => {
+importsRoute.post("/tilesets/:id/dataset-builds", async (c) => {
   const accountId = c.get("ownerId");
   const userId = c.get("userId");
-  const datasetId = c.req.param("id");
+  const tilesetId = c.req.param("id");
   const parsed = datasetTilesetSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
+
+  const result = await queueExistingDatasetTilesetBuild({
+    accountId,
+    userId,
+    tilesetId,
+    datasetId: parsed.data.datasetId,
+    datasetVersionId: parsed.data.datasetVersionId,
+    minZoom: parsed.data.minZoom,
+    maxZoom: parsed.data.maxZoom,
+    executionTargetId: parsed.data.executionTargetId,
+    workerProfileId: parsed.data.workerProfileId,
+    c,
+  });
+  if (result instanceof Response) return result;
+  return c.json({ data: result }, 202);
+});
+
+async function queueExistingDatasetTilesetBuild(params: {
+  accountId: string;
+  userId: string;
+  tilesetId: string;
+  datasetId: string;
+  datasetVersionId?: string;
+  minZoom?: number;
+  maxZoom?: number;
+  executionTargetId?: string;
+  workerProfileId?: string;
+  c: Context;
+}) {
+  const [tileset] = await db
+    .select()
+    .from(tilesets)
+    .where(
+      and(
+        eq(tilesets.id, params.tilesetId),
+        eq(tilesets.accountId, params.accountId),
+        isNull(tilesets.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!tileset) {
+    return params.c.json(
+      { error: { code: "NOT_FOUND", message: "Tileset not found" } },
+      404,
+    );
+  }
 
   const [dataset] = await db
     .select()
     .from(datasets)
     .where(
       and(
-        eq(datasets.id, datasetId),
-        eq(datasets.accountId, accountId),
+        eq(datasets.id, params.datasetId),
+        eq(datasets.accountId, params.accountId),
         isNull(datasets.deletedAt),
       ),
     )
     .limit(1);
   if (!dataset) {
-    return c.json(
+    return params.c.json(
       { error: { code: "NOT_FOUND", message: "Dataset not found" } },
       404,
     );
   }
   if (dataset.status !== "READY") {
-    return c.json(
+    return params.c.json(
       {
         error: {
           code: "DATASET_NOT_READY",
@@ -502,41 +572,10 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
     );
   }
 
-  const [existing] = await db
-    .select({ id: tilesets.id })
-    .from(tilesets)
-    .where(
-      and(
-        eq(tilesets.accountId, accountId),
-        eq(tilesets.handle, parsed.data.handle),
-        isNull(tilesets.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (existing) {
-    return c.json(
-      { error: { code: "CONFLICT", message: "Tileset handle already exists" } },
-      409,
-    );
-  }
-
-  const planCheck = await checkResourceLimit(userId, accountId, "tilesets");
-  if (!planCheck.allowed) {
-    return c.json(
-      {
-        error: {
-          code: "PLAN_LIMIT",
-          message: `You've reached the maximum of ${planCheck.limit} tilesets on your current plan. Please upgrade to create more.`,
-        },
-      },
-      403,
-    );
-  }
-
   const targetDatasetVersionId =
-    parsed.data.datasetVersionId ?? dataset.currentVersionId;
+    params.datasetVersionId ?? dataset.currentVersionId;
   if (!targetDatasetVersionId) {
-    return c.json(
+    return params.c.json(
       {
         error: {
           code: "DATASET_ARTIFACT_NOT_FOUND",
@@ -558,7 +597,7 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
     )
     .limit(1);
   if (!version?.storageObjectId) {
-    return c.json(
+    return params.c.json(
       {
         error: {
           code: "DATASET_ARTIFACT_NOT_FOUND",
@@ -575,50 +614,33 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
     .where(eq(storageObjects.id, version.storageObjectId))
     .limit(1);
   if (!storageObject) {
-    return c.json(
+    return params.c.json(
       { error: { code: "NOT_FOUND", message: "Dataset artifact not found" } },
       404,
     );
   }
 
-  const minZoom = parsed.data.minZoom ?? 0;
-  const maxZoom = parsed.data.maxZoom ?? 14;
+  const minZoom = params.minZoom ?? tileset.minZoom ?? 0;
+  const maxZoom = params.maxZoom ?? tileset.maxZoom ?? 14;
   let runtimeSelection: Awaited<
     ReturnType<typeof resolveExecutionRuntimeSelection>
   >;
   try {
-    runtimeSelection = await resolveExecutionRuntimeSelection(accountId, {
-      executionTargetId: parsed.data.executionTargetId,
-      workerProfileId: parsed.data.workerProfileId,
-    });
+    runtimeSelection = await resolveExecutionRuntimeSelection(
+      params.accountId,
+      {
+        executionTargetId: params.executionTargetId,
+        workerProfileId: params.workerProfileId,
+      },
+    );
   } catch (err) {
     if (err instanceof ExecutionRuntimeSelectionError) {
-      return c.json({ error: { code: err.code, message: err.message } }, 404);
+      return params.c.json(
+        { error: { code: err.code, message: err.message } },
+        404,
+      );
     }
     throw err;
-  }
-
-  const [tileset] = await db
-    .insert(tilesets)
-    .values({
-      accountId,
-      name: parsed.data.name,
-      handle: parsed.data.handle,
-      description: parsed.data.description ?? dataset.description ?? null,
-      status: "BUILDING",
-      minZoom,
-      maxZoom,
-      bounds: version.bounds ?? dataset.bounds,
-      layerMetadata: dataset.schemaSummary,
-    })
-    .returning();
-  if (!tileset) {
-    return c.json(
-      {
-        error: { code: "INTERNAL_ERROR", message: "Failed to create tileset" },
-      },
-      500,
-    );
   }
 
   const jobInput = buildDatasetTilesetProcessingInput({
@@ -632,22 +654,31 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
   let processingJob;
   try {
     processingJob = await createProcessingJob({
-      accountId,
+      accountId: params.accountId,
       type: "tileset.process_dataset",
       executionTargetId: runtimeSelection.executionTargetId,
       workerProfileId: runtimeSelection.workerProfileId,
       input: jobInput,
     });
   } catch (err) {
-    const response = processingJobLimitResponse(c, err);
+    const response = processingJobLimitResponse(params.c, err);
     if (response) return response;
     throw err;
   }
 
-  await db
+  const [updatedTileset] = await db
     .update(tilesets)
-    .set({ buildJobId: processingJob.id, updatedAt: new Date() })
-    .where(eq(tilesets.id, tileset.id));
+    .set({
+      status: "BUILDING",
+      buildJobId: processingJob.id,
+      bounds: version.bounds ?? dataset.bounds,
+      minZoom,
+      maxZoom,
+      layerMetadata: dataset.schemaSummary,
+      updatedAt: new Date(),
+    })
+    .where(eq(tilesets.id, tileset.id))
+    .returning();
 
   await logProcessingJob(processingJob.id, "Dataset tiling queued", {
     metadata: {
@@ -662,7 +693,7 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
   await enqueueOutboxEvent({
     eventName: "tileset.build.requested",
     payload: {
-      accountId,
+      accountId: params.accountId,
       tilesetId: tileset.id,
       jobId: processingJob.id,
       sourceResourceType: "dataset",
@@ -671,7 +702,7 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
     },
   });
   logAudit({
-    profileId: userId,
+    profileId: params.userId,
     action: "tileset.dataset_build_requested",
     resourceType: "tileset",
     resourceId: tileset.id,
@@ -682,11 +713,13 @@ importsRoute.post("/datasets/:id/tilesets", async (c) => {
     },
   });
 
-  return c.json(
-    { data: { dataset, datasetVersion: version, tileset, processingJob } },
-    202,
-  );
-});
+  return {
+    dataset,
+    datasetVersion: version,
+    tileset: updatedTileset ?? tileset,
+    processingJob,
+  };
+}
 
 async function createDataset(accountId: string, data: OvertureImportRequest) {
   const [dataset] = await db

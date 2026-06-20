@@ -145,6 +145,9 @@ export const sourceImports = pgTable(
     datasetId: uuid("dataset_id").references(() => datasets.id, {
       onDelete: "set null",
     }),
+    targetTilesetId: uuid("target_tileset_id").references(() => tilesets.id, {
+      onDelete: "set null",
+    }),
     processingJobId: uuid("processing_job_id").references(
       () => processingJobs.id,
       { onDelete: "set null" },
@@ -167,6 +170,7 @@ export const sourceImports = pgTable(
     index("source_imports_account_idx").on(table.accountId),
     index("source_imports_status_idx").on(table.status),
     index("source_imports_dataset_idx").on(table.datasetId),
+    index("source_imports_target_tileset_idx").on(table.targetTilesetId),
   ],
 );
 

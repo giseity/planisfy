@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   api,
   type ConsoleSavedRegion,
+  type ConsoleTileset,
   type OvertureCatalogTheme,
 } from "@/lib/api";
 import {
@@ -36,6 +37,7 @@ import { toast } from "sonner";
 const NEW_REGION_VALUE = "__new-region__";
 
 interface OvertureImportDialogProps {
+  tileset?: ConsoleTileset;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImported: () => void;
@@ -43,6 +45,7 @@ interface OvertureImportDialogProps {
 }
 
 export function OvertureImportDialog({
+  tileset,
   open,
   onOpenChange,
   onImported,
@@ -150,12 +153,17 @@ export function OvertureImportDialog({
         handle: importHandle,
         description: importDescription || undefined,
         regionId,
+        targetTilesetId: tileset?.id,
         theme: selectedTheme,
         type: selectedType,
       });
       resetImportForm(regionId);
       onOpenChange(false);
-      toast.success("Overture import queued");
+      toast.success(
+        tileset
+          ? "Overture import queued; tileset will build when ready"
+          : "Overture import queued",
+      );
       onImported();
     } catch (err) {
       toast.error(

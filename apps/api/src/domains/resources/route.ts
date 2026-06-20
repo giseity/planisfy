@@ -6,6 +6,7 @@ import {
   accounts,
   processingJobLogs,
   processingJobs,
+  sourceImports,
   storageObjects,
   tilesetVersions,
   tilesets,
@@ -72,6 +73,9 @@ const createTilesetSchema = z.object({
   description: z.string().max(1000).optional(),
   minZoom: z.number().int().min(0).max(24).optional(),
   maxZoom: z.number().int().min(0).max(24).optional(),
+});
+
+const uploadTilesetSchema = z.object({
   csvLatitude: z.string().max(128).optional(),
   csvLongitude: z.string().max(128).optional(),
   executionTargetId: z.string().uuid().optional(),
@@ -89,9 +93,104 @@ resourcesRoute.get("/uploads", async (c) => {
   return c.json({ data: rows });
 });
 
-resourcesRoute.post("/uploads", async (c) => {
+resourcesRoute.post(
+  "/tilesets",
+  requireOrgMutationPermission("resource.write"),
+  async (c) => {
+    const accountId = c.get("ownerId");
+    const userId = c.get("userId");
+    const parsed = createTilesetSchema.safeParse(await c.req.json());
+
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid tileset options",
+            details: parsed.error.flatten(),
+          },
+        },
+        400,
+      );
+    }
+
+    const [existing] = await db
+      .select({ id: tilesets.id })
+      .from(tilesets)
+      .where(
+        and(
+          eq(tilesets.accountId, accountId),
+          eq(tilesets.handle, parsed.data.handle),
+          isNull(tilesets.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      return c.json(
+        {
+          error: { code: "CONFLICT", message: "Tileset handle already exists" },
+        },
+        409,
+      );
+    }
+
+    const planCheck = await checkResourceLimit(userId, accountId, "tilesets");
+    if (!planCheck.allowed) {
+      return c.json(
+        {
+          error: {
+            code: "PLAN_LIMIT",
+            message: `You've reached the maximum of ${planCheck.limit} tilesets on your current plan. Please upgrade to create more.`,
+          },
+        },
+        403,
+      );
+    }
+
+    const [created] = await db
+      .insert(tilesets)
+      .values({
+        accountId,
+        name: parsed.data.name,
+        handle: parsed.data.handle,
+        description: parsed.data.description ?? null,
+        status: "DRAFT",
+        minZoom: parsed.data.minZoom ?? 0,
+        maxZoom: parsed.data.maxZoom ?? 14,
+      })
+      .returning();
+
+    if (!created) {
+      return c.json(
+        {
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Failed to create tileset",
+          },
+        },
+        500,
+      );
+    }
+
+    logAudit({
+      profileId: userId,
+      action: "tileset.created",
+      resourceType: "tileset",
+      resourceId: created.id,
+      metadata: { handle: created.handle },
+    });
+
+    return c.json(
+      { data: toConsoleTileset(created, await getOwnerHandle(accountId), []) },
+      201,
+    );
+  },
+);
+
+resourcesRoute.post("/tilesets/:id/uploads", async (c) => {
   const accountId = c.get("ownerId");
   const userId = c.get("userId");
+  const tilesetId = c.req.param("id");
   if (isRequestBodyTooLarge(c.req.raw.headers, MAX_MULTIPART_UPLOAD_SIZE)) {
     return c.json(
       {
@@ -111,14 +210,14 @@ resourcesRoute.post("/uploads", async (c) => {
     typeof optionsRaw === "string" && optionsRaw
       ? (JSON.parse(optionsRaw) as unknown)
       : {};
-  const parsed = createTilesetSchema.safeParse(parsedOptions);
+  const parsed = uploadTilesetSchema.safeParse(parsedOptions);
 
   if (!parsed.success) {
     return c.json(
       {
         error: {
           code: "VALIDATION_ERROR",
-          message: "Invalid tileset options",
+          message: "Invalid upload options",
           details: parsed.error.flatten(),
         },
       },
@@ -157,34 +256,21 @@ resourcesRoute.post("/uploads", async (c) => {
     );
   }
 
-  const [existing] = await db
-    .select({ id: tilesets.id })
+  const [tileset] = await db
+    .select()
     .from(tilesets)
     .where(
       and(
+        eq(tilesets.id, tilesetId),
         eq(tilesets.accountId, accountId),
-        eq(tilesets.handle, parsed.data.handle),
         isNull(tilesets.deletedAt),
       ),
     )
     .limit(1);
-  if (existing) {
+  if (!tileset) {
     return c.json(
-      { error: { code: "CONFLICT", message: "Tileset handle already exists" } },
-      409,
-    );
-  }
-
-  const planCheck = await checkResourceLimit(userId, accountId, "tilesets");
-  if (!planCheck.allowed) {
-    return c.json(
-      {
-        error: {
-          code: "PLAN_LIMIT",
-          message: `You've reached the maximum of ${planCheck.limit} tilesets on your current plan. Please upgrade to create more.`,
-        },
-      },
-      403,
+      { error: { code: "NOT_FOUND", message: "Tileset not found" } },
+      404,
     );
   }
 
@@ -249,28 +335,6 @@ resourcesRoute.post("/uploads", async (c) => {
     metadata: { originalFileName: file.name, format },
   });
 
-  const [tileset] = await db
-    .insert(tilesets)
-    .values({
-      accountId,
-      name: parsed.data.name,
-      handle: parsed.data.handle,
-      description: parsed.data.description ?? null,
-      status: "BUILDING",
-      minZoom: parsed.data.minZoom ?? 0,
-      maxZoom: parsed.data.maxZoom ?? 14,
-    })
-    .returning();
-
-  if (!tileset) {
-    return c.json(
-      {
-        error: { code: "INTERNAL_ERROR", message: "Failed to create tileset" },
-      },
-      500,
-    );
-  }
-
   await db
     .update(uploads)
     .set({
@@ -298,8 +362,8 @@ resourcesRoute.post("/uploads", async (c) => {
           longitude: parsed.data.csvLongitude,
         },
         options: {
-          minZoom: parsed.data.minZoom ?? 0,
-          maxZoom: parsed.data.maxZoom ?? 14,
+          minZoom: tileset.minZoom ?? 0,
+          maxZoom: tileset.maxZoom ?? 14,
         },
       },
     });
@@ -311,7 +375,11 @@ resourcesRoute.post("/uploads", async (c) => {
 
   await db
     .update(tilesets)
-    .set({ buildJobId: processingJob.id, updatedAt: new Date() })
+    .set({
+      status: "BUILDING",
+      buildJobId: processingJob.id,
+      updatedAt: new Date(),
+    })
     .where(eq(tilesets.id, tileset.id));
 
   await logProcessingJob(processingJob.id, "Upload received and queued", {
@@ -334,8 +402,8 @@ resourcesRoute.post("/uploads", async (c) => {
       sourceResourceType: "upload",
       sourceResourceId: upload.id,
       options: {
-        minZoom: parsed.data.minZoom ?? 0,
-        maxZoom: parsed.data.maxZoom ?? 14,
+        minZoom: tileset.minZoom ?? 0,
+        maxZoom: tileset.maxZoom ?? 14,
       },
     },
   });
@@ -352,7 +420,16 @@ resourcesRoute.post("/uploads", async (c) => {
     },
   });
 
-  return c.json({ data: { upload, tileset, processingJob } }, 201);
+  const [updatedTileset] = await db
+    .select()
+    .from(tilesets)
+    .where(eq(tilesets.id, tileset.id))
+    .limit(1);
+
+  return c.json(
+    { data: { upload, tileset: updatedTileset ?? tileset, processingJob } },
+    201,
+  );
 });
 
 resourcesRoute.get("/tilesets", async (c) => {
@@ -394,6 +471,22 @@ resourcesRoute.get("/tilesets", async (c) => {
           )
           .orderBy(desc(uploads.createdAt))
       : [];
+  const linkedSourceImports =
+    rows.length > 0
+      ? await db
+          .select()
+          .from(sourceImports)
+          .where(
+            and(
+              eq(sourceImports.accountId, accountId),
+              inArray(
+                sourceImports.targetTilesetId,
+                rows.map((row) => row.id),
+              ),
+            ),
+          )
+          .orderBy(desc(sourceImports.createdAt))
+      : [];
   const artifactById = await fetchArtifactMap(versions);
   const uploadAvailabilityById =
     await fetchUploadArtifactAvailabilityMap(linkedUploads);
@@ -405,6 +498,7 @@ resourcesRoute.get("/tilesets", async (c) => {
     data: rows.map((row) =>
       toConsoleTileset(row, ownerHandle, versionsForTileset(versions, row.id), {
         uploads: uploadsForTileset(linkedUploads, row.id),
+        sourceImports: sourceImportsForTileset(linkedSourceImports, row.id),
         artifactById,
         uploadAvailabilityById,
         buildJobInputById,
@@ -452,6 +546,16 @@ resourcesRoute.get("/tilesets/:id", async (c) => {
       ),
     )
     .orderBy(desc(uploads.createdAt));
+  const linkedSourceImports = await db
+    .select()
+    .from(sourceImports)
+    .where(
+      and(
+        eq(sourceImports.accountId, accountId),
+        eq(sourceImports.targetTilesetId, id),
+      ),
+    )
+    .orderBy(desc(sourceImports.createdAt));
   const artifactById = await fetchArtifactMap(versions);
   const uploadAvailabilityById =
     await fetchUploadArtifactAvailabilityMap(linkedUploads);
@@ -460,6 +564,7 @@ resourcesRoute.get("/tilesets/:id", async (c) => {
   return c.json({
     data: toConsoleTileset(tileset, ownerHandle, versions, {
       uploads: linkedUploads,
+      sourceImports: linkedSourceImports,
       artifactById,
       uploadAvailabilityById,
       buildJobInputById,
@@ -1121,6 +1226,13 @@ function uploadsForTileset(
   return rows.filter((upload) => upload.linkedTilesetId === tilesetId);
 }
 
+function sourceImportsForTileset(
+  rows: Array<typeof sourceImports.$inferSelect>,
+  tilesetId: string,
+) {
+  return rows.filter((sourceImport) => sourceImport.targetTilesetId === tilesetId);
+}
+
 async function fetchArtifactMap(
   versions: Array<typeof tilesetVersions.$inferSelect>,
 ) {
@@ -1223,6 +1335,7 @@ function toConsoleTileset(
   versions: Array<typeof tilesetVersions.$inferSelect>,
   params: {
     uploads?: Array<typeof uploads.$inferSelect>;
+    sourceImports?: Array<typeof sourceImports.$inferSelect>;
     artifactById?: Map<string, ConsoleArtifact>;
     uploadAvailabilityById?: Map<string, ConsoleArtifactAvailability>;
     buildJobInputById?: Map<string, unknown>;
@@ -1241,6 +1354,7 @@ function toConsoleTileset(
   const consoleUploads = (params.uploads ?? []).map((upload) =>
     toConsoleUpload(upload, params.uploadAvailabilityById),
   );
+  const consoleSourceImports = params.sourceImports ?? [];
   const tilejsonUrl =
     ownerHandle && currentVersion
       ? `/tiles/v1/${ownerHandle}/${tileset.handle}.json`
@@ -1255,6 +1369,8 @@ function toConsoleTileset(
     ownerHandle,
     uploads: consoleUploads,
     latestUpload: consoleUploads[0] ?? null,
+    sourceImports: consoleSourceImports,
+    latestSourceImport: consoleSourceImports[0] ?? null,
     versions: consoleVersions,
     latestVersion: latestConsoleVersion,
     currentVersion: currentConsoleVersion,

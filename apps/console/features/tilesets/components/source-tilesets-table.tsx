@@ -79,6 +79,9 @@ export function SourceTilesetsTable({
           const displayVersion =
             tileset.currentVersion ?? tileset.latestVersion;
           const latestJob = latestJobForTileset(jobs, tileset.id);
+          const hasSource = Boolean(
+            tileset.latestUpload || tileset.latestSourceImport,
+          );
           const validation = tileset.latestUpload?.validationResult;
           const artifact = displayVersion?.artifact;
           const canPublish = Boolean(
@@ -116,7 +119,11 @@ export function SourceTilesetsTable({
                     {tileset.status === "BUILDING" && (
                       <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
                     )}
-                    {tileset.isPublished ? "PUBLISHED" : tileset.status}
+                    {tileset.isPublished
+                      ? "PUBLISHED"
+                      : !hasSource && tileset.status === "DRAFT"
+                        ? "AWAITING SOURCE"
+                        : tileset.status}
                   </Badge>
                   {latestJob && (
                     <div className="mt-1 text-xs text-muted-foreground">

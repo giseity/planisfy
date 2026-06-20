@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type {
   ConsoleExecutionTarget,
+  ConsoleTileset,
   ConsoleWorkerProfile,
   ProcessingEstimate,
 } from "@/lib/api";
@@ -17,7 +18,7 @@ import {
 } from "@planisfy/ui/components/dialog";
 import { Input } from "@planisfy/ui/components/input";
 import { Label } from "@planisfy/ui/components/label";
-import { Plus, RefreshCw, Upload } from "lucide-react";
+import { RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { SourceRuntimeSelectors } from "@/features/tilesets/components/source-runtime-selectors";
 import {
@@ -26,6 +27,7 @@ import {
 } from "@/features/tilesets/workflow/source-runtime";
 
 export function TilesetUploadDialog({
+  tileset,
   open,
   onOpenChange,
   executionTargets,
@@ -36,6 +38,7 @@ export function TilesetUploadDialog({
   onWorkerProfileChange,
   onUploaded,
 }: {
+  tileset: ConsoleTileset;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   executionTargets: ConsoleExecutionTarget[];
@@ -46,11 +49,6 @@ export function TilesetUploadDialog({
   onWorkerProfileChange: (value: string) => void;
   onUploaded: () => void;
 }) {
-  const [newName, setNewName] = useState("");
-  const [newHandle, setNewHandle] = useState("");
-  const [description, setDescription] = useState("");
-  const [minZoom, setMinZoom] = useState(0);
-  const [maxZoom, setMaxZoom] = useState(14);
   const [csvLatitude, setCsvLatitude] = useState("");
   const [csvLongitude, setCsvLongitude] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -72,8 +70,8 @@ export function TilesetUploadDialog({
           selectedWorkerProfileId,
         ),
         sourceSizeBytes: file.size,
-        minZoom,
-        maxZoom,
+        minZoom: tileset.minZoom ?? 0,
+        maxZoom: tileset.maxZoom ?? 14,
       })
       .then((res) => {
         if (!canceled) setUploadEstimate(res.data);
@@ -87,24 +85,19 @@ export function TilesetUploadDialog({
     };
   }, [
     file,
-    maxZoom,
-    minZoom,
     open,
     selectedExecutionTargetId,
     selectedWorkerProfileId,
+    tileset.maxZoom,
+    tileset.minZoom,
   ]);
 
   async function handleUpload() {
-    if (!newName || !newHandle || !file) return;
+    if (!file) return;
 
     setUploading(true);
     try {
-      await api.uploadTileset(file, {
-        name: newName,
-        handle: newHandle,
-        description: description || undefined,
-        minZoom,
-        maxZoom,
+      await api.uploadTileset(tileset.id, file, {
         csvLatitude: csvLatitude || undefined,
         csvLongitude: csvLongitude || undefined,
         ...runtimeSelectionPayload(
@@ -124,11 +117,6 @@ export function TilesetUploadDialog({
   }
 
   function resetUploadForm() {
-    setNewName("");
-    setNewHandle("");
-    setDescription("");
-    setMinZoom(0);
-    setMaxZoom(14);
     setCsvLatitude("");
     setCsvLongitude("");
     setFile(null);
@@ -138,77 +126,15 @@ export function TilesetUploadDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
         <Button data-testid="upload-tileset">
-          <Plus className="mr-2 h-4 w-4" />
-          Upload tileset
+          <Upload className="mr-2 h-4 w-4" />
+          Upload source
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Upload tileset</DialogTitle>
+          <DialogTitle>Upload source</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
-          <div className="space-y-2">
-            <Label htmlFor="tileset-upload-name">Name (required)</Label>
-            <Input
-              id="tileset-upload-name"
-              required
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Enter tileset name"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="tileset-upload-handle">Handle (required)</Label>
-            <Input
-              id="tileset-upload-handle"
-              required
-              aria-describedby="tileset-upload-handle-help"
-              value={newHandle}
-              onChange={(e) =>
-                setNewHandle(
-                  e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
-                )
-              }
-              placeholder="enter-handle"
-            />
-            <p
-              id="tileset-upload-handle-help"
-              className="text-xs text-muted-foreground"
-            >
-              Lowercase letters, numbers, and hyphens only.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="tileset-upload-description">Description</Label>
-            <Input
-              id="tileset-upload-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Min zoom</Label>
-              <Input
-                type="number"
-                min={0}
-                max={24}
-                value={minZoom}
-                onChange={(e) => setMinZoom(Number(e.target.value))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Max zoom</Label>
-              <Input
-                type="number"
-                min={0}
-                max={24}
-                value={maxZoom}
-                onChange={(e) => setMaxZoom(Number(e.target.value))}
-              />
-            </div>
-          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>CSV latitude</Label>
@@ -269,7 +195,7 @@ export function TilesetUploadDialog({
             </Button>
             <Button
               onClick={handleUpload}
-              disabled={!newName || !newHandle || !file || uploading}
+              disabled={!file || uploading}
               data-testid="upload-tileset-submit"
             >
               {uploading ? (

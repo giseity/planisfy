@@ -104,6 +104,8 @@ export interface ConsoleTileset {
   } | null;
   uploads: ConsoleUpload[];
   latestUpload: ConsoleUpload | null;
+  sourceImports: ConsoleSourceImport[];
+  latestSourceImport: ConsoleSourceImport | null;
   versions: ConsoleTilesetVersion[];
   latestVersion: ConsoleTilesetVersion | null;
   currentVersion: ConsoleTilesetVersion | null;
@@ -145,27 +147,27 @@ export interface ConsoleProcessingJob {
 }
 
 export interface TilesetUploadOptions {
-  name: string;
-  handle: string;
-  description?: string;
-  minZoom?: number;
-  maxZoom?: number;
   csvLatitude?: string;
   csvLongitude?: string;
   executionTargetId?: string;
   workerProfileId?: string;
 }
 
+export interface CreateTilesetOptions {
+  name: string;
+  handle: string;
+  description?: string;
+  minZoom?: number;
+  maxZoom?: number;
+}
+
 export interface TilesetUploadResult {
-  upload: unknown;
-  tileset: unknown;
-  processingJob: unknown;
+  upload: ConsoleUpload;
+  tileset: ConsoleTileset;
+  processingJob: ConsoleProcessingJob;
 }
 
 export interface DatasetTilesetOptions {
-  handle: string;
-  name: string;
-  description?: string;
   datasetVersionId?: string;
   minZoom?: number;
   maxZoom?: number;
@@ -206,6 +208,7 @@ export interface ConsoleSourceImport {
   sourceConnectionId: string | null;
   regionId: string | null;
   datasetId: string | null;
+  targetTilesetId: string | null;
   processingJobId: string | null;
   provider: "OVERTURE" | "NATURAL_EARTH" | "CUSTOM" | string;
   sourceName: string;
@@ -254,6 +257,7 @@ export interface OvertureImportOptions {
   name: string;
   description?: string;
   regionId: string;
+  targetTilesetId?: string;
   sourceConnectionId?: string;
   theme: string;
   type?: string;

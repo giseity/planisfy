@@ -15,6 +15,7 @@ export const overtureImportRequestSchema = z.object({
   name: z.string().min(1).max(128),
   description: z.string().max(1000).optional(),
   regionId: z.string().uuid(),
+  targetTilesetId: z.string().uuid().optional(),
   sourceConnectionId: z.string().uuid().optional(),
   theme: z.string().min(1).max(64),
   type: z.string().min(1).max(64).optional(),

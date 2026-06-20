@@ -27,6 +27,7 @@ import type {
   ConsoleWorkflowTemplate,
   ConsoleWorkerNode,
   ConsoleWorkerProfile,
+  CreateTilesetOptions,
   DatasetTilesetOptions,
   DatasetTilesetResult,
   ExecutionTargetAuthMode,
@@ -73,6 +74,7 @@ export type {
   ConsoleWorkflowTemplate,
   ConsoleWorkerNode,
   ConsoleWorkerProfile,
+  CreateTilesetOptions,
   DashboardHealthStatus,
   DatasetTilesetOptions,
   DatasetTilesetResult,
@@ -638,18 +640,29 @@ class ApiClient {
     );
   }
 
-  createTilesetFromDataset(datasetId: string, options: DatasetTilesetOptions) {
+  createTileset(options: CreateTilesetOptions) {
+    return this.post<ApiEnvelope<ConsoleTileset>>("/tilesets", options).then(
+      (res) => ({
+        data: normalizeTilesetUrls(res.data),
+      }),
+    );
+  }
+
+  buildTilesetFromDataset(tilesetId: string, options: DatasetTilesetOptions) {
     return this.post<ApiEnvelope<DatasetTilesetResult>>(
-      `/datasets/${datasetId}/tilesets`,
+      `/tilesets/${tilesetId}/dataset-builds`,
       options,
     );
   }
 
-  uploadTileset(file: File, options: TilesetUploadOptions) {
+  uploadTileset(tilesetId: string, file: File, options: TilesetUploadOptions) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("options", JSON.stringify(options));
-    return this.upload<ApiEnvelope<TilesetUploadResult>>("/uploads", formData);
+    return this.upload<ApiEnvelope<TilesetUploadResult>>(
+      `/tilesets/${tilesetId}/uploads`,
+      formData,
+    );
   }
 
   async upload<T>(path: string, formData: FormData): Promise<T> {
