@@ -4,6 +4,7 @@ const withMDX = createMDX();
 
 /** @type {import('next').NextConfig} */
 const config = {
+  allowedDevOrigins: ['docs.planisfy.localhost'],
   output: 'standalone',
   reactStrictMode: true,
   async rewrites() {

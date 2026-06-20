@@ -6,6 +6,7 @@ loadWorkspaceEnvForNextConfig();
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ["console.planisfy.localhost"],
   output: "standalone",
   transpilePackages: ["@planisfy/ui", "@planisfy/auth"],
   async rewrites() {
