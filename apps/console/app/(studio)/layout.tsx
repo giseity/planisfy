@@ -105,7 +105,7 @@ function ConsoleSidebarContent({ pathname }: { pathname: string }) {
                     <Link
                       href={item.href}
                       className={cn(
-                        "flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-[0.8125rem] text-muted-foreground transition-[background-color,color,width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]/sidebar:size-8 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:p-0 [&_svg]:size-4 [&_svg]:shrink-0",
+                        "flex min-h-8.5 group-data-[collapsible=icon]/sidebar:min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-[0.8125rem] text-muted-foreground transition-[background-color,color,width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]/sidebar:size-8 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:p-0 [&_svg]:size-4 [&_svg]:shrink-0",
                         isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                       )}
                     >

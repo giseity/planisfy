@@ -48,7 +48,7 @@ export function AdminSidebarContent({ pathname }: { pathname: string }) {
                     <Link
                       href={item.href}
                       className={cn(
-                        "flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0",
+                        "flex min-h-8.5 group-data-[collapsible=icon]/sidebar:min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0",
                         isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                       )}
                     >

@@ -218,6 +218,7 @@ function AuthInput({
         </span>
       )}
       <Input
+        size="auth"
         className={cn(icon && (hasLargeIcon ? "pl-11" : "pl-10"), className)}
         {...props}
       />
@@ -272,6 +273,7 @@ function SocialButton({
     <Button
       type="button"
       variant="outline"
+      size="auth"
       className={cn(compact && "flex-1")}
       disabled={loading}
       onClick={handleSocialSignIn}
@@ -418,7 +420,7 @@ export function SignInForm({
             autoComplete="current-password"
           />
         </div>
-        <Button type="submit" className="w-full" disabled={loading}>
+        <Button type="submit" size="auth" className="w-full" disabled={loading}>
           {loading ? "Signing in..." : "Login"}
         </Button>
         <SocialAuthOptions callbackURL={target} />
@@ -549,7 +551,7 @@ export function SignUpForm({
             Good - add a special character for strong
           </span>
         </div>
-        <Button type="submit" className="w-full" disabled={loading}>
+        <Button type="submit" size="auth" className="w-full" disabled={loading}>
           {loading ? "Creating account..." : "Create account"}
         </Button>
         <SocialAuthOptions callbackURL={target} compact />
@@ -651,7 +653,7 @@ export function ResetPasswordForm({
             />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" size="auth" className="w-full" disabled={loading}>
             {loading ? "Resetting..." : "Reset password"}
           </Button>
         </form>
@@ -666,7 +668,7 @@ export function ResetPasswordForm({
         description="If an account exists for that email, a reset link is on the way."
         variant="split"
       >
-        <Button asChild variant="outline" className="w-full">
+        <Button asChild variant="outline" size="auth" className="w-full">
           <a href={signInHref}>Back to sign in</a>
         </Button>
       </AuthShell>
@@ -693,7 +695,7 @@ export function ResetPasswordForm({
             autoComplete="email"
           />
         </div>
-        <Button type="submit" className="w-full" disabled={loading}>
+        <Button type="submit" size="auth" className="w-full" disabled={loading}>
           <Send className="size-4" />
           {loading ? "Sending..." : "Send Reset Link"}
         </Button>

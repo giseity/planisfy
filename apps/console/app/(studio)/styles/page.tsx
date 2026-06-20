@@ -102,7 +102,7 @@ export default function StylesPage() {
             placeholder="Search styles..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-9"
+            className="pl-8"
           />
         </div>
         <Select value={sort} onValueChange={(v) => setSort(v as SortMode)}>
