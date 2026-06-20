@@ -10,7 +10,6 @@ import {
 } from "./client";
 import {
   ArrowLeft,
-  Chrome,
   Github,
   Lock,
   Mail,
@@ -248,7 +247,6 @@ function SocialButton({
   compact?: boolean;
 }) {
   const [loading, setLoading] = React.useState(false);
-  const Icon = provider === "github" ? Github : Chrome;
 
   async function handleSocialSignIn() {
     setLoading(true);
@@ -278,7 +276,16 @@ function SocialButton({
       disabled={loading}
       onClick={handleSocialSignIn}
     >
-      <Icon className="size-4" />
+      {provider === "github" ? (
+        <Github className="size-4" />
+      ) : (
+        <img
+          src="/auth/google-g.svg"
+          alt=""
+          aria-hidden="true"
+          className="size-[18px]"
+        />
+      )}
       {loading ? "Connecting..." : children}
     </Button>
   );

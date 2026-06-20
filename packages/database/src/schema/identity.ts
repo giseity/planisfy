@@ -210,7 +210,15 @@ export const oauthAccounts = pgTable("oauth_accounts", {
   providerId: text("provider_id").notNull(),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
+  accessTokenExpiresAt: timestamp("access_token_expires_at", {
+    withTimezone: true,
+  }),
+  refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+    withTimezone: true,
+  }),
+  scope: text("scope"),
   password: text("password"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

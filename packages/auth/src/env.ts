@@ -21,7 +21,8 @@ export function getAuthBaseURL() {
 }
 
 export function getOAuthProxyURL() {
-  return authUrlFromAppUrl(process.env.OAUTH_PROXY_ORIGIN);
+  const value = process.env.OAUTH_PROXY_ORIGIN;
+  return value ? trimTrailingSlash(value) : undefined;
 }
 
 export function getSocialProviderCredentials() {

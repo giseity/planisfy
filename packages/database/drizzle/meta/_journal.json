@@ -113,6 +113,13 @@
       "when": 1781852202099,
       "tag": "0015_better_auth_api_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1782030000000,
+      "tag": "0016_oauth_account_tokens",
+      "breakpoints": true
     }
   ]
 }
