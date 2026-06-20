@@ -41,7 +41,7 @@ import type {
   TilesetUploadOptions,
   TilesetUploadResult,
 } from "@planisfy/api-contracts";
-import { CONSOLE_API_BASE, consoleRpc } from "./config";
+import { CONSOLE_API_BASE } from "./config";
 import { ApiRequestError, type ApiError } from "./errors";
 import {
   normalizeDashboardUrls,
@@ -94,14 +94,11 @@ export type {
 } from "@planisfy/api-contracts";
 
 class ApiClient {
-  private readonly rpc = consoleRpc;
-
   private async request<T>(
     method: string,
     path: string,
     body?: unknown,
   ): Promise<T> {
-    void this.rpc;
     const url = `${CONSOLE_API_BASE}${path}`;
     const res = await fetch(url, {
       method,

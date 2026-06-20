@@ -30,7 +30,6 @@
     "@types/geojson": "^7946.0.16",
     "better-auth": "1.6.11",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.7.10",
     "immer": "^11.1.4",
     "lucide-react": "^0.563.0",
     "maplibre-gl": "^5.14.0",

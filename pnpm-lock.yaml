@@ -280,9 +280,6 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(kysely@0.28.17)(postgres@3.4.8)
-      hono:
-        specifier: ^4.7.10
-        version: 4.12.7
       immer:
         specifier: ^11.1.4
         version: 11.1.4
