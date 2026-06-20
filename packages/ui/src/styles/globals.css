@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @source "../../../apps/**/*.{ts,tsx}";
 @source "../../../components/**/*.{ts,tsx}";
+@source "../../../auth/src/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
 @import "tw-animate-css";
@@ -91,7 +92,7 @@
   --sidebar-border: oklch(0.92 0.01 80);
   --sidebar-ring: oklch(0.62 0.14 48);
   --tracking-normal: 0em;
-  --spacing: 0.27rem;
+  --spacing: 0.24rem;
 }
 
 .dark {

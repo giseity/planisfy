@@ -10,17 +10,16 @@ import {
 } from "./client";
 import {
   ArrowLeft,
-  Building2,
   Chrome,
   Github,
-  KeyRound,
   Lock,
   Mail,
   Send,
 } from "lucide-react";
 import { Button } from "@planisfy/ui/components/button";
+import { PlanisfyLogo } from "@planisfy/ui/components/brand-mark";
 import { Input } from "@planisfy/ui/components/input";
-import { Field, FieldLabel } from "@planisfy/ui/components/field";
+import { Label } from "@planisfy/ui/components/label";
 import { cn } from "@planisfy/ui/lib/utils";
 import { toast } from "sonner";
 
@@ -77,6 +76,7 @@ function AuthShell({
   footer,
   width = "sm",
   icon,
+  variant = "centered",
 }: {
   title: string;
   description: string;
@@ -84,67 +84,154 @@ function AuthShell({
   footer?: React.ReactNode;
   width?: "sm" | "md";
   icon?: React.ReactNode;
+  variant?: "centered" | "split";
 }) {
-  return (
-    <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10 text-foreground">
-      <main
-        className={cn(
-          "flex w-full flex-col gap-6",
-          width === "md" ? "max-w-[420px]" : "max-w-[400px]",
-        )}
-      >
-        <div className="text-center">
-          <div className="mx-auto mb-3.5 flex size-[52px] items-center justify-center rounded-lg bg-primary text-[22px] font-bold text-primary-foreground">
+  const content = (
+    <main
+      className={cn(
+        "flex w-full flex-col gap-6",
+        width === "md" ? "max-w-[480px]" : "max-w-[400px]",
+        variant === "split" && (width === "md" ? "max-w-[480px]" : "max-w-md"),
+      )}
+    >
+      <div className="flex flex-col items-center gap-2 text-center">
+        {variant === "centered" && (
+          <div className="flex size-[52px] items-center justify-center rounded-lg bg-primary text-[22px] font-bold text-primary-foreground">
             {icon ?? "P"}
           </div>
-          <h1 className="m-0 text-2xl font-bold tracking-tight">{title}</h1>
-          <p className="mt-1.5 text-[13px] text-muted-foreground">
-            {description}
-          </p>
+        )}
+        <h1 className="text-2xl font-bold">{title}</h1>
+        <p className="text-balance text-sm text-muted-foreground">
+          {description}
+        </p>
+      </div>
+      {children}
+      {footer}
+    </main>
+  );
+
+  if (variant === "split") {
+    return <AuthSplitLayout>{content}</AuthSplitLayout>;
+  }
+
+  return (
+    <div className="flex min-h-svh items-center justify-center bg-background px-4 py-10 text-foreground">
+      {content}
+    </div>
+  );
+}
+
+export function AuthSplitLayout({
+  children,
+  sublabel = "Customer console",
+}: {
+  children: React.ReactNode;
+  sublabel?: string;
+}) {
+  return (
+    <div className="grid min-h-svh bg-background text-foreground md:grid-cols-2 mx-auto">
+      <AuthVisualPanel />
+      <div className="flex flex-col gap-4 p-6 md:col-start-2 md:row-start-1 md:p-10">
+        <div className="flex justify-center md:justify-start">
+          <a
+            href="/"
+            className="rounded-md font-medium focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <PlanisfyLogo sublabel={sublabel} />
+          </a>
         </div>
-        {children}
-        {footer}
-      </main>
+        <div className="flex flex-1 items-center justify-center">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AuthVisualPanel() {
+  return (
+    <div className="relative hidden overflow-hidden bg-muted md:col-start-1 md:row-start-1 md:block">
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,var(--muted)_0%,var(--card)_46%,var(--accent)_100%)]" />
+      <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:44px_44px]" />
+      <div className="absolute left-[12%] top-[14%] h-[72%] w-[76%] rounded-lg border bg-background/75 p-4 shadow-2xl backdrop-blur">
+        <div className="flex h-full flex-col overflow-hidden rounded-md border bg-card">
+          <div className="flex items-center gap-2 border-b px-3 py-2">
+            <span className="size-2 rounded-full bg-destructive" />
+            <span className="size-2 rounded-full bg-chart-4" />
+            <span className="size-2 rounded-full bg-success" />
+            <span className="ml-2 h-2 w-28 rounded-full bg-muted" />
+          </div>
+          <div className="relative flex-1 overflow-hidden bg-background">
+            <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:36px_36px]" />
+            <div className="absolute left-[14%] top-[24%] h-20 w-48 rounded-md border bg-card/90 p-3 shadow-sm">
+              <div className="mb-2 h-2 w-20 rounded-full bg-muted-foreground/30" />
+              <div className="h-2 w-36 rounded-full bg-primary/50" />
+              <div className="mt-2 h-2 w-28 rounded-full bg-secondary/50" />
+            </div>
+            <div className="absolute bottom-[18%] right-[12%] h-28 w-56 rounded-md border bg-card/90 p-3 shadow-sm">
+              <div className="mb-3 h-2 w-24 rounded-full bg-muted-foreground/30" />
+              <div className="grid grid-cols-4 gap-2">
+                {Array.from({ length: 12 }).map((_, index) => (
+                  <span
+                    key={index}
+                    className={cn(
+                      "h-6 rounded-sm",
+                      index % 3 === 0 ? "bg-primary/60" : "bg-muted",
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="absolute bottom-[34%] left-[24%] h-24 w-64 rotate-[-10deg] rounded-full border-2 border-primary/50" />
+            <div className="absolute bottom-[30%] left-[30%] h-16 w-44 rotate-[-10deg] rounded-full border-2 border-secondary/50" />
+            <div className="absolute right-[24%] top-[22%] size-3 rounded-full bg-primary ring-8 ring-primary/15" />
+            <div className="absolute left-[38%] top-[58%] size-3 rounded-full bg-secondary ring-8 ring-secondary/15" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 function AuthInput({
   icon,
+  iconSize = "default",
   className,
   ...props
 }: React.ComponentProps<typeof Input> & {
   icon?: React.ReactNode;
+  iconSize?: "default" | "large";
 }) {
+  const hasLargeIcon = iconSize === "large";
+
   return (
     <div className="relative">
       {icon && (
-        <span className="pointer-events-none absolute left-3 top-1/2 flex -translate-y-1/2 text-muted-foreground [&_svg]:size-4">
+        <span
+          className={cn(
+            "pointer-events-none absolute top-1/2 flex -translate-y-1/2 text-muted-foreground",
+            hasLargeIcon
+              ? "left-3 [&_svg]:size-[18px]"
+              : "left-3.5 [&_svg]:size-4",
+          )}
+        >
           {icon}
         </span>
       )}
       <Input
-        className={cn(
-          "h-9 rounded-md bg-background text-sm",
-          icon && "pl-9",
-          className,
-        )}
+        className={cn(icon && (hasLargeIcon ? "pl-11" : "pl-10"), className)}
         {...props}
       />
     </div>
   );
 }
 
-function AuthLabel(props: React.ComponentProps<typeof FieldLabel>) {
-  return <FieldLabel className="text-xs font-medium" {...props} />;
-}
-
 function AuthDivider() {
   return (
-    <div className="flex items-center gap-3 text-muted-foreground">
-      <div className="h-px flex-1 bg-border" />
-      <span className="text-[11px] uppercase tracking-wider">or</span>
-      <div className="h-px flex-1 bg-border" />
+    <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
+      <span className="relative z-10 bg-background px-2 text-muted-foreground">
+        Or continue with
+      </span>
     </div>
   );
 }
@@ -187,10 +274,7 @@ function SocialButton({
     <Button
       type="button"
       variant="outline"
-      className={cn(
-        "h-10 justify-center bg-card text-[13px] font-medium",
-        compact && "flex-1",
-      )}
+      className={cn(compact && "flex-1")}
       disabled={loading}
       onClick={handleSocialSignIn}
     >
@@ -217,6 +301,7 @@ function SocialAuthOptions({
 
   return (
     <>
+      <AuthDivider />
       <div className={compact ? "flex gap-2" : "flex flex-col gap-2"}>
         {providers.includes("github") && (
           <SocialButton
@@ -237,7 +322,6 @@ function SocialAuthOptions({
           </SocialButton>
         )}
       </div>
-      <AuthDivider />
     </>
   );
 }
@@ -277,24 +361,24 @@ export function SignInForm({
 
   return (
     <AuthShell
-      title="Welcome back"
-      description="Sign in to your Planisfy account"
+      title="Login to your account"
+      description="Enter your email below to login to your account"
+      variant="split"
       footer={
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-sm">
           Don&apos;t have an account?{" "}
           <a
             href={signUpHref}
-            className="font-medium text-primary underline-offset-4 hover:underline"
+            className="underline underline-offset-4"
           >
             Sign up
           </a>
         </p>
       }
     >
-      <SocialAuthOptions callbackURL={target} />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-        <Field>
-          <AuthLabel htmlFor="email">Email</AuthLabel>
+      <form onSubmit={handleSubmit} className="grid gap-6">
+        <div className="grid gap-2">
+          <Label htmlFor="email">Email</Label>
           <AuthInput
             id="email"
             type="email"
@@ -305,15 +389,15 @@ export function SignInForm({
             required
             autoComplete="email"
           />
-        </Field>
-        <Field>
+        </div>
+        <div className="grid gap-2">
           <div className="flex items-center justify-between">
-            <AuthLabel htmlFor="password">Password</AuthLabel>
+            <Label htmlFor="password">Password</Label>
             <a
               href={resetHref}
-              className="text-[11px] text-primary underline-offset-4 hover:underline"
+              className="text-sm underline-offset-4 hover:underline"
             >
-              Forgot password?
+              Forgot your password?
             </a>
           </div>
           <AuthInput
@@ -326,14 +410,11 @@ export function SignInForm({
             required
             autoComplete="current-password"
           />
-        </Field>
-        <Button
-          type="submit"
-          className="h-10 w-full justify-center text-sm"
-          disabled={loading}
-        >
-          {loading ? "Signing in..." : "Sign In"}
+        </div>
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? "Signing in..." : "Login"}
         </Button>
+        <SocialAuthOptions callbackURL={target} />
       </form>
     </AuthShell>
   );
@@ -346,11 +427,9 @@ export function SignUpForm({
   defaultCallbackUrl?: string;
   signInHref?: string;
 }) {
-  const [firstName, setFirstName] = React.useState("");
-  const [lastName, setLastName] = React.useState("");
+  const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [organizationName, setOrganizationName] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const target = callbackUrl(defaultCallbackUrl);
 
@@ -360,7 +439,7 @@ export function SignUpForm({
     await signUp.email({
       email,
       password,
-      name: `${firstName} ${lastName}`.trim(),
+      name: name.trim(),
       callbackURL: target,
       fetchOptions: {
         onSuccess: () => {
@@ -376,32 +455,33 @@ export function SignUpForm({
 
   return (
     <AuthShell
-      title="Create your account"
-      description="Start building with geospatial APIs in minutes"
+      title="Create an account"
+      description="Enter your information below to create your account"
+      variant="split"
       width="md"
       footer={
         <>
-          <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+          <p className="text-balance text-center text-xs leading-relaxed text-muted-foreground">
             By signing up you agree to our{" "}
             <a
               href="/terms"
-              className="text-primary underline-offset-4 hover:underline"
+              className="underline underline-offset-4 hover:text-primary"
             >
               Terms of Service
             </a>{" "}
             and{" "}
             <a
               href="/privacy"
-              className="text-primary underline-offset-4 hover:underline"
+              className="underline underline-offset-4 hover:text-primary"
             >
               Privacy Policy
             </a>
           </p>
-          <p className="text-center text-xs text-muted-foreground">
+          <p className="text-center text-sm">
             Already have an account?{" "}
             <a
               href={signInHref}
-              className="font-medium text-primary underline-offset-4 hover:underline"
+              className="underline underline-offset-4"
             >
               Sign in
             </a>
@@ -409,34 +489,20 @@ export function SignUpForm({
         </>
       }
     >
-      <SocialAuthOptions callbackURL={target} compact />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-        <div className="grid grid-cols-2 gap-3">
-          <Field>
-            <AuthLabel htmlFor="first-name">First name</AuthLabel>
-            <AuthInput
-              id="first-name"
-              placeholder="Alex"
-              value={firstName}
-              onChange={(event) => setFirstName(event.target.value)}
-              required
-              autoComplete="given-name"
-            />
-          </Field>
-          <Field>
-            <AuthLabel htmlFor="last-name">Last name</AuthLabel>
-            <AuthInput
-              id="last-name"
-              placeholder="Chen"
-              value={lastName}
-              onChange={(event) => setLastName(event.target.value)}
-              required
-              autoComplete="family-name"
-            />
-          </Field>
+      <form onSubmit={handleSubmit} className="grid gap-6">
+        <div className="grid gap-2">
+          <Label htmlFor="name">Name</Label>
+          <AuthInput
+            id="name"
+            placeholder="Alex Chen"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+            autoComplete="name"
+          />
         </div>
-        <Field>
-          <AuthLabel htmlFor="email">Email</AuthLabel>
+        <div className="grid gap-2">
+          <Label htmlFor="email">Email</Label>
           <AuthInput
             id="email"
             type="email"
@@ -447,9 +513,9 @@ export function SignUpForm({
             required
             autoComplete="email"
           />
-        </Field>
-        <Field>
-          <AuthLabel htmlFor="password">Password</AuthLabel>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="password">Password</Label>
           <AuthInput
             id="password"
             type="password"
@@ -475,25 +541,11 @@ export function SignUpForm({
           <span className="mt-0.5 block text-[10px] text-chart-4">
             Good - add a special character for strong
           </span>
-        </Field>
-        <Field>
-          <AuthLabel htmlFor="organization">Organization name</AuthLabel>
-          <AuthInput
-            id="organization"
-            icon={<Building2 />}
-            placeholder="Acme Corp (optional - create later)"
-            value={organizationName}
-            onChange={(event) => setOrganizationName(event.target.value)}
-            autoComplete="organization"
-          />
-        </Field>
-        <Button
-          type="submit"
-          className="h-10 w-full justify-center text-sm"
-          disabled={loading}
-        >
-          {loading ? "Creating account..." : "Create Account"}
+        </div>
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? "Creating account..." : "Create account"}
         </Button>
+        <SocialAuthOptions callbackURL={target} compact />
       </form>
     </AuthShell>
   );
@@ -560,10 +612,11 @@ export function ResetPasswordForm({
       <AuthShell
         title="Set a new password"
         description="Choose a password for your account."
+        variant="split"
       >
-        <form onSubmit={handleReset} className="flex flex-col gap-3.5">
-          <Field>
-            <AuthLabel htmlFor="new-password">New password</AuthLabel>
+        <form onSubmit={handleReset} className="grid gap-6">
+          <div className="grid gap-2">
+            <Label htmlFor="new-password">New password</Label>
             <AuthInput
               id="new-password"
               type="password"
@@ -575,9 +628,9 @@ export function ResetPasswordForm({
               minLength={8}
               autoComplete="new-password"
             />
-          </Field>
-          <Field>
-            <AuthLabel htmlFor="confirm-password">Confirm password</AuthLabel>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="confirm-password">Confirm password</Label>
             <AuthInput
               id="confirm-password"
               type="password"
@@ -589,13 +642,9 @@ export function ResetPasswordForm({
               minLength={8}
               autoComplete="new-password"
             />
-          </Field>
+          </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button
-            type="submit"
-            className="h-10 w-full justify-center"
-            disabled={loading}
-          >
+          <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Resetting..." : "Reset password"}
           </Button>
         </form>
@@ -608,12 +657,9 @@ export function ResetPasswordForm({
       <AuthShell
         title="Check your inbox"
         description="If an account exists for that email, a reset link is on the way."
+        variant="split"
       >
-        <Button
-          asChild
-          variant="outline"
-          className="h-10 w-full justify-center"
-        >
+        <Button asChild variant="outline" className="w-full">
           <a href={signInHref}>Back to sign in</a>
         </Button>
       </AuthShell>
@@ -624,11 +670,11 @@ export function ResetPasswordForm({
     <AuthShell
       title="Reset your password"
       description="Enter your email and we'll send you a reset link"
-      icon={<KeyRound className="size-6 text-primary" />}
+      variant="split"
     >
-      <form onSubmit={handleRequest} className="flex flex-col gap-3.5">
-        <Field>
-          <AuthLabel htmlFor="reset-email">Email address</AuthLabel>
+      <form onSubmit={handleRequest} className="grid gap-6">
+        <div className="grid gap-2">
+          <Label htmlFor="reset-email">Email address</Label>
           <AuthInput
             id="reset-email"
             type="email"
@@ -639,12 +685,8 @@ export function ResetPasswordForm({
             required
             autoComplete="email"
           />
-        </Field>
-        <Button
-          type="submit"
-          className="h-10 w-full justify-center"
-          disabled={loading}
-        >
+        </div>
+        <Button type="submit" className="w-full" disabled={loading}>
           <Send className="size-4" />
           {loading ? "Sending..." : "Send Reset Link"}
         </Button>
