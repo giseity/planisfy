@@ -19,7 +19,7 @@ function ToggleGroup({
       data-slot="toggle-group"
       data-variant={variant}
       data-size={size}
-      className={cn("group/toggle-group flex w-fit items-center rounded-md border", className)}
+      className={cn("group/toggle-group flex w-fit items-center rounded-lg border border-input", className)}
       {...props}
     >
       {children}
@@ -31,7 +31,7 @@ function ToggleGroupItem({
   className,
   children,
   variant = "ghost",
-  size = "sm",
+  size = "default",
   ...props
 }: React.ComponentProps<typeof ToggleGroupPrimitive.Item> &
   VariantProps<typeof buttonVariants>) {
@@ -40,7 +40,7 @@ function ToggleGroupItem({
       data-slot="toggle-group-item"
       className={cn(
         buttonVariants({ variant, size }),
-        "rounded-none first:rounded-l-md last:rounded-r-md data-state-on:bg-muted data-state-on:text-foreground",
+        "rounded-none size-9.75 first:rounded-l-lg last:rounded-r-lg data-[state=on]:bg-secondary data-[state=on]:text-secondary-foreground",
         className
       )}
       {...props}

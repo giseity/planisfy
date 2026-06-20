@@ -21,6 +21,10 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@planisfy/ui/components/resizable";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@planisfy/ui/components/toggle-group";
 import { StatusAlert } from "@planisfy/ui/components/status-alert";
 import { ValidationPanel } from "@/features/style-editor/components/validation-panel";
 import { VersionHistoryButton } from "@/features/style-editor/components/version-history";
@@ -86,7 +90,9 @@ export default function StyleEditorPage() {
   const [urlLoading, setUrlLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [ownerHandle, setOwnerHandle] = useState<string | null>(null);
-  const [leftPanelTab, setLeftPanelTab] = useState("layers");
+  const [leftPanelTab, setLeftPanelTab] = useState<
+    "layers" | "sources" | "settings"
+  >("layers");
 
   const searchParams = useSearchParams();
 
@@ -623,37 +629,40 @@ export default function StyleEditorPage() {
           className="flex min-w-0 flex-col border-r bg-background"
         >
           <aside className="flex h-full min-w-0 flex-col">
-            <div className="mx-2 mt-1 flex h-7 rounded-lg bg-muted p-[3px] text-muted-foreground">
-              <Button
-                type="button"
-                variant={leftPanelTab === "layers" ? "secondary" : "ghost"}
+            <ToggleGroup
+              type="single"
+              value={leftPanelTab}
+              onValueChange={(value) => {
+                if (value) {
+                  setLeftPanelTab(value as "layers" | "sources" | "settings");
+                }
+              }}
+              className="mx-2 mt-1 h-7 w-auto rounded-lg bg-muted p-[3px] text-muted-foreground"
+            >
+              <ToggleGroupItem
+                value="layers"
                 size="sm"
                 className="h-6 flex-1 rounded-md px-1.5 text-xs"
-                onClick={() => setLeftPanelTab("layers")}
               >
                 Layers ({style.layers.length})
-              </Button>
-              <Button
-                type="button"
-                variant={leftPanelTab === "sources" ? "secondary" : "ghost"}
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="sources"
                 size="sm"
                 className="h-6 flex-1 rounded-md px-1.5 text-xs"
-                onClick={() => setLeftPanelTab("sources")}
               >
                 Sources ({Object.keys(style.sources).length})
-              </Button>
-              <Button
-                type="button"
-                variant={leftPanelTab === "settings" ? "secondary" : "ghost"}
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="settings"
                 size="sm"
                 className="h-6 w-8 rounded-md px-1.5 text-xs"
-                onClick={() => setLeftPanelTab("settings")}
                 aria-label="Style settings"
                 title="Style settings"
               >
                 <Settings className="h-3 w-3" />
-              </Button>
-            </div>
+              </ToggleGroupItem>
+            </ToggleGroup>
             <div className="flex-1 overflow-hidden text-sm outline-none">
               {leftPanelTab === "layers" && (
                 <div className="h-full overflow-hidden">

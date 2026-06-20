@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { Label } from "@planisfy/ui/components/label";
-import { Button } from "@planisfy/ui/components/button";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@planisfy/ui/components/toggle-group";
 import { ExpressionField } from "./expression-field";
 import { VisualFilterBuilder, canParseFilter } from "./visual-filter-builder";
 import { Code2, SlidersHorizontal } from "lucide-react";
@@ -24,27 +27,32 @@ export function FilterField({ value, onChange }: FilterFieldProps) {
         <Label className="text-xs font-medium text-muted-foreground">
           Filter
         </Label>
-        <div className="flex items-center gap-0.5">
-          <Button
-            variant={mode === "visual" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-5 w-5"
-            onClick={() => setMode("visual")}
+        <ToggleGroup
+          type="single"
+          value={mode}
+          onValueChange={(value) => {
+            if (value) setMode(value as "visual" | "json");
+          }}
+          className="rounded-md"
+        >
+          <ToggleGroupItem
+            value="visual"
+            size="icon-xs"
             disabled={!canVisual}
+            aria-label="Visual editor"
             title="Visual editor"
           >
             <SlidersHorizontal className="h-3 w-3" />
-          </Button>
-          <Button
-            variant={mode === "json" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-5 w-5"
-            onClick={() => setMode("json")}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="json"
+            size="icon-xs"
+            aria-label="JSON editor"
             title="JSON editor"
           >
             <Code2 className="h-3 w-3" />
-          </Button>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       {mode === "visual" && canVisual ? (

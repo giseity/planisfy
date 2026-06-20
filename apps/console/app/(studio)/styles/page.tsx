@@ -22,6 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@planisfy/ui/components/select";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@planisfy/ui/components/toggle-group";
 import { Plus, Map, Search, LayoutGrid, List } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -106,7 +110,7 @@ export default function StylesPage() {
           />
         </div>
         <Select value={sort} onValueChange={(v) => setSort(v as SortMode)}>
-          <SelectTrigger className="w-[160px] h-9">
+          <SelectTrigger className="w-[160px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -115,24 +119,20 @@ export default function StylesPage() {
             <SelectItem value="created">Date created</SelectItem>
           </SelectContent>
         </Select>
-        <div className="flex border rounded-md">
-          <Button
-            variant={view === "grid" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-9 w-9 rounded-r-none"
-            onClick={() => setView("grid")}
-          >
+        <ToggleGroup
+          type="single"
+          value={view}
+          onValueChange={(value) => {
+            if (value) setView(value as ViewMode);
+          }}
+        >
+          <ToggleGroupItem value="grid" size="icon" aria-label="Grid view">
             <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={view === "list" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-9 w-9 rounded-l-none"
-            onClick={() => setView("list")}
-          >
+          </ToggleGroupItem>
+          <ToggleGroupItem value="list" size="icon" aria-label="List view">
             <List className="h-4 w-4" />
-          </Button>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       {loading ? (
