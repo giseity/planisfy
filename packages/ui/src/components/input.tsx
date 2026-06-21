@@ -9,7 +9,7 @@ const inputVariants = cva(
     variants: {
       size: {
         default: "h-10",
-        auth: "h-11",
+        marketing: "h-11",
       },
     },
     defaultVariants: {
