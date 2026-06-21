@@ -187,6 +187,47 @@ resourcesRoute.post(
   },
 );
 
+resourcesRoute.delete("/tilesets/:id", async (c) => {
+  const accountId = c.get("ownerId");
+  const userId = c.get("userId");
+  const tilesetId = c.req.param("id");
+
+  const [existing] = await db
+    .select()
+    .from(tilesets)
+    .where(
+      and(
+        eq(tilesets.id, tilesetId),
+        eq(tilesets.accountId, accountId),
+        isNull(tilesets.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!existing) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Tileset not found" } },
+      404,
+    );
+  }
+
+  const now = new Date();
+  await db
+    .update(tilesets)
+    .set({ deletedAt: now, updatedAt: now, status: "ARCHIVED" })
+    .where(eq(tilesets.id, existing.id));
+
+  logAudit({
+    profileId: userId,
+    action: "tileset.deleted",
+    resourceType: "tileset",
+    resourceId: existing.id,
+    metadata: { handle: existing.handle },
+  });
+
+  return c.json({ data: { id: existing.id, deleted: true } });
+});
+
 resourcesRoute.post("/tilesets/:id/uploads", async (c) => {
   const accountId = c.get("ownerId");
   const userId = c.get("userId");

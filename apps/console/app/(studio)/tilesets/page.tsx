@@ -7,6 +7,16 @@ import {
   type ConsoleTileset,
   type ConsoleTilesetVersion,
 } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@planisfy/ui/components/alert-dialog";
 import { Button } from "@planisfy/ui/components/button";
 import { Skeleton } from "@planisfy/ui/components/skeleton";
 import { Plus, Database } from "lucide-react";
@@ -24,6 +34,12 @@ export default function SourcesPage() {
   );
   const [controllingJobId, setControllingJobId] = useState<string | null>(null);
   const [rebuildingTilesetId, setRebuildingTilesetId] = useState<string | null>(
+    null,
+  );
+  const [deleteTileset, setDeleteTileset] = useState<ConsoleTileset | null>(
+    null,
+  );
+  const [deletingTilesetId, setDeletingTilesetId] = useState<string | null>(
     null,
   );
 
@@ -127,6 +143,22 @@ export default function SourcesPage() {
     toast.success("Artifact URL copied");
   }
 
+  async function handleDeleteTileset() {
+    if (!deleteTileset) return;
+
+    setDeletingTilesetId(deleteTileset.id);
+    try {
+      await api.deleteTileset(deleteTileset.id);
+      toast.success(`Deleted ${deleteTileset.handle}`);
+      setDeleteTileset(null);
+      fetchTilesets();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete tileset");
+    } finally {
+      setDeletingTilesetId(null);
+    }
+  }
+
   return (
     <div className="container max-w-6xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
@@ -184,9 +216,40 @@ export default function SourcesPage() {
             onCopyArtifactUrl={handleCopyArtifactUrl}
             onRetryJob={handleRetryJob}
             onCancelJob={handleCancelJob}
+            onRequestDelete={setDeleteTileset}
           />
         </div>
       )}
+      <AlertDialog
+        open={Boolean(deleteTileset)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTileset(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete &ldquo;{deleteTileset?.name}&rdquo;?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the tileset from Console and makes its public TileJSON
+              unavailable. Uploaded source files and processed artifacts remain in
+              storage for audit and backup retention.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(deletingTilesetId)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteTileset}
+              disabled={Boolean(deletingTilesetId)}
+            >
+              {deletingTilesetId ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

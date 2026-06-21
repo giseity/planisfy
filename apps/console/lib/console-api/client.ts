@@ -682,6 +682,12 @@ class ApiClient {
     );
   }
 
+  deleteTileset(tilesetId: string) {
+    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
+      `/tilesets/${tilesetId}`,
+    );
+  }
+
   buildTilesetFromDataset(tilesetId: string, options: DatasetTilesetOptions) {
     return this.post<ApiEnvelope<DatasetTilesetResult>>(
       `/tilesets/${tilesetId}/dataset-builds`,

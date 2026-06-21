@@ -26,6 +26,7 @@ import {
   Globe,
   RefreshCw,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 import {
   canRebuildTileset,
@@ -44,6 +45,7 @@ export function SourceTilesetsTable({
   onCopyArtifactUrl,
   onRetryJob,
   onCancelJob,
+  onRequestDelete,
 }: {
   tilesets: ConsoleTileset[];
   jobs: ConsoleProcessingJob[];
@@ -59,6 +61,7 @@ export function SourceTilesetsTable({
   onCopyArtifactUrl: (version: ConsoleTilesetVersion | null) => void;
   onRetryJob: (job: ConsoleProcessingJob) => void;
   onCancelJob: (job: ConsoleProcessingJob) => void;
+  onRequestDelete: (tileset: ConsoleTileset) => void;
 }) {
   return (
     <Table>
@@ -238,6 +241,15 @@ export function SourceTilesetsTable({
                         )}
                       </Button>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onRequestDelete(tileset)}
+                      data-testid={`delete-tileset-${tileset.handle}`}
+                      title="Delete tileset"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>
