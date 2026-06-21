@@ -1,11 +1,9 @@
-"use client"
+'use client'
 
-import { SignInForm } from "@planisfy/auth/ui"
+import { SignInForm } from '@planisfy/auth/ui'
 
-const consoleUrl = process.env.NEXT_PUBLIC_CONSOLE_URL
-
-if (!consoleUrl) throw new Error("NEXT_PUBLIC_CONSOLE_URL is required.")
+import { env } from '@/env'
 
 export default function SignInPage() {
-  return <SignInForm defaultCallbackUrl={consoleUrl} />
+  return <SignInForm defaultCallbackUrl={env.NEXT_PUBLIC_CONSOLE_URL} />
 }

@@ -1,25 +1,24 @@
-import { CallToAction } from '@/components/call-to-action'
-import FAQs from '@/components/faqs'
-import { Features } from '@/components/features'
+import { Comparator } from '@/components/comparator'
 import { Footer } from '@/components/footer'
-import { HeroSection } from '@/components/hero-section'
+import { HeroHeader } from '@/components/header'
+import { Pricing } from '@/components/pricing'
 import { env } from '@/env'
 
 const signInHref = `${env.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
 const signUpHref = `${env.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
 
-export default function Page() {
+export default function PricingPage() {
   return (
     <div className="min-h-svh bg-background">
-      <HeroSection
+      <HeroHeader
         docsHref={env.NEXT_PUBLIC_DOCS_URL}
         signInHref={signInHref}
         signUpHref={signUpHref}
-        consoleHref={env.NEXT_PUBLIC_CONSOLE_URL}
       />
-      <Features />
-      <FAQs />
-      <CallToAction signUpHref={signUpHref} consoleHref={env.NEXT_PUBLIC_CONSOLE_URL} />
+      <main className="pt-24">
+        <Pricing signUpHref={signUpHref} />
+        <Comparator signUpHref={signUpHref} />
+      </main>
       <Footer docsHref={env.NEXT_PUBLIC_DOCS_URL} />
     </div>
   )

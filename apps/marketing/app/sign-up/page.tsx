@@ -1,11 +1,9 @@
-"use client"
+'use client'
 
-import { SignUpForm } from "@planisfy/auth/ui"
+import { SignUpForm } from '@planisfy/auth/ui'
 
-const consoleUrl = process.env.NEXT_PUBLIC_CONSOLE_URL
-
-if (!consoleUrl) throw new Error("NEXT_PUBLIC_CONSOLE_URL is required.")
+import { env } from '@/env'
 
 export default function SignUpPage() {
-  return <SignUpForm defaultCallbackUrl={`${consoleUrl}/styles`} />
+  return <SignUpForm defaultCallbackUrl={`${env.NEXT_PUBLIC_CONSOLE_URL}/styles`} />
 }
