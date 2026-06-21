@@ -126,7 +126,7 @@ function DataTable<TData, TValue>({
           <div className="flex flex-1 flex-wrap items-center gap-2">
             {filterColumn && (
               <Input
-                className="h-8 max-w-sm"
+                className="max-w-sm"
                 placeholder={filterPlaceholder}
                 value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""}
                 onChange={(event) =>
@@ -286,7 +286,7 @@ function DataTableViewOptions<TData>({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8">
+        <Button variant="outline">
           <Settings2 className="h-3.5 w-3.5" />
           View
         </Button>

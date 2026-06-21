@@ -1,5 +1,6 @@
 "use client";
 
+import { FileDropzone } from "@/components/file-upload/file-dropzone";
 import { api, type ConsoleSpriteAsset } from "@/lib/api";
 import { Label } from "@planisfy/ui/components/label";
 import { Input } from "@planisfy/ui/components/input";
@@ -12,6 +13,10 @@ import {
 import { useState, useEffect, useMemo } from "react";
 import { FolderOpen, Image, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
+
+const SPRITE_ACCEPT = "image/png,image/svg+xml";
+const SPRITE_ACCEPTED_LABEL = "PNG or SVG";
+const MAX_SPRITE_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
 
 interface SpriteMetadata {
   [name: string]: {
@@ -61,9 +66,9 @@ export function IconField({
   const [uploadFolder, setUploadFolder] = useState("");
   const [uploadTags, setUploadTags] = useState("");
   const [open, setOpen] = useState(false);
-  const [assetMetadata, setAssetMetadata] = useState<ConsoleSpriteAsset[] | null>(
-    null,
-  );
+  const [assetMetadata, setAssetMetadata] = useState<
+    ConsoleSpriteAsset[] | null
+  >(null);
   const [uploading, setUploading] = useState(false);
   const sprites =
     spriteMetadata && spriteMetadata.url === spriteUrl
@@ -120,24 +125,28 @@ export function IconField({
 
   const filteredSprites = useMemo(() => {
     const accountEntries: Array<readonly [string, PickerSprite]> =
-      assetMetadata?.map((asset) => [
-        asset.name,
-        {
-          width: asset.width,
-          height: asset.height,
-          x: 0,
-          y: 0,
-          pixelRatio: 1,
-          previewUrl: asset.previewUrl,
-          folder: asset.folder,
-          sourceFormat: asset.sourceFormat,
-          tags: asset.tags,
-          description: asset.description,
-        },
-      ] as const) ?? [];
-    const spriteEntries: Array<readonly [string, PickerSprite]> = Object.entries(
-      sprites ?? {},
-    ).map(([name, meta]) => [name, meta] as const);
+      assetMetadata?.map(
+        (asset) =>
+          [
+            asset.name,
+            {
+              width: asset.width,
+              height: asset.height,
+              x: 0,
+              y: 0,
+              pixelRatio: 1,
+              previewUrl: asset.previewUrl,
+              folder: asset.folder,
+              sourceFormat: asset.sourceFormat,
+              tags: asset.tags,
+              description: asset.description,
+            },
+          ] as const,
+      ) ?? [];
+    const spriteEntries: Array<readonly [string, PickerSprite]> =
+      Object.entries(sprites ?? {}).map(
+        ([name, meta]) => [name, meta] as const,
+      );
     const entries = accountEntries.length > 0 ? accountEntries : spriteEntries;
     const query = filter.trim().toLowerCase();
     return entries.filter(([name, meta]) => {
@@ -256,28 +265,24 @@ export function IconField({
                 className="h-7 text-xs"
               />
             </div>
-            <label className="flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded border text-xs hover:bg-accent">
-              <Upload className="h-3 w-3" />
-              {uploading ? "Uploading..." : "Upload PNG/SVG"}
-              <input
-                type="file"
-                accept="image/png,image/svg+xml"
-                className="sr-only"
-                disabled={uploading}
-                onChange={(event) => {
-                  void uploadAsset(event.currentTarget.files?.[0] ?? null);
-                  event.currentTarget.value = "";
-                }}
-              />
-            </label>
+            <FileDropzone
+              id="sprite-asset-upload-file"
+              accept={SPRITE_ACCEPT}
+              acceptedLabel={SPRITE_ACCEPTED_LABEL}
+              maxSizeBytes={MAX_SPRITE_UPLOAD_SIZE_BYTES}
+              title={uploading ? "Uploading..." : "Upload PNG/SVG"}
+              description="Drop image or click to browse"
+              emptyIcon={<Upload className="size-3.5 opacity-60" />}
+              disabled={uploading}
+              variant="compact"
+              showSelectedFile={false}
+              onFileAccepted={uploadAsset}
+            />
             {assetMetadata || sprites ? (
               <ScrollArea className="h-48">
                 <div className="grid grid-cols-4 gap-1">
                   {filteredSprites.map(([name, meta]) => (
-                    <div
-                      key={name}
-                      className="group relative"
-                    >
+                    <div key={name} className="group relative">
                       <button
                         className={`flex w-full flex-col items-center gap-0.5 rounded p-1 text-[9px] hover:bg-accent ${
                           name === value ? "bg-accent ring-1 ring-primary" : ""

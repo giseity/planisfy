@@ -25,6 +25,12 @@ import {
   estimateSummary,
   runtimeSelectionPayload,
 } from "@/features/tilesets/workflow/source-runtime";
+import { FileDropzone } from "@/components/file-upload/file-dropzone";
+
+const MAX_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024;
+const SOURCE_ACCEPT = ".geojson,.json,.csv,.zip,.pmtiles,.mbtiles";
+const SOURCE_ACCEPTED_LABEL =
+  "GeoJSON, CSV, zipped Shapefile, PMTiles, MBTiles";
 
 export function TilesetUploadDialog({
   tileset,
@@ -153,23 +159,16 @@ export function TilesetUploadDialog({
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="tileset-upload-file">File (required)</Label>
-            <Input
-              id="tileset-upload-file"
-              type="file"
-              required
-              accept=".geojson,.json,.csv,.zip,.pmtiles,.mbtiles"
-              aria-describedby="tileset-upload-file-help"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
-            <p
-              id="tileset-upload-file-help"
-              className="text-xs text-muted-foreground"
-            >
-              GeoJSON, CSV, zipped Shapefile, PMTiles, or MBTiles.
-            </p>
-          </div>
+          <FileDropzone
+            id="tileset-upload-file"
+            file={file}
+            onFileChange={setFile}
+            accept={SOURCE_ACCEPT}
+            acceptedLabel={SOURCE_ACCEPTED_LABEL}
+            maxSizeBytes={MAX_UPLOAD_SIZE_BYTES}
+            title="Upload source file"
+            disabled={uploading}
+          />
           <SourceRuntimeSelectors
             executionTargets={executionTargets}
             workerProfiles={workerProfiles}
