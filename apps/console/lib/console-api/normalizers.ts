@@ -1,5 +1,6 @@
 import type {
   ConsoleDashboard,
+  ConsoleProfile,
   ConsoleSpriteAsset,
   ConsoleTileset,
 } from "@planisfy/api-contracts";
@@ -57,4 +58,20 @@ export function normalizeSpriteAssetPreviewUrl(
   if (/^https?:\/\//.test(asset.previewUrl)) return asset;
   const path = asset.previewUrl.replace(/^\/console/, "");
   return { ...asset, previewUrl: `${CONSOLE_API_BASE}${path}` };
+}
+
+export function normalizeProfileAvatarUrl(
+  profile: ConsoleProfile,
+): ConsoleProfile {
+  return {
+    ...profile,
+    avatarUrl: normalizeConsoleUrl(profile.avatarUrl),
+  };
+}
+
+export function normalizeConsoleUrl(url: string | null) {
+  if (!url || /^https?:\/\//.test(url)) return url;
+  if (url.startsWith(CONSOLE_API_BASE)) return url;
+  const path = url.replace(/^\/console/, "");
+  return `${CONSOLE_API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 }

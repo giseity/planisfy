@@ -3,6 +3,11 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { authClient, organization, useSession } from "@planisfy/auth/client";
+import {
+  PROFILE_AVATAR_UPDATED_EVENT,
+  type ProfileAvatarUpdatedDetail,
+} from "@/lib/profile-avatar-events";
+import { normalizeConsoleUrl } from "@/lib/console-api/normalizers";
 import { cn } from "@planisfy/ui/lib/utils";
 import { Button } from "@planisfy/ui/components/button";
 import {
@@ -101,6 +106,34 @@ function useMounted() {
   );
 }
 
+function useProfileAvatarImage(sessionImage?: string | null) {
+  const [avatarUrl, setAvatarUrl] = useState(
+    normalizeConsoleUrl(sessionImage ?? null),
+  );
+
+  useEffect(() => {
+    setAvatarUrl(normalizeConsoleUrl(sessionImage ?? null));
+  }, [sessionImage]);
+
+  useEffect(() => {
+    function handleAvatarUpdated(event: Event) {
+      setAvatarUrl(
+        (event as CustomEvent<ProfileAvatarUpdatedDetail>).detail.avatarUrl,
+      );
+    }
+
+    window.addEventListener(PROFILE_AVATAR_UPDATED_EVENT, handleAvatarUpdated);
+    return () => {
+      window.removeEventListener(
+        PROFILE_AVATAR_UPDATED_EVENT,
+        handleAvatarUpdated,
+      );
+    };
+  }, []);
+
+  return avatarUrl;
+}
+
 export function NavAccountSwitcher() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -111,6 +144,7 @@ export function NavAccountSwitcher() {
 
   const user = session?.user as SessionUser | undefined;
   const userName = user?.name || user?.email || "Personal";
+  const userAvatar = useProfileAvatarImage(user?.image);
 
   useEffect(() => {
     organization.list().then((res) => {
@@ -195,7 +229,7 @@ export function NavAccountSwitcher() {
             className="flex items-center justify-between"
           >
             <span className="flex min-w-0 items-center gap-2">
-              <Avatar name={userName} image={user?.image} />
+              <Avatar name={userName} image={userAvatar} />
               <span className="grid min-w-0 leading-tight">
                 <span className="truncate font-medium">{userName}</span>
                 <span className="truncate text-xs text-muted-foreground">
@@ -223,7 +257,9 @@ export function NavAccountSwitcher() {
                       </span>
                     </span>
                   </span>
-                  {activeOrg?.id === org.id && <Check className="ml-2 size-4" />}
+                  {activeOrg?.id === org.id && (
+                    <Check className="ml-2 size-4" />
+                  )}
                 </DropdownMenuItem>
               ))}
             </>
@@ -297,6 +333,7 @@ export function NavUser() {
   const mounted = useMounted();
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
+  const userAvatar = useProfileAvatarImage(user?.image);
 
   if (!mounted || !user) {
     return <div aria-hidden="true" className="min-h-12 rounded-lg" />;
@@ -315,7 +352,7 @@ export function NavUser() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" className={sidebarTriggerClass}>
-          <Avatar name={displayName} image={user.image} />
+          <Avatar name={displayName} image={userAvatar} />
           <span className="grid min-w-0 flex-1 leading-tight group-data-[collapsible=icon]/sidebar:hidden">
             <span className="truncate font-medium">{displayName}</span>
             {email && (
@@ -335,7 +372,7 @@ export function NavUser() {
       >
         <DropdownMenuLabel className="p-0 font-normal">
           <span className="flex items-center gap-2 px-1 py-1.5 text-left text-[0.8125rem]">
-            <Avatar name={displayName} image={user.image} />
+            <Avatar name={displayName} image={userAvatar} />
             <span className="grid min-w-0 flex-1 leading-tight">
               <span className="truncate font-medium">{displayName}</span>
               {email && (

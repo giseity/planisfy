@@ -46,6 +46,7 @@ import { CONSOLE_API_BASE } from "./config";
 import { ApiRequestError, type ApiError } from "./errors";
 import {
   normalizeDashboardUrls,
+  normalizeProfileAvatarUrl,
   normalizeSpriteAssetPreviewUrl,
   normalizeTilesetUrls,
 } from "./normalizers";
@@ -223,7 +224,40 @@ class ApiClient {
   }
 
   getProfile() {
-    return this.get<ApiEnvelope<ConsoleProfile>>("/profile");
+    return this.get<ApiEnvelope<ConsoleProfile>>("/profile").then((res) => ({
+      data: normalizeProfileAvatarUrl(res.data),
+    }));
+  }
+
+  updateProfile(options: {
+    displayName?: string;
+    handle?: string;
+    bio?: string;
+  }) {
+    return this.put<ApiEnvelope<ConsoleProfile>>("/profile", options).then(
+      (res) => ({
+        data: normalizeProfileAvatarUrl(res.data),
+      }),
+    );
+  }
+
+  uploadProfileAvatar(file: File) {
+    const body = new FormData();
+    body.set("file", file);
+    return this.formRequest<ApiEnvelope<ConsoleProfile>>(
+      "/profile/avatar",
+      body,
+    ).then((res) => ({
+      data: normalizeProfileAvatarUrl(res.data),
+    }));
+  }
+
+  deleteProfileAvatar() {
+    return this.delete<ApiEnvelope<ConsoleProfile>>("/profile/avatar").then(
+      (res) => ({
+        data: normalizeProfileAvatarUrl(res.data),
+      }),
+    );
   }
 
   async getDashboard() {

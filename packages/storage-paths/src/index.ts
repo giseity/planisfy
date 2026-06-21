@@ -65,6 +65,9 @@ export const StoragePaths = {
   accountSpriteAsset: (accountId: string, assetId: string, fileName: string) =>
     `accounts/${safeSegment(accountId)}/sprite-assets/${safeSegment(assetId)}/${safeSegment(fileName)}`,
 
+  profileAvatar: (accountId: string, avatarId: string, fileName: string) =>
+    `accounts/${safeSegment(accountId)}/profile/avatar/${safeSegment(avatarId)}/${safeSegment(fileName)}`,
+
   basemapRelease: (
     name: string,
     version: string,
