@@ -5,6 +5,8 @@ type UploadTilingOptions = {
   simplification?: number;
 };
 
+export const UPLOAD_VECTOR_LAYER_ID = "data";
+
 export type SourceFormat = "geojson" | "csv" | "shapefile" | "pmtiles" | "mbtiles";
 
 export type UploadValidation = {
@@ -40,6 +42,8 @@ export function buildTippecanoeArgs(params: {
     `-Z${params.options.minZoom}`,
     "--force",
     "--no-tile-compression",
+    "-l",
+    UPLOAD_VECTOR_LAYER_ID,
   ];
 
   if (params.options.dropDensest) {

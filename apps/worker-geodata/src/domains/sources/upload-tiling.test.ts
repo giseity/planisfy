@@ -26,6 +26,8 @@ test("buildTippecanoeArgs creates deterministic upload tiling args", () => {
       "-Z3",
       "--force",
       "--no-tile-compression",
+      "-l",
+      "data",
       "--drop-densest-as-needed",
       "--simplification=4",
       "/tmp/input.geojson",

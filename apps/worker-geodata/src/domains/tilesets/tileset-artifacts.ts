@@ -12,7 +12,10 @@ import {
   type TilesetArtifactFormat,
 } from "@planisfy/storage-paths";
 import { markProcessingJobSucceeded } from "../jobs/job-lifecycle";
-import type { SourceFormat } from "../sources/upload-tiling";
+import {
+  UPLOAD_VECTOR_LAYER_ID,
+  type SourceFormat,
+} from "../sources/upload-tiling";
 
 export async function storeProcessedArtifact(params: {
   ownerId: string;
@@ -109,7 +112,7 @@ export async function finalizeProcessedArtifact(params: {
         schema: {
           vector_layers: [
             {
-              id: "data",
+              id: UPLOAD_VECTOR_LAYER_ID,
               fields: {},
               minzoom: params.minZoom,
               maxzoom: params.maxZoom,
