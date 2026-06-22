@@ -65,7 +65,22 @@ export interface PlanInfo {
   productId: string;
   name: string;
   price: number;
+  priceLabel: string;
+  period: string;
+  checkout: boolean;
   checkoutAvailable: boolean;
+  pricing: Partial<
+    Record<
+      "monthly" | "yearly",
+      {
+        interval: "monthly" | "yearly";
+        price: number;
+        priceLabel: string;
+        period: string;
+      }
+    >
+  >;
+  features: string[];
   monthlyUnits: string | number;
   requestsPerMinute: number;
   maxStyles: string | number;

@@ -25,6 +25,8 @@ import {
 } from "@planisfy/ui/components/dropdown-menu";
 import { Building2, ChevronDown, Plus, User } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
+import type { BillingInfo } from "@/features/settings/model";
 
 interface OrgItem {
   id: string;
@@ -40,6 +42,7 @@ export function ContextSwitcher() {
   const [activeOrg, setActiveOrg] = useState<OrgItem | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [billing, setBilling] = useState<BillingInfo | null>(null);
 
   useEffect(() => {
     organization.list().then((res) => {
@@ -47,6 +50,10 @@ export function ContextSwitcher() {
         setOrgs(res.data as OrgItem[]);
       }
     });
+    api
+      .get<BillingInfo>("/billing")
+      .then(setBilling)
+      .catch(() => setBilling(null));
   }, []);
 
   useEffect(() => {
@@ -142,10 +149,17 @@ export function ContextSwitcher() {
             </>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create organization
-          </DropdownMenuItem>
+          {billing?.plan !== "free" ? (
+            <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create organization
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onClick={() => router.push("/billing")}>
+              <Plus className="h-4 w-4 mr-2" />
+              Upgrade for organizations
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

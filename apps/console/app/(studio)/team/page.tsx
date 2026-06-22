@@ -71,6 +71,8 @@ import {
   X,
 } from "lucide-react"
 import { toast } from "sonner"
+import { api } from "@/lib/api"
+import type { BillingInfo } from "@/features/settings/model"
 
 interface OrgData {
   id: string
@@ -119,6 +121,7 @@ export default function TeamPage() {
   const [org, setOrg] = useState<OrgData | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [billing, setBilling] = useState<BillingInfo | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviting, setInviting] = useState(false)
   const [removeId, setRemoveId] = useState<string | null>(null)
@@ -144,6 +147,13 @@ export default function TeamPage() {
   }, [])
 
   useEffect(() => {
+    api
+      .get<BillingInfo>("/billing")
+      .then(setBilling)
+      .catch(() => setBilling(null))
+  }, [])
+
+  useEffect(() => {
     if (session?.user) setCurrentUserId(session.user.id)
   }, [session])
 
@@ -157,6 +167,24 @@ export default function TeamPage() {
       <div className="space-y-4">
         <Skeleton className="h-20 rounded-lg" />
         <Skeleton className="h-64 rounded-lg" />
+      </div>
+    )
+  }
+
+  if (billing?.plan === "free") {
+    return (
+      <div className="flex min-h-[360px] items-center justify-center rounded-lg border">
+        <div className="text-center">
+          <Users className="mx-auto h-9 w-9 text-muted-foreground" />
+          <h1 className="mt-3 text-lg font-semibold">Team requires Starter</h1>
+          <p className="mt-1 max-w-md text-sm text-muted-foreground">
+            Free is for personal projects. Upgrade to Starter to create
+            organizations, invite members, and manage roles.
+          </p>
+          <Button className="mt-4" onClick={() => location.assign("/billing")}>
+            View plans
+          </Button>
+        </div>
       </div>
     )
   }

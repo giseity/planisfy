@@ -63,8 +63,21 @@ export type SourceType = "VECTOR" | "RASTER" | "GEOJSON" | "IMAGE" | "VIDEO";
 // Plan definitions
 // ============================================================================
 
-export type PlanSlug = "free" | "pro" | "enterprise";
+export type PlanSlug = "free" | "starter" | "scale" | "platform";
+export type LegacyPlanSlug = "pro" | "enterprise";
+export type AnyPlanSlug = PlanSlug | LegacyPlanSlug;
 export type PlanId = `prod_${PlanSlug}`;
+export type CheckoutPlanSlug = "starter" | "scale";
+export type BillingInterval = "monthly" | "yearly";
+
+export type PlanFeature =
+  | "team"
+  | "audit"
+  | "operations"
+  | "selfHostSupport"
+  | "customExecutionTargets"
+  | "sla"
+  | "onboarding";
 
 export interface PlanLimits {
   monthlyUnits: number;
@@ -74,11 +87,39 @@ export interface PlanLimits {
   maxApiKeys: number;
 }
 
+export interface PlanPrice {
+  interval: BillingInterval;
+  price: number;
+  priceLabel: string;
+  period: string;
+}
+
 export interface PlanDefinition extends PlanLimits {
   id: PlanSlug;
   productId: PlanId;
   name: string;
   price: number;
+  priceLabel: string;
+  period: string;
+  description: string;
+  cta: string;
+  highlighted: boolean;
+  checkout: boolean;
+  pricing: Partial<Record<BillingInterval, PlanPrice>>;
+  features: string[];
+  entitlements: PlanFeature[];
+  comparison: {
+    publishedStyles: string;
+    hostedTilesets: string;
+    apiKeys: string;
+    geocodingUsage: string;
+    usageDashboard: boolean;
+    teamRoles: boolean;
+    auditLog: boolean;
+    operationsControls: boolean;
+    selfHostSupport: boolean;
+    slaAndOnboarding: boolean;
+  };
 }
 
 export const PLANS: Record<PlanSlug, PlanDefinition> = {
@@ -87,38 +128,219 @@ export const PLANS: Record<PlanSlug, PlanDefinition> = {
     productId: "prod_free",
     name: "Free",
     price: 0,
-    monthlyUnits: 50_000,
+    priceLabel: "$0",
+    period: "/month",
+    description: "For personal projects, prototypes, and integration testing.",
+    cta: "Create account",
+    highlighted: false,
+    checkout: false,
+    pricing: {
+      monthly: {
+        interval: "monthly",
+        price: 0,
+        priceLabel: "$0",
+        period: "/month",
+      },
+    },
+    monthlyUnits: 100_000,
     requestsPerMinute: 100,
-    maxStyles: 5,
-    maxSources: 3,
-    maxApiKeys: 5,
+    maxStyles: 3,
+    maxSources: 1,
+    maxApiKeys: 2,
+    features: [
+      "Hosted style publishing",
+      "One hosted tileset",
+      "Two scoped API keys",
+      "100k Planisfy credits/month",
+    ],
+    entitlements: [],
+    comparison: {
+      publishedStyles: "3",
+      hostedTilesets: "1",
+      apiKeys: "2",
+      geocodingUsage: "100k credits",
+      usageDashboard: true,
+      teamRoles: false,
+      auditLog: false,
+      operationsControls: false,
+      selfHostSupport: false,
+      slaAndOnboarding: false,
+    },
   },
-  pro: {
-    id: "pro",
-    productId: "prod_pro",
-    name: "Pro",
+  starter: {
+    id: "starter",
+    productId: "prod_starter",
+    name: "Starter",
     price: 29,
-    monthlyUnits: 500_000,
+    priceLabel: "$29",
+    period: "/month",
+    description: "For small production apps and teams moving maps into use.",
+    cta: "Start starter plan",
+    highlighted: true,
+    checkout: true,
+    pricing: {
+      monthly: {
+        interval: "monthly",
+        price: 29,
+        priceLabel: "$29",
+        period: "/month",
+      },
+      yearly: {
+        interval: "yearly",
+        price: 290,
+        priceLabel: "$290",
+        period: "/year",
+      },
+    },
+    monthlyUnits: 1_000_000,
     requestsPerMinute: 500,
-    maxStyles: 50,
-    maxSources: 25,
-    maxApiKeys: 25,
+    maxStyles: 10,
+    maxSources: 5,
+    maxApiKeys: 10,
+    features: [
+      "1m Planisfy credits/month",
+      "Team collaboration",
+      "Multiple API keys",
+      "Usage visibility",
+      "Email support",
+    ],
+    entitlements: ["team"],
+    comparison: {
+      publishedStyles: "10",
+      hostedTilesets: "5",
+      apiKeys: "10",
+      geocodingUsage: "1m credits",
+      usageDashboard: true,
+      teamRoles: true,
+      auditLog: false,
+      operationsControls: false,
+      selfHostSupport: false,
+      slaAndOnboarding: false,
+    },
   },
-  enterprise: {
-    id: "enterprise",
-    productId: "prod_enterprise",
-    name: "Enterprise",
-    price: 199,
+  scale: {
+    id: "scale",
+    productId: "prod_scale",
+    name: "Scale",
+    price: 99,
+    priceLabel: "$99",
+    period: "/month",
+    description: "For production teams needing governance and operations.",
+    cta: "Start scale plan",
+    highlighted: false,
+    checkout: true,
+    pricing: {
+      monthly: {
+        interval: "monthly",
+        price: 99,
+        priceLabel: "$99",
+        period: "/month",
+      },
+      yearly: {
+        interval: "yearly",
+        price: 990,
+        priceLabel: "$990",
+        period: "/year",
+      },
+    },
+    monthlyUnits: 8_000_000,
+    requestsPerMinute: 1500,
+    maxStyles: 50,
+    maxSources: 20,
+    maxApiKeys: 40,
+    features: [
+      "8m Planisfy credits/month",
+      "Audit log",
+      "Operations controls",
+      "Advanced usage controls",
+      "Priority operations review",
+    ],
+    entitlements: ["team", "audit", "operations"],
+    comparison: {
+      publishedStyles: "50",
+      hostedTilesets: "20",
+      apiKeys: "40",
+      geocodingUsage: "8m credits",
+      usageDashboard: true,
+      teamRoles: true,
+      auditLog: true,
+      operationsControls: true,
+      selfHostSupport: false,
+      slaAndOnboarding: false,
+    },
+  },
+  platform: {
+    id: "platform",
+    productId: "prod_platform",
+    name: "Platform",
+    price: 0,
+    priceLabel: "Custom",
+    period: "",
+    description: "For organizations that need scale and deployment control.",
+    cta: "Talk to sales",
+    highlighted: false,
+    checkout: false,
+    pricing: {},
     monthlyUnits: Infinity,
-    requestsPerMinute: 2000,
+    requestsPerMinute: Infinity,
     maxStyles: Infinity,
     maxSources: Infinity,
     maxApiKeys: Infinity,
+    features: [
+      "Custom Planisfy credit quota",
+      "Self-hosting support",
+      "Custom storage and worker topology",
+      "SLA and onboarding",
+      "Operational readiness review",
+    ],
+    entitlements: [
+      "team",
+      "audit",
+      "operations",
+      "selfHostSupport",
+      "customExecutionTargets",
+      "sla",
+      "onboarding",
+    ],
+    comparison: {
+      publishedStyles: "Custom",
+      hostedTilesets: "Custom",
+      apiKeys: "Custom",
+      geocodingUsage: "Custom",
+      usageDashboard: true,
+      teamRoles: true,
+      auditLog: true,
+      operationsControls: true,
+      selfHostSupport: true,
+      slaAndOnboarding: true,
+    },
   },
 };
 
 export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
   prod_free: PLANS.free,
-  prod_pro: PLANS.pro,
-  prod_enterprise: PLANS.enterprise,
+  prod_starter: PLANS.starter,
+  prod_scale: PLANS.scale,
+  prod_platform: PLANS.platform,
 };
+
+export const PLAN_ORDER = ["free", "starter", "scale", "platform"] as const;
+
+export const LEGACY_PLAN_SLUGS = {
+  pro: "starter",
+  enterprise: "scale",
+} satisfies Record<LegacyPlanSlug, PlanSlug>;
+
+export function normalizePlanSlug(value: unknown): PlanSlug | null {
+  if (value === "free" || value === "starter" || value === "scale" || value === "platform") {
+    return value;
+  }
+  if (value === "pro" || value === "enterprise") {
+    return LEGACY_PLAN_SLUGS[value];
+  }
+  return null;
+}
+
+export function planIncludesFeature(planId: PlanSlug, feature: PlanFeature) {
+  return PLANS[planId].entitlements.includes(feature);
+}

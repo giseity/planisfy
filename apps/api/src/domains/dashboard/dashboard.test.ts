@@ -84,7 +84,7 @@ test("dashboard payload sorts recent account sections", () => {
     generatedAt: "2026-06-05T12:00:00.000Z",
     account,
     user,
-    plan: "pro",
+    plan: "starter",
     monthlyQuotaUsed: 50,
     monthlyQuotaLimit: 1_000_000,
     totalRequests: 20,

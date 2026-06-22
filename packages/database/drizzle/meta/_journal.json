@@ -134,6 +134,13 @@
       "when": 1782090000000,
       "tag": "0018_usage_log_endpoint_text",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1782091000000,
+      "tag": "0019_pricing_plan_catalog",
+      "breakpoints": true
     }
   ]
 }

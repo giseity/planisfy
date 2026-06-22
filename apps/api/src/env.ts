@@ -9,6 +9,7 @@ import {
 loadWorkspaceEnv();
 
 const emptyableString = z.string();
+const optionalEmptyableString = z.string().default("");
 const emptyableUrl = z.union([z.literal(""), z.string().url()]);
 
 const schema = z.object({
@@ -46,6 +47,10 @@ const schema = z.object({
   DODO_PAYMENTS_API_URL: emptyableUrl,
   DODO_PAYMENTS_ENVIRONMENT: z.enum(["test_mode", "live_mode"]),
   DODO_PAYMENTS_WEBHOOK_SECRET: emptyableString,
+  DODO_STARTER_MONTHLY_PRODUCT_ID: optionalEmptyableString,
+  DODO_STARTER_YEARLY_PRODUCT_ID: optionalEmptyableString,
+  DODO_SCALE_MONTHLY_PRODUCT_ID: optionalEmptyableString,
+  DODO_SCALE_YEARLY_PRODUCT_ID: optionalEmptyableString,
   DODO_PRO_PRODUCT_ID: emptyableString,
   DODO_ENTERPRISE_PRODUCT_ID: emptyableString,
   SOURCE_CREDENTIAL_ENCRYPTION_KEY: emptyableString,
@@ -121,7 +126,9 @@ function managedProductionEnvIssues(value: typeof env): string[] {
   if (!value.DODO_PAYMENTS_WEBHOOK_SECRET) {
     issues.push("DODO_PAYMENTS_WEBHOOK_SECRET");
   }
-  if (!value.DODO_PRO_PRODUCT_ID) issues.push("DODO_PRO_PRODUCT_ID");
+  if (!value.DODO_STARTER_MONTHLY_PRODUCT_ID && !value.DODO_PRO_PRODUCT_ID) {
+    issues.push("DODO_STARTER_MONTHLY_PRODUCT_ID");
+  }
   if (!value.RESEND_API_KEY) issues.push("RESEND_API_KEY");
   if (
     !value.BETTER_AUTH_SECRET ||

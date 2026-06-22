@@ -35,6 +35,7 @@ import { getStorage } from "@planisfy/storage";
 import { requireOrgPermission, type AuthEnv } from "../../middleware/auth";
 import { env, redisConnection } from "../../env";
 import { enqueueOutboxEvent } from "../../shared/outbox/outbox";
+import { requirePlanFeature } from "../../shared/policy/plan-gates";
 import { htmlParagraphFromText, sendEmail } from "../email/email";
 import { buildNotificationPayload } from "./notification-adapters";
 import {
@@ -48,6 +49,7 @@ operationsRoute.use(
   "/operations/*",
   requireOrgPermission("operations.manage"),
 );
+operationsRoute.use("/operations/*", requirePlanFeature("operations"));
 
 const notificationSchema = z
   .object({

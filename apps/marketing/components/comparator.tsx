@@ -1,62 +1,32 @@
 import Link from 'next/link'
 import { Check, Minus } from 'lucide-react'
+import { PLAN_ORDER, PLANS } from '@planisfy/types'
 
 import { Button } from '@planisfy/ui/components/button'
 import { Card } from '@planisfy/ui/components/card'
 
-const plans = [
-  {
-    name: 'Free',
-    price: '$0',
-    period: '/month',
-    cta: 'Create account',
-    highlighted: false,
-  },
-  {
-    name: 'Starter',
-    price: '$19',
-    period: '/month',
-    cta: 'Start starter plan',
-    highlighted: true,
-  },
-  {
-    name: 'Scale',
-    price: '$79',
-    period: '/month',
-    cta: 'Start scale plan',
-    highlighted: false,
-  },
-  {
-    name: 'Platform',
-    price: 'Custom',
-    period: '',
-    cta: 'Talk to sales',
-    highlighted: false,
-  },
-]
+const plans = PLAN_ORDER.map((planId) => PLANS[planId])
 
 const features = [
   {
     name: 'Published map styles',
-    free: '3',
-    starter: '10',
-    scale: '50',
-    platform: 'Unlimited',
+    values: plans.map((plan) => plan.comparison.publishedStyles),
   },
-  { name: 'Hosted tilesets', free: '1', starter: '5', scale: '20', platform: 'Custom' },
-  { name: 'API keys', free: '2', starter: '10', scale: '40', platform: 'Unlimited' },
+  { name: 'Hosted tilesets', values: plans.map((plan) => plan.comparison.hostedTilesets) },
+  { name: 'API keys', values: plans.map((plan) => plan.comparison.apiKeys) },
   {
-    name: 'Geocoding usage',
-    free: 'Test volume',
-    starter: 'Growing apps',
-    scale: 'Production',
-    platform: 'Custom',
+    name: 'Planisfy credits',
+    values: plans.map((plan) => plan.comparison.geocodingUsage),
   },
-  { name: 'Usage dashboard', free: true, starter: true, scale: true, platform: true },
-  { name: 'Team roles', free: false, starter: true, scale: true, platform: true },
-  { name: 'Audit log', free: false, starter: false, scale: true, platform: true },
-  { name: 'Self-host support', free: false, starter: false, scale: false, platform: true },
-  { name: 'SLA and onboarding', free: false, starter: false, scale: false, platform: true },
+  { name: 'Usage dashboard', values: plans.map((plan) => plan.comparison.usageDashboard) },
+  { name: 'Team roles', values: plans.map((plan) => plan.comparison.teamRoles) },
+  { name: 'Audit log', values: plans.map((plan) => plan.comparison.auditLog) },
+  {
+    name: 'Operations controls',
+    values: plans.map((plan) => plan.comparison.operationsControls),
+  },
+  { name: 'Self-host support', values: plans.map((plan) => plan.comparison.selfHostSupport) },
+  { name: 'SLA and onboarding', values: plans.map((plan) => plan.comparison.slaAndOnboarding) },
 ]
 
 type ComparatorProps = {
@@ -89,7 +59,7 @@ export function Comparator({ signUpHref }: ComparatorProps) {
                 >
                   <p className="font-medium">{plan.name}</p>
                   <p className="mt-1">
-                    <span className="text-2xl font-semibold">{plan.price}</span>
+                    <span className="text-2xl font-semibold">{plan.priceLabel}</span>
                     <span className="text-sm text-muted-foreground">{plan.period}</span>
                   </p>
                 </div>
@@ -98,12 +68,10 @@ export function Comparator({ signUpHref }: ComparatorProps) {
             {features.map((feature) => (
               <div key={feature.name} className="grid grid-cols-5 border-b">
                 <div className="p-4 text-sm text-muted-foreground">{feature.name}</div>
-                {(['free', 'starter', 'scale', 'platform'] as const).map((planKey, index) => {
-                  const value = feature[planKey]
-
+                {feature.values.map((value, index) => {
                   return (
                     <div
-                      key={planKey}
+                      key={`${feature.name}-${plans[index]?.id ?? index}`}
                       className={[
                         'flex items-center justify-center border-l p-4 text-sm',
                         index === 1 ? 'bg-accent' : '',

@@ -7,6 +7,8 @@ import {
   PROFILE_AVATAR_UPDATED_EVENT,
   type ProfileAvatarUpdatedDetail,
 } from '@/lib/profile-avatar-events'
+import { api } from '@/lib/api'
+import type { BillingInfo } from '@/features/settings/model'
 import { normalizeConsoleUrl } from '@/lib/console-api/normalizers'
 import { cn } from '@planisfy/ui/lib/utils'
 import { Button } from '@planisfy/ui/components/button'
@@ -138,6 +140,7 @@ export function NavAccountSwitcher() {
   const [activeOrg, setActiveOrg] = useState<OrgItem | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [billing, setBilling] = useState<BillingInfo | null>(null)
 
   const user = session?.user as SessionUser | undefined
   const userName = user?.name || user?.email || 'Personal'
@@ -149,6 +152,10 @@ export function NavAccountSwitcher() {
         setOrgs(res.data as OrgItem[])
       }
     })
+    api
+      .get<BillingInfo>('/billing')
+      .then(setBilling)
+      .catch(() => setBilling(null))
   }, [])
 
   useEffect(() => {
@@ -252,10 +259,17 @@ export function NavAccountSwitcher() {
             </>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setCreateOpen(true)}>
-            <Plus className="mr-2 size-4" />
-            Create organization
-          </DropdownMenuItem>
+          {billing?.plan !== 'free' ? (
+            <DropdownMenuItem onSelect={() => setCreateOpen(true)}>
+              <Plus className="mr-2 size-4" />
+              Create organization
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onSelect={() => router.push('/billing')}>
+              <Plus className="mr-2 size-4" />
+              Upgrade for organizations
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

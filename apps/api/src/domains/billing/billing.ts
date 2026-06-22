@@ -8,6 +8,8 @@ import {
 } from "@planisfy/database";
 import {
   PLANS,
+  normalizePlanSlug,
+  type BillingInterval,
   type PlanDefinition,
   type PlanLimits,
   type PlanSlug,
@@ -46,6 +48,12 @@ export interface RuntimePlanDefinition {
   productId: string;
   name: string;
   price: number;
+  priceLabel: string;
+  period: string;
+  checkout: boolean;
+  pricing: PlanDefinition["pricing"];
+  features: string[];
+  comparison: PlanDefinition["comparison"];
   limits: PlanLimits;
 }
 
@@ -112,7 +120,7 @@ export function isBillingConfigured(): boolean {
   return Boolean(
     env.DODO_PAYMENTS_API_KEY &&
       env.DODO_PAYMENTS_WEBHOOK_SECRET &&
-      env.DODO_PRO_PRODUCT_ID,
+      (env.DODO_STARTER_MONTHLY_PRODUCT_ID || env.DODO_PRO_PRODUCT_ID),
   );
 }
 
@@ -142,6 +150,11 @@ export async function ensureBillingPlans() {
         active: true,
       },
     });
+
+  await db
+    .update(plans)
+    .set({ active: false })
+    .where(sql`${plans.id} in ('pro', 'enterprise')`);
 }
 
 export async function listPlanDefinitions(): Promise<RuntimePlanDefinition[]> {
@@ -157,6 +170,12 @@ export async function listPlanDefinitions(): Promise<RuntimePlanDefinition[]> {
       productId: fallback.productId,
       name: row?.name ?? fallback.name,
       price: fallback.price,
+      priceLabel: fallback.priceLabel,
+      period: fallback.period,
+      checkout: fallback.checkout,
+      pricing: fallback.pricing,
+      features: fallback.features,
+      comparison: fallback.comparison,
       limits: row ? parseStoredPlanLimits(row.limits, fallback) : fallback,
     };
   });
@@ -172,6 +191,12 @@ export async function getPlanDefinition(
       productId: PLANS.free.productId,
       name: PLANS.free.name,
       price: PLANS.free.price,
+      priceLabel: PLANS.free.priceLabel,
+      period: PLANS.free.period,
+      checkout: PLANS.free.checkout,
+      pricing: PLANS.free.pricing,
+      features: PLANS.free.features,
+      comparison: PLANS.free.comparison,
       limits: PLANS.free,
     }
   );
@@ -196,7 +221,7 @@ export async function getAccountPlan(accountId: string): Promise<PlanSlug> {
     .orderBy(desc(subscriptions.updatedAt))
     .limit(1);
 
-  return isPlanSlug(subscription?.planId) ? subscription.planId : "free";
+  return normalizePlanSlug(subscription?.planId) ?? "free";
 }
 
 export async function getAccountBillingStatus(
@@ -241,8 +266,10 @@ export async function createCheckoutSession(params: {
   userId: string;
   accountId: string;
   planId: BillablePlanSlug;
+  interval?: BillingInterval;
 }): Promise<CheckoutSession | null> {
-  const product = resolveSubscriptionProduct(params.planId);
+  const interval = params.interval ?? "monthly";
+  const product = resolveSubscriptionProduct(params.planId, interval);
   if (!env.DODO_PAYMENTS_API_KEY || !product) return null;
 
   await ensureBillingPlans();
@@ -274,6 +301,7 @@ export async function createCheckoutSession(params: {
       userId: params.userId,
       accountId: params.accountId,
       planId: params.planId,
+      interval,
     },
   };
 
@@ -303,6 +331,7 @@ export async function createCheckoutSession(params: {
     productLabel: product.productLabel,
     metadata: {
       planId: params.planId,
+      interval,
       productId: product.dodoProductId,
       userId: params.userId,
     },
@@ -315,8 +344,14 @@ export async function createCheckoutUrl(
   userId: string,
   planId: BillablePlanSlug,
   accountId = userId,
+  interval: BillingInterval = "monthly",
 ): Promise<string | null> {
-  const session = await createCheckoutSession({ userId, accountId, planId });
+  const session = await createCheckoutSession({
+    userId,
+    accountId,
+    planId,
+    interval,
+  });
   return session?.url ?? null;
 }
 
@@ -540,10 +575,6 @@ async function dodoFetch<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function isPlanSlug(value: unknown): value is PlanSlug {
-  return value === "free" || value === "pro" || value === "enterprise";
-}
-
 function parseStoredPlanLimits(
   value: unknown,
   fallback: PlanDefinition,
@@ -621,9 +652,10 @@ function readSubscriptionProduct(
   metadata: Record<string, unknown>,
   data: Record<string, unknown>,
 ): SubscriptionProduct | null {
-  const metadataPlan = stringValue(metadata.planId);
-  if (metadataPlan === "pro" || metadataPlan === "enterprise") {
-    const product = resolveSubscriptionProduct(metadataPlan);
+  const metadataPlan = normalizePlanSlug(stringValue(metadata.planId));
+  const metadataInterval = billingIntervalValue(metadata.interval) ?? "monthly";
+  if (metadataPlan === "starter" || metadataPlan === "scale") {
+    const product = resolveSubscriptionProduct(metadataPlan, metadataInterval);
     if (product) return product;
   }
 
@@ -636,6 +668,10 @@ function readSubscriptionProduct(
     "productCart.0.productId",
   ]);
   return productId ? lookupSubscriptionProduct(productId) : null;
+}
+
+function billingIntervalValue(value: unknown): BillingInterval | null {
+  return value === "monthly" || value === "yearly" ? value : null;
 }
 
 function isPaymentEvent(eventType: string): boolean {

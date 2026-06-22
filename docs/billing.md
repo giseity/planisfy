@@ -8,8 +8,19 @@ Billing configuration is optional. Console can show billing capability as unavai
 
 ## Managed Mode
 
-Managed mode requires Dodo configuration through `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_API_URL`, `DODO_PAYMENTS_ENVIRONMENT`, `DODO_PAYMENTS_WEBHOOK_SECRET`, and product IDs.
+Managed mode requires Dodo configuration through `DODO_PAYMENTS_API_KEY`,
+`DODO_PAYMENTS_API_URL`, `DODO_PAYMENTS_ENVIRONMENT`,
+`DODO_PAYMENTS_WEBHOOK_SECRET`, and product IDs for paid self-serve plans:
+`DODO_STARTER_MONTHLY_PRODUCT_ID`, `DODO_STARTER_YEARLY_PRODUCT_ID`,
+`DODO_SCALE_MONTHLY_PRODUCT_ID`, and `DODO_SCALE_YEARLY_PRODUCT_ID`.
+
+`DODO_PRO_PRODUCT_ID` and `DODO_ENTERPRISE_PRODUCT_ID` are legacy monthly
+fallbacks while older deployments migrate to Starter and Scale naming.
 
 ## Runtime
 
-The API owns checkout/session creation and webhook handling. Webhooks are mounted at `/webhooks/dodo` and update billing/subscription ledger rows after verification. Plan limits feed request-per-minute and monthly quota checks.
+The API owns checkout/session creation and webhook handling. Webhooks are
+mounted at `/webhooks/dodo` and update billing/subscription ledger rows after
+verification. Free requires no card. Starter and Scale support monthly and
+yearly checkout. Plan limits feed request-per-minute and monthly Planisfy credit
+quota checks.

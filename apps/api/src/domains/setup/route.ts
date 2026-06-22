@@ -105,6 +105,9 @@ async function buildPreflightChecks(
   const productLoopChecks = await buildProductLoopChecks(deploymentMode);
   const upgradeChecks = await buildUpgradeReadinessChecks(storage);
   const valhalla = await valhallaReadinessCheck();
+  const starterProductConfigured = Boolean(
+    env.DODO_STARTER_MONTHLY_PRODUCT_ID || env.DODO_PRO_PRODUCT_ID,
+  );
 
   return [
     check({
@@ -279,15 +282,15 @@ async function buildPreflightChecks(
       ok: Boolean(
         env.DODO_PAYMENTS_API_KEY &&
           env.DODO_PAYMENTS_WEBHOOK_SECRET &&
-          env.DODO_PRO_PRODUCT_ID,
+          starterProductConfigured,
       ),
       warnWhenMissing: !managed,
       message:
         env.DODO_PAYMENTS_API_KEY &&
         env.DODO_PAYMENTS_WEBHOOK_SECRET &&
-        env.DODO_PRO_PRODUCT_ID
+        starterProductConfigured
           ? "Dodo Payments checkout and webhooks are configured."
-          : env.DODO_PAYMENTS_API_KEY || env.DODO_PRO_PRODUCT_ID
+          : env.DODO_PAYMENTS_API_KEY || starterProductConfigured
             ? "Dodo Payments checkout is partially configured."
           : "Billing checkout is disabled.",
       action:

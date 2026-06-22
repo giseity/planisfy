@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Check } from 'lucide-react'
+import { PLAN_ORDER, PLANS } from '@planisfy/types'
 
 import { Button } from '@planisfy/ui/components/button'
 import {
@@ -12,66 +13,7 @@ import {
 } from '@planisfy/ui/components/card'
 import { cn } from '@planisfy/ui/lib/utils'
 
-const plans = [
-  {
-    name: 'Free',
-    description: 'For testing integrations and supporting early usage.',
-    price: '$0',
-    period: '/month',
-    cta: 'Create account',
-    highlighted: false,
-    features: [
-      'Hosted style publishing',
-      'Small style and tileset workspace',
-      'Two API keys',
-      'Enough usage for testing',
-    ],
-  },
-  {
-    name: 'Starter',
-    description: 'A low-cost plan for real projects starting to grow.',
-    price: '$19',
-    period: '/month',
-    cta: 'Start starter plan',
-    highlighted: true,
-    features: [
-      'More map and geocoding usage',
-      'Multiple API keys',
-      'Usage visibility',
-      'Email support',
-      'Promotion workflows',
-    ],
-  },
-  {
-    name: 'Scale',
-    description: 'For teams running production maps across products.',
-    price: '$79',
-    period: '/month',
-    cta: 'Start scale plan',
-    highlighted: false,
-    features: [
-      'Higher geocoding throughput',
-      'Advanced usage controls',
-      'Multiple environments',
-      'Audit exports',
-      'Priority operations review',
-    ],
-  },
-  {
-    name: 'Platform',
-    description: 'For organizations that need scale and deployment control.',
-    price: 'Custom',
-    period: '',
-    cta: 'Talk to sales',
-    highlighted: false,
-    features: [
-      'Self-hosting support',
-      'Custom storage and worker topology',
-      'SLA and onboarding',
-      'Operational readiness review',
-    ],
-  },
-]
+const plans = PLAN_ORDER.map((planId) => PLANS[planId])
 
 type PricingProps = {
   signUpHref: string
@@ -109,8 +51,13 @@ export function Pricing({ signUpHref }: PricingProps) {
                 <CardTitle>{plan.name}</CardTitle>
                 <CardDescription>{plan.description}</CardDescription>
                 <div className="pt-4">
-                  <span className="text-4xl font-semibold">{plan.price}</span>
+                  <span className="text-4xl font-semibold">{plan.priceLabel}</span>
                   <span className="text-muted-foreground">{plan.period}</span>
+                  {plan.pricing.yearly ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {plan.pricing.yearly.priceLabel}/year
+                    </p>
+                  ) : null}
                 </div>
               </CardHeader>
               <CardContent className={cn('flex-1', plan.name === 'Platform' && 'md:p-6')}>

@@ -5,10 +5,12 @@ import { auditQuerySchema } from "@planisfy/api-contracts";
 import { queryValidator } from "../../shared/validation/validation";
 import type { AuthEnv } from "../../middleware/auth";
 import { requireOrgPermission } from "../../middleware/auth";
+import { requirePlanFeature } from "../../shared/policy/plan-gates";
 
 const auditBaseRoute = new Hono<AuthEnv>();
 
 auditBaseRoute.use("/audit", requireOrgPermission("members.manage"));
+auditBaseRoute.use("/audit", requirePlanFeature("audit"));
 
 // ── GET /console/audit - Audit events for current owner ─────────────────────
 

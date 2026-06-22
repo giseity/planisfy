@@ -166,7 +166,7 @@ export async function sendQuotaWarningEmail(params: {
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #1a1a1a;">Quota Warning</h2>
         <p>Hi ${name},</p>
-        <p>You've used <strong>${params.usedUnits.toLocaleString()}</strong> of your <strong>${params.totalUnits.toLocaleString()}</strong> monthly API units (<strong>${params.percentUsed}%</strong>).</p>
+        <p>You've used <strong>${params.usedUnits.toLocaleString()}</strong> of your <strong>${params.totalUnits.toLocaleString()}</strong> monthly Planisfy credits (<strong>${params.percentUsed}%</strong>).</p>
         <div style="background: #f5f5f5; border-radius: 8px; padding: 4px; margin: 16px 0;">
           <div style="background: ${percentUsed >= 90 ? '#ef4444' : '#f59e0b'}; height: 8px; border-radius: 6px; width: ${percentUsed}%;"></div>
         </div>
@@ -178,7 +178,7 @@ export async function sendQuotaWarningEmail(params: {
         <p style="color: #999; font-size: 12px;">Planisfy — Open-source mapping platform</p>
       </div>
     `,
-    text: `Hi ${params.name},\n\nYou've used ${params.usedUnits.toLocaleString()} of ${params.totalUnits.toLocaleString()} monthly units (${params.percentUsed}%).\n\nUpgrade: ${billingUrl}`,
+    text: `Hi ${params.name},\n\nYou've used ${params.usedUnits.toLocaleString()} of ${params.totalUnits.toLocaleString()} monthly Planisfy credits (${params.percentUsed}%).\n\nUpgrade: ${billingUrl}`,
   });
 }
 

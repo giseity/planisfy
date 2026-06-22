@@ -430,6 +430,9 @@ importers:
       '@planisfy/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@planisfy/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../../packages/ui

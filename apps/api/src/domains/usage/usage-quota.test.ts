@@ -42,7 +42,7 @@ describe("usage quota helpers", () => {
     assert.equal(quota.remaining, 0);
   });
 
-  it("treats enterprise quota as unlimited", () => {
+  it("treats platform quota as unlimited", () => {
     const quota = evaluateMonthlyQuota({
       used: 1_000_000,
       cost: 10_000,

@@ -32,7 +32,8 @@ import { env } from "../../env";
 import { requireOrgPermission } from "../../middleware/auth";
 
 const checkoutSchema = z.object({
-  planId: z.enum(["pro", "enterprise"]),
+  planId: z.enum(["starter", "scale"]),
+  interval: z.enum(["monthly", "yearly"]).default("monthly"),
 });
 
 export const billingRoute = new Hono<AuthEnv>();
@@ -130,7 +131,13 @@ billingRoute.get("/billing/plans", async (c) => {
     productId: plan.productId,
     name: plan.name,
     price: plan.price,
+    priceLabel: plan.priceLabel,
+    period: plan.period,
+    checkout: plan.checkout,
     checkoutAvailable: isCheckoutConfiguredForPlan(plan.id),
+    pricing: plan.pricing,
+    features: plan.features,
+    comparison: plan.comparison,
     requestsPerMinute: plan.limits.requestsPerMinute,
     monthlyUnits:
       plan.limits.monthlyUnits === Infinity
@@ -172,12 +179,13 @@ billingRoute.post("/billing/checkout", async (c) => {
   const userId = c.get("userId");
   const ownerId = c.get("ownerId");
   const body = await c.req.json();
-  const { planId } = checkoutSchema.parse(body);
+  const { planId, interval } = checkoutSchema.parse(body);
 
   const session = await createCheckoutSession({
     userId,
     accountId: ownerId,
     planId,
+    interval,
   });
 
   if (!session) {

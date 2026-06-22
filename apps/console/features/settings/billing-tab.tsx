@@ -35,6 +35,9 @@ export function BillingTab() {
   const [plans, setPlans] = useState<PlanInfo[]>([]);
   const [transactions, setTransactions] = useState<BillingTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">(
+    "monthly",
+  );
 
   useEffect(() => {
     Promise.all([
@@ -79,7 +82,7 @@ export function BillingTab() {
               variant={
                 billing.plan === "free"
                   ? "secondary"
-                  : billing.plan === "enterprise"
+                  : billing.plan === "platform"
                     ? "warning"
                     : "success"
               }
@@ -104,7 +107,7 @@ export function BillingTab() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div>
-              <p className="text-sm text-muted-foreground">Monthly Units</p>
+              <p className="text-sm text-muted-foreground">Planisfy Credits</p>
               <p className="text-lg font-semibold">
                 {billing.usage.monthlyUnits.toLocaleString()}
                 <span className="text-sm font-normal text-muted-foreground">
@@ -181,10 +184,26 @@ export function BillingTab() {
       </Card>
 
       {/* Plan Comparison */}
-      <h2 className="text-lg font-semibold">Plans</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Plans</h2>
+        <div className="flex rounded-md border p-1">
+          {(["monthly", "yearly"] as const).map((interval) => (
+            <Button
+              key={interval}
+              size="sm"
+              variant={billingInterval === interval ? "default" : "ghost"}
+              onClick={() => setBillingInterval(interval)}
+            >
+              {interval === "monthly" ? "Monthly" : "Yearly"}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {plans.map((plan) => {
           const isCurrent = plan.id === billing.plan;
+          const intervalPrice =
+            plan.pricing[billingInterval] ?? plan.pricing.monthly;
           return (
             <Card key={plan.id} className={isCurrent ? "border-primary" : ""}>
               <CardHeader>
@@ -193,10 +212,10 @@ export function BillingTab() {
                   {isCurrent && <Badge>Current</Badge>}
                 </div>
                 <p className="text-2xl font-bold">
-                  {plan.price === 0 ? "Free" : `$${plan.price}`}
-                  {plan.price > 0 && (
+                  {intervalPrice?.priceLabel ?? plan.priceLabel}
+                  {intervalPrice && intervalPrice.price > 0 && (
                     <span className="text-sm font-normal text-muted-foreground">
-                      /mo
+                      {intervalPrice.period}
                     </span>
                   )}
                 </p>
@@ -208,7 +227,7 @@ export function BillingTab() {
                     {plan.monthlyUnits === "Unlimited"
                       ? "Unlimited"
                       : Number(plan.monthlyUnits).toLocaleString()}{" "}
-                    API units/month
+                    Planisfy credits/month
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-500 shrink-0" />
@@ -240,10 +259,10 @@ export function BillingTab() {
                 {!isCurrent && plan.price > 0 && (
                   <Button
                     className="w-full mt-4"
-                    variant={plan.id === "pro" ? "default" : "outline"}
-                    disabled={!plan.checkoutAvailable}
+                    variant={plan.id === "starter" ? "default" : "outline"}
+                    disabled={!plan.checkoutAvailable || !intervalPrice}
                     onClick={async () => {
-                      if (!plan.checkoutAvailable) {
+                      if (!plan.checkoutAvailable || !intervalPrice) {
                         toast.info(
                           "Billing is not configured yet. Set Dodo Payments credentials to enable payments.",
                         );
@@ -252,7 +271,7 @@ export function BillingTab() {
                       try {
                         const { url } = await api.post<{ url: string }>(
                           "/billing/checkout",
-                          { planId: plan.id },
+                          { planId: plan.id, interval: billingInterval },
                         );
                         window.open(url, "_blank");
                       } catch {

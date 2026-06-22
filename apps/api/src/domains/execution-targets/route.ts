@@ -12,6 +12,7 @@ import {
 import { requireOrgPermission, type AuthEnv } from "../../middleware/auth";
 import { env } from "../../env";
 import { customerComputeMutationGate } from "../../shared/policy/platform-gates";
+import { requirePlanFeature } from "../../shared/policy/plan-gates";
 import {
   encryptExecutionSecret,
   estimateProcessingDuration,
@@ -31,6 +32,14 @@ executionTargetsRoute.use(
   requireOrgPermission("execution_target.manage"),
 );
 executionTargetsRoute.use(
+  "/execution-targets",
+  requirePlanFeature("customExecutionTargets"),
+);
+executionTargetsRoute.use(
+  "/execution-targets/*",
+  requirePlanFeature("customExecutionTargets"),
+);
+executionTargetsRoute.use(
   "/worker-profiles",
   requireOrgPermission("execution_target.manage"),
 );
@@ -39,8 +48,20 @@ executionTargetsRoute.use(
   requireOrgPermission("execution_target.manage"),
 );
 executionTargetsRoute.use(
+  "/worker-profiles",
+  requirePlanFeature("customExecutionTargets"),
+);
+executionTargetsRoute.use(
+  "/worker-profiles/*",
+  requirePlanFeature("customExecutionTargets"),
+);
+executionTargetsRoute.use(
   "/processing-jobs/estimate",
   requireOrgPermission("execution_target.manage"),
+);
+executionTargetsRoute.use(
+  "/processing-jobs/estimate",
+  requirePlanFeature("customExecutionTargets"),
 );
 
 const providerSchema = z.enum(["local", "aws_batch", "gcp_batch"]);
