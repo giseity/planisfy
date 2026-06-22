@@ -8,6 +8,8 @@ The GitHub environment must be named `managed-staging` and require human approva
 
 Required proof:
 
+- `pnpm smoke:managed-local` passed with real Cloudflare R2 credentials for a
+  local managed-mode rehearsal.
 - `Managed Staging Proof` workflow completed against the protected environment.
 - `MANAGED_STAGING_API_URL` and `MANAGED_STAGING_CONSOLE_URL` are public HTTPS origins.
 - API CORS accepts the configured Console origin.

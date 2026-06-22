@@ -86,9 +86,11 @@ function validateManagedIngressUrl(value, name) {
   if (url.protocol !== "https:" && process.env.ALLOW_INSECURE_MANAGED_STAGING !== "true") {
     throw new Error(`${name} must use https for managed staging`);
   }
+  const allowLocal = process.env.ALLOW_LOCAL_MANAGED_SMOKE === "true";
   if (
-    ["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname) ||
-    url.hostname.endsWith(".localhost")
+    !allowLocal &&
+    (["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname) ||
+      url.hostname.endsWith(".localhost"))
   ) {
     throw new Error(`${name} must be a public staging ingress URL, not ${url.hostname}`);
   }

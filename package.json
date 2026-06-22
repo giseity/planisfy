@@ -20,6 +20,7 @@
     "self-host:restore": "scripts/self-host-restore.sh",
     "self-host:setup": "scripts/self-host-setup.sh",
     "self-host:support-bundle": "scripts/self-host-support-bundle.sh",
+    "smoke:managed-local": "scripts/managed-local-smoke.sh",
     "smoke:managed-staging": "node scripts/managed-staging-smoke.mjs",
     "smoke:self-host-backup-restore": "scripts/self-host-backup-restore-smoke.sh",
     "smoke:self-host-browser-map": "node scripts/self-host-browser-map-smoke.mjs",

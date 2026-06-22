@@ -48,6 +48,25 @@ Set `PLANISFY_FIXTURE_BASE_URL` to the public `v1` prefix before running
 can fall back to `DEMO_PMTILES_FALLBACK_URL`, `DEMO_PMTILES_FALLBACK_PATH`, or
 an already-installed local PMTiles file.
 
+Managed mode can be smoked locally against real Cloudflare R2 without using
+public HTTPS ingress:
+
+```bash
+cat > .env.managed-local <<'EOF'
+R2_ACCESS_KEY_ID="..."
+R2_SECRET_ACCESS_KEY="..."
+# Optional when Wrangler can discover it: R2_ACCOUNT_ID="..."
+# Optional: R2_BUCKET="planisfy-managed-local-smoke"
+EOF
+
+pnpm smoke:managed-local
+```
+
+This workflow resets the local Compose stack, creates the private R2 smoke
+bucket when missing, and runs the managed smoke against `http://localhost:4000`
+and `http://localhost:3001`. Billing and email are config smokes only; no Dodo
+checkout or Resend delivery is attempted.
+
 To exercise S3-compatible storage locally, run the same full product loop with
 the `with-minio` Compose profile and these storage settings:
 
