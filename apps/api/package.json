@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "portless api.planisfy --app-port 4000 tsx watch src/index.ts",
     "build": "tsup",

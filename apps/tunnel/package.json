@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "tsx src/index.ts",
     "lint": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
