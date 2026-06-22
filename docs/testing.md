@@ -37,6 +37,17 @@ pnpm smoke:self-host-backup-restore
 These commands write logs, screenshots, and generated fixtures under
 `dogfood-output/`.
 
+Public self-host fixtures can be uploaded to Cloudflare R2 with:
+
+```bash
+pnpm fixtures:upload
+```
+
+Set `PLANISFY_FIXTURE_BASE_URL` to the public `v1` prefix before running
+`scripts/self-host-setup.sh --demo-data`. If that bucket is unavailable, setup
+can fall back to `DEMO_PMTILES_FALLBACK_URL`, `DEMO_PMTILES_FALLBACK_PATH`, or
+an already-installed local PMTiles file.
+
 To exercise S3-compatible storage locally, run the same full product loop with
 the `with-minio` Compose profile and these storage settings:
 

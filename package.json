@@ -15,6 +15,7 @@
     "e2e:product-loop:full": "node scripts/product-loop-full-browser-smoke.mjs",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "fixtures:upload": "scripts/upload-public-fixtures.sh",
     "self-host:backup": "scripts/self-host-backup.sh",
     "self-host:restore": "scripts/self-host-restore.sh",
     "self-host:setup": "scripts/self-host-setup.sh",

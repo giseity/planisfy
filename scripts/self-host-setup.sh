@@ -16,6 +16,7 @@ STYLE_FIXTURES=(
 )
 SOURCE_LAYER_CONTRACT="$ROOT_DIR/packages/map-styles/source-layer-contract.json"
 DEMO_PMTILES="$DATA_DIR/pmtiles/stuttgart.pmtiles"
+DEFAULT_DEMO_PMTILES_SHA256="85f84e73be586548a8a336e3d85bbf045cc8a0f5a517296125145d04ec1c8b6e"
 FIXTURE_TILEJSON_URL="http://localhost:3005/planisfy.basic"
 FIXTURE_MARTIN_SOURCE="stuttgart-base"
 FIXTURE_TILESET_ID="planisfy.basic"
@@ -219,24 +220,102 @@ generate_secret() {
 }
 
 download_demo_pmtiles() {
-  local url="${DEMO_PMTILES_URL:-}"
+  local fixture_base="${PLANISFY_FIXTURE_BASE_URL:-}"
+  local default_url=""
+  if [[ -n "$fixture_base" ]]; then
+    default_url="${fixture_base%/}/pmtiles/stuttgart.pmtiles"
+  fi
+
+  local url="${DEMO_PMTILES_URL:-$default_url}"
+  local fallback_url="${DEMO_PMTILES_FALLBACK_URL:-}"
+  local fallback_path="${DEMO_PMTILES_FALLBACK_PATH:-}"
   local checksum="${DEMO_PMTILES_SHA256:-}"
   local target="$DEMO_PMTILES"
   local tmp="${target}.tmp"
 
-  if [[ -z "$url" ]]; then
-    cat <<'NO_URL' >&2
-DEMO_PMTILES_URL is not configured.
+  if [[ -z "$checksum" && -n "$default_url" && "$url" == "$default_url" ]]; then
+    checksum="$DEFAULT_DEMO_PMTILES_SHA256"
+  fi
 
-Set DEMO_PMTILES_URL in .env, then rerun:
+  if [[ -f "$target" ]]; then
+    validate_pmtiles "$target"
+    echo "Using cached demo PMTiles fixture: infra/docker/data/pmtiles/stuttgart.pmtiles"
+    return
+  fi
+
+  if [[ -z "$url" && -z "$fallback_url" && -z "$fallback_path" ]]; then
+    cat <<'NO_URL' >&2
+Demo PMTiles download source is not configured.
+
+Set PLANISFY_FIXTURE_BASE_URL or DEMO_PMTILES_URL in .env, then rerun:
   scripts/self-host-setup.sh --demo-data
 NO_URL
     exit 1
   fi
 
-  require_cmd curl
-  echo "Downloading demo PMTiles fixture"
-  curl -fL --retry 3 --retry-delay 2 --output "$tmp" "$url"
+  if [[ -n "$url" ]]; then
+    require_cmd curl
+    echo "Downloading demo PMTiles fixture"
+    if download_pmtiles_url "$url" "$tmp"; then
+      install_demo_pmtiles "$tmp" "$target" "$checksum"
+      return
+    fi
+    echo "Primary demo PMTiles download failed: $url" >&2
+  fi
+
+  if [[ -n "$fallback_url" ]]; then
+    require_cmd curl
+    echo "Downloading fallback demo PMTiles fixture"
+    if download_pmtiles_url "$fallback_url" "$tmp"; then
+      install_demo_pmtiles "$tmp" "$target" "$checksum"
+      return
+    fi
+    echo "Fallback demo PMTiles download failed: $fallback_url" >&2
+  fi
+
+  if [[ -n "$fallback_path" ]]; then
+    local resolved_fallback_path
+    resolved_fallback_path="$(resolve_repo_path "$fallback_path")"
+    if [[ -f "$resolved_fallback_path" ]]; then
+      cp "$resolved_fallback_path" "$tmp"
+      install_demo_pmtiles "$tmp" "$target" "$checksum"
+      return
+    fi
+    echo "Fallback demo PMTiles path is missing: $fallback_path" >&2
+  fi
+
+  cat <<'DOWNLOAD_FAILED' >&2
+Unable to install the demo PMTiles fixture.
+
+The public fixture bucket may be unavailable. Rerun after it recovers, set
+DEMO_PMTILES_FALLBACK_URL to a mirror, or set DEMO_PMTILES_FALLBACK_PATH to a
+local PMTiles file.
+DOWNLOAD_FAILED
+  exit 1
+}
+
+download_pmtiles_url() {
+  local url="$1"
+  local tmp="$2"
+
+  rm -f "$tmp"
+  if ! curl -fL --retry 3 --retry-delay 2 --output "$tmp" "$url"; then
+    rm -f "$tmp"
+    return 1
+  fi
+
+  if ! is_pmtiles "$tmp"; then
+    rm -f "$tmp"
+    echo "Downloaded file is not a PMTiles archive: $url" >&2
+    return 1
+  fi
+}
+
+install_demo_pmtiles() {
+  local tmp="$1"
+  local target="$2"
+  local checksum="$3"
+
   validate_pmtiles "$tmp"
 
   if [[ -n "$checksum" ]]; then
@@ -248,11 +327,19 @@ NO_URL
   echo "Downloaded demo PMTiles fixture: infra/docker/data/pmtiles/stuttgart.pmtiles"
 }
 
-validate_pmtiles() {
+is_pmtiles() {
   local path="$1"
   local magic
+  if [[ ! -f "$path" ]]; then
+    return 1
+  fi
   magic="$(head -c 7 "$path" || true)"
-  if [[ "$magic" != "PMTiles" ]]; then
+  [[ "$magic" == "PMTiles" ]]
+}
+
+validate_pmtiles() {
+  local path="$1"
+  if ! is_pmtiles "$path"; then
     rm -f "$path"
     echo "Downloaded file is not a PMTiles archive: $path" >&2
     exit 1
@@ -337,7 +424,7 @@ if [[ "$API_STORAGE_STYLE_DIR" != "$LOCAL_STORAGE_MOUNT_STYLE_DIR" ]]; then
   seed_style_fixtures "$API_STORAGE_STYLE_DIR"
 fi
 
-if [[ ! -f "$DEMO_PMTILES" && "$want_demo_data" == true ]]; then
+if [[ "$want_demo_data" == true ]]; then
   download_demo_pmtiles
 fi
 
@@ -403,7 +490,8 @@ Next steps:
 Demo data directories:
   infra/docker/data/pmtiles        Put *.pmtiles files here for Martin.
                                    The default fixture expects stuttgart.pmtiles.
-                                   Use --demo-data with DEMO_PMTILES_URL to fetch it.
+                                   Use --demo-data with PLANISFY_FIXTURE_BASE_URL
+                                   or DEMO_PMTILES_URL to fetch it.
   infra/docker/data/valhalla_data  Put Valhalla tiles/config data here.
   $LOCAL_STORAGE_MOUNT_DISPLAY
                                    Host local object storage mount shared by API

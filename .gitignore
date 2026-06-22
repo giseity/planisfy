@@ -35,6 +35,7 @@ infra/docker/data/fonts/*
 
 # Vercel
 .vercel
+.wrangler/
 
 # Build Outputs
 .next/

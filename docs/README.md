@@ -11,6 +11,7 @@ These documents are contributor and operator references. They describe current r
 - [Operations](./operations.md)
 - [Managed Launch Runbook](./managed-launch-runbook.md)
 - [Storage](./storage.md)
+- [Public Fixtures](./public-fixtures.md)
 - [Testing](./testing.md)
 - [Security](./security.md)
 - [Billing](./billing.md)
