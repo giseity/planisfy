@@ -127,6 +127,13 @@
       "when": 1782031000000,
       "tag": "0017_source_import_target_tileset",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782090000000,
+      "tag": "0018_usage_log_endpoint_text",
+      "breakpoints": true
     }
   ]
 }

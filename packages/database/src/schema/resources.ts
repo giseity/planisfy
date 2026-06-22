@@ -252,7 +252,7 @@ export const usageLogs = pgTable(
       onDelete: "set null",
     }),
 
-    endpoint: varchar("endpoint", { length: 64 }).notNull(),
+    endpoint: text("endpoint").notNull(),
     method: varchar("method", { length: 8 }).notNull(),
     statusCode: integer("status_code").notNull(),
     durationMs: integer("duration_ms"),
