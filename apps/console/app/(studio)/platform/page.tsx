@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ComponentType } from "react";
 import {
   api,
   type PlatformCapability,
   type PlatformPreflight,
   type PlatformPreflightCheck,
-  type PlatformPreflightStatus,
 } from "@/lib/api";
 import { Badge } from "@planisfy/ui/components/badge";
 import { Button } from "@planisfy/ui/components/button";
@@ -30,17 +28,11 @@ import {
   ServerCog,
   Wrench,
   XCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
-const statusIcon = {
-  pass: CheckCircle2,
-  warn: AlertTriangle,
-  fail: XCircle,
-} satisfies Record<
-  PlatformPreflightStatus,
-  ComponentType<{ className?: string }>
->;
+type DisplayStatus = "pass" | "warn" | "fail";
 
 export default function PlatformPage() {
   const [preflight, setPreflight] = useState<PlatformPreflight | null>(null);
@@ -181,7 +173,7 @@ export default function PlatformPage() {
   );
 }
 
-const capabilityIcons = {
+const capabilityIcons: Record<PlatformCapability["id"], LucideIcon> = {
   billing: Cloud,
   transactionalEmail: Cloud,
   managedStorage: Database,
@@ -194,10 +186,7 @@ const capabilityIcons = {
   supportBundles: ClipboardCheck,
   releaseUpgrades: ServerCog,
   platformWorkerRuntime: Wrench,
-} satisfies Record<
-  PlatformCapability["id"],
-  ComponentType<{ className?: string }>
->;
+};
 
 function CapabilitySurface({ preflight }: { preflight: PlatformPreflight }) {
   const mode = deploymentModeDisplay(preflight.deploymentMode);
@@ -226,7 +215,7 @@ function CapabilitySurface({ preflight }: { preflight: PlatformPreflight }) {
 }
 
 function CapabilityCard({ capability }: { capability: PlatformCapability }) {
-  const Icon = capabilityIcons[capability.id];
+  const Icon = capabilityIcons[capability.id] ?? ClipboardCheck;
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
@@ -282,14 +271,13 @@ function MetricCard({
 }: {
   label: string;
   value: number;
-  status: PlatformPreflightStatus;
+  status: DisplayStatus;
 }) {
-  const Icon = statusIcon[status];
   return (
     <Card>
       <CardContent className="flex items-center gap-3 p-4">
         <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
-          <Icon className={iconClass(status)} />
+          <StatusIcon status={status} className={iconClass(status)} />
         </div>
         <div>
           <p className="text-xs text-muted-foreground">{label}</p>
@@ -301,12 +289,14 @@ function MetricCard({
 }
 
 function CheckRow({ check }: { check: PlatformPreflightCheck }) {
-  const Icon = statusIcon[check.status];
   return (
     <div className="rounded-md border p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2">
-          <Icon className={iconClass(check.status, "mt-0.5")} />
+          <StatusIcon
+            status={check.status}
+            className={iconClass(check.status, "mt-0.5")}
+          />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-medium">{check.label}</p>
@@ -335,7 +325,19 @@ function CheckRow({ check }: { check: PlatformPreflightCheck }) {
   );
 }
 
-function iconClass(status: PlatformPreflightStatus, extra = "") {
+function StatusIcon({
+  status,
+  className,
+}: {
+  status: unknown;
+  className: string;
+}) {
+  if (status === "pass") return <CheckCircle2 className={className} />;
+  if (status === "warn") return <AlertTriangle className={className} />;
+  return <XCircle className={className} />;
+}
+
+function iconClass(status: unknown, extra = "") {
   const color =
     status === "pass"
       ? "text-emerald-600"

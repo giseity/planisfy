@@ -7,6 +7,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import {
+  chmodSync,
   createWriteStream,
   createReadStream,
   existsSync,
@@ -18,6 +19,9 @@ import { dirname, join } from "path";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { env } from "./env";
+
+const LOCAL_STORAGE_DIR_MODE = 0o777;
+const LOCAL_STORAGE_FILE_MODE = 0o666;
 
 export interface StoredObject {
   key: string;
@@ -239,9 +243,7 @@ export class LocalStorage implements StorageProvider {
     this.baseUrl = env.LOCAL_STORAGE_URL;
     this.bucket = env.LOCAL_STORAGE_BUCKET;
 
-    if (!existsSync(this.basePath)) {
-      mkdirSync(this.basePath, { recursive: true });
-    }
+    ensureLocalStorageDirectory(this.basePath);
   }
 
   async upload(
@@ -252,13 +254,11 @@ export class LocalStorage implements StorageProvider {
     const filePath = join(this.basePath, key);
     const dir = dirname(filePath);
     const resolvedContentType = contentType || "application/octet-stream";
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
+    ensureLocalStorageDirectory(dir);
 
     if (Buffer.isBuffer(data)) {
       const { writeFile } = await import("fs/promises");
-      await writeFile(filePath, data);
+      await writeFile(filePath, data, { mode: LOCAL_STORAGE_FILE_MODE });
       return {
         key,
         url: this.getUrl(key),
@@ -267,7 +267,9 @@ export class LocalStorage implements StorageProvider {
       };
     }
 
-    const writable = createWriteStream(filePath);
+    const writable = createWriteStream(filePath, {
+      mode: LOCAL_STORAGE_FILE_MODE,
+    });
     await pipeline(data, writable);
     const stats = statSync(filePath);
     return {
@@ -297,10 +299,10 @@ export class LocalStorage implements StorageProvider {
   }
 
   async copy(sourceKey: string, targetKey: string): Promise<void> {
-    const { copyFile, mkdir } = await import("fs/promises");
+    const { copyFile } = await import("fs/promises");
     const sourcePath = join(this.basePath, sourceKey);
     const targetPath = join(this.basePath, targetKey);
-    await mkdir(dirname(targetPath), { recursive: true });
+    ensureLocalStorageDirectory(dirname(targetPath));
     await copyFile(sourcePath, targetPath);
   }
 
@@ -324,6 +326,29 @@ export class LocalStorage implements StorageProvider {
       provider: "local",
       bucket: this.bucket,
     };
+  }
+}
+
+function ensureLocalStorageDirectory(path: string): void {
+  if (existsSync(path)) {
+    chmodLocalStorageDirectory(path);
+    return;
+  }
+
+  const parent = dirname(path);
+  if (parent && parent !== path) {
+    ensureLocalStorageDirectory(parent);
+  }
+  mkdirSync(path, { recursive: true, mode: LOCAL_STORAGE_DIR_MODE });
+  chmodLocalStorageDirectory(path);
+}
+
+function chmodLocalStorageDirectory(path: string): void {
+  try {
+    chmodSync(path, LOCAL_STORAGE_DIR_MODE);
+  } catch {
+    // Non-root containers may not own bind-mounted host directories. Best effort
+    // is still useful for paths the current process created or owns.
   }
 }
 

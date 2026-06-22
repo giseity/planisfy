@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/infra/docker/docker-compose.yml"
 MARTIN_CONFIG="$ROOT_DIR/infra/docker/configs/martin.yaml"
-ENV_FILE="$ROOT_DIR/.env"
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
 ENV_EXAMPLE="$ROOT_DIR/.env.example"
 DATA_DIR="$ROOT_DIR/infra/docker/data"
 MAP_STYLES_DIR="$ROOT_DIR/packages/map-styles"
@@ -280,23 +280,45 @@ set_env_if_blank_or_default DEMO_PMTILES_PATH "/data/pmtiles/stuttgart.pmtiles" 
 
 API_STORAGE_DIR="$(resolve_repo_path "${LOCAL_STORAGE_PATH:-.storage}")"
 LOCAL_STORAGE_MOUNT_DIR="$(resolve_compose_path "${LOCAL_STORAGE_HOST_PATH:-./data/storage}")"
+LOCAL_STORAGE_MOUNT_ACCOUNTS_DIR="$LOCAL_STORAGE_MOUNT_DIR/accounts"
 LOCAL_STORAGE_MOUNT_STYLE_DIR="$LOCAL_STORAGE_MOUNT_DIR/styles"
 LOCAL_STORAGE_MOUNT_FIXTURE_DIR="$LOCAL_STORAGE_MOUNT_DIR/fixtures"
 LOCAL_STORAGE_MOUNT_MARTIN_SOURCES_DIR="$LOCAL_STORAGE_MOUNT_DIR/martin-sources"
 API_STORAGE_STYLE_DIR="$API_STORAGE_DIR/styles"
+API_STORAGE_ACCOUNTS_DIR="$API_STORAGE_DIR/accounts"
 API_STORAGE_MARTIN_SOURCES_DIR="$(resolve_repo_path "${MARTIN_SOURCES_PATH:-${LOCAL_STORAGE_PATH:-.storage}/martin-sources}")"
 
 mkdir -p \
   "$DATA_DIR/pmtiles" \
   "$DATA_DIR/valhalla_data" \
+  "$LOCAL_STORAGE_MOUNT_ACCOUNTS_DIR" \
   "$LOCAL_STORAGE_MOUNT_DIR/uploads" \
   "$LOCAL_STORAGE_MOUNT_STYLE_DIR" \
   "$LOCAL_STORAGE_MOUNT_FIXTURE_DIR" \
   "$LOCAL_STORAGE_MOUNT_MARTIN_SOURCES_DIR" \
+  "$API_STORAGE_ACCOUNTS_DIR" \
   "$API_STORAGE_DIR/uploads" \
   "$API_STORAGE_STYLE_DIR" \
   "$API_STORAGE_DIR/fixtures" \
   "$API_STORAGE_MARTIN_SOURCES_DIR"
+
+# Keep local demo storage roots writable for non-root app containers without
+# requiring sudo for old artifacts that may already be container-owned.
+chmod a+rwX \
+  "$LOCAL_STORAGE_MOUNT_DIR" \
+  "$LOCAL_STORAGE_MOUNT_ACCOUNTS_DIR" \
+  "$LOCAL_STORAGE_MOUNT_DIR/uploads" \
+  "$LOCAL_STORAGE_MOUNT_STYLE_DIR" \
+  "$LOCAL_STORAGE_MOUNT_FIXTURE_DIR" \
+  "$LOCAL_STORAGE_MOUNT_MARTIN_SOURCES_DIR" \
+  "$API_STORAGE_DIR" \
+  "$API_STORAGE_ACCOUNTS_DIR" \
+  "$API_STORAGE_DIR/uploads" \
+  "$API_STORAGE_STYLE_DIR" \
+  "$API_STORAGE_DIR/fixtures" \
+  "$API_STORAGE_MARTIN_SOURCES_DIR"
+find "$LOCAL_STORAGE_MOUNT_ACCOUNTS_DIR" "$API_STORAGE_ACCOUNTS_DIR" \
+  -mindepth 1 -maxdepth 2 -type d -exec chmod a+rwX {} + 2>/dev/null || true
 
 if [[ ! -w "$LOCAL_STORAGE_MOUNT_DIR" ]]; then
   echo "Local storage mount directory is not writable: ${LOCAL_STORAGE_MOUNT_DIR#$ROOT_DIR/}" >&2
