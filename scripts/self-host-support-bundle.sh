@@ -49,6 +49,19 @@ require_cmd() {
   fi
 }
 
+env_value() {
+  local key="$1"
+  awk -F= -v key="$key" '
+    $1 == key {
+      value = substr($0, index($0, "=") + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^"/, "", value)
+      gsub(/"$/, "", value)
+      print value
+    }
+  ' "$ENV_FILE" | tail -n 1
+}
+
 compose() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
@@ -56,10 +69,41 @@ compose() {
 write_or_note() {
   local path="$1"
   shift
-  if "$@" > "$path" 2>&1; then
+  if "$@" > "$path.tmp" 2>&1; then
+    redact_known_secrets < "$path.tmp" > "$path"
+    rm -f "$path.tmp"
     return 0
   fi
-  echo "Command failed: $*" > "$path"
+  redact_known_secrets < "$path.tmp" > "$path"
+  rm -f "$path.tmp"
+  echo "Command failed: $*" >> "$path"
+}
+
+redact_known_secrets() {
+  local secrets=()
+  if [[ -f "$ENV_FILE" ]]; then
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "$line" || "$line" != *=* ]]; then
+        continue
+      fi
+      key="${line%%=*}"
+      value="${line#*=}"
+      value="${value%$'\r'}"
+      value="${value#\"}"
+      value="${value%\"}"
+      if [[ "$key" =~ (SECRET|KEY|PASSWORD|TOKEN|CREDENTIAL) && ${#value} -ge 12 ]]; then
+        secrets+=("$value")
+      fi
+    done < "$ENV_FILE"
+  fi
+
+  local redacted
+  while IFS= read -r redacted || [[ -n "$redacted" ]]; do
+    for secret in "${secrets[@]}"; do
+      redacted="${redacted//"$secret"/<redacted>}"
+    done
+    printf '%s\n' "$redacted"
+  done
 }
 
 redact_env() {
@@ -109,8 +153,14 @@ write_or_note "$bundle_dir/compose.logs.txt" compose logs --no-color --tail=300
 
 if command -v curl >/dev/null 2>&1; then
   write_or_note "$bundle_dir/api.health.json" curl -fsS http://localhost:4000/health
-  write_or_note "$bundle_dir/api.health-detailed.json" curl -fsS http://localhost:4000/health/detailed
-  write_or_note "$bundle_dir/api.metrics.txt" curl -fsS http://localhost:4000/metrics
+  internal_secret="$(env_value INTERNAL_API_SECRET)"
+  if [[ -n "$internal_secret" ]]; then
+    write_or_note "$bundle_dir/api.health-detailed.json" curl -fsS -H "x-internal-secret: $internal_secret" http://localhost:4000/health/detailed
+    write_or_note "$bundle_dir/api.metrics.txt" curl -fsS -H "x-internal-secret: $internal_secret" http://localhost:4000/metrics
+  else
+    write_or_note "$bundle_dir/api.health-detailed.json" curl -fsS http://localhost:4000/health/detailed
+    write_or_note "$bundle_dir/api.metrics.txt" curl -fsS http://localhost:4000/metrics
+  fi
 else
   echo "curl not available" > "$bundle_dir/api.health.json"
 fi

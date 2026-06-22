@@ -31,6 +31,8 @@ The local self-host QA pass also uses:
 
 ```bash
 SMOKE_BROWSER_PRODUCT_LOOP=true pnpm smoke:self-host-compose
+pnpm smoke:self-host-route-protection
+pnpm smoke:self-host-support-bundle
 pnpm smoke:self-host-backup-restore
 ```
 

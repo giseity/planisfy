@@ -26,6 +26,8 @@
     "smoke:self-host-browser-map": "node scripts/self-host-browser-map-smoke.mjs",
     "smoke:self-host-compose": "scripts/docker-compose-smoke.sh",
     "smoke:self-host-default-map": "node scripts/self-host-default-map-smoke.mjs",
+    "smoke:self-host-route-protection": "scripts/self-host-route-protection-smoke.sh",
+    "smoke:self-host-support-bundle": "scripts/self-host-support-bundle-smoke.sh",
     "smoke:self-host-upgrade": "node scripts/self-host-upgrade-smoke.mjs",
     "check-types": "turbo run check-types",
     "test": "turbo run test",
