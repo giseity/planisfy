@@ -37,6 +37,7 @@ const renderScreenshotPath = resolve(
 
 if (seedBeforeRun) {
   await run("pnpm", ["dev:seed"]);
+  await run("scripts/self-host-setup.sh", []);
 }
 
 await waitForJson(`${apiUrl}/health`, "API health");
@@ -57,6 +58,7 @@ page.on("console", (message) => {
 
 try {
   await signIn(page, { consoleUrl, email, password });
+  await cleanupSmokeResources(page);
   await expectText(page, "Dashboard");
 
   await uploadTilesetThroughUi(page);
@@ -67,13 +69,17 @@ try {
   if (!publishedTileset.tilejsonUrl) {
     throw new Error("Published tileset did not expose a TileJSON URL");
   }
+  const tilejsonUrl = publicApiUrl(publishedTileset.tilejsonUrl);
   await expectBrowserFetch(
     page,
-    publishedTileset.tilejsonUrl,
+    tilejsonUrl,
     "Full loop TileJSON URL",
   );
 
-  const publicStyleUrl = await createAndPublishStyle(page, publishedTileset);
+  const publicStyleUrl = await createAndPublishStyle(page, {
+    ...publishedTileset,
+    tilejsonUrl,
+  });
   await expectBrowserFetch(page, publicStyleUrl, "Full loop public style URL");
   const bytes = await renderMapLibreStyle(page, {
     styleUrl: publicStyleUrl,
@@ -82,9 +88,7 @@ try {
     zoom: 12,
   });
 
-  await page.goto(`${consoleUrl}/integration`, {
-    waitUntil: "domcontentloaded",
-  });
+  await gotoProtectedPage(page, "/integration");
   await expectText(page, "Public style URL");
   await expectText(page, "TileJSON URL");
 
@@ -111,22 +115,63 @@ try {
 }
 
 async function uploadTilesetThroughUi(page) {
-  await page.goto(`${consoleUrl}/tilesets`, { waitUntil: "domcontentloaded" });
-  await page.getByTestId("upload-tileset").click();
-  await page.getByLabel("Name (required)").fill(`Smoke Tileset ${suffix}`);
-  await page.getByLabel("Handle (required)").fill(tilesetHandle);
+  await gotoProtectedPage(page, "/tilesets");
+  await page.getByTestId("create-tileset").click();
+  await page.getByLabel("Name", { exact: true }).fill(`Smoke Tileset ${suffix}`);
+  await page.getByLabel("Handle", { exact: true }).fill(tilesetHandle);
   await page.getByLabel("Description").fill("Browser smoke upload.");
+  const [createResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/v1/console/tilesets") &&
+        response.request().method() === "POST",
+      { timeout: 20_000 },
+    ),
+    page.getByTestId("create-tileset-submit").click(),
+  ]);
+  if (!createResponse.ok()) {
+    throw new Error(
+      `Create tileset failed with ${createResponse.status()}: ${await createResponse.text()}`,
+    );
+  }
+  const createdTileset = await poll(
+    `tileset ${tilesetHandle} to be created`,
+    async () => {
+      const tileset = await findTileset(page, tilesetHandle);
+      return tileset ?? null;
+    },
+    { timeoutMs: 20_000, intervalMs: 1_000 },
+  );
+  await page.goto(`${consoleUrl}/tilesets/${createdTileset.id}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await expectText(page, "Upload source");
+
+  await page.getByTestId("upload-tileset").click();
   await page.locator("#tileset-upload-file").setInputFiles({
     name: `${tilesetHandle}.geojson`,
     mimeType: "application/geo+json",
     buffer: Buffer.from(JSON.stringify(smokeGeoJson())),
   });
-  await page.getByTestId("upload-tileset-submit").click();
-  await expectText(page, "Tileset upload queued");
+  const uploadSubmit = page.getByTestId("upload-tileset-submit");
+  await poll(
+    "tileset upload submit button to become enabled",
+    async () => ((await uploadSubmit.isEnabled().catch(() => false)) ? true : null),
+    { timeoutMs: 20_000, intervalMs: 500 },
+  );
+  await uploadSubmit.click();
+  await poll(
+    `tileset upload ${tilesetHandle} to be queued`,
+    async () => {
+      const tileset = await findTileset(page, tilesetHandle);
+      return tileset?.latestUpload ? true : null;
+    },
+    { timeoutMs: 30_000, intervalMs: 1_000 },
+  );
 }
 
 async function publishTilesetThroughUi(page, tileset) {
-  await page.goto(`${consoleUrl}/tilesets`, { waitUntil: "domcontentloaded" });
+  await gotoProtectedPage(page, "/tilesets");
   const publishButton = page.getByTestId(
     `publish-tileset-version-${tileset.handle}`,
   );
@@ -180,6 +225,39 @@ async function findTileset(page, handle) {
   return response.data.find((tileset) => tileset.handle === handle) ?? null;
 }
 
+async function gotoProtectedPage(page, path) {
+  await page.goto(`${consoleUrl}${path}`, { waitUntil: "domcontentloaded" });
+  if (new URL(page.url()).pathname !== "/sign-in") return;
+
+  await signIn(page, { consoleUrl, email, password });
+  await page.goto(`${consoleUrl}${path}`, { waitUntil: "domcontentloaded" });
+  if (new URL(page.url()).pathname === "/sign-in") {
+    throw new Error(`Authentication redirect loop while opening ${path}`);
+  }
+}
+
+async function cleanupSmokeResources(page) {
+  const [tilesetsResponse, stylesResponse] = await Promise.all([
+    consoleApi(page, "/tilesets"),
+    consoleApi(page, "/styles"),
+  ]);
+
+  await Promise.all(
+    tilesetsResponse.data
+      .filter((tileset) => tileset.handle?.startsWith("smoke-tileset-"))
+      .map((tileset) =>
+        consoleApi(page, `/tilesets/${tileset.id}`, { method: "DELETE" }),
+      ),
+  );
+  await Promise.all(
+    stylesResponse.data
+      .filter((style) => style.handle?.startsWith("smoke-style-"))
+      .map((style) =>
+        consoleApi(page, `/styles/${style.id}`, { method: "DELETE" }),
+      ),
+  );
+}
+
 async function createAndPublishStyle(page, tileset) {
   const profile = (await consoleApi(page, "/profile")).data;
   const sourceId = "smoke-upload";
@@ -231,6 +309,11 @@ async function createAndPublishStyle(page, tileset) {
   }
 
   return `${apiUrl}/styles/v1/${encodeURIComponent(profile.handle)}/${encodeURIComponent(published.data.handle)}`;
+}
+
+function publicApiUrl(pathOrUrl) {
+  if (/^https?:\/\//.test(pathOrUrl)) return pathOrUrl;
+  return `${apiUrl}${pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`}`;
 }
 
 function smokeGeoJson() {

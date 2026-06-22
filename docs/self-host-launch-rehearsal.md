@@ -47,6 +47,22 @@ Run the backup/restore smoke:
 pnpm smoke:self-host-backup-restore
 ```
 
+For the local MinIO/S3 path, run the same smoke with the MinIO env file:
+
+```bash
+ENV_FILE=/path/to/minio.env pnpm smoke:self-host-backup-restore
+```
+
+For a full local self-host QA pass, also run:
+
+```bash
+SMOKE_BROWSER_PRODUCT_LOOP=true pnpm smoke:self-host-compose
+pnpm e2e:product-loop:full
+```
+
+The smoke scripts preserve evidence under `dogfood-output/`, including browser
+screenshots and generated upload fixtures.
+
 If the supervisor profile is enabled, run the upgrade smoke:
 
 ```bash
@@ -67,3 +83,4 @@ Add `--confirm-backup`, `--confirm-apply`, and `--confirm-rollback` only on a di
 - Backup/restore smoke output.
 - Upgrade smoke output, if supervisor is enabled.
 - Public style URL and TileJSON URL from the product-loop smoke.
+- `dogfood-output/` screenshots and generated fixtures for the run.

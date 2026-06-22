@@ -13,10 +13,8 @@ TILESET_HANDLE="smoke-tileset-${SUFFIX}"
 STYLE_HANDLE="smoke-style-${SUFFIX}"
 BACKUP_DIR="$OUTPUT_DIR/backup"
 LOG_DIR="$OUTPUT_DIR/logs"
-
-compose() {
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
-}
+export COMPOSE_ANSI=never
+export COMPOSE_PROGRESS=plain
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -25,11 +23,46 @@ require_cmd() {
   fi
 }
 
+env_value() {
+  local key="$1"
+  awk -F= -v key="$key" '
+    $1 == key {
+      value = substr($0, index($0, "=") + 1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      gsub(/^"/, "", value)
+      gsub(/"$/, "", value)
+      print value
+    }
+  ' "$ENV_FILE" | tail -n 1
+}
+
+storage_provider() {
+  local provider
+  provider="$(env_value STORAGE_PROVIDER)"
+  echo "${provider:-local}"
+}
+
+compose_args() {
+  local args=(--env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+  if [[ "$(storage_provider)" == "s3" ]]; then
+    args+=(--profile with-minio)
+  fi
+  printf '%s\n' "${args[@]}"
+}
+
+compose() {
+  local args=()
+  while IFS= read -r arg; do
+    args+=("$arg")
+  done < <(compose_args)
+  docker compose "${args[@]}" "$@"
+}
+
 cleanup() {
   local status=$?
   if [[ "$status" -ne 0 ]]; then
     mkdir -p "$LOG_DIR"
-    compose logs --no-color postgres redis api console worker-geodata >"$LOG_DIR/compose.log" 2>&1 || true
+    compose logs --no-color postgres redis minio minio-init api console worker-geodata >"$LOG_DIR/compose.log" 2>&1 || true
   fi
   compose down -v --remove-orphans >/dev/null 2>&1 || true
 }
@@ -49,10 +82,6 @@ wait_for_http() {
   done
 }
 
-internal_secret() {
-  sed -n 's/^INTERNAL_API_SECRET=//p' "$ENV_FILE" | tail -n 1
-}
-
 require_cmd curl
 require_cmd docker
 require_cmd node
@@ -65,12 +94,23 @@ rm -rf "$BACKUP_DIR"
 
 "$ROOT_DIR/scripts/self-host-setup.sh"
 
+set -a
+# shellcheck disable=SC1090
+source <(sed 's/\r$//' "$ENV_FILE")
+set +a
+
 echo "Preparing clean self-host stack"
 compose down -v --remove-orphans >/dev/null 2>&1 || true
-compose up -d postgres redis martin api console worker-geodata
+if [[ "$(storage_provider)" == "s3" ]]; then
+  compose up -d postgres redis martin minio minio-init
+else
+  compose up -d postgres redis martin
+fi
 
 echo "Running database migrations"
 (cd "$ROOT_DIR" && pnpm db:migrate)
+
+compose up -d api console worker-geodata
 
 wait_for_http "$API_URL/health" "API"
 wait_for_http "$CONSOLE_URL" "Console"
@@ -88,16 +128,20 @@ STYLE_URL="$API_URL/styles/v1/${SEED_HANDLE}/${STYLE_HANDLE}"
 TILEJSON_URL="$API_URL/tiles/v1/${SEED_HANDLE}.${TILESET_HANDLE}.json"
 
 echo "Running self-host backup"
-"$ROOT_DIR/scripts/self-host-backup.sh" --output "$BACKUP_DIR"
+ENV_FILE="$ENV_FILE" "$ROOT_DIR/scripts/self-host-backup.sh" --output "$BACKUP_DIR"
 
 echo "Restoring into fresh Compose volumes"
 compose down -v --remove-orphans >/dev/null 2>&1 || true
-"$ROOT_DIR/scripts/self-host-restore.sh" --backup "$BACKUP_DIR" --confirm
-compose up -d api
+ENV_FILE="$ENV_FILE" "$ROOT_DIR/scripts/self-host-restore.sh" --backup "$BACKUP_DIR" --confirm
+if [[ "$(storage_provider)" == "s3" ]]; then
+  compose up -d minio minio-init api
+else
+  compose up -d api
+fi
 
 wait_for_http "$API_URL/health" "Restored API"
 
-secret="$(internal_secret)"
+secret="$(env_value INTERNAL_API_SECRET)"
 if [[ -z "$secret" ]]; then
   echo "INTERNAL_API_SECRET is missing from $ENV_FILE" >&2
   exit 1

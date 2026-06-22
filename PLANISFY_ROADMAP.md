@@ -27,23 +27,26 @@ Implemented today:
 
 ## Current Gaps
 
-- Browser, backup/restore, tile-worker, and managed-staging workflows are wired, but they still need to run against the real protected CI/staging/self-host environments and have their required secrets validated.
+- Managed-staging and tile-worker workflows are wired, but they still need to run against the real protected CI/staging environments and have their required secrets validated.
 - Account sprite assets support PNG/SVG icons and patterns with folders and basic metadata; broader style asset management remains future work, including asset folders as a first-class management surface, richer search/governance metadata, and raster sprite/vector icon parity.
 - Tilequery is implemented for PMTiles-backed vector tilesets. Raster tilequery is intentionally not required or planned for v1; raster value sampling can be revisited later if a concrete product use case appears.
 - Larger Overture import UX, managed basemap releases, and global release packaging need more product and QA work.
 - Managed-mode launch still needs real protected environment runs, provider dashboard evidence, and operator sign-off.
-- Self-host launch still needs a clean-machine rehearsal with real Docker volumes.
+- Before tagging a self-host release, repeat the clean-volume rehearsal on the exact release branch or tag and archive the evidence.
 
 ## Recently Closed Launch Gaps
 
 - Product-loop browser CI now runs as a blocking workflow on PRs and `main`.
-- Self-host backup/restore smoke coverage now verifies health, preflight, style URLs, and TileJSON after restore.
+- Local self-host Compose smoke has passed with browser product-loop coverage against Docker volumes, local storage, Martin, Console sign-in, public style/TileJSON fetches, and MapLibre rendering.
+- Full product-loop QA has passed against self-host Compose by uploading GeoJSON, waiting for worker tiling, publishing the tileset and style, fetching public URLs, and rendering the style.
+- Local MinIO/S3 runtime QA has passed for full product-loop upload, worker processing, tileset publication, TileJSON/style rendering, profile avatar upload, and sprite SVG upload.
+- Self-host backup/restore smoke coverage now verifies local storage and MinIO/S3 archives, health, preflight, style URLs, and TileJSON after restore.
 - Stale `processing_jobs` are reconciled from worker-geodata and exposed through operations.
-- Managed-mode staging proof now validates startup config, preflight, storage, billing adapter availability, email adapter availability, and the full product loop.
+- Managed-mode staging proof coverage now checks startup config, preflight, storage, billing adapter availability, email adapter availability, and the full product loop when protected staging credentials are supplied.
 - Account-level PNG/SVG sprite assets are reusable in Studio, include folders and basic tags, and publish into real MapLibre sprite sheets.
 - `TILE_DELIVERY_MODE=api|worker` is implemented with API-to-tile-worker proxying, health/preflight visibility, and a `with-tile-worker` Compose profile.
 - Operations now validate scheduled run timing, persist notification delivery proof, expose retention-aware usage windows, and include a supervisor upgrade smoke.
-- Managed staging smoke now checks public HTTPS ingress and API CORS for the configured Console origin.
+- Managed staging smoke coverage now checks public HTTPS ingress and API CORS for the configured Console origin.
 - Self-host clean-machine rehearsal and missing-dataset recovery are documented.
 
 ## Future Work

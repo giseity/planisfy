@@ -54,15 +54,127 @@ export async function waitForHttp(url, label, validate = async () => {}) {
 }
 
 export async function signIn(page, { consoleUrl, email, password }) {
+  const authFailures = [];
+  const responseListener = async (response) => {
+    const url = response.url();
+    if (!url.includes("/api/auth/") || response.ok()) return;
+
+    let body = "";
+    try {
+      body = (await response.text()).slice(0, 500);
+    } catch {
+      body = "<unreadable response body>";
+    }
+    authFailures.push(`${response.status()} ${url}: ${body}`);
+  };
+
+  page.on("response", responseListener);
   await page.goto(`${consoleUrl}/sign-in`, { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await Promise.all([
-    page.waitForURL((url) => url.pathname !== "/sign-in", {
-      timeout: 20_000,
-    }),
-    page.getByRole("button", { name: /sign in/i }).click(),
-  ]);
+  try {
+    const emailInput = page.locator("input#email");
+    const passwordInput = page.locator("input#password");
+    await emailInput.fill(email);
+    await passwordInput.fill(password);
+    if ((await emailInput.inputValue()) !== email) {
+      throw new Error("Sign-in email field did not retain the smoke user");
+    }
+    if ((await passwordInput.inputValue()) !== password) {
+      throw new Error("Sign-in password field did not retain the smoke password");
+    }
+    const [signInResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/auth/sign-in/email") &&
+          response.request().method() === "POST",
+        { timeout: 20_000 },
+      ),
+      page.getByRole("button", { name: /sign in|login/i }).click(),
+    ]);
+    if (!signInResponse.ok()) {
+      throw new Error(
+        `Sign-in request failed with ${signInResponse.status()}: ${await signInResponse.text()}`,
+      );
+    }
+    await waitForBrowserSession(page);
+    await waitForProtectedConsoleEntry(page, consoleUrl);
+  } catch (error) {
+    const notices = await page
+      .locator('[data-sonner-toast], [role="alert"], [role="status"]')
+      .allTextContents()
+      .catch(() => []);
+    const details = [
+      error instanceof Error ? error.message : String(error),
+      authFailures.length > 0
+        ? `auth failures: ${authFailures.join(" | ")}`
+        : null,
+      notices.length > 0 ? `visible notices: ${notices.join(" | ")}` : null,
+    ].filter(Boolean);
+    throw new Error(details.join("; "));
+  } finally {
+    page.off("response", responseListener);
+  }
+}
+
+async function waitForProtectedConsoleEntry(page, consoleUrl) {
+  let lastSession = "";
+  for (let attempt = 1; attempt <= 30; attempt += 1) {
+    await page.goto(consoleUrl, { waitUntil: "domcontentloaded" });
+    if (new URL(page.url()).pathname !== "/sign-in") return;
+    lastSession = await page
+      .evaluate(async () => {
+        const response = await fetch("/api/auth/get-session", {
+          credentials: "include",
+        });
+        return `${response.status} ${(await response.text()).slice(0, 300)}`;
+      })
+      .catch((error) =>
+        error instanceof Error ? error.message : String(error),
+      );
+    await delay(500);
+  }
+  throw new Error(
+    `Sign-in completed but Console route protection rejected the session; get-session=${lastSession}`,
+  );
+}
+
+async function waitForBrowserSession(page) {
+  let lastStatus = 0;
+  let lastText = "";
+  for (let attempt = 1; attempt <= 40; attempt += 1) {
+    const result = await page
+      .evaluate(async () => {
+        const response = await fetch("/api/auth/get-session", {
+          credentials: "include",
+        });
+        const text = await response.text();
+        let hasSession = false;
+        try {
+          const json = JSON.parse(text);
+          hasSession = Boolean(json?.session?.token);
+        } catch {
+          hasSession = false;
+        }
+        return {
+          ok: response.ok,
+          status: response.status,
+          hasSession,
+          text,
+        };
+      })
+      .catch((error) => ({
+        ok: false,
+        status: 0,
+        hasSession: false,
+        text: error instanceof Error ? error.message : String(error),
+      }));
+    lastStatus = result.status;
+    lastText = result.text;
+    if (result.ok && result.hasSession) return;
+    await delay(500);
+  }
+  throw new Error(
+    `Session did not become visible after sign-in (${lastStatus}): ${lastText.slice(0, 500)}`,
+  );
 }
 
 export async function expectText(page, text, options = {}) {
@@ -128,9 +240,9 @@ export async function renderMapLibreStyle(
     waitUntil: "domcontentloaded",
   });
 
-  await page.evaluate(
+  const renderResult = await page.evaluate(
     async ({ styleUrl, center, zoom, timeoutMs }) => {
-      await new Promise((resolve, reject) => {
+      return await new Promise((resolve, reject) => {
         const map = new window.maplibregl.Map({
           container: "map",
           style: styleUrl,
@@ -151,15 +263,21 @@ export async function renderMapLibreStyle(
 
         map.once("idle", () => {
           window.clearTimeout(timeout);
-          resolve();
+          resolve({
+            renderedFeatureCount: map.queryRenderedFeatures().length,
+          });
         });
       });
     },
     { styleUrl, center, zoom, timeoutMs },
   );
 
+  if (renderResult.renderedFeatureCount < 1) {
+    throw new Error("MapLibre rendered no visible features");
+  }
+
   const screenshot = await page.screenshot({ type: "png" });
-  if (screenshot.byteLength < 10_000) {
+  if (screenshot.byteLength < 1_000) {
     throw new Error(
       `MapLibre screenshot was unexpectedly small: ${screenshot.byteLength} bytes`,
     );

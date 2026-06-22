@@ -44,6 +44,10 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with
 docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-proxy up -d traefik
 ```
 
+The `with-minio` profile starts local S3-compatible storage and a one-shot
+bucket initializer. Set `STORAGE_PROVIDER=s3`, `CONTAINER_S3_ENDPOINT=http://minio:9000`,
+and a host-visible `S3_PUBLIC_URL` before using it for artifact storage.
+
 ## Tile Worker Mode
 
 `TILE_DELIVERY_MODE=api` is the default. In that mode, `apps/api` reads published PMTiles artifacts directly and only falls back to Martin for legacy/non-PMTiles sources.

@@ -14,7 +14,7 @@ Usage: scripts/self-host-backup.sh [--output DIR]
 Creates a self-host backup containing:
   - PostgreSQL custom-format dump
   - Redis dump.rdb when Redis is running
-  - local storage, PMTiles, and Valhalla data archives
+  - local storage, MinIO, PMTiles, and Valhalla data archives when present
   - manifest metadata
 
 Options:
@@ -85,6 +85,7 @@ archive_dir() {
 }
 
 archive_dir storage
+archive_dir minio
 archive_dir pmtiles
 archive_dir valhalla_data
 
@@ -98,6 +99,7 @@ cat > "$backup_dir/manifest.json" <<MANIFEST
     "postgres": true,
     "redis": $(if [[ -f "$backup_dir/redis.dump.rdb" ]]; then echo true; else echo false; fi),
     "storage": $(if [[ -f "$backup_dir/storage.tgz" ]]; then echo true; else echo false; fi),
+    "minio": $(if [[ -f "$backup_dir/minio.tgz" ]]; then echo true; else echo false; fi),
     "pmtiles": $(if [[ -f "$backup_dir/pmtiles.tgz" ]]; then echo true; else echo false; fi),
     "valhallaData": $(if [[ -f "$backup_dir/valhalla_data.tgz" ]]; then echo true; else echo false; fi)
   }

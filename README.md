@@ -54,9 +54,9 @@ External geospatial engines are optional only in the sense that the process can 
 
 ## Launch Readiness
 
-For self-hosted trials, the Compose stack is expected to boot with degraded health when datasets are missing. Before calling a deployment production-ready, run the checks in [docs/v1-trust-checklist.md](./docs/v1-trust-checklist.md) and verify the current V1 gates in [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md).
+For self-hosted trials, the Compose stack is expected to boot with degraded health when datasets are missing. The local self-host smoke, local-storage full product loop, MinIO/S3 full product loop, and local/MinIO backup-restore smokes have passed in this workspace; before calling a deployment production-ready, repeat the checks in [docs/v1-trust-checklist.md](./docs/v1-trust-checklist.md) on the target release branch or tag and verify the current V1 gates in [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md).
 
-Managed-mode production launch still depends on proving provider configuration, billing and email flows, object storage, ingress/secrets, operational runbooks, and broader browser smoke coverage against a live stack.
+Managed-mode production launch still depends on proving provider configuration, billing and email flows, object storage, ingress/secrets, operational runbooks, and browser smoke coverage against a live managed stack.
 
 ## Local Development
 

@@ -26,7 +26,7 @@ pnpm self-host:backup
 pnpm self-host:restore --backup backups/planisfy-YYYYMMDDTHHMMSSZ --confirm
 ```
 
-Backups include Postgres, Redis snapshot when reachable, local storage, PMTiles, Valhalla data, and a manifest. Restore is guarded because it overwrites local data.
+Backups include Postgres, Redis snapshot when reachable, local storage, MinIO data when using the `with-minio` profile, PMTiles, Valhalla data, and a manifest. Restore is guarded because it overwrites local data.
 
 ## Support Bundles
 

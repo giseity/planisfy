@@ -25,6 +25,18 @@ require_cmd() {
   fi
 }
 
+env_value() {
+  local key="$1"
+  awk -F= -v key="$key" '
+    $1 == key {
+      value = substr($0, index($0, "=") + 1)
+      gsub(/^"/, "", value)
+      gsub(/"$/, "", value)
+      print value
+    }
+  ' "${SMOKE_ENV_FILE:-$ENV_FILE}" | tail -n 1
+}
+
 cleanup() {
   if [[ -n "$SMOKE_ENV_FILE" ]]; then
     compose down -v --remove-orphans
@@ -101,8 +113,13 @@ for attempt in {1..60}; do
   sleep 2
 done
 
-echo "Checking public setup preflight"
-preflight="$(curl -fsS http://localhost:4000/setup/preflight)"
+echo "Checking authorized setup preflight"
+internal_secret="$(env_value INTERNAL_API_SECRET)"
+if [[ -z "$internal_secret" ]]; then
+  echo "INTERNAL_API_SECRET is required for setup preflight smoke" >&2
+  exit 1
+fi
+preflight="$(curl -fsS -H "x-internal-secret: $internal_secret" http://localhost:4000/setup/preflight)"
 PREFLIGHT_JSON="$preflight" node <<'NODE'
 const body = JSON.parse(process.env.PREFLIGHT_JSON ?? "{}");
 const checks = new Map((body.data?.checks ?? []).map((check) => [check.id, check]));
@@ -136,7 +153,7 @@ if (demoPmtiles.status === "warn") {
 NODE
 
 echo "Checking detailed health"
-detailed="$(curl -fsS http://localhost:4000/health/detailed)"
+detailed="$(curl -fsS -H "x-internal-secret: $internal_secret" http://localhost:4000/health/detailed)"
 for check in postgres redis storage workerGeodata martin valhalla; do
   if ! grep -q "\"$check\"" <<<"$detailed"; then
     echo "Detailed health is missing '$check'" >&2
