@@ -13,6 +13,24 @@ pnpm db:migrate
 
 The stack defines API, Console, Admin, Docs, Marketing, worker-geodata, Postgres, Redis, Martin, Valhalla, local elevation, static renderer, Pelias API, Pelias Elasticsearch, optional Pelias fixture import jobs, optional MinIO, optional Traefik, optional tile-worker, and optional self-host supervisor.
 
+## VPS Platforms
+
+Dokploy and similar VPS app platforms are self-host deployment targets. Keep
+`DEPLOYMENT_MODE=self_host` and validate the platform wiring rather than using
+managed mode:
+
+- Public domains and TLS terminate correctly for API and Console.
+- Environment variables are injected into the app services.
+- Postgres, Redis, local object storage, PMTiles, Valhalla, and optional MinIO
+  data live on persistent volumes.
+- Database and Redis ports are private to the deployment network.
+- Public routing exposes API and Console origins expected by `NEXT_PUBLIC_*`
+  and `CONSOLE_API_INTERNAL_ORIGIN`.
+
+Use the generic self-host smokes against that environment once a stable public
+URL exists. There is no Dokploy-specific smoke command until there is an actual
+Dokploy deployment target to test.
+
 ## Runtime Data
 
 Ignored runtime data lives under `infra/docker/data`:
