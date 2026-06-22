@@ -33,6 +33,7 @@ The local self-host QA pass also uses:
 SMOKE_BROWSER_PRODUCT_LOOP=true pnpm smoke:self-host-compose
 pnpm smoke:self-host-route-protection
 pnpm smoke:self-host-support-bundle
+pnpm smoke:self-host-restart-persistence
 pnpm smoke:self-host-backup-restore
 ```
 
@@ -68,6 +69,19 @@ This workflow resets the local Compose stack, creates the private R2 smoke
 bucket when missing, and runs the managed smoke against `http://localhost:4000`
 and `http://localhost:3001`. Billing and email are config smokes only; no Dodo
 checkout or Resend delivery is attempted.
+
+Managed staging has two smoke levels:
+
+```bash
+pnpm smoke:managed-staging
+MANAGED_STAGING_TEST_EMAIL="..." MANAGED_STAGING_TEST_PASSWORD="..." pnpm smoke:managed-staging-product-loop
+```
+
+`smoke:managed-staging` stays a fast public ingress, CORS, provider
+configuration, and storage write/read/delete check. The product-loop wrapper
+runs the full upload/process/publish/render browser flow against real managed
+public URLs and an existing managed test user; it does not seed data or reset
+the environment.
 
 To exercise S3-compatible storage locally, run the same full product loop with
 the `with-minio` Compose profile and these storage settings:
