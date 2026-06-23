@@ -260,6 +260,16 @@ billingWebhookRoute.post("/webhooks/dodo", async (c) => {
 
   const webhookId = c.req.header("webhook-id");
   const eventPayload = payload as Record<string, unknown>;
+  if (!isExpectedDodoWebhookBrand(eventPayload)) {
+    return c.json({
+      data: {
+        applied: false,
+        reason: "brand-mismatch",
+        brandId: getDodoWebhookBrandId(eventPayload),
+      },
+    });
+  }
+
   const claimed = webhookId
     ? await claimDodoWebhookEvent(webhookId, eventPayload)
     : true;
@@ -330,4 +340,26 @@ async function releaseDodoWebhookClaim(webhookId: string) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+export function getDodoWebhookBrandId(payload: Record<string, unknown>) {
+  return (
+    stringValue(payload.brand_id) ??
+    stringValue(recordValue(payload.data)?.brand_id) ??
+    stringValue(recordValue(payload.payload)?.brand_id)
+  );
+}
+
+export function isExpectedDodoWebhookBrand(
+  payload: Record<string, unknown>,
+  expectedBrandId = env.DODO_PAYMENTS_BRAND_ID,
+) {
+  if (!expectedBrandId) return true;
+  return getDodoWebhookBrandId(payload) === expectedBrandId;
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }

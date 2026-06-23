@@ -47,6 +47,7 @@ const schema = z.object({
   DODO_PAYMENTS_API_URL: emptyableUrl,
   DODO_PAYMENTS_ENVIRONMENT: z.enum(["test_mode", "live_mode"]),
   DODO_PAYMENTS_WEBHOOK_SECRET: emptyableString,
+  DODO_PAYMENTS_BRAND_ID: optionalEmptyableString,
   DODO_STARTER_MONTHLY_PRODUCT_ID: optionalEmptyableString,
   DODO_STARTER_YEARLY_PRODUCT_ID: optionalEmptyableString,
   DODO_SCALE_MONTHLY_PRODUCT_ID: optionalEmptyableString,
@@ -126,6 +127,7 @@ function managedProductionEnvIssues(value: typeof env): string[] {
   if (!value.DODO_PAYMENTS_WEBHOOK_SECRET) {
     issues.push("DODO_PAYMENTS_WEBHOOK_SECRET");
   }
+  if (!value.DODO_PAYMENTS_BRAND_ID) issues.push("DODO_PAYMENTS_BRAND_ID");
   if (!value.DODO_STARTER_MONTHLY_PRODUCT_ID && !value.DODO_PRO_PRODUCT_ID) {
     issues.push("DODO_STARTER_MONTHLY_PRODUCT_ID");
   }
