@@ -14,9 +14,10 @@ internalSmokeRoute.get("/internal/managed-smoke", async (c) => {
   const plans = (await listPlanDefinitions()).map((plan) => ({
     id: plan.id,
     productId: plan.productId,
+    checkout: plan.checkout,
     checkoutAvailable: isCheckoutConfiguredForPlan(plan.id),
   }));
-  const paidPlans = plans.filter((plan) => plan.id !== "free");
+  const paidPlans = plans.filter((plan) => plan.checkout);
   const billing = {
     ok: paidPlans.every((plan) => plan.checkoutAvailable),
     plans,
