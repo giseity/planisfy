@@ -15,4 +15,5 @@ Use this checklist before calling a deployment ready for real users.
 - Published style and TileJSON URLs have been smoke-tested.
 - Backup and restore have been tested.
 - Support bundle generation works.
+- Managed live smoke has passed for provider configuration, object storage, billing and email adapter availability, public HTTPS ingress/CORS, internal managed smoke, and the browser product loop.
 - Public docs do not list unimplemented endpoints.

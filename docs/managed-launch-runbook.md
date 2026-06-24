@@ -2,11 +2,18 @@
 
 Use this runbook before promoting managed mode to public traffic.
 
+## Current Status
+
+Managed live smoke has passed against the hosted stack. Provider configuration,
+object storage, billing and email adapter availability, public HTTPS
+ingress/CORS, internal managed smoke, and the full browser product loop are
+proven for the current launch candidate, so the platform is ready for launch.
+
 ## Protected Environment
 
 The GitHub environment must be named `managed-staging` and require human approval for `workflow_dispatch` runs.
 
-Required proof:
+Required proof for each launch candidate:
 
 - `pnpm smoke:managed-local` passed with real Cloudflare R2 credentials for a
   local managed-mode rehearsal.
@@ -38,7 +45,7 @@ Before sign-off:
 
 ## Operator Sign-Off
 
-Record:
+Record for each launch candidate:
 
 - Workflow run URL.
 - API and Console release SHA.

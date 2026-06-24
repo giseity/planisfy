@@ -56,7 +56,7 @@ External geospatial engines are optional only in the sense that the process can 
 
 For self-hosted trials, the Compose stack is expected to boot with degraded health when datasets are missing. The local self-host smoke, local-storage full product loop, MinIO/S3 full product loop, and local/MinIO backup-restore smokes have passed in this workspace; before calling a deployment production-ready, repeat the checks in [docs/v1-trust-checklist.md](./docs/v1-trust-checklist.md) on the target release branch or tag and verify the current V1 gates in [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md).
 
-Managed-mode production launch still depends on proving provider configuration, billing and email flows, object storage, ingress/secrets, operational runbooks, and browser smoke coverage against a live managed stack.
+Managed-mode live smoke has passed against the hosted stack, including provider configuration, object storage, billing and email adapter availability, public HTTPS ingress/CORS, internal managed smoke, and browser product-loop coverage. With that proof archived through the managed launch runbook, the platform is ready for launch.
 
 ## Local Development
 
