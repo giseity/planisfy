@@ -11,6 +11,7 @@ COPY packages/ui/package.json packages/ui/
 COPY packages/auth/package.json packages/auth/
 COPY packages/env/package.json packages/env/
 COPY packages/database/package.json packages/database/
+COPY packages/types/package.json packages/types/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/typescript-config/package.json packages/typescript-config/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
