@@ -1,20 +1,15 @@
-"use client";
+'use client'
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from 'react'
 import {
   api,
   type PlatformCapability,
   type PlatformPreflight,
   type PlatformPreflightCheck,
-} from "@/lib/api";
-import { Badge } from "@planisfy/ui/components/badge";
-import { Button } from "@planisfy/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@planisfy/ui/components/card";
+} from '@/lib/api'
+import { Badge } from '@planisfy/ui/components/badge'
+import { Button } from '@planisfy/ui/components/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -29,43 +24,41 @@ import {
   Wrench,
   XCircle,
   type LucideIcon,
-} from "lucide-react";
-import { toast } from "sonner";
+} from 'lucide-react'
+import { toast } from 'sonner'
 
-type DisplayStatus = "pass" | "warn" | "fail";
+type DisplayStatus = 'pass' | 'warn' | 'fail'
 
 export default function PlatformPage() {
-  const [preflight, setPreflight] = useState<PlatformPreflight | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [preflight, setPreflight] = useState<PlatformPreflight | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
   async function load(silent = false) {
-    if (silent) setRefreshing(true);
-    else setLoading(true);
+    if (silent) setRefreshing(true)
+    else setLoading(true)
     try {
-      const res = await api.getPlatformPreflight();
-      setPreflight(res.data);
+      const res = await api.getPlatformPreflight()
+      setPreflight(res.data)
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to load platform checks",
-      );
+      toast.error(err instanceof Error ? err.message : 'Failed to load platform checks')
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setLoading(false)
+      setRefreshing(false)
     }
   }
 
   useEffect(() => {
-    void load();
-  }, []);
+    void load()
+  }, [])
 
   const blocking = useMemo(
     () =>
       preflight?.checks.filter(
-        (check) => check.status === "fail" && check.severity === "required",
+        (check) => check.status === 'fail' && check.severity === 'required'
       ) ?? [],
-    [preflight],
-  );
+    [preflight]
+  )
 
   if (loading) {
     return (
@@ -74,7 +67,7 @@ export default function PlatformPage() {
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       </div>
-    );
+    )
   }
 
   if (!preflight) {
@@ -82,9 +75,7 @@ export default function PlatformPage() {
       <div className="container max-w-6xl px-4 py-8">
         <Card>
           <CardContent className="flex items-center justify-between gap-3 p-5">
-            <p className="text-sm text-muted-foreground">
-              Platform checks are unavailable.
-            </p>
+            <p className="text-sm text-muted-foreground">Platform checks are unavailable.</p>
             <Button size="sm" onClick={() => load()}>
               <RefreshCw className="h-4 w-4" />
               Retry
@@ -92,7 +83,7 @@ export default function PlatformPage() {
           </CardContent>
         </Card>
       </div>
-    );
+    )
   }
 
   return (
@@ -101,8 +92,7 @@ export default function PlatformPage() {
         <div>
           <h1 className="text-2xl font-bold">Platform</h1>
           <p className="text-sm text-muted-foreground">
-            Deployment readiness for {preflight.environment} / v
-            {preflight.appVersion}
+            Deployment readiness for {preflight.environment} / v{preflight.appVersion}
           </p>
         </div>
         <Button variant="outline" onClick={() => load(true)} disabled={refreshing}>
@@ -122,10 +112,10 @@ export default function PlatformPage() {
             <div>
               <p className="text-sm font-medium">
                 {blocking.length} required check
-                {blocking.length === 1 ? "" : "s"} need attention
+                {blocking.length === 1 ? '' : 's'} need attention
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                {blocking.map((check) => check.label).join(", ")}
+                {blocking.map((check) => check.label).join(', ')}
               </p>
             </div>
           </CardContent>
@@ -139,7 +129,7 @@ export default function PlatformPage() {
         <MetricCard
           label="Blocking"
           value={preflight.summary.blocking}
-          status={preflight.summary.blocking > 0 ? "fail" : "pass"}
+          status={preflight.summary.blocking > 0 ? 'fail' : 'pass'}
         />
       </div>
 
@@ -170,10 +160,10 @@ export default function PlatformPage() {
         ))}
       </div>
     </div>
-  );
+  )
 }
 
-const capabilityIcons: Record<PlatformCapability["id"], LucideIcon> = {
+const capabilityIcons: Record<PlatformCapability['id'], LucideIcon> = {
   billing: Cloud,
   transactionalEmail: Cloud,
   managedStorage: Database,
@@ -186,13 +176,11 @@ const capabilityIcons: Record<PlatformCapability["id"], LucideIcon> = {
   supportBundles: ClipboardCheck,
   releaseUpgrades: ServerCog,
   platformWorkerRuntime: Wrench,
-};
+}
 
 function CapabilitySurface({ preflight }: { preflight: PlatformPreflight }) {
-  const mode = deploymentModeDisplay(preflight.deploymentMode);
-  const capabilities = preflight.capabilities.filter(
-    (capability) => capability.visible,
-  );
+  const mode = deploymentModeDisplay(preflight.deploymentMode)
+  const capabilities = preflight.capabilities.filter((capability) => capability.visible)
 
   return (
     <div className="space-y-3">
@@ -211,11 +199,11 @@ function CapabilitySurface({ preflight }: { preflight: PlatformPreflight }) {
         ))}
       </div>
     </div>
-  );
+  )
 }
 
 function CapabilityCard({ capability }: { capability: PlatformCapability }) {
-  const Icon = capabilityIcons[capability.id] ?? ClipboardCheck;
+  const Icon = capabilityIcons[capability.id] ?? ClipboardCheck
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
@@ -231,9 +219,7 @@ function CapabilityCard({ capability }: { capability: PlatformCapability }) {
               </p>
             </div>
           </div>
-          <Badge variant={capabilityVariant(capability.status)}>
-            {capability.status}
-          </Badge>
+          <Badge variant={capabilityVariant(capability.status)}>{capability.status}</Badge>
         </div>
         {capability.value !== undefined && capability.value !== null && (
           <div className="flex items-center gap-1 truncate rounded bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground">
@@ -243,25 +229,25 @@ function CapabilityCard({ capability }: { capability: PlatformCapability }) {
         )}
       </CardContent>
     </Card>
-  );
+  )
 }
 
-function deploymentModeDisplay(mode: PlatformPreflight["deploymentMode"]) {
+function deploymentModeDisplay(mode: PlatformPreflight['deploymentMode']) {
   return {
-    badge: mode === "managed" ? "Managed" : "Self-host",
+    badge: mode === 'managed' ? 'Managed' : 'Self-host',
     detail:
-      mode === "managed"
-        ? "Dodo, Resend, R2, usage, and verification gates are required"
-        : "local storage, supervisor, and custom execution controls remain visible",
-    label: "Deployment mode",
-    variant: mode === "managed" ? ("success" as const) : ("secondary" as const),
-  };
+      mode === 'managed'
+        ? 'Dodo, ZeptoMail, R2, usage, and verification gates are required'
+        : 'local storage, supervisor, and custom execution controls remain visible',
+    label: 'Deployment mode',
+    variant: mode === 'managed' ? ('success' as const) : ('secondary' as const),
+  }
 }
 
-function capabilityVariant(state: PlatformCapability["status"]) {
-  if (state === "configured") return "success";
-  if (state === "degraded") return "warning";
-  return "secondary";
+function capabilityVariant(state: PlatformCapability['status']) {
+  if (state === 'configured') return 'success'
+  if (state === 'degraded') return 'warning'
+  return 'secondary'
 }
 
 function MetricCard({
@@ -269,9 +255,9 @@ function MetricCard({
   value,
   status,
 }: {
-  label: string;
-  value: number;
-  status: DisplayStatus;
+  label: string
+  value: number
+  status: DisplayStatus
 }) {
   return (
     <Card>
@@ -285,7 +271,7 @@ function MetricCard({
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function CheckRow({ check }: { check: PlatformPreflightCheck }) {
@@ -293,24 +279,15 @@ function CheckRow({ check }: { check: PlatformPreflightCheck }) {
     <div className="rounded-md border p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2">
-          <StatusIcon
-            status={check.status}
-            className={iconClass(check.status, "mt-0.5")}
-          />
+          <StatusIcon status={check.status} className={iconClass(check.status, 'mt-0.5')} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-medium">{check.label}</p>
-              <Badge variant={severityVariant(check.severity)}>
-                {check.severity}
-              </Badge>
+              <Badge variant={severityVariant(check.severity)}>{check.severity}</Badge>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {check.message}
-            </p>
-            {check.action && check.status !== "pass" && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {check.action}
-              </p>
+            <p className="mt-1 text-sm text-muted-foreground">{check.message}</p>
+            {check.action && check.status !== 'pass' && (
+              <p className="mt-2 text-xs text-muted-foreground">{check.action}</p>
             )}
           </div>
         </div>
@@ -322,33 +299,27 @@ function CheckRow({ check }: { check: PlatformPreflightCheck }) {
         )}
       </div>
     </div>
-  );
+  )
 }
 
-function StatusIcon({
-  status,
-  className,
-}: {
-  status: unknown;
-  className: string;
-}) {
-  if (status === "pass") return <CheckCircle2 className={className} />;
-  if (status === "warn") return <AlertTriangle className={className} />;
-  return <XCircle className={className} />;
+function StatusIcon({ status, className }: { status: unknown; className: string }) {
+  if (status === 'pass') return <CheckCircle2 className={className} />
+  if (status === 'warn') return <AlertTriangle className={className} />
+  return <XCircle className={className} />
 }
 
-function iconClass(status: unknown, extra = "") {
+function iconClass(status: unknown, extra = '') {
   const color =
-    status === "pass"
-      ? "text-emerald-600"
-      : status === "warn"
-        ? "text-amber-600"
-        : "text-destructive";
-  return `h-4 w-4 ${color} ${extra}`;
+    status === 'pass'
+      ? 'text-emerald-600'
+      : status === 'warn'
+        ? 'text-amber-600'
+        : 'text-destructive'
+  return `h-4 w-4 ${color} ${extra}`
 }
 
-function severityVariant(severity: PlatformPreflightCheck["severity"]) {
-  if (severity === "required") return "destructive";
-  if (severity === "recommended") return "warning";
-  return "secondary";
+function severityVariant(severity: PlatformPreflightCheck['severity']) {
+  if (severity === 'required') return 'destructive'
+  if (severity === 'recommended') return 'warning'
+  return 'secondary'
 }

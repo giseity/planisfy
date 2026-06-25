@@ -4,7 +4,12 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "env": ["CONTACT_EMAIL"],
+      "env": [
+        "CONTACT_EMAIL",
+        "ZEPTOMAIL_SEND_MAIL_TOKEN",
+        "ZEPTOMAIL_FROM_AUTH",
+        "ZEPTOMAIL_FROM_NOTIFICATIONS"
+      ],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
@@ -43,7 +48,9 @@
         "GOOGLE_CLIENT_ID",
         "GOOGLE_CLIENT_SECRET",
         "DUCKDB_PATH",
-        "RESEND_API_KEY",
+        "ZEPTOMAIL_SEND_MAIL_TOKEN",
+        "ZEPTOMAIL_FROM_AUTH",
+        "ZEPTOMAIL_FROM_NOTIFICATIONS",
         "DODO_PAYMENTS_API_KEY",
         "DODO_PAYMENTS_API_URL",
         "DODO_PAYMENTS_ENVIRONMENT",

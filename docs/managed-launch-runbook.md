@@ -29,7 +29,7 @@ Capture screenshots or exported status evidence for:
 
 - R2 bucket, public URL, lifecycle/retention settings, and access-key scope.
 - Dodo test-mode products, webhook endpoint, and recent webhook delivery.
-- Resend domain verification, sender identity, and recent delivery.
+- ZeptoMail domain verification, sender identities, and recent delivery.
 - Database backups and point-in-time recovery status.
 - Redis persistence/HA setting, if the provider exposes it.
 

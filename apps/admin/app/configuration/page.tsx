@@ -1,24 +1,24 @@
-import { db, platformConfig } from "@planisfy/database"
-import { Badge } from "@planisfy/ui/components/badge"
-import { Button } from "@planisfy/ui/components/button"
+import { db, platformConfig } from '@planisfy/database'
+import { Badge } from '@planisfy/ui/components/badge'
+import { Button } from '@planisfy/ui/components/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@planisfy/ui/components/card"
-import { Checkbox } from "@planisfy/ui/components/checkbox"
-import { Input } from "@planisfy/ui/components/input"
-import { Label } from "@planisfy/ui/components/label"
+} from '@planisfy/ui/components/card'
+import { Checkbox } from '@planisfy/ui/components/checkbox'
+import { Input } from '@planisfy/ui/components/input'
+import { Label } from '@planisfy/ui/components/label'
 import {
   PageActions,
   PageDescription,
   PageHeader,
   PageHeaderText,
   PageTitle,
-} from "@planisfy/ui/components/page-header"
-import { StatusAlert } from "@planisfy/ui/components/status-alert"
+} from '@planisfy/ui/components/page-header'
+import { StatusAlert } from '@planisfy/ui/components/status-alert'
 import {
   Table,
   TableBody,
@@ -26,32 +26,34 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table"
-import { Textarea } from "@planisfy/ui/components/textarea"
-import { Database, Save, SlidersHorizontal } from "lucide-react"
-import { requirePlatformPermission } from "@/features/auth/admin-auth"
-import { upsertPlatformConfigAction } from "@/features/platform/platform-admin-actions"
+} from '@planisfy/ui/components/table'
+import { Textarea } from '@planisfy/ui/components/textarea'
+import { Database, Save, SlidersHorizontal } from 'lucide-react'
+import { requirePlatformPermission } from '@/features/auth/admin-auth'
+import { upsertPlatformConfigAction } from '@/features/platform/platform-admin-actions'
 
-export const dynamic = "force-dynamic"
+export const dynamic = 'force-dynamic'
 
 const runtimeKeys = [
-  "DEPLOYMENT_MODE",
-  "NODE_ENV",
-  "NEXT_PUBLIC_API_URL",
-  "NEXT_PUBLIC_CONSOLE_URL",
-  "APP_VERSION",
-  "STORAGE_PROVIDER",
-  "MARTIN_URL",
-  "PELIAS_URL",
-  "VALHALLA_URL",
-  "RESEND_API_KEY",
-  "DODO_PAYMENTS_API_KEY",
+  'DEPLOYMENT_MODE',
+  'NODE_ENV',
+  'NEXT_PUBLIC_API_URL',
+  'NEXT_PUBLIC_CONSOLE_URL',
+  'APP_VERSION',
+  'STORAGE_PROVIDER',
+  'MARTIN_URL',
+  'PELIAS_URL',
+  'VALHALLA_URL',
+  'ZEPTOMAIL_SEND_MAIL_TOKEN',
+  'ZEPTOMAIL_FROM_AUTH',
+  'ZEPTOMAIL_FROM_NOTIFICATIONS',
+  'DODO_PAYMENTS_API_KEY',
 ]
 
 const secretPattern = /(SECRET|KEY|TOKEN|PASSWORD|DATABASE_URL|REDIS_URL)/i
 
 export default async function ConfigurationPage() {
-  await requirePlatformPermission("platform.configuration.manage")
+  await requirePlatformPermission('platform.configuration.manage')
   const rows = await db
     .select()
     .from(platformConfig)
@@ -89,12 +91,14 @@ export default async function ConfigurationPage() {
             Add Setting
           </CardTitle>
           <CardDescription>
-            Store platform-level settings that application code can consume from
-            the database.
+            Store platform-level settings that application code can consume from the database.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={upsertPlatformConfigAction} className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
+          <form
+            action={upsertPlatformConfigAction}
+            className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto]"
+          >
             <Field label="Key">
               <Input name="key" required placeholder="SUPPORT_CONTACT_URL" />
             </Field>
@@ -152,23 +156,13 @@ export default async function ConfigurationPage() {
                       <Input name="category" defaultValue={row.category} />
                       <Input
                         name="value"
-                        defaultValue={row.isSecret ? "" : row.value}
-                        placeholder={row.isSecret ? "Leave blank to clear" : ""}
+                        defaultValue={row.isSecret ? '' : row.value}
+                        placeholder={row.isSecret ? 'Leave blank to clear' : ''}
                       />
-                      <Input
-                        name="description"
-                        defaultValue={row.description ?? ""}
-                      />
-                      <input
-                        type="hidden"
-                        name="valueType"
-                        value={row.valueType}
-                      />
+                      <Input name="description" defaultValue={row.description ?? ''} />
+                      <input type="hidden" name="valueType" value={row.valueType} />
                       <label className="flex items-center gap-2 text-xs">
-                        <Checkbox
-                          name="isSecret"
-                          defaultChecked={row.isSecret}
-                        />
+                        <Checkbox name="isSecret" defaultChecked={row.isSecret} />
                         Secret
                       </label>
                       <Button type="submit" size="sm">
@@ -209,12 +203,10 @@ export default async function ConfigurationPage() {
             <TableBody>
               {runtimeRows.map((item) => (
                 <TableRow key={item.key}>
-                  <TableCell className="font-mono text-xs">
-                    {item.key}
-                  </TableCell>
+                  <TableCell className="font-mono text-xs">{item.key}</TableCell>
                   <TableCell>
-                    <Badge variant={item.configured ? "success" : "warning"}>
-                      {item.configured ? "Configured" : "Missing"}
+                    <Badge variant={item.configured ? 'success' : 'warning'}>
+                      {item.configured ? 'Configured' : 'Missing'}
                     </Badge>
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
@@ -230,13 +222,7 @@ export default async function ConfigurationPage() {
   )
 }
 
-function Field({
-  children,
-  label,
-}: {
-  children: React.ReactNode
-  label: string
-}) {
+function Field({ children, label }: { children: React.ReactNode; label: string }) {
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
@@ -246,7 +232,7 @@ function Field({
 }
 
 function formatEnvValue(key: string, value: string | undefined) {
-  if (!value) return "Not configured"
-  if (secretPattern.test(key)) return "Configured"
+  if (!value) return 'Not configured'
+  if (secretPattern.test(key)) return 'Configured'
   return value
 }

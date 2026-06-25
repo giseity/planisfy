@@ -1,30 +1,25 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { api, type ConsoleNotificationChannel } from "@/lib/api";
-import { splitList } from "@/features/operations/model";
-import {
-  EmptyRow,
-  Field,
-  runAction,
-  StatusBadge,
-} from "@/features/operations/ui";
-import { Button } from "@planisfy/ui/components/button";
+import { useState } from 'react'
+import { api, type ConsoleNotificationChannel } from '@/lib/api'
+import { splitList } from '@/features/operations/model'
+import { EmptyRow, Field, runAction, StatusBadge } from '@/features/operations/ui'
+import { Button } from '@planisfy/ui/components/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@planisfy/ui/components/card";
-import { Input } from "@planisfy/ui/components/input";
+} from '@planisfy/ui/components/card'
+import { Input } from '@planisfy/ui/components/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@planisfy/ui/components/select";
+} from '@planisfy/ui/components/select'
 import {
   Table,
   TableBody,
@@ -32,22 +27,21 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table";
-import { Bell, CheckCircle2, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+} from '@planisfy/ui/components/table'
+import { Bell, CheckCircle2, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export function NotificationsTab({
   channels,
   onChanged,
 }: {
-  channels: ConsoleNotificationChannel[];
-  onChanged: () => void;
+  channels: ConsoleNotificationChannel[]
+  onChanged: () => void
 }) {
-  const [name, setName] = useState("");
-  const [provider, setProvider] =
-    useState<ConsoleNotificationChannel["provider"]>("webhook");
-  const [target, setTarget] = useState("");
-  const [events, setEvents] = useState("job.failed,job.succeeded,schedule.due");
+  const [name, setName] = useState('')
+  const [provider, setProvider] = useState<ConsoleNotificationChannel['provider']>('webhook')
+  const [target, setTarget] = useState('')
+  const [events, setEvents] = useState('job.failed,job.succeeded,schedule.due')
 
   async function createChannel() {
     await runAction(
@@ -58,13 +52,13 @@ export function NotificationsTab({
           target,
           events: splitList(events),
         }),
-      "Notification channel created",
+      'Notification channel created',
       () => {
-        setName("");
-        setTarget("");
-        onChanged();
-      },
-    );
+        setName('')
+        setTarget('')
+        onChanged()
+      }
+    )
   }
 
   return (
@@ -73,8 +67,8 @@ export function NotificationsTab({
         <CardHeader>
           <CardTitle>Add Channel</CardTitle>
           <CardDescription>
-            Webhook, Slack, and Discord tests post immediately. Email tests use
-            Resend when it is configured.
+            Webhook, Slack, and Discord tests post immediately. Email tests use ZeptoMail when it is
+            configured.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -85,7 +79,7 @@ export function NotificationsTab({
             <Select
               value={provider}
               onValueChange={(value) =>
-                setProvider(value as ConsoleNotificationChannel["provider"])
+                setProvider(value as ConsoleNotificationChannel['provider'])
               }
             >
               <SelectTrigger>
@@ -132,7 +126,7 @@ export function NotificationsTab({
                   <TableCell>
                     <StatusBadge status={channel.provider} />
                   </TableCell>
-                  <TableCell>{channel.events.join(", ") || "All"}</TableCell>
+                  <TableCell>{channel.events.join(', ') || 'All'}</TableCell>
                   <TableCell className="space-x-1">
                     <Button
                       size="sm"
@@ -147,8 +141,8 @@ export function NotificationsTab({
                       onClick={() =>
                         runAction(
                           () => api.deleteNotificationChannel(channel.id),
-                          "Channel deleted",
-                          onChanged,
+                          'Channel deleted',
+                          onChanged
                         )
                       }
                     >
@@ -158,29 +152,26 @@ export function NotificationsTab({
                 </TableRow>
               ))}
               {channels.length === 0 && (
-                <EmptyRow
-                  colSpan={4}
-                  label="No notification channels configured."
-                />
+                <EmptyRow colSpan={4} label="No notification channels configured." />
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }
 
 async function testChannel(id: string, onChanged: () => void) {
   try {
-    const result = await api.testNotificationChannel(id);
+    const result = await api.testNotificationChannel(id)
     if (result.data.delivered) {
-      toast.success(result.data.message || "Test delivered");
+      toast.success(result.data.message || 'Test delivered')
     } else {
-      toast.error(result.data.message || "Test delivery failed");
+      toast.error(result.data.message || 'Test delivery failed')
     }
-    onChanged();
+    onChanged()
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : "Test delivery failed");
+    toast.error(err instanceof Error ? err.message : 'Test delivery failed')
   }
 }

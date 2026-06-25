@@ -8,7 +8,7 @@ Planisfy recognizes two deployment modes through `DEPLOYMENT_MODE`.
 
 ## managed
 
-`managed` uses the same code paths but requires production provider configuration: Dodo Payments for billing, Resend for email, and R2/S3-compatible object storage. `@planisfy/platform-policy` and `/setup/preflight` expose which capabilities are configured, degraded, unavailable, or hidden.
+`managed` uses the same code paths but requires production provider configuration: Dodo Payments for billing, ZeptoMail for email, and R2/S3-compatible object storage. `@planisfy/platform-policy` and `/setup/preflight` expose which capabilities are configured, degraded, unavailable, or hidden.
 
 ## Shared Runtime
 

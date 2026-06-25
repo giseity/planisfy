@@ -1,85 +1,157 @@
-import { Badge } from "@planisfy/ui/components/badge"
-import { Button } from "@planisfy/ui/components/button"
+import { Badge } from '@planisfy/ui/components/badge'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@planisfy/ui/components/card"
+} from '@planisfy/ui/components/card'
 import {
   PageActions,
   PageDescription,
   PageHeader,
   PageHeaderText,
   PageTitle,
-} from "@planisfy/ui/components/page-header"
-import { StatusAlert } from "@planisfy/ui/components/status-alert"
-import {
-  Clipboard,
-  Database,
-  Download,
-  Eye,
-  HardDrive,
-  Info,
-  Mail,
-  Pencil,
-  Plus,
-  Save,
-  Server,
-  Shield,
-  Upload,
-} from "lucide-react"
+} from '@planisfy/ui/components/page-header'
+import { StatusAlert } from '@planisfy/ui/components/status-alert'
+import { Database, HardDrive, Info, Mail, Server, Shield } from 'lucide-react'
 
 const envGroups = [
   {
-    label: "Database",
+    label: 'Database',
     icon: Database,
     vars: [
-      { key: "DATABASE_URL", value: "postgresql://planisfy:********@db:5432/planisfy", sensitive: true, required: true, desc: "Primary PostgreSQL connection string." },
-      { key: "DATABASE_POOL_SIZE", value: "20", required: false, desc: "Max database pool connections." },
-      { key: "DATABASE_SSL", value: "true", required: false, desc: "Require SSL for database connections." },
+      {
+        key: 'DATABASE_URL',
+        requirement: 'Required',
+        desc: 'Primary PostgreSQL connection string.',
+      },
+      {
+        key: 'REDIS_URL',
+        requirement: 'Required',
+        desc: 'Redis connection string for queues, caching, and runtime coordination.',
+      },
     ],
   },
   {
-    label: "Authentication",
+    label: 'Authentication',
     icon: Shield,
     vars: [
-      { key: "AUTH_SECRET", value: "************************", sensitive: true, required: true, desc: "JWT signing secret for session tokens." },
-      { key: "AUTH_URL", value: "https://planisfy.acme.com", required: true, desc: "Canonical URL used for OAuth callbacks." },
-      { key: "GITHUB_CLIENT_ID", value: "Ov23liXkP9a2bQ7mNdRe", required: false, desc: "GitHub OAuth application client ID." },
-      { key: "GITHUB_CLIENT_SECRET", value: "************************", sensitive: true, required: false, desc: "GitHub OAuth application client secret." },
-      { key: "GOOGLE_CLIENT_ID", value: "", required: false, desc: "Google OAuth client ID." },
-      { key: "GOOGLE_CLIENT_SECRET", value: "", sensitive: true, required: false, desc: "Google OAuth client secret." },
+      {
+        key: 'BETTER_AUTH_SECRET',
+        requirement: 'Required',
+        desc: 'Generated secret used by Better Auth.',
+      },
+      {
+        key: 'INTERNAL_API_SECRET',
+        requirement: 'Required',
+        desc: 'Shared secret for internal service-to-service requests.',
+      },
+      {
+        key: 'GITHUB_CLIENT_ID',
+        requirement: 'Optional',
+        desc: 'GitHub OAuth application client ID.',
+      },
+      {
+        key: 'GITHUB_CLIENT_SECRET',
+        requirement: 'Optional',
+        desc: 'GitHub OAuth application client secret.',
+      },
+      { key: 'GOOGLE_CLIENT_ID', requirement: 'Optional', desc: 'Google OAuth client ID.' },
+      {
+        key: 'GOOGLE_CLIENT_SECRET',
+        requirement: 'Optional',
+        desc: 'Google OAuth client secret.',
+      },
     ],
   },
   {
-    label: "Email (Resend)",
+    label: 'Email (ZeptoMail)',
     icon: Mail,
     vars: [
-      { key: "RESEND_API_KEY", value: "re_********************", sensitive: true, required: true, desc: "Resend API key for transactional email." },
-      { key: "EMAIL_FROM", value: "noreply@planisfy.acme.com", required: true, desc: "Sender address for platform emails." },
+      {
+        key: 'ZEPTOMAIL_SEND_MAIL_TOKEN',
+        requirement: 'Managed',
+        desc: 'ZeptoMail send mail token.',
+      },
+      {
+        key: 'ZEPTOMAIL_FROM_AUTH',
+        requirement: 'Managed',
+        desc: 'Sender identity for account and auth emails.',
+      },
+      {
+        key: 'ZEPTOMAIL_FROM_NOTIFICATIONS',
+        requirement: 'Managed',
+        desc: 'Sender identity for operational notification emails.',
+      },
     ],
   },
   {
-    label: "Object Storage",
+    label: 'Object Storage',
     icon: HardDrive,
     vars: [
-      { key: "R2_ACCOUNT_ID", value: "a1b2c3d4e5f6g7h8", required: true, desc: "Cloudflare R2 account identifier." },
-      { key: "R2_ACCESS_KEY_ID", value: "****************", sensitive: true, required: true, desc: "R2 access key ID." },
-      { key: "R2_SECRET_ACCESS_KEY", value: "************************", sensitive: true, required: true, desc: "R2 secret access key." },
-      { key: "R2_BUCKET_TILES", value: "planisfy-tiles", required: true, desc: "Bucket name for tile storage." },
-      { key: "R2_BUCKET_STYLES", value: "planisfy-styles", required: false, desc: "Bucket name for style JSON storage." },
+      {
+        key: 'STORAGE_PROVIDER',
+        requirement: 'Required',
+        desc: 'Storage backend: local, s3, or r2.',
+      },
+      {
+        key: 'LOCAL_STORAGE_PATH',
+        requirement: 'Self-host',
+        desc: 'Local artifact storage path when STORAGE_PROVIDER=local.',
+      },
+      {
+        key: 'S3_BUCKET',
+        requirement: 'S3/R2',
+        desc: 'S3-compatible bucket for artifacts.',
+      },
+      {
+        key: 'S3_ENDPOINT',
+        requirement: 'S3/R2',
+        desc: 'S3-compatible endpoint for object storage.',
+      },
+      {
+        key: 'R2_ACCESS_KEY_ID',
+        requirement: 'Managed',
+        desc: 'R2 access key ID.',
+      },
+      {
+        key: 'R2_SECRET_ACCESS_KEY',
+        requirement: 'Managed',
+        desc: 'R2 secret access key.',
+      },
+      {
+        key: 'R2_BUCKET',
+        requirement: 'Managed',
+        desc: 'R2 bucket for artifacts.',
+      },
+      {
+        key: 'R2_PUBLIC_URL',
+        requirement: 'Managed',
+        desc: 'Public URL for R2-hosted artifacts.',
+      },
     ],
   },
   {
-    label: "Services",
+    label: 'Services',
     icon: Server,
     vars: [
-      { key: "MARTIN_URL", value: "http://martin:3000", required: true, desc: "Martin tile server internal URL." },
-      { key: "PELIAS_URL", value: "http://pelias:4000", required: true, desc: "Pelias-compatible geocoding service URL." },
-      { key: "VALHALLA_URL", value: "http://valhalla:8002", required: false, desc: "Valhalla routing engine URL." },
-      { key: "ELEVATION_URL", value: "", required: false, desc: "Elevation service URL." },
+      {
+        key: 'MARTIN_URL',
+        requirement: 'Required',
+        desc: 'Martin tile server internal URL.',
+      },
+      {
+        key: 'PELIAS_URL',
+        requirement: 'Required',
+        desc: 'Pelias-compatible geocoding service URL.',
+      },
+      {
+        key: 'VALHALLA_URL',
+        requirement: 'Optional',
+        desc: 'Valhalla routing engine URL.',
+      },
+      { key: 'ELEVATION_URL', requirement: 'Optional', desc: 'Elevation service URL.' },
     ],
   },
 ]
@@ -90,33 +162,22 @@ export default function EnvironmentPage() {
       <PageHeader>
         <PageHeaderText>
           <PageTitle>Environment</PageTitle>
-          <PageDescription>Configuration variables for your self-hosted deployment.</PageDescription>
+          <PageDescription>
+            Configuration variables for your self-hosted deployment.
+          </PageDescription>
         </PageHeaderText>
         <PageActions>
           <Badge variant="secondary">Self-hosted</Badge>
-          <Button variant="outline">
-            <Download className="h-4 w-4" />
-            Export .env
-          </Button>
-          <Button variant="outline">
-            <Upload className="h-4 w-4" />
-            Import .env
-          </Button>
-          <Button>
-            <Save className="h-4 w-4" />
-            Save changes
-          </Button>
         </PageActions>
       </PageHeader>
 
       <StatusAlert
         icon={<Info className="h-4 w-4" />}
-        title="5 of 6 required variables are configured"
-        description="Set all required variables before the platform can start serving requests."
+        title="Configuration reference"
+        description="Use the platform readiness page for live status. This page lists the environment variables operators commonly need to review."
       />
 
       {envGroups.map((group) => {
-        const configured = group.vars.filter((item) => item.value).length
         return (
           <Card key={group.label}>
             <CardHeader className="flex-row items-start justify-between gap-3">
@@ -125,19 +186,7 @@ export default function EnvironmentPage() {
                   <group.icon className="h-4 w-4 text-muted-foreground" />
                   {group.label}
                 </CardTitle>
-                <CardDescription>
-                  {configured}/{group.vars.length} configured
-                </CardDescription>
-              </div>
-              <div className="flex gap-1">
-                <Button variant="ghost" size="xs">
-                  <Eye className="h-3.5 w-3.5" />
-                  Reveal all
-                </Button>
-                <Button variant="ghost" size="xs">
-                  <Plus className="h-3.5 w-3.5" />
-                  Add
-                </Button>
+                <CardDescription>{group.vars.length} environment variables</CardDescription>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -160,34 +209,16 @@ function EnvRow({
 }: {
   envVar: {
     key: string
-    value: string
-    sensitive?: boolean
-    required: boolean
+    requirement: string
   }
 }) {
   return (
-    <div className="grid overflow-hidden rounded-lg border bg-input/30 md:grid-cols-[220px_1fr_auto]">
+    <div className="grid overflow-hidden rounded-lg border bg-input/30 md:grid-cols-[minmax(180px,260px)_1fr]">
       <div className="flex items-center gap-2 border-b bg-muted px-3 py-2 font-mono text-xs font-medium md:border-b-0 md:border-r">
         {envVar.key}
-        {envVar.required && <span className="text-destructive">*</span>}
       </div>
-      <div className="min-w-0 px-3 py-2 font-mono text-xs">
-        <span className={envVar.value ? "block truncate" : "text-muted-foreground"}>
-          {envVar.value || "Not configured"}
-        </span>
-      </div>
-      <div className="flex border-t md:border-l md:border-t-0">
-        {envVar.sensitive && (
-          <Button variant="ghost" size="icon-sm" aria-label={`Reveal ${envVar.key}`}>
-            <Eye className="h-4 w-4" />
-          </Button>
-        )}
-        <Button variant="ghost" size="icon-sm" aria-label={`Copy ${envVar.key}`}>
-          <Clipboard className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" aria-label={`Edit ${envVar.key}`}>
-          <Pencil className="h-4 w-4" />
-        </Button>
+      <div className="flex items-center px-3 py-2">
+        <Badge variant="secondary">{envVar.requirement}</Badge>
       </div>
     </div>
   )

@@ -44,7 +44,7 @@ Next.js apps
 `DEPLOYMENT_MODE=self_host` and `DEPLOYMENT_MODE=managed` are parsed by `@planisfy/platform-policy` and surfaced in `/setup/preflight`.
 
 - Self-host mode keeps billing, email, supervisor, and cloud storage optional.
-- Managed mode expects Dodo Payments, Resend, and R2/S3-compatible storage.
+- Managed mode expects Dodo Payments, ZeptoMail, and R2/S3-compatible storage.
 - Both modes use the same API, Console, Admin, worker, and database schema.
 
 ## Resource Model

@@ -68,7 +68,7 @@ pnpm smoke:managed-local
 This workflow resets the local Compose stack, creates the private R2 smoke
 bucket when missing, and runs the managed smoke against `http://localhost:4000`
 and `http://localhost:3001`. Billing and email are config smokes only; no Dodo
-checkout or Resend delivery is attempted.
+checkout or ZeptoMail delivery is attempted.
 
 Managed staging has two smoke levels:
 

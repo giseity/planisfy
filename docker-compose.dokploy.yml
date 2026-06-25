@@ -41,8 +41,9 @@ x-api-env: &api-env
   DODO_SCALE_YEARLY_PRODUCT_ID: ${DODO_SCALE_YEARLY_PRODUCT_ID:-}
   DODO_PRO_PRODUCT_ID: ${DODO_PRO_PRODUCT_ID:-}
   DODO_ENTERPRISE_PRODUCT_ID: ${DODO_ENTERPRISE_PRODUCT_ID:-}
-  RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY must be set}
-  FROM_EMAIL: ${FROM_EMAIL:-Planisfy <noreply@planisfy.com>}
+  ZEPTOMAIL_SEND_MAIL_TOKEN: ${ZEPTOMAIL_SEND_MAIL_TOKEN:?ZEPTOMAIL_SEND_MAIL_TOKEN must be set}
+  ZEPTOMAIL_FROM_AUTH: ${ZEPTOMAIL_FROM_AUTH:?ZEPTOMAIL_FROM_AUTH must be set}
+  ZEPTOMAIL_FROM_NOTIFICATIONS: ${ZEPTOMAIL_FROM_NOTIFICATIONS:?ZEPTOMAIL_FROM_NOTIFICATIONS must be set}
   SOURCE_CREDENTIAL_ENCRYPTION_KEY: ${SOURCE_CREDENTIAL_ENCRYPTION_KEY:-}
   ALLOW_PRIVATE_SOURCE_URLS: ${ALLOW_PRIVATE_SOURCE_URLS:-false}
   OVERTURE_ALLOW_EXPERIMENTAL_TYPES: ${OVERTURE_ALLOW_EXPERIMENTAL_TYPES:-false}
@@ -52,7 +53,7 @@ x-api-env: &api-env
   SOURCE_IMPORT_TIMEOUT_MS: ${SOURCE_IMPORT_TIMEOUT_MS:-900000}
   DEMO_PMTILES_PATH: ${DEMO_PMTILES_PATH:-}
   TILE_DELIVERY_MODE: api
-  TILE_WORKER_URL: ""
+  TILE_WORKER_URL: ''
   MARTIN_URL: http://127.0.0.1:3005
   VALHALLA_URL: http://127.0.0.1:3007
   PELIAS_URL: http://127.0.0.1:3100
@@ -65,7 +66,7 @@ x-api-env: &api-env
   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
 
 x-traefik-websecure: &traefik-websecure
-  traefik.enable: "true"
+  traefik.enable: 'true'
   traefik.docker.network: dokploy-network
 
 services:
@@ -79,7 +80,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U planisfy -d planisfy"]
+      test: ['CMD-SHELL', 'pg_isready -U planisfy -d planisfy']
       interval: 5s
       timeout: 5s
       retries: 12
@@ -93,7 +94,7 @@ services:
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 12
@@ -114,8 +115,8 @@ services:
     healthcheck:
       test:
         [
-          "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+          'CMD-SHELL',
+          'node -e "fetch(''http://127.0.0.1:4000/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
         ]
       interval: 10s
       timeout: 5s
@@ -186,7 +187,9 @@ services:
       NEXT_PUBLIC_ADMIN_URL: https://admin.planisfy.com
       NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
       NEXT_PUBLIC_CONSOLE_API_PATH: /api/v1/console
-      RESEND_API_KEY: ${RESEND_API_KEY:?RESEND_API_KEY must be set}
+      ZEPTOMAIL_SEND_MAIL_TOKEN: ${ZEPTOMAIL_SEND_MAIL_TOKEN:?ZEPTOMAIL_SEND_MAIL_TOKEN must be set}
+      ZEPTOMAIL_FROM_AUTH: ${ZEPTOMAIL_FROM_AUTH:?ZEPTOMAIL_FROM_AUTH must be set}
+      ZEPTOMAIL_FROM_NOTIFICATIONS: ${ZEPTOMAIL_FROM_NOTIFICATIONS:?ZEPTOMAIL_FROM_NOTIFICATIONS must be set}
       NODE_ENV: production
     depends_on:
       api:
