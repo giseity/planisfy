@@ -1,15 +1,15 @@
 import { Footer } from '@/components/footer'
 import { HeroHeader } from '@/components/header'
-import { env } from '@/env'
+import { serverEnv } from '@/env.server'
 
-const signInHref = `${env.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
-const signUpHref = `${env.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
+const signInHref = `${serverEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
+const signUpHref = `${serverEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
 
 export default function TermsPage() {
   return (
     <div className="min-h-svh bg-background">
       <HeroHeader
-        docsHref={env.NEXT_PUBLIC_DOCS_URL}
+        docsHref={serverEnv.NEXT_PUBLIC_DOCS_URL}
         signInHref={signInHref}
         signUpHref={signUpHref}
       />
@@ -29,7 +29,7 @@ export default function TermsPage() {
           </div>
         </section>
       </main>
-      <Footer docsHref={env.NEXT_PUBLIC_DOCS_URL} />
+      <Footer docsHref={serverEnv.NEXT_PUBLIC_DOCS_URL} />
     </div>
   )
 }

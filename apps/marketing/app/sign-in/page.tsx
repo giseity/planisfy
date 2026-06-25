@@ -2,8 +2,8 @@
 
 import { SignInForm } from '@planisfy/auth/ui'
 
-import { env } from '@/env'
+import { clientEnv } from '@/env.client'
 
 export default function SignInPage() {
-  return <SignInForm defaultCallbackUrl={env.NEXT_PUBLIC_CONSOLE_URL} />
+  return <SignInForm defaultCallbackUrl={clientEnv.NEXT_PUBLIC_CONSOLE_URL} />
 }
