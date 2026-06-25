@@ -3,9 +3,7 @@ import { Github } from 'lucide-react'
 
 import { PlanisfyLogo } from '@planisfy/ui/components/brand-mark'
 
-const socialLinks = [
-  { icon: Github, href: '#', label: 'GitHub' },
-]
+const socialLinks = [{ icon: Github, href: '#', label: 'GitHub' }]
 
 type FooterProps = {
   docsHref: string
@@ -48,7 +46,7 @@ export function Footer({ docsHref }: FooterProps) {
         <div className="grid gap-10 md:grid-cols-[1fr_2fr]">
           <div>
             <Link href="/" aria-label="Planisfy home" className="inline-flex">
-              <PlanisfyLogo markClassName="size-7" />
+              <PlanisfyLogo size="lg" markClassName="size-11" />
             </Link>
             <p className="mt-4 max-w-sm text-sm text-muted-foreground">
               Self-hostable map infrastructure for styles, tilesets, API keys, and operational

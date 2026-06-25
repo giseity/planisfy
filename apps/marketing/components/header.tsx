@@ -49,7 +49,7 @@ export const HeroHeader = ({ docsHref, signInHref, signUpHref }: HeroHeaderProps
                 <NavItems docsHref={docsHref} />
               </div>
               <Link href="/" aria-label="home" className="flex items-center space-x-2 lg:hidden">
-                <PlanisfyLogo markClassName="size-7" />
+                <PlanisfyLogo size="lg" markClassName="size-11" />
               </Link>
 
               <button
@@ -151,7 +151,7 @@ const FloatingNavPill = ({
       )}
     >
       <Link href="/" aria-label="home" className="px-3.5">
-        <PlanisfyLogo markClassName="size-7" />
+        <PlanisfyLogo size="lg" markClassName="size-11" />
       </Link>
       <AnimatePresence initial={false}>
         {isScrolled && (
