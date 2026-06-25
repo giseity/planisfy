@@ -4,6 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["CONTACT_EMAIL"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
@@ -36,6 +37,7 @@
         "NEXT_PUBLIC_ADMIN_URL",
         "NEXT_PUBLIC_MARKETING_URL",
         "NEXT_PUBLIC_CONSOLE_API_PATH",
+        "CONTACT_EMAIL",
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "GOOGLE_CLIENT_ID",

@@ -3,6 +3,7 @@ import FAQs from '@/components/faqs'
 import { Features } from '@/components/features'
 import { Footer } from '@/components/footer'
 import { HeroSection } from '@/components/hero-section'
+import { WorkflowSection } from '@/components/workflow'
 import { serverEnv } from '@/env.server'
 
 const signInHref = `${serverEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
@@ -18,6 +19,7 @@ export default function Page() {
         consoleHref={serverEnv.NEXT_PUBLIC_CONSOLE_URL}
       />
       <Features />
+      <WorkflowSection />
       <FAQs />
       <CallToAction signUpHref={signUpHref} consoleHref={serverEnv.NEXT_PUBLIC_CONSOLE_URL} />
       <Footer docsHref={serverEnv.NEXT_PUBLIC_DOCS_URL} />

@@ -3,7 +3,7 @@ import { Github } from 'lucide-react'
 
 import { PlanisfyLogo } from '@planisfy/ui/components/brand-mark'
 
-const socialLinks = [{ icon: Github, href: '#', label: 'GitHub' }]
+const socialLinks = [{ icon: Github, href: 'https://github.com/giseity/planisfy', label: 'GitHub' }]
 
 type FooterProps = {
   docsHref: string

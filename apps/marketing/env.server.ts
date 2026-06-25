@@ -5,6 +5,7 @@ const schema = z.object({
   NEXT_PUBLIC_CONSOLE_URL: z.string().url(),
   NEXT_PUBLIC_DOCS_URL: z.string().url().optional(),
   NEXT_PUBLIC_MARKETING_URL: z.string().url().optional(),
+  CONTACT_EMAIL: z.string().email(),
 })
 
 const parsed = createEnv(
@@ -14,6 +15,7 @@ const parsed = createEnv(
     NEXT_PUBLIC_CONSOLE_URL: process.env.NEXT_PUBLIC_CONSOLE_URL,
     NEXT_PUBLIC_DOCS_URL: process.env.NEXT_PUBLIC_DOCS_URL,
     NEXT_PUBLIC_MARKETING_URL: process.env.NEXT_PUBLIC_MARKETING_URL,
+    CONTACT_EMAIL: process.env.CONTACT_EMAIL,
   },
   { appName: 'marketing server', onInvalid: 'throw' }
 )
