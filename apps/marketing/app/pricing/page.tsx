@@ -2,16 +2,16 @@ import { Comparator } from '@/components/comparator'
 import { Footer } from '@/components/footer'
 import { HeroHeader } from '@/components/header'
 import { Pricing } from '@/components/pricing'
-import { serverEnv } from '@/env.server'
+import { clientEnv } from '@/env.client'
 
-const signInHref = `${serverEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
-const signUpHref = `${serverEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
+const signInHref = `${clientEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
+const signUpHref = `${clientEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
 
 export default function PricingPage() {
   return (
     <div className="min-h-svh bg-background">
       <HeroHeader
-        docsHref={serverEnv.NEXT_PUBLIC_DOCS_URL}
+        docsHref={clientEnv.NEXT_PUBLIC_DOCS_URL}
         signInHref={signInHref}
         signUpHref={signUpHref}
       />
@@ -19,7 +19,7 @@ export default function PricingPage() {
         <Pricing signUpHref={signUpHref} />
         <Comparator signUpHref={signUpHref} />
       </main>
-      <Footer docsHref={serverEnv.NEXT_PUBLIC_DOCS_URL} />
+      <Footer docsHref={clientEnv.NEXT_PUBLIC_DOCS_URL} />
     </div>
   )
 }

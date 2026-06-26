@@ -4,25 +4,25 @@ import { Features } from '@/components/features'
 import { Footer } from '@/components/footer'
 import { HeroSection } from '@/components/hero-section'
 import { WorkflowSection } from '@/components/workflow'
-import { serverEnv } from '@/env.server'
+import { clientEnv } from '@/env.client'
 
-const signInHref = `${serverEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
-const signUpHref = `${serverEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
+const signInHref = `${clientEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
+const signUpHref = `${clientEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
 
 export default function Page() {
   return (
     <div className="min-h-svh bg-background">
       <HeroSection
-        docsHref={serverEnv.NEXT_PUBLIC_DOCS_URL}
+        docsHref={clientEnv.NEXT_PUBLIC_DOCS_URL}
         signInHref={signInHref}
         signUpHref={signUpHref}
-        consoleHref={serverEnv.NEXT_PUBLIC_CONSOLE_URL}
+        consoleHref={clientEnv.NEXT_PUBLIC_CONSOLE_URL}
       />
       <Features />
       <WorkflowSection />
       <FAQs />
-      <CallToAction signUpHref={signUpHref} consoleHref={serverEnv.NEXT_PUBLIC_CONSOLE_URL} />
-      <Footer docsHref={serverEnv.NEXT_PUBLIC_DOCS_URL} />
+      <CallToAction signUpHref={signUpHref} consoleHref={clientEnv.NEXT_PUBLIC_CONSOLE_URL} />
+      <Footer docsHref={clientEnv.NEXT_PUBLIC_DOCS_URL} />
     </div>
   )
 }

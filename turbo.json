@@ -5,7 +5,9 @@
     "build": {
       "dependsOn": ["^build"],
       "env": [
-        "CONTACT_EMAIL",
+        "NEXT_PUBLIC_CONTACT_EMAIL",
+        "NEXT_PUBLIC_DOCS_URL",
+        "NEXT_PUBLIC_MARKETING_URL",
         "ZEPTOMAIL_SEND_MAIL_TOKEN",
         "ZEPTOMAIL_FROM_AUTH",
         "ZEPTOMAIL_FROM_NOTIFICATIONS"
@@ -41,8 +43,9 @@
         "NEXT_PUBLIC_APP_URL",
         "NEXT_PUBLIC_ADMIN_URL",
         "NEXT_PUBLIC_MARKETING_URL",
+        "NEXT_PUBLIC_DOCS_URL",
+        "NEXT_PUBLIC_CONTACT_EMAIL",
         "NEXT_PUBLIC_CONSOLE_API_PATH",
-        "CONTACT_EMAIL",
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "GOOGLE_CLIENT_ID",

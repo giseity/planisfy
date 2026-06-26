@@ -5,11 +5,11 @@ import { Card } from '@planisfy/ui/components/card'
 
 import { Footer } from '@/components/footer'
 import { HeroHeader } from '@/components/header'
-import { serverEnv } from '@/env.server'
+import { clientEnv } from '@/env.client'
 
-const signInHref = `${serverEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
-const signUpHref = `${serverEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
-const contactEmail = serverEnv.CONTACT_EMAIL
+const signInHref = `${clientEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
+const signUpHref = `${clientEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
+const contactEmail = clientEnv.NEXT_PUBLIC_CONTACT_EMAIL
 const contactHref = `mailto:${contactEmail}?subject=Planisfy%20self-hosted%20deployment%20conversation`
 
 const contactRoutes = [
@@ -35,7 +35,7 @@ export default function ContactPage() {
   return (
     <div className="min-h-svh bg-background">
       <HeroHeader
-        docsHref={serverEnv.NEXT_PUBLIC_DOCS_URL}
+        docsHref={clientEnv.NEXT_PUBLIC_DOCS_URL}
         signInHref={signInHref}
         signUpHref={signUpHref}
       />
@@ -103,7 +103,7 @@ export default function ContactPage() {
           </div>
         </section>
       </main>
-      <Footer docsHref={serverEnv.NEXT_PUBLIC_DOCS_URL} />
+      <Footer docsHref={clientEnv.NEXT_PUBLIC_DOCS_URL} />
     </div>
   )
 }

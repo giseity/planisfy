@@ -216,6 +216,7 @@ services:
         NEXT_PUBLIC_AUTH_ORIGIN: https://planisfy.com
         NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
         NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
+        NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
@@ -225,6 +226,7 @@ services:
       NEXT_PUBLIC_AUTH_ORIGIN: https://planisfy.com
       NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
       NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
+      NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
       NODE_ENV: production
     depends_on:
       postgres:
