@@ -12,6 +12,12 @@ import {
   catalogTypesForTheme,
   defaultOvertureImportOptions,
 } from "@/features/tilesets/workflow/import-workflow";
+import {
+  AreaOfInterestSelector,
+  areaOfInterestToDraft,
+  draftToAreaOfInterest,
+} from "@/features/shared/area-of-interest-selector";
+import { areaOfInterestToBBox } from "@planisfy/api-contracts";
 import { Button } from "@planisfy/ui/components/button";
 import {
   Dialog,
@@ -65,10 +71,13 @@ export function OvertureImportDialog({
   const [importDescription, setImportDescription] = useState("");
   const [regionName, setRegionName] = useState("");
   const [regionHandle, setRegionHandle] = useState("");
-  const [bboxWest, setBboxWest] = useState("");
-  const [bboxSouth, setBboxSouth] = useState("");
-  const [bboxEast, setBboxEast] = useState("");
-  const [bboxNorth, setBboxNorth] = useState("");
+  const [regionAoiPreset, setRegionAoiPreset] = useState("custom");
+  const [regionAreaOfInterest, setRegionAreaOfInterest] = useState(
+    areaOfInterestToDraft({
+      kind: "bbox",
+      bbox: [-122.55, 37.7, -122.35, 37.84],
+    }),
+  );
 
   const loadOptions = useCallback(async () => {
     setLoading(true);
@@ -114,7 +123,8 @@ export function OvertureImportDialog({
 
   async function handleCreateOvertureImport() {
     const needsRegion = selectedRegionId === NEW_REGION_VALUE;
-    const bbox = parseBbox([bboxWest, bboxSouth, bboxEast, bboxNorth]);
+    const areaOfInterest = draftToAreaOfInterest(regionAreaOfInterest);
+    const bbox = areaOfInterest ? areaOfInterestToBBox(areaOfInterest) : null;
     if (needsRegion && !bbox) {
       toast.error("Region bbox must be west, south, east, north.");
       return;
@@ -186,11 +196,16 @@ export function OvertureImportDialog({
   function useSampleBbox() {
     setRegionName("San Francisco sample");
     setRegionHandle("san-francisco-sample");
-    setBboxWest("-122.55");
-    setBboxSouth("37.70");
-    setBboxEast("-122.35");
-    setBboxNorth("37.84");
+    setRegionAoiPreset("custom");
+    setRegionAreaOfInterest(
+      areaOfInterestToDraft({
+        kind: "bbox",
+        bbox: [-122.55, 37.7, -122.35, 37.84],
+      }),
+    );
   }
+
+  const regionAreaReady = Boolean(draftToAreaOfInterest(regionAreaOfInterest));
 
   const canSubmit = canRequestOvertureImport({
     theme: selectedTheme,
@@ -199,11 +214,7 @@ export function OvertureImportDialog({
     handle: importHandle,
     regionReady:
       selectedRegionId === NEW_REGION_VALUE
-        ? Boolean(
-            regionName &&
-            regionHandle &&
-            parseBbox([bboxWest, bboxSouth, bboxEast, bboxNorth]),
-          )
+        ? Boolean(regionName && regionHandle && regionAreaReady)
         : Boolean(selectedRegionId),
   });
 
@@ -339,40 +350,12 @@ export function OvertureImportDialog({
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <div className="space-y-2">
-                  <Label>West</Label>
-                  <Input
-                    type="number"
-                    value={bboxWest}
-                    onChange={(e) => setBboxWest(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>South</Label>
-                  <Input
-                    type="number"
-                    value={bboxSouth}
-                    onChange={(e) => setBboxSouth(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>East</Label>
-                  <Input
-                    type="number"
-                    value={bboxEast}
-                    onChange={(e) => setBboxEast(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>North</Label>
-                  <Input
-                    type="number"
-                    value={bboxNorth}
-                    onChange={(e) => setBboxNorth(e.target.value)}
-                  />
-                </div>
-              </div>
+              <AreaOfInterestSelector
+                value={regionAreaOfInterest}
+                onChange={setRegionAreaOfInterest}
+                presetId={regionAoiPreset}
+                onPresetChange={setRegionAoiPreset}
+              />
             </div>
           )}
           <DialogFooter>
@@ -401,19 +384,4 @@ export function OvertureImportDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-function parseBbox(
-  values: [string, string, string, string],
-): [number, number, number, number] | null {
-  const parsed: [number, number, number, number] = [
-    Number(values[0]),
-    Number(values[1]),
-    Number(values[2]),
-    Number(values[3]),
-  ];
-  if (parsed.some((value) => !Number.isFinite(value))) return null;
-  const [west, south, east, north] = parsed;
-  if (west >= east || south >= north) return null;
-  return [west, south, east, north];
 }
