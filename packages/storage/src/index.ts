@@ -1,11 +1,17 @@
 import {
   CopyObjectCommand,
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  UploadPartCommand,
   PutObjectCommand,
   S3Client,
+  type CompletedPart,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
   chmodSync,
   createWriteStream,
@@ -30,9 +36,31 @@ export interface StoredObject {
   contentType: string;
 }
 
+export interface StoredObjectMetadata {
+  key: string;
+  size: number;
+  contentType: string;
+}
+
 export interface StorageProviderInfo {
   provider: "local" | "s3" | "r2";
   bucket: string;
+}
+
+export interface MultipartUploadPartUrl {
+  partNumber: number;
+  url: string;
+  method: "PUT";
+}
+
+export interface MultipartUploadSession {
+  provider: "s3" | "r2";
+  bucket: string;
+  key: string;
+  uploadId: string;
+  partSize: number;
+  expiresAt: string;
+  parts: MultipartUploadPartUrl[];
 }
 
 export interface StorageProvider {
@@ -48,6 +76,19 @@ export interface StorageProvider {
   copy(sourceKey: string, targetKey: string): Promise<void>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
+  getMetadata(key: string): Promise<StoredObjectMetadata | null>;
+  createMultipartUploadSession?(
+    key: string,
+    contentType: string,
+    contentLength: number,
+    options?: { partSize?: number; expiresInSeconds?: number },
+  ): Promise<MultipartUploadSession>;
+  completeMultipartUpload?(
+    key: string,
+    uploadId: string,
+    parts: Array<{ partNumber: number; eTag: string }>,
+  ): Promise<void>;
+  abortMultipartUpload?(key: string, uploadId: string): Promise<void>;
   getUrl(key: string): string;
   getInfo(): StorageProviderInfo;
 }
@@ -98,6 +139,90 @@ export class S3Storage implements StorageProvider {
     };
   }
 
+  async createMultipartUploadSession(
+    key: string,
+    contentType: string,
+    contentLength: number,
+    options: { partSize?: number; expiresInSeconds?: number } = {},
+  ): Promise<MultipartUploadSession> {
+    const partSize = resolveMultipartPartSize(contentLength, options.partSize);
+    const partCount = Math.ceil(contentLength / partSize);
+    if (partCount > 10_000) {
+      throw new Error("Multipart upload would exceed the 10,000 part S3 limit");
+    }
+
+    const multipart = await this.client.send(
+      new CreateMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ContentType: contentType,
+      }),
+    );
+    if (!multipart.UploadId) {
+      throw new Error("S3 did not return a multipart upload id");
+    }
+
+    const expiresIn = options.expiresInSeconds ?? 60 * 60 * 24 * 7;
+    const parts = await Promise.all(
+      Array.from({ length: partCount }, async (_, index) => {
+        const partNumber = index + 1;
+        const url = await getS3SignedUrl(
+          this.client,
+          new UploadPartCommand({
+            Bucket: this.bucket,
+            Key: key,
+            UploadId: multipart.UploadId,
+            PartNumber: partNumber,
+          }),
+          { expiresIn },
+        );
+        return { partNumber, url, method: "PUT" as const };
+      }),
+    );
+
+    return {
+      provider: this.provider,
+      bucket: this.bucket,
+      key,
+      uploadId: multipart.UploadId,
+      partSize,
+      expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      parts,
+    };
+  }
+
+  async completeMultipartUpload(
+    key: string,
+    uploadId: string,
+    parts: Array<{ partNumber: number; eTag: string }>,
+  ): Promise<void> {
+    const completedParts: CompletedPart[] = parts
+      .map((part) => ({
+        PartNumber: part.partNumber,
+        ETag: part.eTag,
+      }))
+      .sort((a, b) => Number(a.PartNumber) - Number(b.PartNumber));
+
+    await this.client.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        UploadId: uploadId,
+        MultipartUpload: { Parts: completedParts },
+      }),
+    );
+  }
+
+  async abortMultipartUpload(key: string, uploadId: string): Promise<void> {
+    await this.client.send(
+      new AbortMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        UploadId: uploadId,
+      }),
+    );
+  }
+
   async download(key: string): Promise<Buffer> {
     return streamToBuffer(await this.downloadStream(key));
   }
@@ -144,13 +269,21 @@ export class S3Storage implements StorageProvider {
   }
 
   async exists(key: string): Promise<boolean> {
+    return (await this.getMetadata(key)) !== null;
+  }
+
+  async getMetadata(key: string): Promise<StoredObjectMetadata | null> {
     try {
-      await this.client.send(
+      const object = await this.client.send(
         new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
       );
-      return true;
+      return {
+        key,
+        size: object.ContentLength ?? 0,
+        contentType: object.ContentType ?? "application/octet-stream",
+      };
     } catch (err) {
-      if (isNotFoundError(err)) return false;
+      if (isNotFoundError(err)) return null;
       throw err;
     }
   }
@@ -331,6 +464,17 @@ export class LocalStorage implements StorageProvider {
     return existsSync(join(this.basePath, key));
   }
 
+  async getMetadata(key: string): Promise<StoredObjectMetadata | null> {
+    const filePath = join(this.basePath, key);
+    if (!existsSync(filePath)) return null;
+    const stats = statSync(filePath);
+    return {
+      key,
+      size: stats.size,
+      contentType: "application/octet-stream",
+    };
+  }
+
   getUrl(key: string): string {
     return `${this.baseUrl}/${key}`;
   }
@@ -401,6 +545,27 @@ function trimTrailingSlash(value: string) {
 
 function configured(value: string | undefined) {
   return value && value.length > 0 ? value : undefined;
+}
+
+function getS3SignedUrl(
+  client: S3Client,
+  command: UploadPartCommand,
+  options: { expiresIn: number },
+) {
+  const signer = getSignedUrl as unknown as (
+    client: unknown,
+    command: unknown,
+    options: { expiresIn: number },
+  ) => Promise<string>;
+  return signer(client, command, options);
+}
+
+function resolveMultipartPartSize(contentLength: number, requested?: number) {
+  const minPartSize = 5 * 1024 * 1024;
+  const defaultPartSize = 64 * 1024 * 1024;
+  const maxParts = 10_000;
+  const requiredPartSize = Math.ceil(contentLength / maxParts);
+  return Math.max(requested ?? defaultPartSize, defaultPartSize, minPartSize, requiredPartSize);
 }
 
 function encodeCopySourceKey(key: string) {

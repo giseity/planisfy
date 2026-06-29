@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  bigint,
   index,
   integer,
   jsonb,
@@ -55,7 +56,7 @@ export const uploads = pgTable(
       .references(() => accounts.id, { onDelete: "cascade" }),
     originalFileName: varchar("original_file_name", { length: 256 }).notNull(),
     contentType: varchar("content_type", { length: 128 }),
-    size: integer("size"),
+    size: bigint("size", { mode: "number" }),
     storageObjectId: uuid("storage_object_id"),
     status: uploadStatusEnum("status").notNull().default("PENDING"),
     validationResult: jsonb("validation_result"),
@@ -418,7 +419,7 @@ export const artifactBackups = pgTable(
     bucket: varchar("bucket", { length: 256 }).notNull(),
     sourceStorageKey: text("source_storage_key").notNull(),
     backupStorageKey: text("backup_storage_key").notNull(),
-    size: integer("size"),
+    size: bigint("size", { mode: "number" }),
     metadata: jsonb("metadata").notNull().default({}),
     errorMessage: text("error_message"),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -788,7 +789,7 @@ export const storageObjects = pgTable(
     storageKey: text("storage_key").notNull(),
     fileName: varchar("file_name", { length: 256 }),
     contentType: varchar("content_type", { length: 128 }),
-    size: integer("size"),
+    size: bigint("size", { mode: "number" }),
     contentHash: varchar("content_hash", { length: 128 }),
     resourceType: varchar("resource_type", { length: 64 }),
     resourceId: uuid("resource_id"),

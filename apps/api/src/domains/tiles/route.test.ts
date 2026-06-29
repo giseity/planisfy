@@ -322,6 +322,11 @@ class MemoryStorage implements StorageProvider {
     return this.keys.includes(key);
   }
 
+  async getMetadata(key: string) {
+    if (!this.keys.includes(key)) return null;
+    return { key, size: 0, contentType: "application/octet-stream" };
+  }
+
   getUrl(key: string) {
     return `memory://${key}`;
   }

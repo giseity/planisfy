@@ -70,6 +70,45 @@ const logSchema = z.object({
     .max(100),
 });
 
+const artifactKindSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9._-]+$/);
+
+const artifactUploadSessionSchema = z.object({
+  kind: artifactKindSchema.default("valhalla_graph"),
+  fileName: z.string().min(1).max(256),
+  size: z.number().int().nonnegative(),
+  checksumSha256: z.string().length(64).regex(/^[a-f0-9]+$/i).optional(),
+  contentType: z.string().min(1).max(128).default("application/gzip"),
+  manifest: z.record(z.string(), z.unknown()).default({}),
+});
+
+const artifactFinalizeSchema = z.object({
+  kind: artifactKindSchema.default("valhalla_graph"),
+  fileName: z.string().min(1).max(256),
+  size: z.number().int().nonnegative(),
+  checksumSha256: z.string().length(64).regex(/^[a-f0-9]+$/i).optional(),
+  contentType: z.string().min(1).max(128).default("application/gzip"),
+  manifest: z.record(z.string(), z.unknown()).default({}),
+  storage: z.object({
+    provider: z.enum(["s3", "r2"]),
+    bucket: z.string().min(1).max(256),
+    key: z.string().min(1),
+    uploadId: z.string().min(1),
+    parts: z
+      .array(
+        z.object({
+          partNumber: z.number().int().min(1).max(10_000),
+          eTag: z.string().min(1).max(256),
+        }),
+      )
+      .min(1)
+      .max(10_000),
+  }),
+});
+
 rootAgentRoute.post("/root-agent/register", async (c) => {
   const parsed = registerSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
@@ -320,6 +359,161 @@ rootAgentRoute.post("/root-agent/jobs/:id/logs", async (c) => {
   return c.json({ data: { inserted: parsed.data.entries.length } });
 });
 
+rootAgentRoute.post("/root-agent/jobs/:id/artifacts/upload-session", async (c) => {
+  const build = await findBuildForAgent(c, c.req.param("id"));
+  if (!build) return notFound(c, "Routing graph build not found");
+  const parsed = artifactUploadSessionSchema.safeParse(await c.req.json());
+  if (!parsed.success) return validationError(c, parsed.error);
+
+  const storage = getStorage();
+  const storageInfo = storage.getInfo();
+  const fileName = safeFileName(parsed.data.fileName);
+  const storageKey = `accounts/${build.accountId}/routing-graphs/${build.id}/${Date.now()}-${fileName}`;
+  if (
+    !storage.createMultipartUploadSession ||
+    storageInfo.provider === "local"
+  ) {
+    return c.json({
+      data: {
+        strategy: "legacy_proxy",
+        reason: "Storage provider does not support signed multipart uploads.",
+        uploadUrl: `/root-agent/jobs/${build.id}/artifacts`,
+      },
+    });
+  }
+
+  const session = await storage.createMultipartUploadSession(
+    storageKey,
+    parsed.data.contentType,
+    parsed.data.size,
+  );
+  await appendLog(build.id, "info", "Created direct artifact upload session", {
+    fileName,
+    kind: parsed.data.kind,
+    provider: storageInfo.provider,
+    bucket: storageInfo.bucket,
+    storageKey,
+    size: parsed.data.size,
+    partCount: session.parts.length,
+    partSize: session.partSize,
+  });
+
+  return c.json({
+    data: {
+      strategy: "multipart",
+      storage: {
+        provider: session.provider,
+        bucket: session.bucket,
+        key: session.key,
+      },
+      multipart: {
+        uploadId: session.uploadId,
+        partSize: session.partSize,
+        expiresAt: session.expiresAt,
+        parts: session.parts,
+      },
+    },
+  });
+});
+
+rootAgentRoute.post("/root-agent/jobs/:id/artifacts/finalize", async (c) => {
+  const build = await findBuildForAgent(c, c.req.param("id"));
+  if (!build) return notFound(c, "Routing graph build not found");
+  const parsed = artifactFinalizeSchema.safeParse(await c.req.json());
+  if (!parsed.success) return validationError(c, parsed.error);
+
+  const storage = getStorage();
+  const storageInfo = storage.getInfo();
+  if (
+    parsed.data.storage.provider !== storageInfo.provider ||
+    parsed.data.storage.bucket !== storageInfo.bucket
+  ) {
+    return c.json(
+      {
+        error: {
+          code: "ARTIFACT_STORAGE_UNAVAILABLE",
+          message: "Artifact was uploaded to a storage provider that is not active.",
+        },
+      },
+      409,
+    );
+  }
+  if (!storage.completeMultipartUpload) {
+    return c.json(
+      {
+        error: {
+          code: "ARTIFACT_DIRECT_UPLOAD_UNSUPPORTED",
+          message: "Active storage provider cannot finalize multipart uploads.",
+        },
+      },
+      409,
+    );
+  }
+
+  const existing = await findExistingArtifact(build.id, parsed.data.storage.key);
+  if (existing) {
+    return c.json({ data: existing });
+  }
+
+  let objectMetadata = await storage.getMetadata(parsed.data.storage.key);
+  if (!objectMetadata) {
+    await storage.completeMultipartUpload(
+      parsed.data.storage.key,
+      parsed.data.storage.uploadId,
+      parsed.data.storage.parts,
+    );
+    objectMetadata = await storage.getMetadata(parsed.data.storage.key);
+  }
+  if (!objectMetadata) {
+    return c.json(
+      {
+        error: {
+          code: "ARTIFACT_STORAGE_MISSING",
+          message: "Uploaded artifact was not found in object storage.",
+        },
+      },
+      409,
+    );
+  }
+  if (objectMetadata.size !== parsed.data.size) {
+    return c.json(
+      {
+        error: {
+          code: "ARTIFACT_SIZE_MISMATCH",
+          message: "Uploaded artifact size does not match the build metadata.",
+        },
+      },
+      409,
+    );
+  }
+
+  const artifact = await recordRoutingGraphArtifact({
+    accountId: build.accountId,
+    buildId: build.id,
+    provider: storageInfo.provider,
+    bucket: storageInfo.bucket,
+    storageKey: parsed.data.storage.key,
+    fileName: safeFileName(parsed.data.fileName),
+    contentType: parsed.data.contentType,
+    size: parsed.data.size,
+    checksumSha256: parsed.data.checksumSha256 ?? null,
+    artifactKind: parsed.data.kind,
+    manifest: parsed.data.manifest,
+    metadata: {
+      ...parsed.data.manifest,
+      directUpload: true,
+      uploadId: parsed.data.storage.uploadId,
+      partCount: parsed.data.storage.parts.length,
+    },
+  });
+  await appendLog(build.id, "info", "Artifact direct upload finalized", {
+    artifactId: artifact.id,
+    fileName: artifact.fileName,
+    size: artifact.size,
+  });
+  return c.json({ data: artifact }, 201);
+});
+
 rootAgentRoute.post("/root-agent/jobs/:id/artifacts", async (c) => {
   const build = await findBuildForAgent(c, c.req.param("id"));
   if (!build) return notFound(c, "Routing graph build not found");
@@ -345,37 +539,20 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts", async (c) => {
     c.req.header("content-type") ?? "application/gzip",
     artifactSize,
   );
-  const [object] = await db
-    .insert(storageObjects)
-    .values({
-      accountId: build.accountId,
-      provider: storageInfo.provider,
-      bucket: storageInfo.bucket,
-      storageKey: uploaded.key,
-      fileName,
-      contentType: uploaded.contentType,
-      size: artifactSize ?? uploaded.size,
-      contentHash: checksumSha256,
-      resourceType: "routing_graph_build",
-      resourceId: build.id,
-      artifactKind,
-      metadata: manifest,
-    })
-    .returning();
-  const [artifact] = await db
-    .insert(routingGraphArtifacts)
-    .values({
-      accountId: build.accountId,
-      buildId: build.id,
-      storageObjectId: object?.id,
-      kind: artifactKind,
-      status: "available",
-      fileName,
-      size: artifactSize ?? uploaded.size,
-      checksumSha256,
-      manifest,
-    })
-    .returning();
+  const artifact = await recordRoutingGraphArtifact({
+    accountId: build.accountId,
+    buildId: build.id,
+    provider: storageInfo.provider,
+    bucket: storageInfo.bucket,
+    storageKey: uploaded.key,
+    fileName,
+    contentType: uploaded.contentType,
+    size: artifactSize ?? uploaded.size,
+    checksumSha256,
+    artifactKind,
+    manifest,
+    metadata: manifest,
+  });
   await appendLog(build.id, "info", "Artifact uploaded", {
     artifactId: artifact?.id,
     fileName,
@@ -506,6 +683,87 @@ async function appendLog(
   metadata: unknown,
 ) {
   await db.insert(routingGraphBuildLogs).values({ buildId, level, message, metadata });
+}
+
+async function findExistingArtifact(buildId: string, storageKey: string) {
+  const rows = await db
+    .select({ artifact: routingGraphArtifacts, object: storageObjects })
+    .from(routingGraphArtifacts)
+    .innerJoin(
+      storageObjects,
+      eq(routingGraphArtifacts.storageObjectId, storageObjects.id),
+    )
+    .where(
+      and(
+        eq(routingGraphArtifacts.buildId, buildId),
+        eq(storageObjects.storageKey, storageKey),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.artifact ?? null;
+}
+
+async function recordRoutingGraphArtifact(params: {
+  accountId: string;
+  buildId: string;
+  provider: "local" | "s3" | "r2";
+  bucket: string;
+  storageKey: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  checksumSha256: string | null;
+  artifactKind: string;
+  manifest: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+}) {
+  const [existingObject] = await db
+    .select()
+    .from(storageObjects)
+    .where(
+      and(
+        eq(storageObjects.provider, params.provider),
+        eq(storageObjects.bucket, params.bucket),
+        eq(storageObjects.storageKey, params.storageKey),
+        isNull(storageObjects.deletedAt),
+      ),
+    )
+    .limit(1);
+  const [createdObject] = existingObject
+    ? [existingObject]
+    : await db
+        .insert(storageObjects)
+        .values({
+          accountId: params.accountId,
+          provider: params.provider,
+          bucket: params.bucket,
+          storageKey: params.storageKey,
+          fileName: params.fileName,
+          contentType: params.contentType,
+          size: params.size,
+          contentHash: params.checksumSha256,
+          resourceType: "routing_graph_build",
+          resourceId: params.buildId,
+          artifactKind: params.artifactKind,
+          metadata: params.metadata,
+        })
+        .returning();
+  const [artifact] = await db
+    .insert(routingGraphArtifacts)
+    .values({
+      accountId: params.accountId,
+      buildId: params.buildId,
+      storageObjectId: createdObject?.id,
+      kind: params.artifactKind,
+      status: "available",
+      fileName: params.fileName,
+      size: params.size,
+      checksumSha256: params.checksumSha256,
+      manifest: params.manifest,
+    })
+    .returning();
+  if (!artifact) throw new Error("Failed to record routing graph artifact");
+  return artifact;
 }
 
 function hashToken(token: string) {

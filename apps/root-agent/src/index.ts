@@ -44,6 +44,8 @@ const envSchema = z.object({
   ROOT_AGENT_COMPOSE_FILE: z.string().optional(),
   ROOT_AGENT_COMPOSE_ENV_FILE: z.string().optional(),
   ROOT_AGENT_COMPOSE_CWD: z.string().optional(),
+  ROOT_AGENT_UPLOAD_RETRIES: z.coerce.number().int().min(1).default(5),
+  ROOT_AGENT_UPLOAD_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
 });
 
 const config = envSchema.parse(process.env);
@@ -89,6 +91,40 @@ type AgentJob =
       build: RoutingGraphBuild;
       artifacts: RoutingGraphArtifact[];
     };
+
+type ArtifactUploadSession =
+  | {
+      data: {
+        strategy: "legacy_proxy";
+        reason?: string;
+        uploadUrl: string;
+      };
+    }
+  | {
+      data: {
+        strategy: "multipart";
+        storage: {
+          provider: "s3" | "r2";
+          bucket: string;
+          key: string;
+        };
+        multipart: {
+          uploadId: string;
+          partSize: number;
+          expiresAt: string;
+          parts: Array<{
+            partNumber: number;
+            url: string;
+            method: "PUT";
+          }>;
+        };
+      };
+    };
+
+type UploadedPart = {
+  partNumber: number;
+  eTag: string;
+};
 
 let activeChild: ChildProcessWithoutNullStreams | null = null;
 
@@ -240,9 +276,11 @@ async function buildRoutingGraph(token: string, build: RoutingGraphBuild) {
       await updateBuild(token, build.id, "canceled", 100, "Routing graph build canceled");
       return;
     }
+    const localArtifacts = await existingLocalArtifacts([graphTarPath]);
     await updateBuild(token, build.id, "failed", 100, "Routing graph build failed", {
       errorCode: "ROOT_AGENT_BUILD_FAILED",
       errorMessage: err instanceof Error ? err.message : String(err),
+      ...(localArtifacts.length ? { output: { localArtifacts } } : {}),
     });
   }
 }
@@ -512,24 +550,156 @@ async function uploadArtifact(
     manifest: Record<string, unknown>;
   },
 ) {
-  const stream = createReadStream(path);
   const fileSize = (await stat(path)).size;
+  const contentType = "application/gzip";
+  const session = await withRetry(
+    () =>
+      post<ArtifactUploadSession>(token, `/root-agent/jobs/${build.id}/artifacts/upload-session`, {
+        kind: metadata.kind,
+        fileName: metadata.fileName,
+        checksumSha256: metadata.checksumSha256,
+        manifest: metadata.manifest,
+        size: fileSize,
+        contentType,
+      }),
+    `create upload session for ${metadata.fileName}`,
+  );
+
+  if (session.data.strategy === "multipart") {
+    const multipartSession = session.data;
+    await sendLogs(token, build.id, [
+      {
+        level: "info",
+        message: `Uploading ${metadata.fileName} directly to ${multipartSession.storage.provider} in ${multipartSession.multipart.parts.length} part(s)`,
+      },
+    ]);
+    const uploadedParts = await uploadMultipartArtifact(
+      path,
+      fileSize,
+      multipartSession.multipart.partSize,
+      multipartSession.multipart.parts,
+    );
+    await withRetry(
+      () =>
+        post(token, `/root-agent/jobs/${build.id}/artifacts/finalize`, {
+          kind: metadata.kind,
+          fileName: metadata.fileName,
+          checksumSha256: metadata.checksumSha256,
+          manifest: metadata.manifest,
+          size: fileSize,
+          contentType,
+          storage: {
+            ...multipartSession.storage,
+            uploadId: multipartSession.multipart.uploadId,
+            parts: uploadedParts,
+          },
+        }),
+      `finalize upload for ${metadata.fileName}`,
+    );
+    return;
+  }
+
+  await sendLogs(token, build.id, [
+    {
+      level: "warn",
+      message: `Using legacy proxied artifact upload for ${metadata.fileName}: ${
+        session.data.reason ?? "direct upload is unavailable"
+      }`,
+    },
+  ]);
+  await uploadArtifactViaApi(token, build, path, metadata, fileSize, contentType);
+}
+
+async function uploadArtifactViaApi(
+  token: string,
+  build: RoutingGraphBuild,
+  path: string,
+  metadata: {
+    kind: string;
+    fileName: string;
+    checksumSha256: string;
+    manifest: Record<string, unknown>;
+  },
+  fileSize: number,
+  contentType: string,
+) {
   const init = {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`,
-      "content-type": "application/gzip",
+      "content-type": contentType,
       "x-artifact-kind": metadata.kind,
       "x-artifact-filename": metadata.fileName,
       "x-artifact-sha256": metadata.checksumSha256,
       "x-artifact-manifest": JSON.stringify(metadata.manifest),
       "x-artifact-size": String(fileSize),
     },
-    body: stream,
     duplex: "half",
   } as unknown as RequestInit & { duplex: "half" };
-  const response = await fetch(`${apiBase}/root-agent/jobs/${build.id}/artifacts`, init);
-  if (!response.ok) throw new Error(`Artifact upload failed: ${response.status}`);
+  await withRetry(async () => {
+    const uploadInit = {
+      ...init,
+      body: createReadStream(path),
+    } as unknown as RequestInit & { duplex: "half" };
+    const response = await fetch(
+      `${apiBase}/root-agent/jobs/${build.id}/artifacts`,
+      uploadInit,
+    );
+    if (!response.ok) throw new Error(`Artifact upload failed: ${response.status}`);
+  }, `legacy upload for ${metadata.fileName}`);
+}
+
+async function uploadMultipartArtifact(
+  path: string,
+  fileSize: number,
+  partSize: number,
+  parts: Array<{ partNumber: number; url: string; method: "PUT" }>,
+): Promise<UploadedPart[]> {
+  const uploaded: UploadedPart[] = [];
+  let nextPartIndex = 0;
+  async function uploadNextPart() {
+    for (;;) {
+      const part = parts[nextPartIndex];
+      nextPartIndex += 1;
+      if (!part) return;
+      uploaded.push(await uploadMultipartPart(path, fileSize, partSize, part));
+    }
+  }
+  await Promise.all(
+    Array.from(
+      { length: Math.min(config.ROOT_AGENT_UPLOAD_CONCURRENCY, parts.length) },
+      () => uploadNextPart(),
+    ),
+  );
+  return uploaded.sort((a, b) => a.partNumber - b.partNumber);
+}
+
+async function uploadMultipartPart(
+  path: string,
+  fileSize: number,
+  partSize: number,
+  part: { partNumber: number; url: string; method: "PUT" },
+) {
+  const start = (part.partNumber - 1) * partSize;
+  const end = Math.min(start + partSize, fileSize) - 1;
+  const contentLength = end - start + 1;
+  const eTag = await withRetry(async () => {
+    const response = await fetch(part.url, {
+      method: part.method,
+      headers: { "content-length": String(contentLength) },
+      body: createReadStream(path, { start, end }),
+      duplex: "half",
+    } as unknown as RequestInit & { duplex: "half" });
+    if (!response.ok) {
+      throw new Error(`Part ${part.partNumber} upload failed: ${response.status}`);
+    }
+    const responseETag = response.headers.get("etag");
+    if (!responseETag) {
+      throw new Error(`Part ${part.partNumber} upload did not return an ETag`);
+    }
+    return responseETag;
+  }, `upload part ${part.partNumber}`);
+  return { partNumber: part.partNumber, eTag };
 }
 
 async function downloadArtifact(token: string, artifactId: string, target: string) {
@@ -623,6 +793,46 @@ async function rawPost(path: string, body: unknown) {
   });
   if (!response.ok) throw new Error(`${path} failed: ${response.status}`);
   return (await response.json()) as { data?: { agentToken?: string } };
+}
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  attempts = config.ROOT_AGENT_UPLOAD_RETRIES,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt === attempts || !isTransientError(err)) break;
+      await delay(Math.min(30_000, 1000 * 2 ** (attempt - 1)));
+    }
+  }
+  throw new Error(
+    `${label} failed after ${attempts} attempt(s): ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`,
+  );
+}
+
+async function existingLocalArtifacts(paths: string[]) {
+  const existing: Array<{ path: string; size: number }> = [];
+  for (const path of paths) {
+    try {
+      existing.push({ path, size: (await stat(path)).size });
+    } catch {
+      // Missing artifacts are expected when a build fails before packaging.
+    }
+  }
+  return existing;
+}
+
+function isTransientError(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/\b(408|409|425|429|500|502|503|504)\b/.test(message)) return true;
+  return /ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|network|timeout/i.test(message);
 }
 
 async function sha256File(path: string) {

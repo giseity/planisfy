@@ -37,3 +37,22 @@ alongside the database and other local data directories.
 The database ledger records provider, bucket, storage key, resource type, artifact kind, and content type. Published tilesets are served through API-owned TileJSON and tile URLs. The API verifies that promoted PMTiles artifacts exist before advertising TileJSON.
 
 Storage key construction belongs in `@planisfy/storage-paths`.
+
+## Root-Agent Artifact Uploads
+
+Managed root-agent builds use direct multipart uploads for S3/R2 artifacts:
+
+1. The root-agent asks the API for an artifact upload session.
+2. The API creates signed multipart object-storage part URLs.
+3. The root-agent uploads artifact parts directly to object storage.
+4. The root-agent finalizes through the API with artifact metadata, checksum,
+   storage key, upload id, and uploaded part ETags.
+5. The API completes the multipart upload and records `storage_objects` and
+   `routing_graph_artifacts`.
+
+The API is the control plane for regional and planet routing artifacts. It must
+not proxy multi-GB managed artifacts through public ingress.
+
+Local storage cannot issue signed object-storage uploads. In that mode the
+root-agent uses the legacy proxied endpoint as a local fallback for small
+self-host smoke artifacts only.

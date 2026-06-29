@@ -35,6 +35,7 @@ test('operationsOverviewSignature ignores volatile display-only fields', () => {
     scheduledOperations: [],
     artifactBackups: [],
     workerNodes: [],
+    routingGraphBuilds: [],
     previewLinks: [],
     customDomains: [],
     workflowTemplates: [

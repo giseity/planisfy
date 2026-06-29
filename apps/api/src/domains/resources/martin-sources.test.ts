@@ -249,6 +249,16 @@ class MemoryStorage implements StorageProvider {
     return this.objects.has(key);
   }
 
+  async getMetadata(key: string) {
+    const value = this.objects.get(key);
+    if (value === undefined) return null;
+    return {
+      key,
+      size: Buffer.byteLength(value),
+      contentType: "application/octet-stream",
+    };
+  }
+
   getUrl(key: string) {
     return `https://artifacts.example.com/${key}`;
   }
