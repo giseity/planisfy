@@ -39,9 +39,11 @@ export interface StorageProvider {
   upload(
     key: string,
     data: Buffer | Readable,
-    contentType?: string
+    contentType?: string,
+    contentLength?: number
   ): Promise<StoredObject>;
   download(key: string): Promise<Buffer>;
+  downloadStream?(key: string): Promise<Readable>;
   readRange(key: string, offset: number, length: number): Promise<Buffer>;
   copy(sourceKey: string, targetKey: string): Promise<void>;
   delete(key: string): Promise<void>;
@@ -72,35 +74,44 @@ export class S3Storage implements StorageProvider {
   async upload(
     key: string,
     data: Buffer | Readable,
-    contentType?: string
+    contentType?: string,
+    contentLength?: number
   ): Promise<StoredObject> {
-    const body = Buffer.isBuffer(data) ? data : await streamToBuffer(data);
     const resolvedContentType = contentType || "application/octet-stream";
+    const contentLengthBytes = Buffer.isBuffer(data) ? data.length : contentLength;
 
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
-        Body: body,
+        Body: data,
         ContentType: resolvedContentType,
-        ContentLength: body.length,
+        ContentLength: contentLengthBytes,
       }),
     );
 
     return {
       key,
       url: this.getUrl(key),
-      size: body.length,
+      size: contentLengthBytes ?? 0,
       contentType: resolvedContentType,
     };
   }
 
   async download(key: string): Promise<Buffer> {
+    return streamToBuffer(await this.downloadStream(key));
+  }
+
+  async downloadStream(key: string): Promise<Readable> {
     const object = await this.client.send(
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
     );
-    if (!object.Body) return Buffer.alloc(0);
-    return Buffer.from(await object.Body.transformToByteArray());
+    if (!object.Body) return Readable.from([]);
+    return object.Body instanceof Readable
+      ? object.Body
+      : Readable.fromWeb(
+          object.Body.transformToWebStream() as unknown as import("stream/web").ReadableStream,
+        );
   }
 
   async readRange(key: string, offset: number, length: number): Promise<Buffer> {
@@ -249,7 +260,7 @@ export class LocalStorage implements StorageProvider {
   async upload(
     key: string,
     data: Buffer | Readable,
-    contentType?: string
+    contentType?: string,
   ): Promise<StoredObject> {
     const filePath = join(this.basePath, key);
     const dir = dirname(filePath);
@@ -281,8 +292,11 @@ export class LocalStorage implements StorageProvider {
   }
 
   async download(key: string): Promise<Buffer> {
-    const { readFile } = await import("fs/promises");
-    return readFile(join(this.basePath, key));
+    return streamToBuffer(await this.downloadStream(key));
+  }
+
+  async downloadStream(key: string): Promise<Readable> {
+    return createReadStream(join(this.basePath, key));
   }
 
   async readRange(key: string, offset: number, length: number): Promise<Buffer> {

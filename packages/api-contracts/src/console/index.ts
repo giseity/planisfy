@@ -1,4 +1,5 @@
 export type { ApiEnvelope, PaginatedApiEnvelope } from "../primitives";
+export * from "./aoi";
 export * from "./audit";
 export * from "./dashboard";
 export * from "./operations";

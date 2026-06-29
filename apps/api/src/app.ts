@@ -28,6 +28,7 @@ import { emailRoute } from "./domains/email/route";
 import { internalSmokeRoute } from "./domains/internal-smoke/route";
 import { billingWebhookRoute } from "./domains/billing/route";
 import { consoleRoute } from "./domains/console/route";
+import { rootAgentRoute } from "./domains/root-agent/route";
 import { setupRoute } from "./domains/setup/route";
 import { auth } from "@planisfy/auth/auth";
 import { env } from "./env";
@@ -118,6 +119,9 @@ app.use("/internal/*", internalAuthMiddleware);
 app.route("/", emailRoute);
 app.route("/", internalSmokeRoute);
 app.route("/", billingWebhookRoute);
+
+// ── Root agent routes (registration token / node token auth) ───────────────
+app.route("/", rootAgentRoute);
 
 // ── Protected routes (require session cookie) ───────────────────────────────
 app.use("/console/*", authMiddleware);

@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Globe,
   RefreshCw,
+  Route,
   ServerCog,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -41,6 +42,7 @@ const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
   scheduledOperations: [],
   artifactBackups: [],
   workerNodes: [],
+  routingGraphBuilds: [],
   previewLinks: [],
   customDomains: [],
   workflowTemplates: [],
@@ -53,6 +55,7 @@ const operationRoutes = [
   { href: "/operations/schedules", label: "Schedules", icon: CalendarClock },
   { href: "/operations/notifications", label: "Notifications", icon: Bell },
   { href: "/operations/workers", label: "Workers", icon: ServerCog },
+  { href: "/operations/routing", label: "Routing", icon: Route },
   { href: "/operations/backups", label: "Backups", icon: ArchiveRestore },
   { href: "/operations/delivery", label: "Delivery", icon: Globe },
   { href: "/operations/templates", label: "Templates", icon: ClipboardList },

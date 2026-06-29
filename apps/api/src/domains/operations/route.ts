@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { resolveTxt } from 'node:dns/promises'
 import { Queue } from 'bullmq'
 import { Hono } from 'hono'
@@ -15,6 +15,10 @@ import {
   previewLinks,
   processingJobLogs,
   processingJobs,
+  rootAgentRegistrationTokens,
+  routingGraphArtifacts,
+  routingGraphBuildLogs,
+  routingGraphBuilds,
   scheduledOperations,
   storageObjects,
   workerProfiles,
@@ -32,6 +36,11 @@ import {
   WORKER_GEODATA_HEARTBEAT_STALE_MS,
 } from '@planisfy/geodata-contracts'
 import { getStorage } from '@planisfy/storage'
+import {
+  areaOfInterestToBBox,
+  normalizeAreaOfInterest,
+  type ConsoleAreaOfInterest,
+} from '@planisfy/api-contracts'
 import { requireOrgPermission, type AuthEnv } from '../../middleware/auth'
 import { env, redisConnection } from '../../env'
 import { enqueueOutboxEvent } from '../../shared/outbox/outbox'
@@ -133,6 +142,60 @@ const workerNodeSchema = z
       })
     }
   })
+
+const rootAgentRegistrationTokenSchema = z.object({
+  name: z.string().min(1).max(128),
+  kind: z.enum(['local', 'remote', 'cloud']).default('remote'),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  expiresInHours: z.number().int().min(1).max(168).default(24),
+})
+
+const areaOfInterestInputSchema = z
+  .unknown()
+  .optional()
+  .transform((value, ctx): ConsoleAreaOfInterest | undefined => {
+    if (value === undefined || value === null) return undefined
+    try {
+      return normalizeAreaOfInterest(value)
+    } catch (err) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: err instanceof Error ? err.message : 'Invalid area of interest',
+      })
+      return z.NEVER
+    }
+  })
+
+const routingGraphBuildSchema = z.object({
+  name: z.string().min(1).max(128),
+  sourceUrl: z
+    .string()
+    .url()
+    .transform((value, ctx) => {
+      try {
+        return validateOutboundUrl(value)
+      } catch (err) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: err instanceof Error ? err.message : 'Source URL is not allowed',
+        })
+        return z.NEVER
+      }
+    }),
+  sourcePreset: z.string().min(1).max(128).optional(),
+  workerNodeId: z.string().uuid(),
+  activationWorkerNodeId: z.string().uuid().optional(),
+  valhallaImage: z.string().min(1).max(512).default('ghcr.io/valhalla/valhalla:3.7.0'),
+  includeAdmins: z.boolean().default(true),
+  includeTimezones: z.boolean().default(true),
+  elevationMode: z.enum(['none', 'dem_companion']).default('none'),
+  areaOfInterest: areaOfInterestInputSchema,
+  config: z.record(z.string(), z.unknown()).default({}),
+})
+
+const routingGraphActivateSchema = z.object({
+  activationWorkerNodeId: z.string().uuid().optional(),
+})
 
 const previewLinkSchema = z.object({
   resourceType: z.string().min(1).max(64),
@@ -303,6 +366,7 @@ async function buildOperationsOverview(accountId: string) {
     schedules,
     backups,
     nodes,
+    routingBuilds,
     previews,
     domains,
     templates,
@@ -342,6 +406,12 @@ async function buildOperationsOverview(accountId: string) {
       .orderBy(desc(workerNodes.updatedAt)),
     db
       .select()
+      .from(routingGraphBuilds)
+      .where(and(eq(routingGraphBuilds.accountId, accountId), isNull(routingGraphBuilds.deletedAt)))
+      .orderBy(desc(routingGraphBuilds.updatedAt))
+      .limit(20),
+    db
+      .select()
       .from(previewLinks)
       .where(and(eq(previewLinks.accountId, accountId), isNull(previewLinks.deletedAt)))
       .orderBy(desc(previewLinks.createdAt)),
@@ -361,6 +431,7 @@ async function buildOperationsOverview(accountId: string) {
     scheduledOperations: schedules,
     artifactBackups: backups,
     workerNodes: nodes,
+    routingGraphBuilds: routingBuilds,
     previewLinks: previews,
     customDomains: domains,
     workflowTemplates: templates,
@@ -404,6 +475,15 @@ export function operationsOverviewSignature(overview: OperationsOverview) {
       status: node.status,
       lastSeenAt: node.lastSeenAt,
       updatedAt: node.updatedAt,
+    })),
+    routingGraphBuilds: overview.routingGraphBuilds.map((build) => ({
+      id: build.id,
+      status: build.status,
+      activationStatus: build.activationStatus,
+      progress: build.progress,
+      updatedAt: build.updatedAt,
+      completedAt: build.completedAt,
+      cancelRequestedAt: build.cancelRequestedAt,
     })),
     previewLinks: overview.previewLinks.map((link) => ({
       id: link.id,
@@ -733,6 +813,163 @@ operationsRoute.post('/operations/worker-nodes/:id/validate', async (c) => {
 
 operationsRoute.delete('/operations/worker-nodes/:id', async (c) => {
   return softDeleteWorkerNode(c)
+})
+
+operationsRoute.post('/operations/root-agent-registration-tokens', async (c) => {
+  const accountId = c.get('ownerId')
+  const parsed = rootAgentRegistrationTokenSchema.safeParse(await c.req.json())
+  if (!parsed.success) return validationError(c, parsed.error)
+  const token = `par_${randomBytes(32).toString('base64url')}`
+  const expiresAt = new Date(Date.now() + parsed.data.expiresInHours * 60 * 60 * 1000)
+  await db.insert(rootAgentRegistrationTokens).values({
+    accountId,
+    name: parsed.data.name,
+    kind: parsed.data.kind,
+    metadata: parsed.data.metadata,
+    tokenHash: hashToken(token),
+    expiresAt,
+  })
+  return c.json({
+    data: {
+      token,
+      expiresAt: expiresAt.toISOString(),
+      nodeName: parsed.data.name,
+    },
+  }, 201)
+})
+
+operationsRoute.get('/operations/routing-graphs', async (c) => {
+  const accountId = c.get('ownerId')
+  const builds = await db
+    .select()
+    .from(routingGraphBuilds)
+    .where(and(eq(routingGraphBuilds.accountId, accountId), isNull(routingGraphBuilds.deletedAt)))
+    .orderBy(desc(routingGraphBuilds.updatedAt))
+    .limit(100)
+  return c.json({ data: builds.map(serializeRoutingGraphBuild) })
+})
+
+operationsRoute.post('/operations/routing-graphs', async (c) => {
+  const accountId = c.get('ownerId')
+  const parsed = routingGraphBuildSchema.safeParse(await c.req.json())
+  if (!parsed.success) return validationError(c, parsed.error)
+  const worker = await findWorkerNode(accountId, parsed.data.workerNodeId)
+  if (!worker) return notFound(c, 'Build worker node not found')
+  if (parsed.data.activationWorkerNodeId) {
+    const activationWorker = await findWorkerNode(accountId, parsed.data.activationWorkerNodeId)
+    if (!activationWorker) return notFound(c, 'Activation worker node not found')
+  }
+  const config = routingGraphConfigForBuild(parsed.data)
+  const demValidation = validateRoutingGraphDemConfig(parsed.data.elevationMode, config)
+  if (demValidation) {
+    return c.json({ error: demValidation }, 400)
+  }
+  const [created] = await db
+    .insert(routingGraphBuilds)
+    .values({
+      accountId,
+      name: parsed.data.name,
+      sourceUrl: parsed.data.sourceUrl,
+      sourcePreset: parsed.data.sourcePreset ?? null,
+      workerNodeId: parsed.data.workerNodeId,
+      activationWorkerNodeId: parsed.data.activationWorkerNodeId ?? null,
+      valhallaImage: parsed.data.valhallaImage,
+      includeAdmins: parsed.data.includeAdmins,
+      includeTimezones: parsed.data.includeTimezones,
+      elevationMode: parsed.data.elevationMode,
+      config,
+    })
+    .returning()
+  await appendRoutingGraphLog(created!.id, 'info', 'Routing graph build queued', {
+    workerNodeId: created!.workerNodeId,
+    sourcePreset: created!.sourcePreset,
+    areaOfInterest: parsed.data.areaOfInterest ?? null,
+  })
+  return c.json({ data: serializeRoutingGraphBuild(created!) }, 201)
+})
+
+operationsRoute.get('/operations/routing-graphs/:id', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const detail = await routingGraphBuildDetail(accountId, id)
+  if (!detail) return notFound(c, 'Routing graph build not found')
+  return c.json({
+    data: { ...detail, build: serializeRoutingGraphBuild(detail.build) },
+  })
+})
+
+operationsRoute.post('/operations/routing-graphs/:id/cancel', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const [updated] = await db
+    .update(routingGraphBuilds)
+    .set({
+      status: 'canceling',
+      cancelRequestedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(routingGraphBuilds.id, id),
+        eq(routingGraphBuilds.accountId, accountId),
+        isNull(routingGraphBuilds.deletedAt),
+        inArray(routingGraphBuilds.status, [
+          'queued',
+          'assigned',
+          'preparing',
+          'downloading_source',
+          'building_admins',
+          'building_tiles',
+          'packaging',
+          'uploading',
+        ])
+      )
+    )
+    .returning()
+  if (!updated) return notFound(c, 'Cancelable routing graph build not found')
+  await appendRoutingGraphLog(id, 'warn', 'Cancellation requested', null)
+  return c.json({ data: serializeRoutingGraphBuild(updated) })
+})
+
+operationsRoute.post('/operations/routing-graphs/:id/activate', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const parsed = routingGraphActivateSchema.safeParse(await c.req.json().catch(() => ({})))
+  if (!parsed.success) return validationError(c, parsed.error)
+  const detail = await routingGraphBuildDetail(accountId, id)
+  if (!detail) return notFound(c, 'Routing graph build not found')
+  const activationWorkerNodeId =
+    parsed.data.activationWorkerNodeId ?? detail.build.activationWorkerNodeId
+  if (!activationWorkerNodeId) {
+    return c.json({
+      error: {
+        code: 'ACTIVATION_WORKER_REQUIRED',
+        message: 'Select a local/self-host activation worker before activation.',
+      },
+    }, 400)
+  }
+  const activationWorker = await findWorkerNode(accountId, activationWorkerNodeId)
+  if (!activationWorker) return notFound(c, 'Activation worker node not found')
+  const artifact = detail.artifacts.find((item) => item.status === 'available')
+  if (!artifact) {
+    return c.json({
+      error: {
+        code: 'ARTIFACT_REQUIRED',
+        message: 'A successful routing graph artifact is required before activation.',
+      },
+    }, 409)
+  }
+  const [updated] = await db
+    .update(routingGraphBuilds)
+    .set({
+      activationWorkerNodeId,
+      activationStatus: 'activation_requested',
+      updatedAt: new Date(),
+    })
+    .where(eq(routingGraphBuilds.id, id))
+    .returning()
+  await appendRoutingGraphLog(id, 'info', 'Activation requested', { activationWorkerNodeId })
+  return c.json({ data: serializeRoutingGraphBuild(updated!) })
 })
 
 operationsRoute.post('/operations/preview-links', async (c) => {
@@ -1821,6 +2058,129 @@ function zonedDateParts(date: Date, timezone: string) {
 
 function previewSlug(resourceType: string) {
   return `${resourceType}-${randomUUID().slice(0, 8)}`
+}
+
+function hashToken(token: string) {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+function serializeRoutingGraphBuild<T extends { config: unknown }>(build: T) {
+  const config = isObjectRecord(build.config) ? build.config : {}
+  return {
+    ...build,
+    config,
+    areaOfInterest: safeNormalizeAreaOfInterest(config.areaOfInterest),
+  }
+}
+
+function routingGraphConfigForBuild(data: {
+  config: Record<string, unknown>
+  areaOfInterest?: ConsoleAreaOfInterest
+  elevationMode: 'none' | 'dem_companion'
+}) {
+  const config: Record<string, unknown> = { ...data.config }
+  if (data.areaOfInterest) {
+    config.areaOfInterest = data.areaOfInterest
+  }
+  if (data.elevationMode !== 'dem_companion') return config
+
+  const existingDem = isObjectRecord(config.dem) ? config.dem : {}
+  const dem: Record<string, unknown> = { ...existingDem }
+  if (!isValidDemBounds(dem.bounds) && data.areaOfInterest) {
+    const [minLon, minLat, maxLon, maxLat] = areaOfInterestToBBox(data.areaOfInterest)
+    dem.bounds = { minLon, minLat, maxLon, maxLat }
+  }
+  config.dem = dem
+  return config
+}
+
+function validateRoutingGraphDemConfig(
+  elevationMode: 'none' | 'dem_companion',
+  config: Record<string, unknown>
+) {
+  if (elevationMode !== 'dem_companion') return null
+  const dem = isObjectRecord(config.dem) ? config.dem : {}
+  const hgtTiles = Array.isArray(dem.hgtTiles)
+    ? dem.hgtTiles.filter((tile) => typeof tile === 'string' && tile.trim())
+    : []
+  if (isValidDemBounds(dem.bounds) || hgtTiles.length > 0) return null
+  return {
+    code: 'DEM_AREA_REQUIRED',
+    message: 'DEM companion builds require a full-world selection, bbox, or explicit HGT tiles.',
+  }
+}
+
+function safeNormalizeAreaOfInterest(value: unknown) {
+  try {
+    return value === undefined ? undefined : normalizeAreaOfInterest(value)
+  } catch {
+    return undefined
+  }
+}
+
+function isValidDemBounds(value: unknown) {
+  if (!isObjectRecord(value)) return false
+  return [value.minLon, value.minLat, value.maxLon, value.maxLat].every((item) =>
+    Number.isFinite(Number(item))
+  )
+}
+
+async function findWorkerNode(accountId: string, id: string) {
+  const [node] = await db
+    .select()
+    .from(workerNodes)
+    .where(
+      and(
+        eq(workerNodes.id, id),
+        eq(workerNodes.accountId, accountId),
+        isNull(workerNodes.deletedAt)
+      )
+    )
+    .limit(1)
+  return node ?? null
+}
+
+async function appendRoutingGraphLog(
+  buildId: string,
+  level: string,
+  message: string,
+  metadata: unknown
+) {
+  await db.insert(routingGraphBuildLogs).values({
+    buildId,
+    level,
+    message,
+    metadata,
+  })
+}
+
+async function routingGraphBuildDetail(accountId: string, id: string) {
+  const [build] = await db
+    .select()
+    .from(routingGraphBuilds)
+    .where(
+      and(
+        eq(routingGraphBuilds.id, id),
+        eq(routingGraphBuilds.accountId, accountId),
+        isNull(routingGraphBuilds.deletedAt)
+      )
+    )
+    .limit(1)
+  if (!build) return null
+  const [artifacts, logs] = await Promise.all([
+    db
+      .select()
+      .from(routingGraphArtifacts)
+      .where(eq(routingGraphArtifacts.buildId, id))
+      .orderBy(desc(routingGraphArtifacts.createdAt)),
+    db
+      .select()
+      .from(routingGraphBuildLogs)
+      .where(eq(routingGraphBuildLogs.buildId, id))
+      .orderBy(desc(routingGraphBuildLogs.createdAt))
+      .limit(250),
+  ])
+  return { build, artifacts, logs }
 }
 
 async function readJsonObject(c: Context) {

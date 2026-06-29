@@ -8,6 +8,7 @@
 import type {
   ApiEnvelope,
   ConsoleArtifactBackup,
+  ConsoleAreaOfInterest,
   ConsoleCustomDomain,
   ConsoleDashboard,
   ConsoleExecutionTarget,
@@ -18,6 +19,9 @@ import type {
   ConsolePreviewLink,
   ConsoleProcessingJob,
   ConsoleProfile,
+  ConsoleRootAgentRegistrationToken,
+  ConsoleRoutingGraphBuild,
+  ConsoleRoutingGraphBuildDetail,
   ConsoleSavedRegion,
   ConsoleScheduledOperation,
   ConsoleSourceImport,
@@ -54,6 +58,7 @@ import {
 export type {
   ApiEnvelope,
   ConsoleArtifactBackup,
+  ConsoleAreaOfInterest,
   ConsoleCustomDomain,
   ConsoleDashboard,
   ConsoleExecutionTarget,
@@ -64,6 +69,11 @@ export type {
   ConsolePreviewLink,
   ConsoleProcessingJob,
   ConsoleProfile,
+  ConsoleRootAgentRegistrationToken,
+  ConsoleRoutingGraphArtifact,
+  ConsoleRoutingGraphBuild,
+  ConsoleRoutingGraphBuildDetail,
+  ConsoleRoutingGraphBuildLog,
   ConsoleSavedRegion,
   ConsoleScheduledOperation,
   ConsoleSourceImport,
@@ -545,6 +555,62 @@ class ApiClient {
   deleteWorkerNode(id: string) {
     return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
       `/operations/worker-nodes/${id}`,
+    );
+  }
+
+  createRootAgentRegistrationToken(options: {
+    name: string;
+    kind?: ConsoleWorkerNode["kind"];
+    metadata?: Record<string, unknown>;
+    expiresInHours?: number;
+  }) {
+    return this.post<ApiEnvelope<ConsoleRootAgentRegistrationToken>>(
+      "/operations/root-agent-registration-tokens",
+      options,
+    );
+  }
+
+  listRoutingGraphBuilds() {
+    return this.get<ApiEnvelope<ConsoleRoutingGraphBuild[]>>(
+      "/operations/routing-graphs",
+    );
+  }
+
+  createRoutingGraphBuild(options: {
+    name: string;
+    sourceUrl: string;
+    sourcePreset?: string;
+    workerNodeId: string;
+    activationWorkerNodeId?: string;
+    valhallaImage?: string;
+    includeAdmins?: boolean;
+    includeTimezones?: boolean;
+    elevationMode?: "none" | "dem_companion";
+    areaOfInterest?: ConsoleAreaOfInterest;
+    config?: Record<string, unknown>;
+  }) {
+    return this.post<ApiEnvelope<ConsoleRoutingGraphBuild>>(
+      "/operations/routing-graphs",
+      options,
+    );
+  }
+
+  getRoutingGraphBuild(id: string) {
+    return this.get<ApiEnvelope<ConsoleRoutingGraphBuildDetail>>(
+      `/operations/routing-graphs/${id}`,
+    );
+  }
+
+  cancelRoutingGraphBuild(id: string) {
+    return this.post<ApiEnvelope<ConsoleRoutingGraphBuild>>(
+      `/operations/routing-graphs/${id}/cancel`,
+    );
+  }
+
+  activateRoutingGraphBuild(id: string, activationWorkerNodeId?: string) {
+    return this.post<ApiEnvelope<ConsoleRoutingGraphBuild>>(
+      `/operations/routing-graphs/${id}/activate`,
+      { activationWorkerNodeId },
     );
   }
 

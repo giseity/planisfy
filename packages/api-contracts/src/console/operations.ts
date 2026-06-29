@@ -1,4 +1,5 @@
 import type { ConsoleProcessingJob } from "./resources";
+import type { ConsoleAreaOfInterest } from "./aoi";
 
 export type ExecutionTargetProvider = "local" | "aws_batch" | "gcp_batch";
 export type ExecutionTargetAuthMode = "federated" | "static" | "external";
@@ -103,6 +104,100 @@ export interface ConsoleWorkerNode {
   updatedAt: string;
 }
 
+export type RoutingGraphBuildStatus =
+  | "queued"
+  | "assigned"
+  | "preparing"
+  | "downloading_source"
+  | "building_admins"
+  | "building_tiles"
+  | "packaging"
+  | "uploading"
+  | "succeeded"
+  | "failed"
+  | "canceling"
+  | "canceled";
+
+export type RoutingGraphActivationStatus =
+  | "inactive"
+  | "activation_requested"
+  | "activating"
+  | "active"
+  | "failed";
+
+export type RoutingGraphArtifactStatus =
+  | "pending"
+  | "uploading"
+  | "available"
+  | "failed"
+  | "activated";
+
+export interface ConsoleRoutingGraphBuild {
+  id: string;
+  accountId: string;
+  name: string;
+  status: RoutingGraphBuildStatus;
+  activationStatus: RoutingGraphActivationStatus;
+  progress: number;
+  workerNodeId: string | null;
+  activationWorkerNodeId: string | null;
+  sourceUrl: string;
+  sourcePreset: string | null;
+  valhallaImage: string;
+  includeAdmins: boolean;
+  includeTimezones: boolean;
+  elevationMode: "none" | "dem_companion" | string;
+  areaOfInterest?: ConsoleAreaOfInterest;
+  config: Record<string, unknown>;
+  output: Record<string, unknown>;
+  errorCode: string | null;
+  errorMessage: string | null;
+  cancelRequestedAt: string | null;
+  assignedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  activatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleRoutingGraphArtifact {
+  id: string;
+  accountId: string;
+  buildId: string;
+  storageObjectId: string | null;
+  kind: string;
+  status: RoutingGraphArtifactStatus;
+  fileName: string;
+  size: number | null;
+  checksumSha256: string | null;
+  manifest: Record<string, unknown>;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleRoutingGraphBuildLog {
+  id: string;
+  buildId: string;
+  level: string;
+  message: string;
+  metadata: unknown;
+  createdAt: string;
+}
+
+export interface ConsoleRoutingGraphBuildDetail {
+  build: ConsoleRoutingGraphBuild;
+  artifacts: ConsoleRoutingGraphArtifact[];
+  logs: ConsoleRoutingGraphBuildLog[];
+}
+
+export interface ConsoleRootAgentRegistrationToken {
+  token: string;
+  expiresAt: string;
+  nodeName: string;
+}
+
 export interface ConsolePreviewLink {
   id: string;
   accountId: string;
@@ -178,6 +273,7 @@ export interface ConsoleOperationsOverview {
   scheduledOperations: ConsoleScheduledOperation[];
   artifactBackups: ConsoleArtifactBackup[];
   workerNodes: ConsoleWorkerNode[];
+  routingGraphBuilds: ConsoleRoutingGraphBuild[];
   previewLinks: ConsolePreviewLink[];
   customDomains: ConsoleCustomDomain[];
   workflowTemplates: ConsoleWorkflowTemplate[];

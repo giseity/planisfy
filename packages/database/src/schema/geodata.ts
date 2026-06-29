@@ -28,6 +28,9 @@ import {
   executionTargetProviderEnum,
   notificationChannelProviderEnum,
   processingJobStatusEnum,
+  routingGraphActivationStatusEnum,
+  routingGraphArtifactStatusEnum,
+  routingGraphBuildStatusEnum,
   scheduledOperationKindEnum,
   scheduledOperationStatusEnum,
   sourceProviderEnum,
@@ -458,6 +461,127 @@ export const workerNodes = pgTable(
   ],
 );
 
+export const rootAgentRegistrationTokens = pgTable(
+  "root_agent_registration_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 128 }).notNull(),
+    tokenHash: varchar("token_hash", { length: 128 }).notNull(),
+    kind: workerNodeKindEnum("kind").notNull().default("remote"),
+    metadata: jsonb("metadata").notNull().default({}),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdWorkerNodeId: uuid("created_worker_node_id").references(
+      () => workerNodes.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("root_agent_registration_tokens_account_idx").on(table.accountId),
+    uniqueIndex("root_agent_registration_tokens_hash_unique").on(
+      table.tokenHash,
+    ),
+  ],
+);
+
+export const rootAgentNodeTokens = pgTable(
+  "root_agent_node_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    workerNodeId: uuid("worker_node_id")
+      .notNull()
+      .references(() => workerNodes.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 128 }).notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("root_agent_node_tokens_worker_idx").on(table.workerNodeId),
+    uniqueIndex("root_agent_node_tokens_hash_unique").on(table.tokenHash),
+  ],
+);
+
+export const routingGraphBuilds = pgTable(
+  "routing_graph_builds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 128 }).notNull(),
+    status: routingGraphBuildStatusEnum("status").notNull().default("queued"),
+    activationStatus: routingGraphActivationStatusEnum("activation_status")
+      .notNull()
+      .default("inactive"),
+    progress: integer("progress").notNull().default(0),
+    workerNodeId: uuid("worker_node_id").references(() => workerNodes.id, {
+      onDelete: "set null",
+    }),
+    activationWorkerNodeId: uuid("activation_worker_node_id").references(
+      () => workerNodes.id,
+      { onDelete: "set null" },
+    ),
+    sourceUrl: text("source_url").notNull(),
+    sourcePreset: varchar("source_preset", { length: 128 }),
+    valhallaImage: text("valhalla_image").notNull(),
+    includeAdmins: boolean("include_admins").notNull().default(true),
+    includeTimezones: boolean("include_timezones").notNull().default(true),
+    elevationMode: varchar("elevation_mode", { length: 64 })
+      .notNull()
+      .default("none"),
+    config: jsonb("config").notNull().default({}),
+    output: jsonb("output").notNull().default({}),
+    errorCode: varchar("error_code", { length: 128 }),
+    errorMessage: text("error_message"),
+    cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("routing_graph_builds_account_idx").on(table.accountId),
+    index("routing_graph_builds_status_idx").on(table.status),
+    index("routing_graph_builds_worker_idx").on(table.workerNodeId),
+  ],
+);
+
+export const routingGraphBuildLogs = pgTable(
+  "routing_graph_build_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    buildId: uuid("build_id")
+      .notNull()
+      .references(() => routingGraphBuilds.id, { onDelete: "cascade" }),
+    level: varchar("level", { length: 16 }).notNull().default("info"),
+    message: text("message").notNull(),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("routing_graph_build_logs_build_idx").on(table.buildId)],
+);
+
 export const previewLinks = pgTable(
   "preview_links",
   {
@@ -688,6 +812,42 @@ export const storageObjects = pgTable(
     uniqueIndex("storage_objects_key_unique")
       .on(table.provider, table.bucket, table.storageKey)
       .where(sql`${table.deletedAt} IS NULL`),
+  ],
+);
+
+export const routingGraphArtifacts = pgTable(
+  "routing_graph_artifacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    buildId: uuid("build_id")
+      .notNull()
+      .references(() => routingGraphBuilds.id, { onDelete: "cascade" }),
+    storageObjectId: uuid("storage_object_id").references(
+      () => storageObjects.id,
+      { onDelete: "set null" },
+    ),
+    kind: varchar("kind", { length: 64 }).notNull().default("valhalla_graph"),
+    status: routingGraphArtifactStatusEnum("status")
+      .notNull()
+      .default("pending"),
+    fileName: varchar("file_name", { length: 256 }).notNull(),
+    size: integer("size"),
+    checksumSha256: varchar("checksum_sha256", { length: 128 }),
+    manifest: jsonb("manifest").notNull().default({}),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("routing_graph_artifacts_account_idx").on(table.accountId),
+    index("routing_graph_artifacts_build_idx").on(table.buildId),
   ],
 );
 

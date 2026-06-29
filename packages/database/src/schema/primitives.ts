@@ -121,6 +121,31 @@ export const workerNodeStatusEnum = pgEnum("worker_node_status", [
   "degraded",
   "offline",
 ]);
+export const routingGraphBuildStatusEnum = pgEnum(
+  "routing_graph_build_status",
+  [
+    "queued",
+    "assigned",
+    "preparing",
+    "downloading_source",
+    "building_admins",
+    "building_tiles",
+    "packaging",
+    "uploading",
+    "succeeded",
+    "failed",
+    "canceling",
+    "canceled",
+  ],
+);
+export const routingGraphArtifactStatusEnum = pgEnum(
+  "routing_graph_artifact_status",
+  ["pending", "uploading", "available", "failed", "activated"],
+);
+export const routingGraphActivationStatusEnum = pgEnum(
+  "routing_graph_activation_status",
+  ["inactive", "activation_requested", "activating", "active", "failed"],
+);
 export const customDomainStatusEnum = pgEnum("custom_domain_status", [
   "pending",
   "verified",
