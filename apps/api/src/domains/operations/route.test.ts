@@ -9,6 +9,7 @@ import {
   operationsOverviewSignature,
   prepareScheduledOperationRun,
   prepareWorkflowTemplateApplication,
+  validateServingWorker,
   validateScheduleInput,
   validateNotificationTarget,
   validatePreviewTargetUrl,
@@ -36,6 +37,8 @@ test('operationsOverviewSignature ignores volatile display-only fields', () => {
     artifactBackups: [],
     workerNodes: [],
     routingGraphBuilds: [],
+    basemapBuilds: [],
+    basemapReleases: [],
     previewLinks: [],
     customDomains: [],
     workflowTemplates: [
@@ -74,6 +77,96 @@ test('operationsOverviewSignature ignores volatile display-only fields', () => {
   assert.equal(
     operationsOverviewSignature(overview as never),
     operationsOverviewSignature(changedOnlyVolatileFields as never)
+  )
+})
+
+test('operationsOverviewSignature tracks basemap build and release state', () => {
+  const overview = {
+    recentJobs: [],
+    notificationChannels: [],
+    scheduledOperations: [],
+    artifactBackups: [],
+    workerNodes: [],
+    routingGraphBuilds: [],
+    basemapBuilds: [
+      {
+        id: 'build-1',
+        status: 'succeeded',
+        activationStatus: 'inactive',
+        progress: 100,
+        updatedAt: new Date('2026-06-12T12:00:00Z'),
+        completedAt: new Date('2026-06-12T12:00:00Z'),
+        cancelRequestedAt: null,
+      },
+    ],
+    basemapReleases: [
+      {
+        id: 'release-1',
+        status: 'published',
+        activationStatus: 'active',
+        isPrimary: false,
+        updatedAt: new Date('2026-06-12T12:00:00Z'),
+        publishedAt: new Date('2026-06-12T12:00:00Z'),
+        activatedAt: new Date('2026-06-12T12:00:00Z'),
+      },
+    ],
+    previewLinks: [],
+    customDomains: [],
+    workflowTemplates: [],
+    workerHealth: { status: 'healthy', message: 'ok', latencyMs: 1 },
+    staleJobReconciliation: { reconciled: 0, latest: [] },
+  }
+  const changed = {
+    ...overview,
+    basemapReleases: [{ ...overview.basemapReleases[0], isPrimary: true }],
+  }
+
+  assert.notEqual(
+    operationsOverviewSignature(overview as never),
+    operationsOverviewSignature(changed as never)
+  )
+})
+
+test('validateServingWorker requires activation capability and config', () => {
+  const baseNode = {
+    id: 'node-1',
+    accountId: 'account-1',
+    name: 'serving-node',
+    kind: 'remote',
+    endpoint: null,
+    validation: null,
+    lastSeenAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+  }
+
+  assert.equal(
+    validateServingWorker({
+      ...baseNode,
+      status: 'healthy',
+      metadata: { capabilities: ['basemap_build'] },
+    } as never)?.code,
+    'WORKER_CAPABILITY_REQUIRED'
+  )
+  assert.equal(
+    validateServingWorker({
+      ...baseNode,
+      status: 'healthy',
+      metadata: { capabilities: ['self_host_activation'] },
+    } as never)?.code,
+    'SERVING_WORKER_ACTIVATION_CONFIG_REQUIRED'
+  )
+  assert.equal(
+    validateServingWorker({
+      ...baseNode,
+      status: 'healthy',
+      metadata: {
+        capabilities: ['self_host_activation'],
+        activation: { martinSourcesDir: '/data/martin-sources' },
+      },
+    } as never),
+    null
   )
 })
 

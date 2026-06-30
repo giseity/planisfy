@@ -19,6 +19,11 @@ In production, `/health/detailed`, `/metrics`, and the root `/setup/preflight` r
 pnpm --filter worker-geodata dev
 ```
 
+Root agents are polling workers for large build and runtime deployment jobs.
+Build workers create artifacts. Serving workers activate artifacts into Valhalla
+or Martin runtimes. A successful build does not imply that the runtime is
+serving the artifact.
+
 ## Backup And Restore
 
 ```bash

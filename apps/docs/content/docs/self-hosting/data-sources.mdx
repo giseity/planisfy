@@ -14,3 +14,18 @@ Planisfy does not ship production map datasets.
 - Elevation: place SRTM `.hgt` files under `infra/docker/data/elevation`.
 
 Routing graph builds can also produce Valhalla artifacts through an external root agent. For regional or planet-scale outputs, use S3-compatible storage so the agent can upload artifacts directly to object storage and the API can record them after finalize.
+
+## Basemap builds
+
+Basemap builds use Planetiler to turn OSM PBF sources into PMTiles artifacts. Martin is the serving runtime, not the build engine.
+
+The normal flow is:
+
+1. Queue a basemap build on a root agent with `basemap_build`.
+2. The agent downloads OSM PBF data and runs Planetiler.
+3. The PMTiles artifact is uploaded to object storage.
+4. The API records a basemap artifact and published release.
+5. A serving worker deploys the release into Martin sources.
+6. An active release can be promoted to the primary basemap.
+
+Overture basemap builds are modeled separately from OSM builds. They require a stable layer profile before they should be used for regional or planet production builds.

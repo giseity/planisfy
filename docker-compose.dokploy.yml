@@ -173,6 +173,7 @@ services:
         NEXT_PUBLIC_APP_URL: https://console.planisfy.com
         NEXT_PUBLIC_ADMIN_URL: https://admin.planisfy.com
         NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
+        NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:?NEXT_PUBLIC_DOCS_URL must be set}
         NEXT_PUBLIC_CONSOLE_API_PATH: /api/v1/console
     restart: unless-stopped
     environment:
@@ -186,6 +187,7 @@ services:
       NEXT_PUBLIC_APP_URL: https://console.planisfy.com
       NEXT_PUBLIC_ADMIN_URL: https://admin.planisfy.com
       NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
+      NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:?NEXT_PUBLIC_DOCS_URL must be set}
       NEXT_PUBLIC_CONSOLE_API_PATH: /api/v1/console
       ZEPTOMAIL_SEND_MAIL_TOKEN: ${ZEPTOMAIL_SEND_MAIL_TOKEN:?ZEPTOMAIL_SEND_MAIL_TOKEN must be set}
       ZEPTOMAIL_FROM_AUTH: ${ZEPTOMAIL_FROM_AUTH:?ZEPTOMAIL_FROM_AUTH must be set}

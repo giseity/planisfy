@@ -415,7 +415,7 @@ async function fetchDashboardHealth(now: Date): Promise<DashboardHealthEntry[]> 
     probePostgres(checkedAt),
     probeRedis(checkedAt),
     probeWorker(checkedAt),
-    probeUrl('martin', 'Martin', `${env.MARTIN_URL}/health`, true, checkedAt),
+    probeUrl('martin', 'Martin', `${env.MARTIN_URL}/health`, Boolean(env.MARTIN_URL), checkedAt),
     probeValhalla(checkedAt),
     probeConfiguredOnly('geocoding', 'Geocoding', isPeliasConfigured(env.PELIAS_URL), checkedAt),
     probeStorage(checkedAt),

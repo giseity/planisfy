@@ -32,7 +32,12 @@ import {
   workflowTemplates,
   eventOutbox,
   storageObjects,
+  routingGraphBuilds,
+  routingGraphArtifacts,
+  routingGraphReleases,
   spriteAssets,
+  basemapBuilds,
+  basemapArtifacts,
   basemapReleases,
   usageLogs,
   usageRollups,
@@ -76,6 +81,10 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   customDomains: many(customDomains),
   workflowTemplates: many(workflowTemplates),
   storageObjects: many(storageObjects),
+  routingGraphBuilds: many(routingGraphBuilds),
+  routingGraphReleases: many(routingGraphReleases),
+  basemapBuilds: many(basemapBuilds),
+  basemapReleases: many(basemapReleases),
   spriteAssets: many(spriteAssets),
   usageLogs: many(usageLogs),
   usageRollups: many(usageRollups),
@@ -374,6 +383,62 @@ export const workerNodesRelations = relations(workerNodes, ({ one }) => ({
   }),
 }));
 
+export const routingGraphBuildsRelations = relations(
+  routingGraphBuilds,
+  ({ one, many }) => ({
+    account: one(accounts, {
+      fields: [routingGraphBuilds.accountId],
+      references: [accounts.id],
+    }),
+    workerNode: one(workerNodes, {
+      fields: [routingGraphBuilds.workerNodeId],
+      references: [workerNodes.id],
+    }),
+    activationWorkerNode: one(workerNodes, {
+      fields: [routingGraphBuilds.activationWorkerNodeId],
+      references: [workerNodes.id],
+    }),
+    artifacts: many(routingGraphArtifacts),
+    releases: many(routingGraphReleases),
+  })
+);
+
+export const routingGraphArtifactsRelations = relations(
+  routingGraphArtifacts,
+  ({ one }) => ({
+    account: one(accounts, {
+      fields: [routingGraphArtifacts.accountId],
+      references: [accounts.id],
+    }),
+    build: one(routingGraphBuilds, {
+      fields: [routingGraphArtifacts.buildId],
+      references: [routingGraphBuilds.id],
+    }),
+    storageObject: one(storageObjects, {
+      fields: [routingGraphArtifacts.storageObjectId],
+      references: [storageObjects.id],
+    }),
+  })
+);
+
+export const routingGraphReleasesRelations = relations(
+  routingGraphReleases,
+  ({ one }) => ({
+    account: one(accounts, {
+      fields: [routingGraphReleases.accountId],
+      references: [accounts.id],
+    }),
+    build: one(routingGraphBuilds, {
+      fields: [routingGraphReleases.buildId],
+      references: [routingGraphBuilds.id],
+    }),
+    artifact: one(routingGraphArtifacts, {
+      fields: [routingGraphReleases.artifactId],
+      references: [routingGraphArtifacts.id],
+    }),
+  })
+);
+
 export const previewLinksRelations = relations(previewLinks, ({ one }) => ({
   account: one(accounts, {
     fields: [previewLinks.accountId],
@@ -426,7 +491,59 @@ export const spriteAssetsRelations = relations(spriteAssets, ({ one }) => ({
   }),
 }));
 
+export const basemapBuildsRelations = relations(basemapBuilds, ({ one, many }) => ({
+  account: one(accounts, {
+    fields: [basemapBuilds.accountId],
+    references: [accounts.id],
+  }),
+  workerNode: one(workerNodes, {
+    fields: [basemapBuilds.workerNodeId],
+    references: [workerNodes.id],
+  }),
+  activationWorkerNode: one(workerNodes, {
+    fields: [basemapBuilds.activationWorkerNodeId],
+    references: [workerNodes.id],
+  }),
+  artifacts: many(basemapArtifacts),
+  releases: many(basemapReleases),
+}));
+
+export const basemapArtifactsRelations = relations(basemapArtifacts, ({ one }) => ({
+  account: one(accounts, {
+    fields: [basemapArtifacts.accountId],
+    references: [accounts.id],
+  }),
+  build: one(basemapBuilds, {
+    fields: [basemapArtifacts.buildId],
+    references: [basemapBuilds.id],
+  }),
+  storageObject: one(storageObjects, {
+    fields: [basemapArtifacts.storageObjectId],
+    references: [storageObjects.id],
+  }),
+}));
+
 export const basemapReleasesRelations = relations(basemapReleases, ({ one }) => ({
+  account: one(accounts, {
+    fields: [basemapReleases.accountId],
+    references: [accounts.id],
+  }),
+  build: one(basemapBuilds, {
+    fields: [basemapReleases.buildId],
+    references: [basemapBuilds.id],
+  }),
+  artifact: one(basemapArtifacts, {
+    fields: [basemapReleases.artifactId],
+    references: [basemapArtifacts.id],
+  }),
+  artifactStorageObject: one(storageObjects, {
+    fields: [basemapReleases.artifactStorageObjectId],
+    references: [storageObjects.id],
+  }),
+  manifestStorageObject: one(storageObjects, {
+    fields: [basemapReleases.manifestStorageObjectId],
+    references: [storageObjects.id],
+  }),
   buildJob: one(processingJobs, {
     fields: [basemapReleases.buildJobId],
     references: [processingJobs.id],

@@ -87,6 +87,8 @@ export type RoutingGraphArtifactStatus =
   | "failed"
   | "activated";
 
+export type RoutingGraphReleaseStatus = "draft" | "published" | "deprecated";
+
 export interface ConsoleRoutingGraphBuild {
   id: string;
   accountId: string;
@@ -144,7 +146,148 @@ export interface ConsoleRoutingGraphBuildLog {
 export interface ConsoleRoutingGraphBuildDetail {
   build: ConsoleRoutingGraphBuild;
   artifacts: ConsoleRoutingGraphArtifact[];
+  releases: ConsoleRoutingGraphRelease[];
   logs: ConsoleRoutingGraphBuildLog[];
+}
+
+export interface ConsoleRoutingGraphRelease {
+  id: string;
+  accountId: string;
+  buildId: string;
+  artifactId: string | null;
+  name: string;
+  version: string;
+  status: RoutingGraphReleaseStatus;
+  activationStatus: RoutingGraphActivationStatus;
+  sourceDataVersions: Record<string, unknown>;
+  manifest: Record<string, unknown>;
+  activatedAt: string | null;
+  publishedAt: string | null;
+  deprecatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BasemapBuildStatus =
+  | "queued"
+  | "assigned"
+  | "preparing"
+  | "downloading_source"
+  | "building_tiles"
+  | "packaging"
+  | "uploading"
+  | "succeeded"
+  | "failed"
+  | "canceling"
+  | "canceled";
+
+export type BasemapActivationStatus =
+  | "inactive"
+  | "activation_requested"
+  | "activating"
+  | "active"
+  | "failed";
+
+export type BasemapArtifactStatus =
+  | "pending"
+  | "uploading"
+  | "available"
+  | "failed"
+  | "activated";
+
+export type BasemapReleaseStatus = "draft" | "published" | "deprecated";
+
+export interface ConsoleBasemapBuild {
+  id: string;
+  accountId: string;
+  name: string;
+  status: BasemapBuildStatus;
+  activationStatus: BasemapActivationStatus;
+  progress: number;
+  workerNodeId: string | null;
+  activationWorkerNodeId: string | null;
+  engine: "planetiler_osm" | "planetiler_overture" | string;
+  sourceKind: "osm_pbf" | "overture_geoparquet" | string;
+  sourceUrl: string;
+  sourcePreset: string | null;
+  planetilerImage: string;
+  profile: string;
+  outputFormat: "pmtiles" | "mbtiles" | string;
+  areaOfInterest: ConsoleAreaOfInterest | null;
+  config: Record<string, unknown>;
+  output: Record<string, unknown>;
+  errorCode: string | null;
+  errorMessage: string | null;
+  cancelRequestedAt: string | null;
+  assignedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  activatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleBasemapArtifact {
+  id: string;
+  accountId: string;
+  buildId: string;
+  storageObjectId: string | null;
+  kind: string;
+  status: BasemapArtifactStatus;
+  fileName: string;
+  size: number | null;
+  checksumSha256: string | null;
+  manifest: Record<string, unknown>;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleBasemapRelease {
+  id: string;
+  accountId: string;
+  name: string;
+  version: string;
+  status: BasemapReleaseStatus;
+  activationStatus: BasemapActivationStatus;
+  isPrimary: boolean;
+  buildId: string | null;
+  artifactId: string | null;
+  sourceDataVersions: Record<string, unknown>;
+  schemaVersion: string | null;
+  artifactStorageObjectId: string | null;
+  manifestStorageObjectId: string | null;
+  bounds: unknown;
+  minZoom: number | null;
+  maxZoom: number | null;
+  attribution: string | null;
+  tilejson: Record<string, unknown>;
+  styleCompatibility: Record<string, unknown>;
+  martinSource: string | null;
+  martinSourceVersioned: string | null;
+  activationMetadata: Record<string, unknown>;
+  buildJobId: string | null;
+  activatedAt: string | null;
+  publishedAt: string | null;
+  deprecatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleBasemapBuildLog {
+  id: string;
+  buildId: string;
+  level: string;
+  message: string;
+  metadata: unknown;
+  createdAt: string;
+}
+
+export interface ConsoleBasemapBuildDetail {
+  build: ConsoleBasemapBuild;
+  artifacts: ConsoleBasemapArtifact[];
+  releases: ConsoleBasemapRelease[];
+  logs: ConsoleBasemapBuildLog[];
 }
 
 export interface ConsoleRootAgentRegistrationToken {
@@ -229,6 +372,8 @@ export interface ConsoleOperationsOverview {
   artifactBackups: ConsoleArtifactBackup[];
   workerNodes: ConsoleWorkerNode[];
   routingGraphBuilds: ConsoleRoutingGraphBuild[];
+  basemapBuilds: ConsoleBasemapBuild[];
+  basemapReleases: ConsoleBasemapRelease[];
   previewLinks: ConsolePreviewLink[];
   customDomains: ConsoleCustomDomain[];
   workflowTemplates: ConsoleWorkflowTemplate[];

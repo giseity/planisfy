@@ -52,11 +52,12 @@ Managed root-agent builds use direct multipart uploads for S3/R2 artifacts:
 3. The root-agent uploads artifact parts directly to object storage.
 4. The root-agent finalizes through the API with artifact metadata, checksum,
    storage key, upload id, and uploaded part ETags.
-5. The API completes the multipart upload and records `storage_objects` and
-   `routing_graph_artifacts`.
+5. The API completes the multipart upload and records `storage_objects` plus
+   the domain artifact row, such as `routing_graph_artifacts` or
+   `basemap_artifacts`.
 
-The API is the control plane for regional and planet routing artifacts. It must
-not proxy multi-GB managed artifacts through public ingress.
+The API is the control plane for regional and planet routing/basemap artifacts.
+It must not proxy multi-GB managed artifacts through public ingress.
 
 Local storage cannot issue signed object-storage uploads. In that mode the
 root-agent uses the legacy proxied endpoint as a local fallback for small

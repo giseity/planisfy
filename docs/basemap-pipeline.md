@@ -12,4 +12,22 @@ DuckDB-backed Overture extraction is available when `OVERTURE_RELEASE` is config
 
 ## Style Fixtures
 
-`packages/map-styles` contains Planisfy Streets fixture styles, source-layer contract data, schema fixtures, and regional Planetiler scripts. Global managed basemap release packaging is not shipped in this repository today.
+## Root-Agent Basemap Builds
+
+Basemap builds are separate from Martin. Planetiler builds PMTiles artifacts;
+Martin serves activated releases.
+
+The v1 root-agent path supports OSM PBF sources with `engine=planetiler_osm`
+and `source_kind=osm_pbf`. Overture basemap builds are represented in the API
+model but remain disabled until the layer profile is implemented.
+
+Build output follows the shared lifecycle:
+
+- Build: compute status.
+- Artifact: stored PMTiles/MBTiles object.
+- Release: named/versioned artifact.
+- Activation: artifact installed into Martin sources.
+- Primary: active release used as the default basemap.
+
+`packages/map-styles` contains Planisfy Streets fixture styles, source-layer
+contract data, schema fixtures, and regional Planetiler scripts.

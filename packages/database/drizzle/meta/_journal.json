@@ -169,6 +169,13 @@
       "when": 1782864000000,
       "tag": "0023_subscription_billing_interval",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1782865000000,
+      "tag": "0024_build_lifecycle_releases",
+      "breakpoints": true
     }
   ]
 }

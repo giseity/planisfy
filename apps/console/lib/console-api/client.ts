@@ -9,6 +9,9 @@ import type {
   ApiEnvelope,
   ConsoleArtifactBackup,
   ConsoleAreaOfInterest,
+  ConsoleBasemapBuild,
+  ConsoleBasemapBuildDetail,
+  ConsoleBasemapRelease,
   ConsoleCustomDomain,
   ConsoleDashboard,
   ConsoleJobTimeline,
@@ -53,6 +56,11 @@ export type {
   ApiEnvelope,
   ConsoleArtifactBackup,
   ConsoleAreaOfInterest,
+  ConsoleBasemapArtifact,
+  ConsoleBasemapBuild,
+  ConsoleBasemapBuildDetail,
+  ConsoleBasemapBuildLog,
+  ConsoleBasemapRelease,
   ConsoleCustomDomain,
   ConsoleDashboard,
   ConsoleJobTimeline,
@@ -66,6 +74,7 @@ export type {
   ConsoleRoutingGraphBuild,
   ConsoleRoutingGraphBuildDetail,
   ConsoleRoutingGraphBuildLog,
+  ConsoleRoutingGraphRelease,
   ConsoleSavedRegion,
   ConsoleScheduledOperation,
   ConsoleSourceImport,
@@ -453,6 +462,57 @@ class ApiClient {
     return this.post<ApiEnvelope<ConsoleRoutingGraphBuild>>(
       `/operations/routing-graphs/${id}/activate`,
       { activationWorkerNodeId },
+    );
+  }
+
+  listBasemapBuilds() {
+    return this.get<ApiEnvelope<ConsoleBasemapBuild[]>>(
+      "/operations/basemap-builds",
+    );
+  }
+
+  createBasemapBuild(options: {
+    name: string;
+    sourceUrl: string;
+    sourcePreset?: string;
+    workerNodeId: string;
+    activationWorkerNodeId?: string;
+    engine?: "planetiler_osm" | "planetiler_overture";
+    sourceKind?: "osm_pbf" | "overture_geoparquet";
+    planetilerImage?: string;
+    profile?: string;
+    outputFormat?: "pmtiles" | "mbtiles";
+    areaOfInterest?: ConsoleAreaOfInterest;
+    config?: Record<string, unknown>;
+  }) {
+    return this.post<ApiEnvelope<ConsoleBasemapBuild>>(
+      "/operations/basemap-builds",
+      options,
+    );
+  }
+
+  getBasemapBuild(id: string) {
+    return this.get<ApiEnvelope<ConsoleBasemapBuildDetail>>(
+      `/operations/basemap-builds/${id}`,
+    );
+  }
+
+  cancelBasemapBuild(id: string) {
+    return this.post<ApiEnvelope<ConsoleBasemapBuild>>(
+      `/operations/basemap-builds/${id}/cancel`,
+    );
+  }
+
+  activateBasemapBuild(id: string, activationWorkerNodeId?: string) {
+    return this.post<ApiEnvelope<ConsoleBasemapBuild>>(
+      `/operations/basemap-builds/${id}/activate`,
+      { activationWorkerNodeId },
+    );
+  }
+
+  promoteBasemapRelease(id: string) {
+    return this.post<ApiEnvelope<ConsoleBasemapRelease>>(
+      `/operations/basemap-releases/${id}/promote-primary`,
     );
   }
 

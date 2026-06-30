@@ -137,6 +137,39 @@ export const routingGraphActivationStatusEnum = pgEnum(
   "routing_graph_activation_status",
   ["inactive", "activation_requested", "activating", "active", "failed"],
 );
+export const routingGraphReleaseStatusEnum = pgEnum(
+  "routing_graph_release_status",
+  ["draft", "published", "deprecated"],
+);
+export const basemapBuildStatusEnum = pgEnum("basemap_build_status", [
+  "queued",
+  "assigned",
+  "preparing",
+  "downloading_source",
+  "building_tiles",
+  "packaging",
+  "uploading",
+  "succeeded",
+  "failed",
+  "canceling",
+  "canceled",
+]);
+export const basemapArtifactStatusEnum = pgEnum("basemap_artifact_status", [
+  "pending",
+  "uploading",
+  "available",
+  "failed",
+  "activated",
+]);
+export const basemapReleaseStatusEnum = pgEnum("basemap_release_status", [
+  "draft",
+  "published",
+  "deprecated",
+]);
+export const basemapActivationStatusEnum = pgEnum(
+  "basemap_activation_status",
+  ["inactive", "activation_requested", "activating", "active", "failed"],
+);
 export const customDomainStatusEnum = pgEnum("custom_domain_status", [
   "pending",
   "verified",

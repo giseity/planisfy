@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import {
+  copyFile,
   mkdir,
   readFile,
   rename,
@@ -28,7 +29,7 @@ const envSchema = z.object({
   ROOT_AGENT_KIND: z.enum(["local", "remote", "cloud"]).default("remote"),
   ROOT_AGENT_CAPABILITIES: z
     .string()
-    .default("valhalla_graph_build,dem_hydration,self_host_activation"),
+    .default("valhalla_graph_build,basemap_build,dem_hydration,self_host_activation"),
   ROOT_AGENT_POLL_INTERVAL_MS: z.coerce.number().int().min(1000).default(5000),
   ROOT_AGENT_WORK_DIR: z.string().default("/var/lib/planisfy/root-agent/work"),
   ROOT_AGENT_VALHALLA_DATA_DIR: z
@@ -37,6 +38,9 @@ const envSchema = z.object({
   ROOT_AGENT_ELEVATION_DATA_DIR: z
     .string()
     .default("/opt/planisfy/infra/docker/data/elevation"),
+  ROOT_AGENT_MARTIN_SOURCES_DIR: z
+    .string()
+    .default("/opt/planisfy/infra/docker/data/martin-sources"),
   ROOT_AGENT_DEM_BASE_URL: z
     .string()
     .url()
@@ -73,6 +77,31 @@ type RoutingGraphArtifact = {
   checksumSha256: string | null;
 };
 
+type BasemapBuild = {
+  id: string;
+  name: string;
+  engine: string;
+  sourceKind: string;
+  sourceUrl: string;
+  sourcePreset: string | null;
+  planetilerImage: string;
+  profile: string;
+  outputFormat: string;
+  areaOfInterest: unknown;
+  config: Record<string, unknown>;
+};
+
+type BasemapArtifact = {
+  id: string;
+  kind: string;
+  fileName: string;
+  checksumSha256: string | null;
+};
+
+type BuildArtifactTarget = {
+  id: string;
+};
+
 type DemConfig = {
   bounds?: {
     minLon: number;
@@ -90,7 +119,9 @@ type AgentJob =
       kind: "routing_graph_activation";
       build: RoutingGraphBuild;
       artifacts: RoutingGraphArtifact[];
-    };
+    }
+  | { kind: "basemap_build"; build: BasemapBuild }
+  | { kind: "basemap_activation"; build: BasemapBuild; artifacts: BasemapArtifact[] };
 
 type ArtifactUploadSession =
   | {
@@ -135,6 +166,7 @@ async function main() {
   await post(token, "/root-agent/heartbeat", {
     hostname: hostname(),
     capabilities,
+    activation: activationMetadata(),
     startedAt: new Date().toISOString(),
   });
 
@@ -147,7 +179,11 @@ async function main() {
       if (next.data) {
         await handleJob(token, next.data);
       } else {
-        await post(token, "/root-agent/heartbeat", { hostname: hostname(), capabilities });
+        await post(token, "/root-agent/heartbeat", {
+          hostname: hostname(),
+          capabilities,
+          activation: activationMetadata(),
+        });
         await delay(config.ROOT_AGENT_POLL_INTERVAL_MS);
       }
     } catch (err) {
@@ -169,7 +205,7 @@ async function resolveAgentToken() {
     registrationToken: config.ROOT_AGENT_REGISTRATION_TOKEN,
     hostname: hostname(),
     capabilities,
-    metadata: { installedBy: "root-agent" },
+    metadata: { installedBy: "root-agent", activation: activationMetadata() },
   });
   const agentToken = response.data?.agentToken;
   if (typeof agentToken !== "string") {
@@ -179,12 +215,30 @@ async function resolveAgentToken() {
   return agentToken;
 }
 
+function activationMetadata() {
+  return {
+    valhallaDataDir: config.ROOT_AGENT_VALHALLA_DATA_DIR,
+    elevationDataDir: config.ROOT_AGENT_ELEVATION_DATA_DIR,
+    martinSourcesDir: config.ROOT_AGENT_MARTIN_SOURCES_DIR,
+    composeFileConfigured: Boolean(config.ROOT_AGENT_COMPOSE_FILE),
+    composeCwd: config.ROOT_AGENT_COMPOSE_CWD ?? null,
+  };
+}
+
 async function handleJob(token: string, job: AgentJob) {
   if (job.kind === "routing_graph_build") {
     await buildRoutingGraph(token, job.build);
     return;
   }
-  await activateRoutingGraph(token, job.build, job.artifacts);
+  if (job.kind === "routing_graph_activation") {
+    await activateRoutingGraph(token, job.build, job.artifacts);
+    return;
+  }
+  if (job.kind === "basemap_build") {
+    await buildBasemap(token, job.build);
+    return;
+  }
+  await activateBasemap(token, job.build, job.artifacts);
 }
 
 async function buildRoutingGraph(token: string, build: RoutingGraphBuild) {
@@ -279,6 +333,89 @@ async function buildRoutingGraph(token: string, build: RoutingGraphBuild) {
     const localArtifacts = await existingLocalArtifacts([graphTarPath]);
     await updateBuild(token, build.id, "failed", 100, "Routing graph build failed", {
       errorCode: "ROOT_AGENT_BUILD_FAILED",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      ...(localArtifacts.length ? { output: { localArtifacts } } : {}),
+    });
+  }
+}
+
+async function buildBasemap(token: string, build: BasemapBuild) {
+  const buildDir = join(config.ROOT_AGENT_WORK_DIR, build.id);
+  await rm(buildDir, { recursive: true, force: true });
+  await mkdir(buildDir, { recursive: true });
+  const pbfPath = join(buildDir, "source.osm.pbf");
+  const extension = build.outputFormat === "mbtiles" ? "mbtiles" : "pmtiles";
+  const outputPath = join(buildDir, `basemap.${extension}`);
+
+  try {
+    if (build.engine !== "planetiler_osm" || build.sourceKind !== "osm_pbf") {
+      throw new Error(
+        "Only planetiler_osm builds from OSM PBF sources are enabled in this root-agent version.",
+      );
+    }
+    await updateBuild(token, build.id, "preparing", 5, "Preparing basemap build workspace");
+    await updateBuild(token, build.id, "downloading_source", 10, "Downloading OSM PBF source");
+    await runLogged(token, build.id, "curl", [
+      "-LfsS",
+      "--continue-at",
+      "-",
+      "-o",
+      pbfPath,
+      build.sourceUrl,
+    ]);
+
+    await updateBuild(token, build.id, "building_tiles", 35, "Building basemap tiles with Planetiler");
+    const planetilerArgs = [
+      "--osm-path=/data/source.osm.pbf",
+      `--output=/data/basemap.${extension}`,
+      "--force",
+      ...planetilerExtraArgs(build.config),
+    ];
+    await runLogged(token, build.id, "docker", [
+      "run",
+      "--rm",
+      "-v",
+      `${buildDir}:/data`,
+      build.planetilerImage,
+      ...planetilerArgs,
+    ]);
+
+    await updateBuild(token, build.id, "packaging", 85, "Validating basemap artifact");
+    const checksumSha256 = await sha256File(outputPath);
+    await updateBuild(token, build.id, "uploading", 92, "Uploading basemap artifact");
+    await uploadArtifact(token, build, outputPath, {
+      kind: "basemap_tiles",
+      fileName: `${build.name.replace(/[^A-Za-z0-9._-]/g, "_")}-${build.id}.${extension}`,
+      checksumSha256,
+      contentType:
+        extension === "pmtiles"
+          ? "application/vnd.pmtiles"
+          : "application/vnd.mapbox-vector-tile",
+      manifest: {
+        buildId: build.id,
+        sourceUrl: build.sourceUrl,
+        sourcePreset: build.sourcePreset,
+        engine: build.engine,
+        sourceKind: build.sourceKind,
+        profile: build.profile,
+        outputFormat: build.outputFormat,
+        minZoom: numberFromConfig(build.config, "minZoom", 0),
+        maxZoom: numberFromConfig(build.config, "maxZoom", 14),
+        attribution:
+          typeof build.config.attribution === "string"
+            ? build.config.attribution
+            : "© OpenStreetMap contributors",
+      },
+    });
+    await updateBuild(token, build.id, "succeeded", 100, "Basemap build completed");
+  } catch (err) {
+    if (await cancelRequested(token, build.id)) {
+      await updateBuild(token, build.id, "canceled", 100, "Basemap build canceled");
+      return;
+    }
+    const localArtifacts = await existingLocalArtifacts([outputPath]);
+    await updateBuild(token, build.id, "failed", 100, "Basemap build failed", {
+      errorCode: "ROOT_AGENT_BASEMAP_BUILD_FAILED",
       errorMessage: err instanceof Error ? err.message : String(err),
       ...(localArtifacts.length ? { output: { localArtifacts } } : {}),
     });
@@ -403,6 +540,54 @@ async function activateRoutingGraph(
     await updateActivation(token, build.id, "active", "Routing graph artifact activated");
   } catch (err) {
     await updateActivation(token, build.id, "failed", "Routing graph activation failed", {
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function activateBasemap(
+  token: string,
+  build: BasemapBuild,
+  artifacts: BasemapArtifact[],
+) {
+  const tiles = artifacts.find((artifact) => artifact.kind === "basemap_tiles");
+  if (!tiles) {
+    await updateActivation(token, build.id, "failed", "No basemap tile artifact is available");
+    return;
+  }
+  const activationDir = join(config.ROOT_AGENT_WORK_DIR, "activation", build.id, "basemap");
+  const artifactPath = join(activationDir, tiles.fileName);
+  const extension = tiles.fileName.toLowerCase().endsWith(".mbtiles") ? "mbtiles" : "pmtiles";
+  const stableSource = safeMartinSource(build.name);
+  const versionedSource = `${stableSource}.${build.id.slice(0, 8)}`;
+  const stablePath = join(config.ROOT_AGENT_MARTIN_SOURCES_DIR, `${stableSource}.${extension}`);
+  const versionedPath = join(
+    config.ROOT_AGENT_MARTIN_SOURCES_DIR,
+    `${versionedSource}.${extension}`,
+  );
+  try {
+    await rm(activationDir, { recursive: true, force: true });
+    await mkdir(activationDir, { recursive: true });
+    await mkdir(config.ROOT_AGENT_MARTIN_SOURCES_DIR, { recursive: true });
+    await downloadArtifact(token, tiles.id, artifactPath);
+    if (tiles.checksumSha256) {
+      const actual = await sha256File(artifactPath);
+      if (actual !== tiles.checksumSha256) {
+        throw new Error("Basemap artifact checksum mismatch");
+      }
+    }
+    await copyFileAtomic(artifactPath, versionedPath);
+    await copyFileAtomic(artifactPath, stablePath);
+    await restartComposeServicesIfConfigured(token, build.id, ["martin"]);
+    await updateActivation(token, build.id, "active", "Basemap artifact activated", {
+      output: {
+        martinSource: stableSource,
+        martinSourceVersioned: versionedSource,
+        martinSourcesDir: config.ROOT_AGENT_MARTIN_SOURCES_DIR,
+      },
+    });
+  } catch (err) {
+    await updateActivation(token, build.id, "failed", "Basemap activation failed", {
       errorMessage: err instanceof Error ? err.message : String(err),
     });
   }
@@ -541,17 +726,18 @@ async function runLogged(
 
 async function uploadArtifact(
   token: string,
-  build: RoutingGraphBuild,
+  build: BuildArtifactTarget,
   path: string,
   metadata: {
     kind: string;
     fileName: string;
     checksumSha256: string;
+    contentType?: string;
     manifest: Record<string, unknown>;
   },
 ) {
   const fileSize = (await stat(path)).size;
-  const contentType = "application/gzip";
+  const contentType = metadata.contentType ?? "application/gzip";
   const session = await withRetry(
     () =>
       post<ArtifactUploadSession>(token, `/root-agent/jobs/${build.id}/artifacts/upload-session`, {
@@ -612,12 +798,13 @@ async function uploadArtifact(
 
 async function uploadArtifactViaApi(
   token: string,
-  build: RoutingGraphBuild,
+  build: BuildArtifactTarget,
   path: string,
   metadata: {
     kind: string;
     fileName: string;
     checksumSha256: string;
+    contentType?: string;
     manifest: Record<string, unknown>;
   },
   fileSize: number,
@@ -863,6 +1050,34 @@ async function renameIfExists(from: string, to: string) {
   } catch {
     // Missing active graph is acceptable for first activation.
   }
+}
+
+async function copyFileAtomic(from: string, to: string) {
+  const tmp = `${to}.tmp-${Date.now()}`;
+  await copyFile(from, tmp);
+  await rename(tmp, to);
+}
+
+function planetilerExtraArgs(configValue: Record<string, unknown>) {
+  const args = Array.isArray(configValue.planetilerArgs)
+    ? configValue.planetilerArgs.filter((item): item is string => typeof item === "string")
+    : [];
+  const minZoom = numberFromConfig(configValue, "minZoom", NaN);
+  const maxZoom = numberFromConfig(configValue, "maxZoom", NaN);
+  return [
+    ...(Number.isFinite(minZoom) ? [`--minzoom=${minZoom}`] : []),
+    ...(Number.isFinite(maxZoom) ? [`--maxzoom=${maxZoom}`] : []),
+    ...args,
+  ];
+}
+
+function numberFromConfig(configValue: Record<string, unknown>, key: string, fallback: number) {
+  const value = Number(configValue[key]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function safeMartinSource(name: string) {
+  return name.replace(/[^A-Za-z0-9._-]/g, "_").replace(/^_+|_+$/g, "").slice(0, 96) || "basemap";
 }
 
 function parseDemConfig(value: unknown): DemConfig {

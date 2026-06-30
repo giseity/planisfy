@@ -9,6 +9,8 @@ import {
   Activity,
   CheckCircle2,
   Copy,
+  ExternalLink,
+  Info,
   Play,
   RefreshCw,
   Route,
@@ -20,6 +22,7 @@ import {
   type ConsoleRoutingGraphBuildDetail,
   type ConsoleWorkerNode,
 } from "@/lib/api";
+import { docsUrl } from "@/lib/docs-url";
 import { formatDate } from "@/features/operations/model";
 import {
   EmptyRow,
@@ -122,8 +125,11 @@ export function RoutingTab({
     null,
   );
 
-  const agentNodes = nodes.filter(
-    (node) => node.metadata?.agentManaged || node.status === "healthy",
+  const buildNodes = nodes.filter((node) => hasCapability(node, "valhalla_graph_build"));
+  const servingNodes = nodes.filter(
+    (node) =>
+      hasCapability(node, "self_host_activation") ||
+      hasCapability(node, "managed_runtime_activation"),
   );
   const areaOfInterest = useMemo(
     () => draftToAreaOfInterest(areaOfInterestDraft),
@@ -262,6 +268,26 @@ export function RoutingTab({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="rounded-md border bg-muted/40 p-3 text-sm">
+              <div className="flex gap-2">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="space-y-1">
+                  <p>
+                    A build creates an artifact. Deploying installs that artifact on a serving
+                    worker and makes Valhalla use it at runtime.
+                  </p>
+                  <a
+                    className="inline-flex items-center gap-1 text-primary"
+                    href={docsUrl("/docs/self-hosting/external-compute")}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    External compute docs
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </div>
+            </div>
             <Field label="Name">
               <Input value={name} onChange={(event) => setName(event.target.value)} />
             </Field>
@@ -299,7 +325,7 @@ export function RoutingTab({
                   <SelectValue placeholder="Select a root agent" />
                 </SelectTrigger>
                 <SelectContent>
-                  {agentNodes.map((node) => (
+                  {buildNodes.map((node) => (
                     <SelectItem key={node.id} value={node.id}>
                       {node.name}
                     </SelectItem>
@@ -307,7 +333,7 @@ export function RoutingTab({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Activation node">
+            <Field label="Serving worker">
               <Select
                 value={activationWorkerNodeId || "none"}
                 onValueChange={(value) =>
@@ -318,8 +344,8 @@ export function RoutingTab({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Manual later</SelectItem>
-                  {agentNodes.map((node) => (
+                  <SelectItem value="none">Deploy later</SelectItem>
+                  {servingNodes.map((node) => (
                     <SelectItem key={node.id} value={node.id}>
                       {node.name}
                     </SelectItem>
@@ -433,7 +459,7 @@ export function RoutingTab({
                                 build.id,
                                 build.activationWorkerNodeId ?? undefined,
                               ),
-                            "Activation requested",
+                            "Deployment requested",
                             onChanged,
                           )
                         }
@@ -498,4 +524,11 @@ export function RoutingTab({
       </div>
     </div>
   );
+}
+
+function hasCapability(node: ConsoleWorkerNode, capability: string) {
+  const capabilities = Array.isArray(node.metadata?.capabilities)
+    ? node.metadata.capabilities
+    : [];
+  return capabilities.includes(capability);
 }

@@ -10,6 +10,7 @@ import { Button } from '@planisfy/ui/components/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
 import { LoadingState } from '@planisfy/ui/components/loading-state'
 import { api, type ConsoleDashboard } from '@/lib/api'
+import { docsUrl } from '@/lib/docs-url'
 
 const setupActions = [
   {
@@ -93,7 +94,7 @@ export default function IntegrationPage() {
           </p>
         </div>
         <Button asChild variant="outline">
-          <Link href="https://docs.planisfy.localhost" target="_blank">
+          <Link href={docsUrl()} target="_blank">
             <ExternalLink className="h-4 w-4" />
             Open docs
           </Link>

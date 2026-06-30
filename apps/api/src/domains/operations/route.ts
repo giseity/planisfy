@@ -7,6 +7,10 @@ import { and, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   artifactBackups,
+  basemapArtifacts,
+  basemapBuildLogs,
+  basemapBuilds,
+  basemapReleases,
   customDomains,
   db,
   notificationChannels,
@@ -19,6 +23,7 @@ import {
   routingGraphArtifacts,
   routingGraphBuildLogs,
   routingGraphBuilds,
+  routingGraphReleases,
   scheduledOperations,
   storageObjects,
   workerNodes,
@@ -98,6 +103,10 @@ operationsRoute.use(
 )
 operationsRoute.use('/operations/routing-graphs', requireOrgPermission('operations.routing.manage'))
 operationsRoute.use('/operations/routing-graphs/*', requireOrgPermission('operations.routing.manage'))
+operationsRoute.use('/operations/basemap-builds', requireOrgPermission('operations.routing.manage'))
+operationsRoute.use('/operations/basemap-builds/*', requireOrgPermission('operations.routing.manage'))
+operationsRoute.use('/operations/basemap-releases', requireOrgPermission('operations.routing.manage'))
+operationsRoute.use('/operations/basemap-releases/*', requireOrgPermission('operations.routing.manage'))
 operationsRoute.use('/operations/preview-links', requireOrgPermission('operations.delivery.manage'))
 operationsRoute.use('/operations/preview-links/*', requireOrgPermission('operations.delivery.manage'))
 operationsRoute.use('/operations/custom-domains', requireOrgPermission('operations.delivery.manage'))
@@ -254,6 +263,38 @@ const routingGraphActivateSchema = z.object({
   activationWorkerNodeId: z.string().uuid().optional(),
 })
 
+const basemapBuildSchema = z.object({
+  name: z.string().min(1).max(128),
+  sourceUrl: z
+    .string()
+    .url()
+    .transform((value, ctx) => {
+      try {
+        return validateOutboundUrl(value)
+      } catch (err) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: err instanceof Error ? err.message : 'Source URL is not allowed',
+        })
+        return z.NEVER
+      }
+    }),
+  sourcePreset: z.string().min(1).max(128).optional(),
+  workerNodeId: z.string().uuid(),
+  activationWorkerNodeId: z.string().uuid().optional(),
+  engine: z.enum(['planetiler_osm', 'planetiler_overture']).default('planetiler_osm'),
+  sourceKind: z.enum(['osm_pbf', 'overture_geoparquet']).default('osm_pbf'),
+  planetilerImage: z.string().min(1).max(512).default('ghcr.io/onthegomap/planetiler:latest'),
+  profile: z.string().min(1).max(128).default('openmaptiles'),
+  outputFormat: z.enum(['pmtiles', 'mbtiles']).default('pmtiles'),
+  areaOfInterest: areaOfInterestInputSchema,
+  config: z.record(z.string(), z.unknown()).default({}),
+})
+
+const basemapActivateSchema = z.object({
+  activationWorkerNodeId: z.string().uuid().optional(),
+})
+
 const previewLinkSchema = z.object({
   resourceType: z.string().min(1).max(64),
   resourceId: z.string().uuid(),
@@ -399,6 +440,8 @@ async function buildOperationsOverview(accountId: string) {
     backups,
     nodes,
     routingBuilds,
+    basemapBuildRows,
+    basemapReleaseRows,
     previews,
     domains,
     templates,
@@ -444,6 +487,18 @@ async function buildOperationsOverview(accountId: string) {
       .limit(20),
     db
       .select()
+      .from(basemapBuilds)
+      .where(and(eq(basemapBuilds.accountId, accountId), isNull(basemapBuilds.deletedAt)))
+      .orderBy(desc(basemapBuilds.updatedAt))
+      .limit(20),
+    db
+      .select()
+      .from(basemapReleases)
+      .where(eq(basemapReleases.accountId, accountId))
+      .orderBy(desc(basemapReleases.updatedAt))
+      .limit(20),
+    db
+      .select()
       .from(previewLinks)
       .where(and(eq(previewLinks.accountId, accountId), isNull(previewLinks.deletedAt)))
       .orderBy(desc(previewLinks.createdAt)),
@@ -463,7 +518,9 @@ async function buildOperationsOverview(accountId: string) {
     scheduledOperations: schedules,
     artifactBackups: backups,
     workerNodes: nodes,
-    routingGraphBuilds: routingBuilds,
+    routingGraphBuilds: routingBuilds.map(serializeRoutingGraphBuild),
+    basemapBuilds: basemapBuildRows.map(serializeBasemapBuild),
+    basemapReleases: basemapReleaseRows,
     previewLinks: previews,
     customDomains: domains,
     workflowTemplates: templates,
@@ -531,6 +588,24 @@ export function operationsOverviewSignature(overview: OperationsOverview) {
       updatedAt: build.updatedAt,
       completedAt: build.completedAt,
       cancelRequestedAt: build.cancelRequestedAt,
+    })),
+    basemapBuilds: overview.basemapBuilds.map((build) => ({
+      id: build.id,
+      status: build.status,
+      activationStatus: build.activationStatus,
+      progress: build.progress,
+      updatedAt: build.updatedAt,
+      completedAt: build.completedAt,
+      cancelRequestedAt: build.cancelRequestedAt,
+    })),
+    basemapReleases: overview.basemapReleases.map((release) => ({
+      id: release.id,
+      status: release.status,
+      activationStatus: release.activationStatus,
+      isPrimary: release.isPrimary,
+      updatedAt: release.updatedAt,
+      publishedAt: release.publishedAt,
+      activatedAt: release.activatedAt,
     })),
     previewLinks: overview.previewLinks.map((link) => ({
       id: link.id,
@@ -910,9 +985,13 @@ operationsRoute.post('/operations/routing-graphs', async (c) => {
   }
   const worker = await findWorkerNode(accountId, parsed.data.workerNodeId)
   if (!worker) return notFound(c, 'Build worker node not found')
+  const buildCapabilityError = validateWorkerCapability(worker, 'valhalla_graph_build', 'build')
+  if (buildCapabilityError) return c.json({ error: buildCapabilityError }, 409)
   if (parsed.data.activationWorkerNodeId) {
     const activationWorker = await findWorkerNode(accountId, parsed.data.activationWorkerNodeId)
     if (!activationWorker) return notFound(c, 'Activation worker node not found')
+    const activationError = validateServingWorker(activationWorker)
+    if (activationError) return c.json({ error: activationError }, 409)
   }
   const config = routingGraphConfigForBuild(parsed.data)
   const demValidation = validateRoutingGraphDemConfig(parsed.data.elevationMode, config)
@@ -993,18 +1072,14 @@ operationsRoute.post('/operations/routing-graphs/:id/activate', async (c) => {
   if (!parsed.success) return validationError(c, parsed.error)
   const detail = await routingGraphBuildDetail(accountId, id)
   if (!detail) return notFound(c, 'Routing graph build not found')
-  const activationWorkerNodeId =
+  const activationWorkerResult = await resolveServingWorker(
+    accountId,
     parsed.data.activationWorkerNodeId ?? detail.build.activationWorkerNodeId
-  if (!activationWorkerNodeId) {
-    return c.json({
-      error: {
-        code: 'ACTIVATION_WORKER_REQUIRED',
-        message: 'Select a local/self-host activation worker before activation.',
-      },
-    }, 400)
+  )
+  if (!activationWorkerResult.ok) {
+    return c.json({ error: activationWorkerResult.error }, activationWorkerResult.status)
   }
-  const activationWorker = await findWorkerNode(accountId, activationWorkerNodeId)
-  if (!activationWorker) return notFound(c, 'Activation worker node not found')
+  const activationWorkerNodeId = activationWorkerResult.node.id
   const artifact = detail.artifacts.find((item) => item.status === 'available')
   if (!artifact) {
     return c.json({
@@ -1025,6 +1100,183 @@ operationsRoute.post('/operations/routing-graphs/:id/activate', async (c) => {
     .returning()
   await appendRoutingGraphLog(id, 'info', 'Activation requested', { activationWorkerNodeId })
   return c.json({ data: serializeRoutingGraphBuild(updated!) })
+})
+
+operationsRoute.get('/operations/basemap-builds', async (c) => {
+  const accountId = c.get('ownerId')
+  const builds = await db
+    .select()
+    .from(basemapBuilds)
+    .where(and(eq(basemapBuilds.accountId, accountId), isNull(basemapBuilds.deletedAt)))
+    .orderBy(desc(basemapBuilds.updatedAt))
+    .limit(100)
+  return c.json({ data: builds.map(serializeBasemapBuild) })
+})
+
+operationsRoute.post('/operations/basemap-builds', async (c) => {
+  const accountId = c.get('ownerId')
+  const parsed = basemapBuildSchema.safeParse(await c.req.json())
+  if (!parsed.success) return validationError(c, parsed.error)
+  const routingDenial = await managedPlanGateResponse(c, 'routingBuilds')
+  if (routingDenial) return routingDenial
+  if (parsed.data.engine === 'planetiler_overture') {
+    return c.json({
+      error: {
+        code: 'OVERTURE_BASEMAP_NOT_IMPLEMENTED',
+        message:
+          'Overture basemap builds are modeled but not enabled until the Overture layer profile is implemented.',
+      },
+    }, 409)
+  }
+  const worker = await findWorkerNode(accountId, parsed.data.workerNodeId)
+  if (!worker) return notFound(c, 'Build worker node not found')
+  const buildCapabilityError = validateWorkerCapability(worker, 'basemap_build', 'build')
+  if (buildCapabilityError) return c.json({ error: buildCapabilityError }, 409)
+  if (parsed.data.activationWorkerNodeId) {
+    const activationWorker = await findWorkerNode(accountId, parsed.data.activationWorkerNodeId)
+    if (!activationWorker) return notFound(c, 'Serving worker node not found')
+    const activationError = validateServingWorker(activationWorker)
+    if (activationError) return c.json({ error: activationError }, 409)
+  }
+  const [created] = await db
+    .insert(basemapBuilds)
+    .values({
+      accountId,
+      name: parsed.data.name,
+      sourceUrl: parsed.data.sourceUrl,
+      sourcePreset: parsed.data.sourcePreset ?? null,
+      workerNodeId: parsed.data.workerNodeId,
+      activationWorkerNodeId: parsed.data.activationWorkerNodeId ?? null,
+      engine: parsed.data.engine,
+      sourceKind: parsed.data.sourceKind,
+      planetilerImage: parsed.data.planetilerImage,
+      profile: parsed.data.profile,
+      outputFormat: parsed.data.outputFormat,
+      areaOfInterest: parsed.data.areaOfInterest ?? null,
+      config: {
+        ...parsed.data.config,
+        areaOfInterest: parsed.data.areaOfInterest ?? undefined,
+      },
+    })
+    .returning()
+  await appendBasemapBuildLog(created!.id, 'info', 'Basemap build queued', {
+    workerNodeId: created!.workerNodeId,
+    sourcePreset: created!.sourcePreset,
+    engine: created!.engine,
+    profile: created!.profile,
+  })
+  return c.json({ data: serializeBasemapBuild(created!) }, 201)
+})
+
+operationsRoute.get('/operations/basemap-builds/:id', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const detail = await basemapBuildDetail(accountId, id)
+  if (!detail) return notFound(c, 'Basemap build not found')
+  return c.json({
+    data: { ...detail, build: serializeBasemapBuild(detail.build) },
+  })
+})
+
+operationsRoute.post('/operations/basemap-builds/:id/cancel', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const [updated] = await db
+    .update(basemapBuilds)
+    .set({
+      status: 'canceling',
+      cancelRequestedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(basemapBuilds.id, id),
+        eq(basemapBuilds.accountId, accountId),
+        isNull(basemapBuilds.deletedAt),
+        inArray(basemapBuilds.status, [
+          'queued',
+          'assigned',
+          'preparing',
+          'downloading_source',
+          'building_tiles',
+          'packaging',
+          'uploading',
+        ])
+      )
+    )
+    .returning()
+  if (!updated) return notFound(c, 'Cancelable basemap build not found')
+  await appendBasemapBuildLog(id, 'warn', 'Cancellation requested', null)
+  return c.json({ data: serializeBasemapBuild(updated) })
+})
+
+operationsRoute.post('/operations/basemap-builds/:id/activate', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const parsed = basemapActivateSchema.safeParse(await c.req.json().catch(() => ({})))
+  if (!parsed.success) return validationError(c, parsed.error)
+  const detail = await basemapBuildDetail(accountId, id)
+  if (!detail) return notFound(c, 'Basemap build not found')
+  const servingWorkerResult = await resolveServingWorker(
+    accountId,
+    parsed.data.activationWorkerNodeId ?? detail.build.activationWorkerNodeId
+  )
+  if (!servingWorkerResult.ok) {
+    return c.json({ error: servingWorkerResult.error }, servingWorkerResult.status)
+  }
+  const artifact = detail.artifacts.find((item) => item.status === 'available')
+  if (!artifact) {
+    return c.json({
+      error: {
+        code: 'ARTIFACT_REQUIRED',
+        message: 'A successful basemap artifact is required before activation.',
+      },
+    }, 409)
+  }
+  const [updated] = await db
+    .update(basemapBuilds)
+    .set({
+      activationWorkerNodeId: servingWorkerResult.node.id,
+      activationStatus: 'activation_requested',
+      updatedAt: new Date(),
+    })
+    .where(eq(basemapBuilds.id, id))
+    .returning()
+  await appendBasemapBuildLog(id, 'info', 'Basemap activation requested', {
+    activationWorkerNodeId: servingWorkerResult.node.id,
+  })
+  return c.json({ data: serializeBasemapBuild(updated!) })
+})
+
+operationsRoute.post('/operations/basemap-releases/:id/promote-primary', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const [release] = await db
+    .select()
+    .from(basemapReleases)
+    .where(and(eq(basemapReleases.id, id), eq(basemapReleases.accountId, accountId)))
+    .limit(1)
+  if (!release) return notFound(c, 'Basemap release not found')
+  if (release.activationStatus !== 'active') {
+    return c.json({
+      error: {
+        code: 'BASEMAP_RELEASE_NOT_ACTIVE',
+        message: 'Only an active basemap release can be promoted to primary.',
+      },
+    }, 409)
+  }
+  const [updated] = await db.transaction(async (tx) => {
+    await tx
+      .update(basemapReleases)
+      .set({ isPrimary: false, updatedAt: new Date() })
+      .where(eq(basemapReleases.accountId, accountId))
+    return tx
+      .update(basemapReleases)
+      .set({ isPrimary: true, updatedAt: new Date() })
+      .where(eq(basemapReleases.id, id))
+      .returning()
+  })
+  return c.json({ data: updated! })
 })
 
 operationsRoute.post('/operations/preview-links', async (c) => {
@@ -2035,6 +2287,15 @@ function serializeRoutingGraphBuild<T extends { config: unknown }>(build: T) {
   }
 }
 
+function serializeBasemapBuild<T extends { config: unknown; areaOfInterest: unknown }>(build: T) {
+  const config = isObjectRecord(build.config) ? build.config : {}
+  return {
+    ...build,
+    config,
+    areaOfInterest: safeNormalizeAreaOfInterest(build.areaOfInterest ?? config.areaOfInterest),
+  }
+}
+
 function routingGraphConfigForBuild(data: {
   config: Record<string, unknown>
   areaOfInterest?: ConsoleAreaOfInterest
@@ -2102,6 +2363,100 @@ async function findWorkerNode(accountId: string, id: string) {
   return node ?? null
 }
 
+async function findManagedServingWorker(accountId: string) {
+  const nodes = await db
+    .select()
+    .from(workerNodes)
+    .where(and(eq(workerNodes.accountId, accountId), isNull(workerNodes.deletedAt)))
+    .orderBy(desc(workerNodes.updatedAt))
+  return (
+    nodes.find(
+      (node) =>
+        node.status === 'healthy' &&
+        (hasWorkerCapability(node, 'managed_runtime_activation') ||
+          hasWorkerCapability(node, 'self_host_activation'))
+    ) ?? null
+  )
+}
+
+async function resolveServingWorker(accountId: string, requestedId: string | null | undefined) {
+  const node = requestedId
+    ? await findWorkerNode(accountId, requestedId)
+    : env.DEPLOYMENT_MODE === 'managed'
+      ? await findManagedServingWorker(accountId)
+      : null
+  if (!node) {
+    return {
+      ok: false as const,
+      status: 400 as const,
+      error: {
+        code:
+          env.DEPLOYMENT_MODE === 'managed'
+            ? 'MANAGED_SERVING_WORKER_UNAVAILABLE'
+            : 'SERVING_WORKER_REQUIRED',
+        message:
+          env.DEPLOYMENT_MODE === 'managed'
+            ? 'No managed serving worker is available for deployment.'
+            : 'Select a self-host serving worker before deployment.',
+      },
+    }
+  }
+  const validation = validateServingWorker(node)
+  if (validation) {
+    return { ok: false as const, status: 409 as const, error: validation }
+  }
+  return { ok: true as const, node }
+}
+
+export function validateServingWorker(node: Awaited<ReturnType<typeof findWorkerNode>>) {
+  if (!node) {
+    return {
+      code: 'SERVING_WORKER_NOT_FOUND',
+      message: 'Serving worker node was not found.',
+    }
+  }
+  const capabilityError = validateWorkerCapability(node, 'self_host_activation', 'serving')
+  if (capabilityError && !hasWorkerCapability(node, 'managed_runtime_activation')) {
+    return capabilityError
+  }
+  if (node.status !== 'healthy') {
+    return {
+      code: 'SERVING_WORKER_NOT_HEALTHY',
+      message: 'Serving worker must have a healthy recent heartbeat before deployment.',
+    }
+  }
+  const metadata = isObjectRecord(node.metadata) ? node.metadata : {}
+  if (!isObjectRecord(metadata.activation)) {
+    return {
+      code: 'SERVING_WORKER_ACTIVATION_CONFIG_REQUIRED',
+      message:
+        'Serving worker must report activation paths before deployment. Restart the root-agent with activation settings configured.',
+    }
+  }
+  return null
+}
+
+export function validateWorkerCapability(
+  node: NonNullable<Awaited<ReturnType<typeof findWorkerNode>>>,
+  capability: string,
+  purpose: 'build' | 'serving'
+) {
+  if (hasWorkerCapability(node, capability)) return null
+  return {
+    code: 'WORKER_CAPABILITY_REQUIRED',
+    message: `Selected ${purpose} worker must advertise the ${capability} capability.`,
+  }
+}
+
+export function hasWorkerCapability(
+  node: NonNullable<Awaited<ReturnType<typeof findWorkerNode>>>,
+  capability: string
+) {
+  const metadata = isObjectRecord(node.metadata) ? node.metadata : {}
+  const capabilities = Array.isArray(metadata.capabilities) ? metadata.capabilities : []
+  return capabilities.some((item) => item === capability)
+}
+
 async function appendRoutingGraphLog(
   buildId: string,
   level: string,
@@ -2109,6 +2464,20 @@ async function appendRoutingGraphLog(
   metadata: unknown
 ) {
   await db.insert(routingGraphBuildLogs).values({
+    buildId,
+    level,
+    message,
+    metadata,
+  })
+}
+
+async function appendBasemapBuildLog(
+  buildId: string,
+  level: string,
+  message: string,
+  metadata: unknown
+) {
+  await db.insert(basemapBuildLogs).values({
     buildId,
     level,
     message,
@@ -2129,7 +2498,7 @@ async function routingGraphBuildDetail(accountId: string, id: string) {
     )
     .limit(1)
   if (!build) return null
-  const [artifacts, logs] = await Promise.all([
+  const [artifacts, releases, logs] = await Promise.all([
     db
       .select()
       .from(routingGraphArtifacts)
@@ -2137,12 +2506,51 @@ async function routingGraphBuildDetail(accountId: string, id: string) {
       .orderBy(desc(routingGraphArtifacts.createdAt)),
     db
       .select()
+      .from(routingGraphReleases)
+      .where(eq(routingGraphReleases.buildId, id))
+      .orderBy(desc(routingGraphReleases.createdAt)),
+    db
+      .select()
       .from(routingGraphBuildLogs)
       .where(eq(routingGraphBuildLogs.buildId, id))
       .orderBy(desc(routingGraphBuildLogs.createdAt))
       .limit(250),
   ])
-  return { build, artifacts, logs }
+  return { build, artifacts, releases, logs }
+}
+
+async function basemapBuildDetail(accountId: string, id: string) {
+  const [build] = await db
+    .select()
+    .from(basemapBuilds)
+    .where(
+      and(
+        eq(basemapBuilds.id, id),
+        eq(basemapBuilds.accountId, accountId),
+        isNull(basemapBuilds.deletedAt)
+      )
+    )
+    .limit(1)
+  if (!build) return null
+  const [artifacts, releases, logs] = await Promise.all([
+    db
+      .select()
+      .from(basemapArtifacts)
+      .where(eq(basemapArtifacts.buildId, id))
+      .orderBy(desc(basemapArtifacts.createdAt)),
+    db
+      .select()
+      .from(basemapReleases)
+      .where(eq(basemapReleases.buildId, id))
+      .orderBy(desc(basemapReleases.createdAt)),
+    db
+      .select()
+      .from(basemapBuildLogs)
+      .where(eq(basemapBuildLogs.buildId, id))
+      .orderBy(desc(basemapBuildLogs.createdAt))
+      .limit(250),
+  ])
+  return { build, artifacts, releases, logs }
 }
 
 async function readJsonObject(c: Context) {

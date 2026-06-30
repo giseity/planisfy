@@ -38,6 +38,7 @@ import {
 } from '@planisfy/ui/components/chart'
 import { cn } from '@planisfy/ui/lib/utils'
 import { api, type ConsoleDashboard, type DashboardHealthStatus } from '@/lib/api'
+import { docsUrl } from '@/lib/docs-url'
 
 const statusColor: Record<DashboardHealthStatus, string> = {
   healthy: 'bg-emerald-500',
@@ -66,7 +67,7 @@ const quickActions = [
   { label: 'Upload tileset', href: '/tilesets', icon: Upload },
   { label: 'Create API key', href: '/keys', icon: Key },
   { label: 'View usage', href: '/usage', icon: BarChart3 },
-  { label: 'Open docs', href: 'https://docs.planisfy.localhost', icon: FileCode2 },
+  { label: 'Open docs', href: docsUrl(), icon: FileCode2 },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 

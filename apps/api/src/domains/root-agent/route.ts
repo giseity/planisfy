@@ -5,11 +5,16 @@ import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
+  basemapArtifacts,
+  basemapBuildLogs,
+  basemapBuilds,
+  basemapReleases,
   rootAgentNodeTokens,
   rootAgentRegistrationTokens,
   routingGraphArtifacts,
   routingGraphBuildLogs,
   routingGraphBuilds,
+  routingGraphReleases,
   storageObjects,
   workerNodes,
 } from "@planisfy/database";
@@ -278,63 +283,166 @@ rootAgentRoute.get("/root-agent/jobs/next", async (c) => {
     });
   }
 
+  const [basemapBuild] = await db
+    .select()
+    .from(basemapBuilds)
+    .where(
+      and(
+        eq(basemapBuilds.accountId, accountId),
+        eq(basemapBuilds.workerNodeId, workerNodeId),
+        eq(basemapBuilds.status, "queued"),
+        isNull(basemapBuilds.deletedAt),
+      ),
+    )
+    .orderBy(basemapBuilds.createdAt)
+    .limit(1);
+  if (basemapBuild) {
+    const [claimed] = await db
+      .update(basemapBuilds)
+      .set({ status: "assigned", assignedAt: now, updatedAt: now })
+      .where(eq(basemapBuilds.id, basemapBuild.id))
+      .returning();
+    await appendLog(basemapBuild.id, "info", "Basemap build claimed by root agent", {
+      workerNodeId,
+    });
+    return c.json({ data: { kind: "basemap_build", build: claimed } });
+  }
+
+  const [basemapActivation] = await db
+    .select()
+    .from(basemapBuilds)
+    .where(
+      and(
+        eq(basemapBuilds.accountId, accountId),
+        eq(basemapBuilds.activationWorkerNodeId, workerNodeId),
+        eq(basemapBuilds.status, "succeeded"),
+        eq(basemapBuilds.activationStatus, "activation_requested"),
+        isNull(basemapBuilds.deletedAt),
+      ),
+    )
+    .orderBy(basemapBuilds.updatedAt)
+    .limit(1);
+  if (basemapActivation) {
+    const [claimed] = await db
+      .update(basemapBuilds)
+      .set({ activationStatus: "activating", updatedAt: now })
+      .where(eq(basemapBuilds.id, basemapActivation.id))
+      .returning();
+    const artifacts = await db
+      .select()
+      .from(basemapArtifacts)
+      .where(eq(basemapArtifacts.buildId, basemapActivation.id));
+    await appendLog(basemapActivation.id, "info", "Basemap activation claimed by root agent", {
+      workerNodeId,
+    });
+    return c.json({
+      data: { kind: "basemap_activation", build: claimed, artifacts },
+    });
+  }
+
   return c.json({ data: null });
 });
 
 rootAgentRoute.get("/root-agent/jobs/:id/cancel", async (c) => {
-  const build = await findBuildForAgent(c, c.req.param("id"));
-  if (!build) return notFound(c, "Routing graph build not found");
-  return c.json({ data: { cancelRequested: Boolean(build.cancelRequestedAt) } });
+  const job = await findBuildForAgent(c, c.req.param("id"));
+  if (!job) return notFound(c, "Build not found");
+  return c.json({ data: { cancelRequested: Boolean(job.build.cancelRequestedAt) } });
 });
 
 rootAgentRoute.post("/root-agent/jobs/:id/state", async (c) => {
-  const build = await findBuildForAgent(c, c.req.param("id"));
-  if (!build) return notFound(c, "Routing graph build not found");
+  const job = await findBuildForAgent(c, c.req.param("id"));
+  if (!job) return notFound(c, "Build not found");
   const parsed = buildStateSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
 
   const terminal = ["succeeded", "failed", "canceled"].includes(parsed.data.status);
   const now = new Date();
-  const [updated] = await db
-    .update(routingGraphBuilds)
-    .set({
-      status: parsed.data.status,
-      progress: parsed.data.progress ?? (parsed.data.status === "succeeded" ? 100 : build.progress),
-      output: parsed.data.output ?? build.output,
-      errorCode: parsed.data.errorCode ?? null,
-      errorMessage: parsed.data.errorMessage ?? null,
-      startedAt: build.startedAt ?? now,
-      completedAt: terminal ? now : build.completedAt,
-      updatedAt: now,
-    })
-    .where(eq(routingGraphBuilds.id, build.id))
-    .returning();
+  const baseUpdate = {
+    progress: parsed.data.progress ?? (parsed.data.status === "succeeded" ? 100 : job.build.progress),
+    output: parsed.data.output ?? job.build.output,
+    errorCode: parsed.data.errorCode ?? null,
+    errorMessage: parsed.data.errorMessage ?? null,
+    startedAt: job.build.startedAt ?? now,
+    completedAt: terminal ? now : job.build.completedAt,
+    updatedAt: now,
+  };
+  const [updated] =
+    job.kind === "routing"
+      ? await db
+          .update(routingGraphBuilds)
+          .set({ ...baseUpdate, status: parsed.data.status })
+          .where(eq(routingGraphBuilds.id, job.build.id))
+          .returning()
+      : await db
+          .update(basemapBuilds)
+          .set({
+            ...baseUpdate,
+            status:
+              parsed.data.status === "building_admins"
+                ? "building_tiles"
+                : parsed.data.status,
+          })
+          .where(eq(basemapBuilds.id, job.build.id))
+          .returning();
   if (parsed.data.message) {
-    await appendLog(build.id, terminal && parsed.data.status !== "succeeded" ? "error" : "info", parsed.data.message, null);
+    await appendLog(job.build.id, terminal && parsed.data.status !== "succeeded" ? "error" : "info", parsed.data.message, null);
   }
   return c.json({ data: updated });
 });
 
 rootAgentRoute.post("/root-agent/activations/:id/state", async (c) => {
-  const build = await findActivationForAgent(c, c.req.param("id"));
-  if (!build) return notFound(c, "Routing graph activation not found");
+  const job = await findActivationForAgent(c, c.req.param("id"));
+  if (!job) return notFound(c, "Activation not found");
   const parsed = activationStateSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
   const now = new Date();
-  const [updated] = await db
-    .update(routingGraphBuilds)
-    .set({
-      activationStatus: parsed.data.activationStatus,
-      output: parsed.data.output ?? build.output,
-      errorMessage: parsed.data.errorMessage ?? build.errorMessage,
-      activatedAt: parsed.data.activationStatus === "active" ? now : build.activatedAt,
-      updatedAt: now,
-    })
-    .where(eq(routingGraphBuilds.id, build.id))
-    .returning();
+  const update = {
+    activationStatus: parsed.data.activationStatus,
+    output: parsed.data.output ?? job.build.output,
+    errorMessage: parsed.data.errorMessage ?? job.build.errorMessage,
+    activatedAt: parsed.data.activationStatus === "active" ? now : job.build.activatedAt,
+    updatedAt: now,
+  };
+  const [updated] =
+    job.kind === "routing"
+      ? await db
+          .update(routingGraphBuilds)
+          .set(update)
+          .where(eq(routingGraphBuilds.id, job.build.id))
+          .returning()
+      : await db
+          .update(basemapBuilds)
+          .set(update)
+          .where(eq(basemapBuilds.id, job.build.id))
+          .returning();
+  if (parsed.data.activationStatus === "active") {
+    if (job.kind === "routing") {
+      await db
+        .update(routingGraphReleases)
+        .set({ activationStatus: "active", activatedAt: now, updatedAt: now })
+        .where(eq(routingGraphReleases.buildId, job.build.id));
+    } else {
+      const output = asRecord(parsed.data.output);
+      await db
+        .update(basemapReleases)
+        .set({
+          activationStatus: "active",
+          activatedAt: now,
+          updatedAt: now,
+          martinSource:
+            typeof output.martinSource === "string" ? output.martinSource : undefined,
+          martinSourceVersioned:
+            typeof output.martinSourceVersioned === "string"
+              ? output.martinSourceVersioned
+              : undefined,
+          activationMetadata: output,
+        })
+        .where(eq(basemapReleases.buildId, job.build.id));
+    }
+  }
   if (parsed.data.message) {
     await appendLog(
-      build.id,
+      job.build.id,
       parsed.data.activationStatus === "active" ? "info" : "error",
       parsed.data.message,
       null,
@@ -344,31 +452,31 @@ rootAgentRoute.post("/root-agent/activations/:id/state", async (c) => {
 });
 
 rootAgentRoute.post("/root-agent/jobs/:id/logs", async (c) => {
-  const build = await findBuildForAgent(c, c.req.param("id"));
-  if (!build) return notFound(c, "Routing graph build not found");
+  const job = await findBuildForAgent(c, c.req.param("id"));
+  if (!job) return notFound(c, "Build not found");
   const parsed = logSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
-  await db.insert(routingGraphBuildLogs).values(
-    parsed.data.entries.map((entry) => ({
-      buildId: build.id,
-      level: entry.level,
-      message: entry.message,
-      metadata: entry.metadata,
-    })),
-  );
+  const rows = parsed.data.entries.map((entry) => ({
+    buildId: job.build.id,
+    level: entry.level,
+    message: entry.message,
+    metadata: entry.metadata,
+  }));
+  if (job.kind === "routing") await db.insert(routingGraphBuildLogs).values(rows);
+  else await db.insert(basemapBuildLogs).values(rows);
   return c.json({ data: { inserted: parsed.data.entries.length } });
 });
 
 rootAgentRoute.post("/root-agent/jobs/:id/artifacts/upload-session", async (c) => {
-  const build = await findBuildForAgent(c, c.req.param("id"));
-  if (!build) return notFound(c, "Routing graph build not found");
+  const job = await findBuildForAgent(c, c.req.param("id"));
+  if (!job) return notFound(c, "Build not found");
   const parsed = artifactUploadSessionSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
 
   const storage = getStorage();
   const storageInfo = storage.getInfo();
   const fileName = safeFileName(parsed.data.fileName);
-  const storageKey = `accounts/${build.accountId}/routing-graphs/${build.id}/${Date.now()}-${fileName}`;
+  const storageKey = artifactStorageKey(job, fileName);
   if (
     !storage.createMultipartUploadSession ||
     storageInfo.provider === "local"
@@ -377,7 +485,7 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts/upload-session", async (c) =
       data: {
         strategy: "legacy_proxy",
         reason: "Storage provider does not support signed multipart uploads.",
-        uploadUrl: `/root-agent/jobs/${build.id}/artifacts`,
+        uploadUrl: `/root-agent/jobs/${job.build.id}/artifacts`,
       },
     });
   }
@@ -387,7 +495,7 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts/upload-session", async (c) =
     parsed.data.contentType,
     parsed.data.size,
   );
-  await appendLog(build.id, "info", "Created direct artifact upload session", {
+  await appendLog(job.build.id, "info", "Created direct artifact upload session", {
     fileName,
     kind: parsed.data.kind,
     provider: storageInfo.provider,
@@ -417,8 +525,8 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts/upload-session", async (c) =
 });
 
 rootAgentRoute.post("/root-agent/jobs/:id/artifacts/finalize", async (c) => {
-  const build = await findBuildForAgent(c, c.req.param("id"));
-  if (!build) return notFound(c, "Routing graph build not found");
+  const job = await findBuildForAgent(c, c.req.param("id"));
+  if (!job) return notFound(c, "Build not found");
   const parsed = artifactFinalizeSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
 
@@ -450,7 +558,7 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts/finalize", async (c) => {
     );
   }
 
-  const existing = await findExistingArtifact(build.id, parsed.data.storage.key);
+  const existing = await findExistingArtifact(job, parsed.data.storage.key);
   if (existing) {
     return c.json({ data: existing });
   }
@@ -487,9 +595,7 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts/finalize", async (c) => {
     );
   }
 
-  const artifact = await recordRoutingGraphArtifact({
-    accountId: build.accountId,
-    buildId: build.id,
+  const artifact = await recordBuildArtifact(job, {
     provider: storageInfo.provider,
     bucket: storageInfo.bucket,
     storageKey: parsed.data.storage.key,
@@ -506,7 +612,7 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts/finalize", async (c) => {
       partCount: parsed.data.storage.parts.length,
     },
   });
-  await appendLog(build.id, "info", "Artifact direct upload finalized", {
+  await appendLog(job.build.id, "info", "Artifact direct upload finalized", {
     artifactId: artifact.id,
     fileName: artifact.fileName,
     size: artifact.size,
@@ -515,8 +621,8 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts/finalize", async (c) => {
 });
 
 rootAgentRoute.post("/root-agent/jobs/:id/artifacts", async (c) => {
-  const build = await findBuildForAgent(c, c.req.param("id"));
-  if (!build) return notFound(c, "Routing graph build not found");
+  const job = await findBuildForAgent(c, c.req.param("id"));
+  if (!job) return notFound(c, "Build not found");
   const body = c.req.raw.body;
   if (!body) {
     return c.json(
@@ -525,13 +631,15 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts", async (c) => {
     );
   }
 
-  const fileName = safeFileName(c.req.header("x-artifact-filename") ?? `${build.id}.tar.gz`);
-  const artifactKind = c.req.header("x-artifact-kind") ?? "valhalla_graph";
+  const fileName = safeFileName(c.req.header("x-artifact-filename") ?? `${job.build.id}.tar.gz`);
+  const artifactKind =
+    c.req.header("x-artifact-kind") ??
+    (job.kind === "routing" ? "valhalla_graph" : "basemap_tiles");
   const checksumSha256 = c.req.header("x-artifact-sha256") ?? null;
   const manifest = parseHeaderJson(c.req.header("x-artifact-manifest"));
   const storage = getStorage();
   const storageInfo = storage.getInfo();
-  const storageKey = `accounts/${build.accountId}/routing-graphs/${build.id}/${Date.now()}-${fileName}`;
+  const storageKey = artifactStorageKey(job, fileName);
   const artifactSize = numberHeader(c.req.header("x-artifact-size"));
   const uploaded = await storage.upload(
     storageKey,
@@ -539,9 +647,7 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts", async (c) => {
     c.req.header("content-type") ?? "application/gzip",
     artifactSize,
   );
-  const artifact = await recordRoutingGraphArtifact({
-    accountId: build.accountId,
-    buildId: build.id,
+  const artifact = await recordBuildArtifact(job, {
     provider: storageInfo.provider,
     bucket: storageInfo.bucket,
     storageKey: uploaded.key,
@@ -553,7 +659,7 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts", async (c) => {
     manifest,
     metadata: manifest,
   });
-  await appendLog(build.id, "info", "Artifact uploaded", {
+  await appendLog(job.build.id, "info", "Artifact uploaded", {
     artifactId: artifact?.id,
     fileName,
     size: artifactSize ?? uploaded.size,
@@ -563,36 +669,26 @@ rootAgentRoute.post("/root-agent/jobs/:id/artifacts", async (c) => {
 
 rootAgentRoute.get("/root-agent/artifacts/:id/download", async (c) => {
   const artifactId = c.req.param("id");
-  const [artifact] = await db
+  const [routingArtifact] = await db
     .select()
     .from(routingGraphArtifacts)
     .where(eq(routingGraphArtifacts.id, artifactId))
     .limit(1);
-  if (!artifact?.storageObjectId) return notFound(c, "Routing graph artifact not found");
-  const [build] = await db
-    .select()
-    .from(routingGraphBuilds)
-    .where(
-      and(
-        eq(routingGraphBuilds.id, artifact.buildId),
-        eq(routingGraphBuilds.accountId, c.get("accountId")),
-        isNull(routingGraphBuilds.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (
-    !build ||
-    (build.workerNodeId !== c.get("workerNodeId") &&
-      build.activationWorkerNodeId !== c.get("workerNodeId"))
-  ) {
-    return notFound(c, "Routing graph artifact not found");
-  }
+  const artifact = routingArtifact
+    ? { kind: "routing" as const, artifact: routingArtifact }
+    : await findBasemapArtifactForDownload(artifactId);
+  if (!artifact?.artifact.storageObjectId) return notFound(c, "Artifact not found");
+  const build =
+    artifact.kind === "routing"
+      ? await findRoutingBuildForArtifact(c, artifact.artifact.buildId)
+      : await findBasemapBuildForArtifact(c, artifact.artifact.buildId);
+  if (!build) return notFound(c, "Artifact not found");
   const [object] = await db
     .select()
     .from(storageObjects)
-    .where(eq(storageObjects.id, artifact.storageObjectId))
+    .where(eq(storageObjects.id, artifact.artifact.storageObjectId))
     .limit(1);
-  if (!object) return notFound(c, "Routing graph storage object not found");
+  if (!object) return notFound(c, "Storage object not found");
   const storage = getStorage();
   const stream = storage.downloadStream
     ? await storage.downloadStream(object.storageKey)
@@ -600,7 +696,7 @@ rootAgentRoute.get("/root-agent/artifacts/:id/download", async (c) => {
   return new Response(Readable.toWeb(stream) as ReadableStream, {
     headers: {
       "content-type": object.contentType ?? "application/octet-stream",
-      "content-disposition": `attachment; filename="${artifact.fileName}"`,
+      "content-disposition": `attachment; filename="${artifact.artifact.fileName}"`,
     },
   });
 });
@@ -668,7 +764,7 @@ async function authenticateAgent(c: Context<AgentEnv>) {
 }
 
 async function findBuildForAgent(c: Context<AgentEnv>, buildId: string) {
-  const [build] = await db
+  const [routingBuild] = await db
     .select()
     .from(routingGraphBuilds)
     .where(
@@ -680,11 +776,24 @@ async function findBuildForAgent(c: Context<AgentEnv>, buildId: string) {
       ),
     )
     .limit(1);
-  return build ?? null;
+  if (routingBuild) return { kind: "routing" as const, build: routingBuild };
+  const [basemapBuild] = await db
+    .select()
+    .from(basemapBuilds)
+    .where(
+      and(
+        eq(basemapBuilds.id, buildId),
+        eq(basemapBuilds.accountId, c.get("accountId")),
+        eq(basemapBuilds.workerNodeId, c.get("workerNodeId")),
+        isNull(basemapBuilds.deletedAt),
+      ),
+    )
+    .limit(1);
+  return basemapBuild ? { kind: "basemap" as const, build: basemapBuild } : null;
 }
 
 async function findActivationForAgent(c: Context<AgentEnv>, buildId: string) {
-  const [build] = await db
+  const [routingBuild] = await db
     .select()
     .from(routingGraphBuilds)
     .where(
@@ -697,7 +806,21 @@ async function findActivationForAgent(c: Context<AgentEnv>, buildId: string) {
       ),
     )
     .limit(1);
-  return build ?? null;
+  if (routingBuild) return { kind: "routing" as const, build: routingBuild };
+  const [basemapBuild] = await db
+    .select()
+    .from(basemapBuilds)
+    .where(
+      and(
+        eq(basemapBuilds.id, buildId),
+        eq(basemapBuilds.accountId, c.get("accountId")),
+        eq(basemapBuilds.activationWorkerNodeId, c.get("workerNodeId")),
+        inArray(basemapBuilds.activationStatus, ["activation_requested", "activating"]),
+        isNull(basemapBuilds.deletedAt),
+      ),
+    )
+    .limit(1);
+  return basemapBuild ? { kind: "basemap" as const, build: basemapBuild } : null;
 }
 
 async function appendLog(
@@ -706,30 +829,51 @@ async function appendLog(
   message: string,
   metadata: unknown,
 ) {
-  await db.insert(routingGraphBuildLogs).values({ buildId, level, message, metadata });
+  const [routingBuild] = await db
+    .select({ id: routingGraphBuilds.id })
+    .from(routingGraphBuilds)
+    .where(eq(routingGraphBuilds.id, buildId))
+    .limit(1);
+  if (routingBuild) {
+    await db.insert(routingGraphBuildLogs).values({ buildId, level, message, metadata });
+    return;
+  }
+  await db.insert(basemapBuildLogs).values({ buildId, level, message, metadata });
 }
 
-async function findExistingArtifact(buildId: string, storageKey: string) {
+async function findExistingArtifact(
+  job: NonNullable<Awaited<ReturnType<typeof findBuildForAgent>>>,
+  storageKey: string,
+) {
+  if (job.kind === "routing") {
+    const rows = await db
+      .select({ artifact: routingGraphArtifacts, object: storageObjects })
+      .from(routingGraphArtifacts)
+      .innerJoin(
+        storageObjects,
+        eq(routingGraphArtifacts.storageObjectId, storageObjects.id),
+      )
+      .where(
+        and(
+          eq(routingGraphArtifacts.buildId, job.build.id),
+          eq(storageObjects.storageKey, storageKey),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.artifact ?? null;
+  }
   const rows = await db
-    .select({ artifact: routingGraphArtifacts, object: storageObjects })
-    .from(routingGraphArtifacts)
-    .innerJoin(
-      storageObjects,
-      eq(routingGraphArtifacts.storageObjectId, storageObjects.id),
-    )
-    .where(
-      and(
-        eq(routingGraphArtifacts.buildId, buildId),
-        eq(storageObjects.storageKey, storageKey),
-      ),
-    )
+    .select({ artifact: basemapArtifacts, object: storageObjects })
+    .from(basemapArtifacts)
+    .innerJoin(storageObjects, eq(basemapArtifacts.storageObjectId, storageObjects.id))
+    .where(and(eq(basemapArtifacts.buildId, job.build.id), eq(storageObjects.storageKey, storageKey)))
     .limit(1);
   return rows[0]?.artifact ?? null;
 }
 
-async function recordRoutingGraphArtifact(params: {
-  accountId: string;
-  buildId: string;
+async function recordBuildArtifact(
+  job: NonNullable<Awaited<ReturnType<typeof findBuildForAgent>>>,
+  params: {
   provider: "local" | "s3" | "r2";
   bucket: string;
   storageKey: string;
@@ -758,7 +902,7 @@ async function recordRoutingGraphArtifact(params: {
     : await db
         .insert(storageObjects)
         .values({
-          accountId: params.accountId,
+          accountId: job.build.accountId,
           provider: params.provider,
           bucket: params.bucket,
           storageKey: params.storageKey,
@@ -766,17 +910,38 @@ async function recordRoutingGraphArtifact(params: {
           contentType: params.contentType,
           size: params.size,
           contentHash: params.checksumSha256,
-          resourceType: "routing_graph_build",
-          resourceId: params.buildId,
+          resourceType: job.kind === "routing" ? "routing_graph_build" : "basemap_build",
+          resourceId: job.build.id,
           artifactKind: params.artifactKind,
           metadata: params.metadata,
         })
         .returning();
+  if (job.kind === "routing") {
+    const [artifact] = await db
+      .insert(routingGraphArtifacts)
+      .values({
+        accountId: job.build.accountId,
+        buildId: job.build.id,
+        storageObjectId: createdObject?.id,
+        kind: params.artifactKind,
+        status: "available",
+        fileName: params.fileName,
+        size: params.size,
+        checksumSha256: params.checksumSha256,
+        manifest: params.manifest,
+      })
+      .returning();
+    if (!artifact) throw new Error("Failed to record routing graph artifact");
+    if (params.artifactKind === "valhalla_graph") {
+      await ensureRoutingGraphRelease(job.build, artifact.id, params.manifest);
+    }
+    return artifact;
+  }
   const [artifact] = await db
-    .insert(routingGraphArtifacts)
+    .insert(basemapArtifacts)
     .values({
-      accountId: params.accountId,
-      buildId: params.buildId,
+      accountId: job.build.accountId,
+      buildId: job.build.id,
       storageObjectId: createdObject?.id,
       kind: params.artifactKind,
       status: "available",
@@ -786,8 +951,153 @@ async function recordRoutingGraphArtifact(params: {
       manifest: params.manifest,
     })
     .returning();
-  if (!artifact) throw new Error("Failed to record routing graph artifact");
+  if (!artifact) throw new Error("Failed to record basemap artifact");
+  if (params.artifactKind === "basemap_tiles") {
+    await ensureBasemapRelease(job.build, artifact.id, createdObject?.id ?? null, params.manifest);
+  }
   return artifact;
+}
+
+function artifactStorageKey(
+  job: NonNullable<Awaited<ReturnType<typeof findBuildForAgent>>>,
+  fileName: string,
+) {
+  const domain = job.kind === "routing" ? "routing-graphs" : "basemaps";
+  return `accounts/${job.build.accountId}/${domain}/${job.build.id}/${Date.now()}-${fileName}`;
+}
+
+async function ensureRoutingGraphRelease(
+  build: typeof routingGraphBuilds.$inferSelect,
+  artifactId: string,
+  manifest: Record<string, unknown>,
+) {
+  const [existing] = await db
+    .select()
+    .from(routingGraphReleases)
+    .where(and(eq(routingGraphReleases.buildId, build.id), eq(routingGraphReleases.artifactId, artifactId)))
+    .limit(1);
+  if (existing) return existing;
+  const now = new Date();
+  const [release] = await db
+    .insert(routingGraphReleases)
+    .values({
+      accountId: build.accountId,
+      buildId: build.id,
+      artifactId,
+      name: build.name,
+      version: build.id.slice(0, 8),
+      status: "published",
+      activationStatus: build.activationStatus,
+      sourceDataVersions: {
+        sourceUrl: build.sourceUrl,
+        sourcePreset: build.sourcePreset,
+        valhallaImage: build.valhallaImage,
+      },
+      manifest,
+      publishedAt: now,
+    })
+    .returning();
+  return release;
+}
+
+async function ensureBasemapRelease(
+  build: typeof basemapBuilds.$inferSelect,
+  artifactId: string,
+  storageObjectId: string | null,
+  manifest: Record<string, unknown>,
+) {
+  const [existing] = await db
+    .select()
+    .from(basemapReleases)
+    .where(and(eq(basemapReleases.buildId, build.id), eq(basemapReleases.artifactId, artifactId)))
+    .limit(1);
+  if (existing) return existing;
+  const now = new Date();
+  const [release] = await db
+    .insert(basemapReleases)
+    .values({
+      accountId: build.accountId,
+      buildId: build.id,
+      artifactId,
+      artifactStorageObjectId: storageObjectId,
+      name: build.name,
+      version: build.id.slice(0, 8),
+      status: "published",
+      activationStatus: build.activationStatus,
+      sourceDataVersions: {
+        sourceUrl: build.sourceUrl,
+        sourcePreset: build.sourcePreset,
+        engine: build.engine,
+        sourceKind: build.sourceKind,
+      },
+      schemaVersion: build.profile,
+      bounds: build.areaOfInterest,
+      minZoom: readNumber(manifest.minZoom, 0),
+      maxZoom: readNumber(manifest.maxZoom, 14),
+      attribution: typeof manifest.attribution === "string" ? manifest.attribution : null,
+      tilejson: asRecord(manifest.tilejson),
+      styleCompatibility: { profile: build.profile, outputFormat: build.outputFormat },
+      publishedAt: now,
+    })
+    .returning();
+  return release;
+}
+
+async function findBasemapArtifactForDownload(artifactId: string) {
+  const [artifact] = await db
+    .select()
+    .from(basemapArtifacts)
+    .where(eq(basemapArtifacts.id, artifactId))
+    .limit(1);
+  return artifact ? { kind: "basemap" as const, artifact } : null;
+}
+
+async function findRoutingBuildForArtifact(c: Context<AgentEnv>, buildId: string) {
+  const [build] = await db
+    .select()
+    .from(routingGraphBuilds)
+    .where(
+      and(
+        eq(routingGraphBuilds.id, buildId),
+        eq(routingGraphBuilds.accountId, c.get("accountId")),
+        isNull(routingGraphBuilds.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (
+    !build ||
+    (build.workerNodeId !== c.get("workerNodeId") &&
+      build.activationWorkerNodeId !== c.get("workerNodeId"))
+  ) {
+    return null;
+  }
+  return build;
+}
+
+async function findBasemapBuildForArtifact(c: Context<AgentEnv>, buildId: string) {
+  const [build] = await db
+    .select()
+    .from(basemapBuilds)
+    .where(
+      and(
+        eq(basemapBuilds.id, buildId),
+        eq(basemapBuilds.accountId, c.get("accountId")),
+        isNull(basemapBuilds.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (
+    !build ||
+    (build.workerNodeId !== c.get("workerNodeId") &&
+      build.activationWorkerNodeId !== c.get("workerNodeId"))
+  ) {
+    return null;
+  }
+  return build;
+}
+
+function readNumber(value: unknown, fallback: number) {
+  return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
 function hashToken(token: string) {

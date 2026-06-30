@@ -5,7 +5,7 @@ description: Register polling root agents for routing graph builds.
 
 # External Compute
 
-Planisfy uses polling root agents for external compute. A root agent is a server process that connects outbound to the API, registers as a worker node, polls for work, runs build tooling such as Valhalla, uploads artifacts, and finalizes metadata.
+Planisfy uses polling root agents for external compute. A root agent is a server process that connects outbound to the API, registers as a worker node, polls for work, runs build tooling such as Valhalla or Planetiler, uploads artifacts, and finalizes metadata.
 
 Polling agents are the default because they work behind NAT, firewalls, and VPS private networks. Planisfy does not require inbound webhook endpoints on worker machines for routing builds.
 
@@ -54,7 +54,7 @@ ROOT_AGENT_NAME=builder-1
 ROOT_AGENT_KIND=remote
 ROOT_AGENT_STATE_DIR=/var/lib/planisfy/root-agent
 ROOT_AGENT_WORK_DIR=/var/lib/planisfy/root-agent/work
-ROOT_AGENT_CAPABILITIES=valhalla_graph_build,dem_hydration,self_host_activation
+ROOT_AGENT_CAPABILITIES=valhalla_graph_build,basemap_build,dem_hydration,self_host_activation
 ROOT_AGENT_POLL_INTERVAL_MS=5000
 ROOT_AGENT_UPLOAD_RETRIES=5
 ROOT_AGENT_UPLOAD_CONCURRENCY=4
@@ -65,6 +65,7 @@ Optional activation settings let the agent install completed artifacts into a lo
 ```bash
 ROOT_AGENT_VALHALLA_DATA_DIR=/opt/planisfy/infra/docker/data/valhalla_data
 ROOT_AGENT_ELEVATION_DATA_DIR=/opt/planisfy/infra/docker/data/elevation
+ROOT_AGENT_MARTIN_SOURCES_DIR=/opt/planisfy/infra/docker/data/martin-sources
 ROOT_AGENT_COMPOSE_FILE=/opt/planisfy/infra/docker/docker-compose.yml
 ROOT_AGENT_COMPOSE_ENV_FILE=/opt/planisfy/.env
 ROOT_AGENT_COMPOSE_CWD=/opt/planisfy
@@ -117,6 +118,17 @@ sudo systemctl status --no-pager planisfy-root-agent
 
 If you use a different Node.js path, update `ExecStart`. If the service user cannot access Docker, builds will fail before Valhalla starts.
 
+## Build workers and serving workers
+
+A build worker creates artifacts. A serving worker installs an artifact into the runtime that answers production traffic.
+
+- Valhalla build: OSM PBF to routing graph artifact.
+- Valhalla deployment: routing graph artifact to `ROOT_AGENT_VALHALLA_DATA_DIR`, then restart/probe Valhalla.
+- Basemap build: OSM PBF to PMTiles through Planetiler.
+- Basemap deployment: PMTiles artifact to `ROOT_AGENT_MARTIN_SOURCES_DIR`, then restart/probe Martin.
+
+Small installs can use one root agent for both roles. Larger installs often use separate build and serving machines.
+
 ## Validate the worker
 
 In Console, the registered worker node should appear under operations with a recent heartbeat. Before a regional build, verify the compute host:
@@ -141,6 +153,13 @@ For S3-compatible storage and R2, root-agent artifacts use direct object-storage
 5. The API records the storage object and routing graph artifact rows.
 
 The API is the control plane. It should not proxy regional or planet-scale artifacts through public HTTP ingress.
+
+The lifecycle in Console is intentionally split:
+
+- Built: compute finished.
+- Available: the artifact is stored and can be fetched.
+- Published: the artifact has a named release.
+- Active or primary: the runtime is currently serving it.
 
 Local filesystem storage cannot issue signed object-storage upload sessions. In local storage mode, root-agent uploads fall back to the legacy proxied path for small smoke artifacts only.
 

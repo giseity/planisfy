@@ -1,4 +1,5 @@
 export { BackupsTab } from "@/features/operations/backups-tab";
+export { BasemapsTab } from "@/features/operations/basemaps-tab";
 export { DeliveryTab } from "@/features/operations/delivery-tab";
 export { JobsTab } from "@/features/operations/jobs-tab";
 export { NotificationsTab } from "@/features/operations/notifications-tab";

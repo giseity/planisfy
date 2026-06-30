@@ -22,6 +22,10 @@ import {
 } from "./resources";
 import {
   artifactBackupStatusEnum,
+  basemapActivationStatusEnum,
+  basemapArtifactStatusEnum,
+  basemapBuildStatusEnum,
+  basemapReleaseStatusEnum,
   customDomainStatusEnum,
   datasetStatusEnum,
   eventStatusEnum,
@@ -30,6 +34,7 @@ import {
   routingGraphActivationStatusEnum,
   routingGraphArtifactStatusEnum,
   routingGraphBuildStatusEnum,
+  routingGraphReleaseStatusEnum,
   scheduledOperationKindEnum,
   scheduledOperationStatusEnum,
   sourceProviderEnum,
@@ -725,7 +730,7 @@ export const routingGraphArtifacts = pgTable(
       .notNull()
       .default("pending"),
     fileName: varchar("file_name", { length: 256 }).notNull(),
-    size: integer("size"),
+    size: bigint("size", { mode: "number" }),
     checksumSha256: varchar("checksum_sha256", { length: 128 }),
     manifest: jsonb("manifest").notNull().default({}),
     errorMessage: text("error_message"),
@@ -739,6 +744,48 @@ export const routingGraphArtifacts = pgTable(
   (table) => [
     index("routing_graph_artifacts_account_idx").on(table.accountId),
     index("routing_graph_artifacts_build_idx").on(table.buildId),
+  ],
+);
+
+export const routingGraphReleases = pgTable(
+  "routing_graph_releases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    buildId: uuid("build_id")
+      .notNull()
+      .references(() => routingGraphBuilds.id, { onDelete: "cascade" }),
+    artifactId: uuid("artifact_id").references(() => routingGraphArtifacts.id, {
+      onDelete: "set null",
+    }),
+    name: varchar("name", { length: 128 }).notNull(),
+    version: varchar("version", { length: 64 }).notNull(),
+    status: routingGraphReleaseStatusEnum("status").notNull().default("draft"),
+    activationStatus: routingGraphActivationStatusEnum("activation_status")
+      .notNull()
+      .default("inactive"),
+    sourceDataVersions: jsonb("source_data_versions").notNull().default({}),
+    manifest: jsonb("manifest").notNull().default({}),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    deprecatedAt: timestamp("deprecated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("routing_graph_releases_account_idx").on(table.accountId),
+    index("routing_graph_releases_build_idx").on(table.buildId),
+    uniqueIndex("routing_graph_releases_name_version_unique").on(
+      table.accountId,
+      table.name,
+      table.version,
+    ),
   ],
 );
 
@@ -784,31 +831,168 @@ export const spriteAssets = pgTable(
   ],
 );
 
-export const basemapReleases = pgTable(
-  "basemap_releases",
+export const basemapBuilds = pgTable(
+  "basemap_builds",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 128 }).notNull(),
-    version: varchar("version", { length: 64 }).notNull(),
-    status: processingJobStatusEnum("status").notNull().default("PENDING"),
-    sourceDataVersions: jsonb("source_data_versions"),
-    schemaVersion: varchar("schema_version", { length: 64 }),
-    artifactStorageObjectId: uuid("artifact_storage_object_id"),
-    manifestStorageObjectId: uuid("manifest_storage_object_id"),
-    bounds: jsonb("bounds"),
-    minZoom: integer("min_zoom").default(0),
-    maxZoom: integer("max_zoom").default(14),
-    attribution: text("attribution"),
-    buildJobId: uuid("build_job_id").references(() => processingJobs.id, {
+    status: basemapBuildStatusEnum("status").notNull().default("queued"),
+    activationStatus: basemapActivationStatusEnum("activation_status")
+      .notNull()
+      .default("inactive"),
+    progress: integer("progress").notNull().default(0),
+    workerNodeId: uuid("worker_node_id").references(() => workerNodes.id, {
       onDelete: "set null",
     }),
-    publishedAt: timestamp("published_at", { withTimezone: true }),
+    activationWorkerNodeId: uuid("activation_worker_node_id").references(
+      () => workerNodes.id,
+      { onDelete: "set null" },
+    ),
+    engine: varchar("engine", { length: 64 }).notNull().default("planetiler_osm"),
+    sourceKind: varchar("source_kind", { length: 64 }).notNull().default("osm_pbf"),
+    sourceUrl: text("source_url").notNull(),
+    sourcePreset: varchar("source_preset", { length: 128 }),
+    planetilerImage: text("planetiler_image")
+      .notNull()
+      .default("ghcr.io/onthegomap/planetiler:latest"),
+    profile: varchar("profile", { length: 128 }).notNull().default("openmaptiles"),
+    outputFormat: varchar("output_format", { length: 32 }).notNull().default("pmtiles"),
+    areaOfInterest: jsonb("area_of_interest"),
+    config: jsonb("config").notNull().default({}),
+    output: jsonb("output").notNull().default({}),
+    errorCode: varchar("error_code", { length: 128 }),
+    errorMessage: text("error_message"),
+    cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("basemap_builds_account_idx").on(table.accountId),
+    index("basemap_builds_status_idx").on(table.status),
+    index("basemap_builds_worker_idx").on(table.workerNodeId),
+  ],
+);
+
+export const basemapBuildLogs = pgTable(
+  "basemap_build_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    buildId: uuid("build_id")
+      .notNull()
+      .references(() => basemapBuilds.id, { onDelete: "cascade" }),
+    level: varchar("level", { length: 16 }).notNull().default("info"),
+    message: text("message").notNull(),
+    metadata: jsonb("metadata"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
+  (table) => [index("basemap_build_logs_build_idx").on(table.buildId)],
+);
+
+export const basemapArtifacts = pgTable(
+  "basemap_artifacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    buildId: uuid("build_id")
+      .notNull()
+      .references(() => basemapBuilds.id, { onDelete: "cascade" }),
+    storageObjectId: uuid("storage_object_id").references(
+      () => storageObjects.id,
+      { onDelete: "set null" },
+    ),
+    kind: varchar("kind", { length: 64 }).notNull().default("basemap_tiles"),
+    status: basemapArtifactStatusEnum("status").notNull().default("pending"),
+    fileName: varchar("file_name", { length: 256 }).notNull(),
+    size: bigint("size", { mode: "number" }),
+    checksumSha256: varchar("checksum_sha256", { length: 128 }),
+    manifest: jsonb("manifest").notNull().default({}),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
   (table) => [
+    index("basemap_artifacts_account_idx").on(table.accountId),
+    index("basemap_artifacts_build_idx").on(table.buildId),
+  ],
+);
+
+export const basemapReleases = pgTable(
+  "basemap_releases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 128 }).notNull(),
+    version: varchar("version", { length: 64 }).notNull(),
+    status: basemapReleaseStatusEnum("status").notNull().default("draft"),
+    activationStatus: basemapActivationStatusEnum("activation_status")
+      .notNull()
+      .default("inactive"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    buildId: uuid("build_id").references(() => basemapBuilds.id, {
+      onDelete: "set null",
+    }),
+    artifactId: uuid("artifact_id").references(() => basemapArtifacts.id, {
+      onDelete: "set null",
+    }),
+    sourceDataVersions: jsonb("source_data_versions").notNull().default({}),
+    schemaVersion: varchar("schema_version", { length: 64 }),
+    artifactStorageObjectId: uuid("artifact_storage_object_id").references(
+      () => storageObjects.id,
+      { onDelete: "set null" },
+    ),
+    manifestStorageObjectId: uuid("manifest_storage_object_id").references(
+      () => storageObjects.id,
+      { onDelete: "set null" },
+    ),
+    bounds: jsonb("bounds"),
+    minZoom: integer("min_zoom").default(0),
+    maxZoom: integer("max_zoom").default(14),
+    attribution: text("attribution"),
+    tilejson: jsonb("tilejson").notNull().default({}),
+    styleCompatibility: jsonb("style_compatibility").notNull().default({}),
+    martinSource: varchar("martin_source", { length: 256 }),
+    martinSourceVersioned: varchar("martin_source_versioned", { length: 256 }),
+    activationMetadata: jsonb("activation_metadata").notNull().default({}),
+    buildJobId: uuid("build_job_id").references(() => processingJobs.id, {
+      onDelete: "set null",
+    }),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    deprecatedAt: timestamp("deprecated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("basemap_releases_account_idx").on(table.accountId),
+    index("basemap_releases_build_idx").on(table.buildId),
     uniqueIndex("basemap_releases_name_version_unique").on(
+      table.accountId,
       table.name,
       table.version,
     ),

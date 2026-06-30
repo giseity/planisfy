@@ -23,3 +23,5 @@ Before running regional or planet-scale routing builds, check:
 Start with no-elevation builds. Elevation and DEM generation should be treated as separate capacity planning work after routing graph builds are reliable.
 
 Use local filesystem storage only for small smoke artifacts. Local storage cannot create signed direct upload sessions and is not a planet-scale artifact path.
+
+Runtime health is separate from build state. A Valhalla or Martin build can succeed while the runtime remains unavailable until the artifact is deployed to a serving worker and the readiness probe passes.

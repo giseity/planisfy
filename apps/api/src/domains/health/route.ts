@@ -106,6 +106,9 @@ healthRoute.get("/health/detailed", async (c) => {
   // Martin (tile server)
   const martinUrl = env.MARTIN_URL;
   const martinStart = Date.now();
+  if (!martinUrl) {
+    checks.martin = { status: "unavailable", latency: Date.now() - martinStart };
+  } else {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
@@ -115,6 +118,7 @@ healthRoute.get("/health/detailed", async (c) => {
   } catch (err) {
     checks.martin = { status: "error", latency: Date.now() - martinStart, error: err instanceof Error ? err.message : String(err) };
     // Martin being down is degraded, not critical
+  }
   }
 
   checks.tileWorker = await checkTileWorkerHealth();
