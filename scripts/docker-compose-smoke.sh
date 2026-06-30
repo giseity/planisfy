@@ -56,13 +56,22 @@ trap cleanup EXIT
 
 SMOKE_ENV_FILE="$(mktemp)"
 if [[ -f "$ENV_FILE" ]]; then
-  grep -Ev '^(DEPLOYMENT_MODE|STORAGE_PROVIDER|LOCAL_STORAGE_HOST_PATH|DEMO_PMTILES_PATH)=' "$ENV_FILE" >"$SMOKE_ENV_FILE" || true
+  grep -Ev '^(DEPLOYMENT_MODE|STORAGE_PROVIDER|LOCAL_STORAGE_HOST_PATH|DEMO_PMTILES_PATH|S3_BUCKET|S3_REGION|S3_ENDPOINT|CONTAINER_S3_ENDPOINT|S3_PUBLIC_URL|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|MINIO_ROOT_USER|MINIO_ROOT_PASSWORD)=' "$ENV_FILE" >"$SMOKE_ENV_FILE" || true
 fi
 {
   echo "DEPLOYMENT_MODE=${SMOKE_DEPLOYMENT_MODE:-self_host}"
-  echo "STORAGE_PROVIDER=${SMOKE_STORAGE_PROVIDER:-local}"
+  echo "STORAGE_PROVIDER=${SMOKE_STORAGE_PROVIDER:-s3}"
   echo "LOCAL_STORAGE_HOST_PATH=${SMOKE_LOCAL_STORAGE_HOST_PATH:-../../.storage}"
   echo "DEMO_PMTILES_PATH=${SMOKE_DEMO_PMTILES_PATH:-/data/pmtiles/stuttgart.pmtiles}"
+  echo "S3_BUCKET=${SMOKE_S3_BUCKET:-planisfy-artifacts}"
+  echo "S3_REGION=${SMOKE_S3_REGION:-auto}"
+  echo "S3_ENDPOINT=${SMOKE_S3_ENDPOINT:-http://localhost:9000}"
+  echo "CONTAINER_S3_ENDPOINT=${SMOKE_CONTAINER_S3_ENDPOINT:-http://minio:9000}"
+  echo "S3_PUBLIC_URL=${SMOKE_S3_PUBLIC_URL:-http://localhost:9000/planisfy-artifacts}"
+  echo "AWS_ACCESS_KEY_ID=${SMOKE_AWS_ACCESS_KEY_ID:-planisfy}"
+  echo "AWS_SECRET_ACCESS_KEY=${SMOKE_AWS_SECRET_ACCESS_KEY:-planisfy-local-minio-password}"
+  echo "MINIO_ROOT_USER=${SMOKE_MINIO_ROOT_USER:-planisfy}"
+  echo "MINIO_ROOT_PASSWORD=${SMOKE_MINIO_ROOT_PASSWORD:-planisfy-local-minio-password}"
 } >>"$SMOKE_ENV_FILE"
 
 echo "Validating Docker Compose configuration"
@@ -96,7 +105,7 @@ do
 done
 
 echo "Starting smoke-test services"
-compose_up postgres redis api
+compose_up minio minio-init postgres redis api
 
 echo "Waiting for API health"
 for attempt in {1..60}; do

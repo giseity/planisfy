@@ -217,7 +217,7 @@ export async function checkStorageHealth(
     return {
       status: process.env.S3_BUCKET ? "configured" : "degraded",
       provider,
-      bucket: process.env.S3_BUCKET ?? "planisfy-uploads",
+      bucket: process.env.S3_BUCKET ?? "planisfy-artifacts",
       latency: Date.now() - start,
       error: process.env.S3_BUCKET ? undefined : "S3_BUCKET is not configured",
     };
@@ -233,7 +233,7 @@ export async function checkStorageHealth(
   return {
     status: r2Configured ? "configured" : "degraded",
     provider,
-    bucket: process.env.R2_BUCKET ?? process.env.S3_BUCKET ?? "planisfy-uploads",
+    bucket: process.env.R2_BUCKET ?? process.env.S3_BUCKET ?? "planisfy-artifacts",
     latency: Date.now() - start,
     error: r2Configured
       ? undefined

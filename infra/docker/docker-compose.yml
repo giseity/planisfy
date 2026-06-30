@@ -4,7 +4,7 @@
 #
 # Quick start from the repository root:
 #   scripts/self-host-setup.sh
-#   docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
+#   docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
 #
 # Services:
 #   - api:        API Gateway (port 4000)
@@ -75,16 +75,16 @@ services:
       - ELEVATION_URL=${ELEVATION_URL:-http://elevation:8080/api/v1}
       - VALHALLA_URL=http://valhalla:8002
       - VALHALLA_READINESS_ROUTE=${VALHALLA_READINESS_ROUTE:-}
-      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-s3}
       - LOCAL_STORAGE_PATH=/data/storage
       - LOCAL_STORAGE_URL=${LOCAL_STORAGE_URL:-http://localhost:4000/storage}
       - LOCAL_STORAGE_BUCKET=${LOCAL_STORAGE_BUCKET:-planisfy-local}
-      - S3_BUCKET=${S3_BUCKET:-planisfy-uploads}
+      - S3_BUCKET=${S3_BUCKET:-planisfy-artifacts}
       - S3_REGION=${S3_REGION:-auto}
-      - S3_ENDPOINT=${CONTAINER_S3_ENDPOINT:-${S3_ENDPOINT:-}}
-      - S3_PUBLIC_URL=${S3_PUBLIC_URL:-}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - S3_ENDPOINT=${CONTAINER_S3_ENDPOINT:-${S3_ENDPOINT:-http://minio:9000}}
+      - S3_PUBLIC_URL=${S3_PUBLIC_URL:-http://localhost:9000/planisfy-artifacts}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-planisfy}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-planisfy-local-minio-password}
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
       - R2_BUCKET=${R2_BUCKET:-}
       - R2_ENDPOINT=${R2_ENDPOINT:-}
@@ -150,16 +150,16 @@ services:
       - HOST=0.0.0.0
       - APP_VERSION=${APP_VERSION:-self-host}
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
-      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-s3}
       - LOCAL_STORAGE_PATH=/data/storage
       - LOCAL_STORAGE_URL=${LOCAL_STORAGE_URL:-http://localhost:4000/storage}
       - LOCAL_STORAGE_BUCKET=${LOCAL_STORAGE_BUCKET:-planisfy-local}
-      - S3_BUCKET=${S3_BUCKET:-planisfy-uploads}
+      - S3_BUCKET=${S3_BUCKET:-planisfy-artifacts}
       - S3_REGION=${S3_REGION:-auto}
-      - S3_ENDPOINT=${CONTAINER_S3_ENDPOINT:-${S3_ENDPOINT:-}}
-      - S3_PUBLIC_URL=${S3_PUBLIC_URL:-}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - S3_ENDPOINT=${CONTAINER_S3_ENDPOINT:-${S3_ENDPOINT:-http://minio:9000}}
+      - S3_PUBLIC_URL=${S3_PUBLIC_URL:-http://localhost:9000/planisfy-artifacts}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-planisfy}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-planisfy-local-minio-password}
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
       - R2_BUCKET=${R2_BUCKET:-}
       - R2_ENDPOINT=${R2_ENDPOINT:-}
@@ -199,16 +199,16 @@ services:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - SOURCE_CREDENTIAL_ENCRYPTION_KEY=${SOURCE_CREDENTIAL_ENCRYPTION_KEY:-}
-      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-local}
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-s3}
       - LOCAL_STORAGE_PATH=/data/storage
       - LOCAL_STORAGE_URL=${LOCAL_STORAGE_URL:-http://localhost:4000/storage}
       - LOCAL_STORAGE_BUCKET=${LOCAL_STORAGE_BUCKET:-planisfy-local}
-      - S3_BUCKET=${S3_BUCKET:-planisfy-uploads}
+      - S3_BUCKET=${S3_BUCKET:-planisfy-artifacts}
       - S3_REGION=${S3_REGION:-auto}
-      - S3_ENDPOINT=${CONTAINER_S3_ENDPOINT:-${S3_ENDPOINT:-}}
-      - S3_PUBLIC_URL=${S3_PUBLIC_URL:-}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - S3_ENDPOINT=${CONTAINER_S3_ENDPOINT:-${S3_ENDPOINT:-http://minio:9000}}
+      - S3_PUBLIC_URL=${S3_PUBLIC_URL:-http://localhost:9000/planisfy-artifacts}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-planisfy}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-planisfy-local-minio-password}
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
       - R2_BUCKET=${R2_BUCKET:-}
       - R2_ENDPOINT=${R2_ENDPOINT:-}
