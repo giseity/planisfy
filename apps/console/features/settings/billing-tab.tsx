@@ -70,6 +70,7 @@ export function BillingTab() {
       : billing.quotaPercent >= 70
         ? "bg-yellow-500"
         : "bg-green-500";
+  const isSelfHosted = billing.deploymentMode === "self_host";
 
   return (
     <div className="space-y-6">
@@ -156,14 +157,21 @@ export function BillingTab() {
             </div>
           </div>
 
-          {billing.quotaPercent >= 80 && (
+          {isSelfHosted && (
+            <div className="rounded-md border bg-muted/30 px-4 py-3 text-sm text-muted-foreground mb-4">
+              Hosted billing is disabled in self-host mode. Usage and limits are
+              shown for operational visibility only.
+            </div>
+          )}
+
+          {!isSelfHosted && billing.quotaPercent >= 80 && (
             <div className="rounded-md border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800 px-4 py-3 text-sm mb-4">
               You&apos;ve used {billing.quotaPercent}% of your monthly quota.
               Consider upgrading to avoid service interruptions.
             </div>
           )}
 
-          {billing.portalAvailable && billing.plan !== "free" && (
+          {!isSelfHosted && billing.portalAvailable && billing.plan !== "free" && (
             <Button
               variant="outline"
               onClick={async () => {
@@ -183,172 +191,177 @@ export function BillingTab() {
         </CardContent>
       </Card>
 
-      {/* Plan Comparison */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Plans</h2>
-        <div className="flex rounded-md border p-1">
-          {(["monthly", "yearly"] as const).map((interval) => (
-            <Button
-              key={interval}
-              size="sm"
-              variant={billingInterval === interval ? "default" : "ghost"}
-              onClick={() => setBillingInterval(interval)}
-            >
-              {interval === "monthly" ? "Monthly" : "Yearly"}
-            </Button>
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {plans.map((plan) => {
-          const isCurrent = plan.id === billing.plan;
-          const intervalPrice =
-            plan.pricing[billingInterval] ?? plan.pricing.monthly;
-          return (
-            <Card key={plan.id} className={isCurrent ? "border-primary" : ""}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{plan.name}</CardTitle>
-                  {isCurrent && <Badge>Current</Badge>}
-                </div>
-                <p className="text-2xl font-bold">
-                  {intervalPrice?.priceLabel ?? plan.priceLabel}
-                  {intervalPrice && intervalPrice.price > 0 && (
-                    <span className="text-sm font-normal text-muted-foreground">
-                      {intervalPrice.period}
-                    </span>
-                  )}
-                </p>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500 shrink-0" />
-                    {plan.monthlyUnits === "Unlimited"
-                      ? "Unlimited"
-                      : Number(plan.monthlyUnits).toLocaleString()}{" "}
-                    Planisfy credits/month
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500 shrink-0" />
-                    {plan.requestsPerMinute.toLocaleString()} requests/minute
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500 shrink-0" />
-                    {plan.maxStyles === "Unlimited"
-                      ? "Unlimited"
-                      : plan.maxStyles}{" "}
-                    styles
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500 shrink-0" />
-                    {plan.maxSources === "Unlimited"
-                      ? "Unlimited"
-                      : plan.maxSources}{" "}
-                    tilesets
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500 shrink-0" />
-                    {plan.maxApiKeys === "Unlimited"
-                      ? "Unlimited"
-                      : plan.maxApiKeys}{" "}
-                    API keys
-                  </li>
-                </ul>
-
-                {!isCurrent && plan.price > 0 && (
-                  <Button
-                    className="w-full mt-4"
-                    variant={plan.id === "starter" ? "default" : "outline"}
-                    disabled={!plan.checkoutAvailable || !intervalPrice}
-                    onClick={async () => {
-                      if (!plan.checkoutAvailable || !intervalPrice) {
-                        toast.info(
-                          "Billing is not configured yet. Set Dodo Payments credentials to enable payments.",
-                        );
-                        return;
-                      }
-                      try {
-                        const { url } = await api.post<{ url: string }>(
-                          "/billing/checkout",
-                          { planId: plan.id, interval: billingInterval },
-                        );
-                        window.open(url, "_blank");
-                      } catch {
-                        toast.error("Unable to start checkout");
-                      }
-                    }}
-                  >
-                    {plan.checkoutAvailable
-                      ? `Upgrade to ${plan.name}`
-                      : "Coming soon"}
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Transaction history</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Transaction</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transactions.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-8 text-center text-sm text-muted-foreground"
-                  >
-                    No billing transactions have been recorded yet.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                transactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell className="font-mono text-xs">
-                      {transaction.providerOrderId ??
-                        transaction.providerCheckoutId ??
-                        transaction.id}
-                    </TableCell>
-                    <TableCell>{transaction.productLabel}</TableCell>
-                    <TableCell className="font-medium">
-                      {formatAmount(
-                        transaction.amountCents,
-                        transaction.currency,
+      {!isSelfHosted && (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Plans</h2>
+            <div className="flex rounded-md border p-1">
+              {(["monthly", "yearly"] as const).map((interval) => (
+                <Button
+                  key={interval}
+                  size="sm"
+                  variant={billingInterval === interval ? "default" : "ghost"}
+                  onClick={() => setBillingInterval(interval)}
+                >
+                  {interval === "monthly" ? "Monthly" : "Yearly"}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {plans.map((plan) => {
+              const isCurrent = plan.id === billing.plan;
+              const intervalPrice =
+                plan.pricing[billingInterval] ?? plan.pricing.monthly;
+              return (
+                <Card key={plan.id} className={isCurrent ? "border-primary" : ""}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">{plan.name}</CardTitle>
+                      {isCurrent && <Badge>Current</Badge>}
+                    </div>
+                    <p className="text-2xl font-bold">
+                      {intervalPrice?.priceLabel ?? plan.priceLabel}
+                      {intervalPrice && intervalPrice.price > 0 && (
+                        <span className="text-sm font-normal text-muted-foreground">
+                          {intervalPrice.period}
+                        </span>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={transactionStatusVariant(transaction.status)}
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2 text-sm">
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                        {plan.monthlyUnits === "Unlimited"
+                          ? "Unlimited"
+                          : Number(plan.monthlyUnits).toLocaleString()}{" "}
+                        Planisfy credits/month
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                        {plan.requestsPerMinute.toLocaleString()} requests/minute
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                        {plan.maxStyles === "Unlimited"
+                          ? "Unlimited"
+                          : plan.maxStyles}{" "}
+                        styles
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                        {plan.maxSources === "Unlimited"
+                          ? "Unlimited"
+                          : plan.maxSources}{" "}
+                        tilesets
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-green-500 shrink-0" />
+                        {plan.maxApiKeys === "Unlimited"
+                          ? "Unlimited"
+                          : plan.maxApiKeys}{" "}
+                        API keys
+                      </li>
+                    </ul>
+
+                    {!isCurrent && plan.price > 0 && (
+                      <Button
+                        className="w-full mt-4"
+                        variant={plan.id === "starter" ? "default" : "outline"}
+                        disabled={!plan.checkoutAvailable || !intervalPrice}
+                        onClick={async () => {
+                          if (!plan.checkoutAvailable || !intervalPrice) {
+                            toast.info(
+                              "Billing is not configured yet. Set Dodo Payments credentials to enable payments.",
+                            );
+                            return;
+                          }
+                          try {
+                            const { url } = await api.post<{ url: string }>(
+                              "/billing/checkout",
+                              { planId: plan.id, interval: billingInterval },
+                            );
+                            window.open(url, "_blank");
+                          } catch {
+                            toast.error("Unable to start checkout");
+                          }
+                        }}
                       >
-                        {transaction.status.replaceAll("_", " ").toLowerCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(
-                        transaction.paidAt ?? transaction.createdAt,
-                      ).toLocaleDateString()}
+                        {plan.checkoutAvailable
+                          ? `Upgrade to ${plan.name}`
+                          : "Coming soon"}
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {!isSelfHosted && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Transaction history</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Transaction</TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="py-8 text-center text-sm text-muted-foreground"
+                    >
+                      No billing transactions have been recorded yet.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                ) : (
+                  transactions.map((transaction) => (
+                    <TableRow key={transaction.id}>
+                      <TableCell className="font-mono text-xs">
+                        {transaction.providerOrderId ??
+                          transaction.providerCheckoutId ??
+                          transaction.id}
+                      </TableCell>
+                      <TableCell>{transaction.productLabel}</TableCell>
+                      <TableCell className="font-medium">
+                        {formatAmount(
+                          transaction.amountCents,
+                          transaction.currency,
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={transactionStatusVariant(transaction.status)}
+                        >
+                          {transaction.status.replaceAll("_", " ").toLowerCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(
+                          transaction.paidAt ?? transaction.createdAt,
+                        ).toLocaleDateString()}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

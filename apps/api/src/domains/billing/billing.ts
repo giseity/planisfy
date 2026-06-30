@@ -34,7 +34,8 @@ export type AccountBillingStatus =
   | "active_subscription"
   | "past_due"
   | "canceled"
-  | "free_plan";
+  | "free_plan"
+  | "self_hosted";
 type SerializedPlanLimits = {
   monthlyUnits: number | null;
   requestsPerMinute: number;
@@ -227,6 +228,8 @@ export async function getAccountPlan(accountId: string): Promise<PlanSlug> {
 export async function getAccountBillingStatus(
   accountId: string,
 ): Promise<AccountBillingStatus> {
+  if (env.DEPLOYMENT_MODE === "self_host") return "self_hosted";
+
   const [subscription] = await db
     .select({
       status: subscriptions.status,

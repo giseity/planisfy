@@ -118,7 +118,7 @@ billingRoute.get("/billing", async (c) => {
       start: period.start.toISOString(),
       end: period.end.toISOString(),
     },
-    billingConfigured: isBillingConfigured(),
+    billingConfigured: env.DEPLOYMENT_MODE === "managed" && isBillingConfigured(),
     portalAvailable: false,
   });
 });
@@ -134,7 +134,8 @@ billingRoute.get("/billing/plans", async (c) => {
     priceLabel: plan.priceLabel,
     period: plan.period,
     checkout: plan.checkout,
-    checkoutAvailable: isCheckoutConfiguredForPlan(plan.id),
+    checkoutAvailable:
+      env.DEPLOYMENT_MODE === "managed" && isCheckoutConfiguredForPlan(plan.id),
     pricing: plan.pricing,
     features: plan.features,
     comparison: plan.comparison,
@@ -161,6 +162,10 @@ billingRoute.get("/billing/plans", async (c) => {
 // ── GET /billing/transactions — Local Dodo transaction ledger ───────────────
 
 billingRoute.get("/billing/transactions", async (c) => {
+  if (env.DEPLOYMENT_MODE === "self_host") {
+    return c.json({ data: [] });
+  }
+
   const ownerId = c.get("ownerId");
 
   const rows = await db
@@ -176,6 +181,19 @@ billingRoute.get("/billing/transactions", async (c) => {
 // ── POST /billing/checkout — Create a checkout session ──────────────────────
 
 billingRoute.post("/billing/checkout", async (c) => {
+  if (env.DEPLOYMENT_MODE === "self_host") {
+    return c.json(
+      {
+        error: {
+          code: "CAPABILITY_UNAVAILABLE",
+          message:
+            "Hosted checkout is disabled in self-host mode. Billing is read-only for usage and limits.",
+        },
+      },
+      409,
+    );
+  }
+
   const userId = c.get("userId");
   const ownerId = c.get("ownerId");
   const body = await c.req.json();
@@ -207,6 +225,19 @@ billingRoute.post("/billing/checkout", async (c) => {
 // ── GET /billing/portal — Get customer portal URL ───────────────────────────
 
 billingRoute.get("/billing/portal", async (c) => {
+  if (env.DEPLOYMENT_MODE === "self_host") {
+    return c.json(
+      {
+        error: {
+          code: "CAPABILITY_UNAVAILABLE",
+          message:
+            "Hosted billing portal is disabled in self-host mode. Billing is read-only for usage and limits.",
+        },
+      },
+      409,
+    );
+  }
+
   const url = await getCustomerPortalUrl();
 
   if (!url) {

@@ -89,11 +89,15 @@ test("org permissions map product capabilities to role thresholds", () => {
   assert.equal(canOrg("admin", "org.manage"), false);
   assert.equal(canOrg("owner", "org.manage"), true);
   assert.equal(canOrg("owner", "selfhost.upgrade"), true);
+  assert.equal(canOrg("admin", "operations.routing.manage"), true);
+  assert.equal(canOrg("admin", "platform.readiness.view"), true);
   assert.equal(canOrg("unknown", "resource.read"), false);
 
   assert.equal(minOrgRoleFor("billing.manage"), "admin");
   assert.equal(minOrgRoleFor("org.manage"), "owner");
   assert.equal(minOrgRoleFor("selfhost.upgrade"), "owner");
+  assert.equal(minOrgRoleFor("operations.workers.manage"), "admin");
+  assert.equal(minOrgRoleFor("platform.environment.view"), "admin");
 });
 
 test("platform permissions include owner as the top platform role", () => {
@@ -222,7 +226,7 @@ test("org permission middleware gates sensitive reads for active organizations",
     c.set("requestId", "request-1");
     await next();
   });
-  app.use("/operations", requireOrgPermission("operations.manage"));
+  app.use("/operations", requireOrgPermission("operations.routing.manage"));
   app.get("/operations", (c) => c.json({ ok: true }));
 
   assert.equal((await app.request("/operations")).status, 200);

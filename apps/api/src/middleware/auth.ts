@@ -245,6 +245,30 @@ export function requireOrgPermission(permission: OrgPermission) {
   });
 }
 
+export function requireAnyOrgPermission(permissions: OrgPermission[]) {
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    const session = c.get("session");
+    if (!session?.activeOrganizationId) {
+      await next();
+      return;
+    }
+
+    if (!permissions.some((permission) => canOrg(c.get("orgRole"), permission))) {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: `Requires one of these permissions for this organization: ${permissions.join(", ")}.`,
+          },
+        },
+        403,
+      );
+    }
+
+    await next();
+  });
+}
+
 export function requireOrgMutationRole(
   minRole: OrgRole,
   methods = ["POST", "PUT", "PATCH", "DELETE"],
