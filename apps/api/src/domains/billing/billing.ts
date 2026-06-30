@@ -77,6 +77,12 @@ export interface CheckoutSession {
   checkoutId: string | null
 }
 
+export interface ActivePaidSubscription {
+  id: string
+  planId: PlanSlug
+  providerSubscriptionId: string | null
+}
+
 interface DodoWebhookPayload {
   type?: string
   event_type?: string
@@ -221,6 +227,36 @@ export async function getAccountPlan(accountId: string): Promise<PlanSlug> {
     .limit(1)
 
   return normalizePlanSlug(subscription?.planId) ?? 'free'
+}
+
+export async function getActivePaidSubscription(
+  accountId: string
+): Promise<ActivePaidSubscription | null> {
+  const [subscription] = await db
+    .select({
+      id: subscriptions.id,
+      planId: subscriptions.planId,
+      providerSubscriptionId: subscriptions.providerSubscriptionId,
+    })
+    .from(subscriptions)
+    .where(
+      and(
+        eq(subscriptions.accountId, accountId),
+        eq(subscriptions.status, 'ACTIVE'),
+        or(isNull(subscriptions.currentPeriodEnd), gt(subscriptions.currentPeriodEnd, new Date()))
+      )
+    )
+    .orderBy(desc(subscriptions.updatedAt))
+    .limit(1)
+
+  const planId = normalizePlanSlug(subscription?.planId)
+  if (!subscription || !planId || planId === 'free') return null
+
+  return {
+    id: subscription.id,
+    planId,
+    providerSubscriptionId: subscription.providerSubscriptionId,
+  }
 }
 
 export async function getAccountBillingStatus(accountId: string): Promise<AccountBillingStatus> {

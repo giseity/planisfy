@@ -9,6 +9,7 @@ import {
   getAccountBillingStatus,
   getAccountPlan,
   getAccountPlanLimits,
+  getActivePaidSubscription,
   getPlanDefinition,
   isBillingConfigured,
   isCheckoutConfiguredForPlan,
@@ -176,6 +177,20 @@ billingRoute.post('/billing/checkout', async (c) => {
   const ownerId = c.get('ownerId')
   const body = await c.req.json()
   const { planId, interval } = checkoutSchema.parse(body)
+
+  const activeSubscription = await getActivePaidSubscription(ownerId)
+  if (activeSubscription) {
+    return c.json(
+      {
+        error: {
+          code: 'ACTIVE_SUBSCRIPTION',
+          message:
+            'This account already has an active paid subscription. Manage it in the billing portal.',
+        },
+      },
+      409
+    )
+  }
 
   const session = await createCheckoutSession({
     userId,
