@@ -1,15 +1,15 @@
-"use client"
+'use client'
 
-import { useEffect, useState, useCallback, useMemo, type FormEvent } from "react"
-import { ApiRequestError, api, type ConsoleProfile, type PlatformPreflight } from "@/lib/api"
-import { Button } from "@planisfy/ui/components/button"
-import { Input } from "@planisfy/ui/components/input"
-import { Badge } from "@planisfy/ui/components/badge"
-import { Label } from "@planisfy/ui/components/label"
-import { Checkbox } from "@planisfy/ui/components/checkbox"
-import { DataTable } from "@planisfy/ui/components/data-table"
-import { EmptyState } from "@planisfy/ui/components/empty-state"
-import { LoadingState } from "@planisfy/ui/components/loading-state"
+import { useEffect, useState, useCallback, useMemo, type FormEvent } from 'react'
+import { ApiRequestError, api, type ConsoleProfile, type PlatformPreflight } from '@/lib/api'
+import { Button } from '@planisfy/ui/components/button'
+import { Input } from '@planisfy/ui/components/input'
+import { Badge } from '@planisfy/ui/components/badge'
+import { Label } from '@planisfy/ui/components/label'
+import { Checkbox } from '@planisfy/ui/components/checkbox'
+import { DataTable } from '@planisfy/ui/components/data-table'
+import { EmptyState } from '@planisfy/ui/components/empty-state'
+import { LoadingState } from '@planisfy/ui/components/loading-state'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +19,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@planisfy/ui/components/alert-dialog"
+} from '@planisfy/ui/components/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -28,36 +28,45 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@planisfy/ui/components/dialog"
+} from '@planisfy/ui/components/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@planisfy/ui/components/dropdown-menu"
+} from '@planisfy/ui/components/dropdown-menu'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@planisfy/ui/components/select"
-import { StatusAlert } from "@planisfy/ui/components/status-alert"
-import { Plus, Copy, MoreHorizontal, Key, AlertTriangle, RefreshCw, Trash2, Check } from "lucide-react"
-import { toast } from "sonner"
+} from '@planisfy/ui/components/select'
+import { StatusAlert } from '@planisfy/ui/components/status-alert'
+import {
+  Plus,
+  Copy,
+  MoreHorizontal,
+  Key,
+  AlertTriangle,
+  RefreshCw,
+  Trash2,
+  Check,
+} from 'lucide-react'
+import { toast } from 'sonner'
 
 const ALL_SCOPES = [
-  { value: "tiles:read", label: "Tiles", description: "Access vector/raster tiles" },
-  { value: "styles:read", label: "Styles (read)", description: "Read public/owned styles" },
-  { value: "styles:write", label: "Styles (write)", description: "Create/update styles" },
-  { value: "geocoding", label: "Geocoding", description: "Forward/reverse geocoding" },
-  { value: "directions", label: "Directions", description: "Routing, isochrone, matrix" },
-  { value: "elevation", label: "Elevation", description: "Elevation queries" },
-  { value: "static", label: "Static images", description: "Static map images" },
-  { value: "sources:read", label: "Tilesets (read)", description: "List tilesets" },
-  { value: "sources:write", label: "Tilesets (write)", description: "Upload/manage tilesets" },
-  { value: "usage:read", label: "Usage", description: "Read usage stats" },
+  { value: 'tiles:read', label: 'Tiles', description: 'Access vector/raster tiles' },
+  { value: 'styles:read', label: 'Styles (read)', description: 'Read public/owned styles' },
+  { value: 'styles:write', label: 'Styles (write)', description: 'Create/update styles' },
+  { value: 'geocoding', label: 'Geocoding', description: 'Forward/reverse geocoding' },
+  { value: 'directions', label: 'Directions', description: 'Routing, isochrone, matrix' },
+  { value: 'elevation', label: 'Elevation', description: 'Elevation queries' },
+  { value: 'static', label: 'Static images', description: 'Static map images' },
+  { value: 'sources:read', label: 'Tilesets (read)', description: 'List tilesets' },
+  { value: 'sources:write', label: 'Tilesets (write)', description: 'Upload/manage tilesets' },
+  { value: 'usage:read', label: 'Usage', description: 'Read usage stats' },
 ] as const
 
 interface ApiKeyData {
@@ -79,10 +88,10 @@ type ApiKeyTableCell = {
 }
 
 function timeAgo(date: string | null): string {
-  if (!date) return "Never"
+  if (!date) return 'Never'
   const diff = Date.now() - new Date(date).getTime()
   const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return "Just now"
+  if (minutes < 1) return 'Just now'
   if (minutes < 60) return `${minutes}m ago`
   const hours = Math.floor(minutes / 60)
   if (hours < 24) return `${hours}h ago`
@@ -104,16 +113,18 @@ export default function ApiKeysPage() {
 
   const fetchKeys = useCallback(async () => {
     try {
-      const res = await api.get<{ data: ApiKeyData[] }>("/keys")
+      const res = await api.get<{ data: ApiKeyData[] }>('/keys')
       setKeys(res.data)
     } catch (err) {
-      console.error("Failed to fetch keys:", err)
+      console.error('Failed to fetch keys:', err)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => { fetchKeys() }, [fetchKeys])
+  useEffect(() => {
+    fetchKeys()
+  }, [fetchKeys])
 
   useEffect(() => {
     Promise.all([api.getProfile(), api.getPlatformPreflight()])
@@ -125,20 +136,20 @@ export default function ApiKeysPage() {
   }, [])
 
   const managedEmailBlocked =
-    preflight?.deploymentMode === "managed" && profile?.emailVerified === false
+    preflight?.deploymentMode === 'managed' && profile?.emailVerified === false
 
   const columns = useMemo(
     () => [
       {
-        accessorKey: "name",
-        header: "Name",
+        accessorKey: 'name',
+        header: 'Name',
         cell: ({ row }: ApiKeyTableCell) => (
           <span className="font-medium">{row.original.name}</span>
         ),
       },
       {
-        accessorKey: "id",
-        header: "Key",
+        accessorKey: 'id',
+        header: 'Key',
         cell: ({ row }: ApiKeyTableCell) => (
           <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
             {row.original.id.slice(0, 12)}...
@@ -146,9 +157,9 @@ export default function ApiKeysPage() {
         ),
       },
       {
-        accessorFn: (row: ApiKeyData) => row.scopes.join(", "),
-        id: "scopes",
-        header: "Scopes",
+        accessorFn: (row: ApiKeyData) => row.scopes.join(', '),
+        id: 'scopes',
+        header: 'Scopes',
         cell: ({ row }: ApiKeyTableCell) => (
           <div className="flex flex-wrap gap-1">
             {row.original.scopes.slice(0, 3).map((scope) => (
@@ -165,17 +176,15 @@ export default function ApiKeysPage() {
         ),
       },
       {
-        accessorKey: "lastUsedAt",
-        header: "Last used",
+        accessorKey: 'lastUsedAt',
+        header: 'Last used',
         cell: ({ row }: ApiKeyTableCell) => (
-          <span className="text-sm text-muted-foreground">
-            {timeAgo(row.original.lastUsedAt)}
-          </span>
+          <span className="text-sm text-muted-foreground">{timeAgo(row.original.lastUsedAt)}</span>
         ),
       },
       {
-        accessorKey: "createdAt",
-        header: "Created",
+        accessorKey: 'createdAt',
+        header: 'Created',
         cell: ({ row }: ApiKeyTableCell) => (
           <span className="text-sm text-muted-foreground">
             {new Date(row.original.createdAt).toLocaleDateString()}
@@ -183,21 +192,17 @@ export default function ApiKeysPage() {
         ),
       },
       {
-        accessorKey: "status",
-        header: "Status",
+        accessorKey: 'status',
+        header: 'Status',
         cell: ({ row }: ApiKeyTableCell) => (
-          <Badge
-            variant={
-              row.original.status === "active" ? "success" : "destructive"
-            }
-          >
+          <Badge variant={row.original.status === 'active' ? 'success' : 'destructive'}>
             {row.original.status}
           </Badge>
         ),
       },
       {
-        id: "actions",
-        header: "",
+        id: 'actions',
+        header: '',
         enableSorting: false,
         cell: ({ row }: ApiKeyTableCell) => (
           <DropdownMenu>
@@ -227,39 +232,40 @@ export default function ApiKeysPage() {
         ),
       },
     ],
-    [managedEmailBlocked],
+    [managedEmailBlocked]
   )
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     if (managedEmailBlocked) {
-      toast.error("Verify your email before creating API keys")
+      toast.error('Verify your email before creating API keys')
       return
     }
 
     const formData = new FormData(event.currentTarget)
-    const name = formData.get("name") as string
+    const name = formData.get('name') as string
     const scopeValues = ALL_SCOPES.map((s) => s.value).filter(
-      (v) => formData.get(`scope_${v}`) === "on"
+      (v) => formData.get(`scope_${v}`) === 'on'
     )
-    const domains = (formData.get("domains") as string)
-      ?.split(",")
-      .map((d) => d.trim())
-      .filter(Boolean) || []
-    const expiry = formData.get("expiry") as string
+    const domains =
+      (formData.get('domains') as string)
+        ?.split(',')
+        .map((d) => d.trim())
+        .filter(Boolean) || []
+    const expiry = formData.get('expiry') as string
 
     let expiresAt: string | null = null
-    if (expiry && expiry !== "never") {
+    if (expiry && expiry !== 'never') {
       const d = new Date()
-      if (expiry === "30d") d.setDate(d.getDate() + 30)
-      else if (expiry === "90d") d.setDate(d.getDate() + 90)
-      else if (expiry === "1y") d.setFullYear(d.getFullYear() + 1)
+      if (expiry === '30d') d.setDate(d.getDate() + 30)
+      else if (expiry === '90d') d.setDate(d.getDate() + 90)
+      else if (expiry === '1y') d.setFullYear(d.getFullYear() + 1)
       expiresAt = d.toISOString()
     }
 
     try {
-      const res = await api.post<{ data: { id: string; key: string } }>("/keys", {
+      const res = await api.post<{ data: { id: string; key: string } }>('/keys', {
         name,
         scopes: scopeValues,
         allowedDomains: domains,
@@ -269,11 +275,11 @@ export default function ApiKeysPage() {
       setCreateOpen(false)
       fetchKeys()
     } catch (err) {
-      if (err instanceof ApiRequestError && err.code === "EMAIL_VERIFICATION_REQUIRED") {
-        toast.error("Verify your email before creating API keys")
+      if (err instanceof ApiRequestError && err.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        toast.error('Verify your email before creating API keys')
         return
       }
-      toast.error("Failed to create key")
+      toast.error('Failed to create key')
     }
   }
 
@@ -282,17 +288,17 @@ export default function ApiKeysPage() {
     try {
       await api.delete(`/keys/${deleteId}`)
       setDeleteId(null)
-      toast.success("API key revoked")
+      toast.success('API key revoked')
       fetchKeys()
     } catch {
-      toast.error("Failed to revoke key")
+      toast.error('Failed to revoke key')
     }
   }
 
   const handleRotate = async () => {
     if (!rotateId) return
     if (managedEmailBlocked) {
-      toast.error("Verify your email before rotating API keys")
+      toast.error('Verify your email before rotating API keys')
       return
     }
 
@@ -302,11 +308,11 @@ export default function ApiKeysPage() {
       setRevealedKey(res.data.key)
       fetchKeys()
     } catch (err) {
-      if (err instanceof ApiRequestError && err.code === "EMAIL_VERIFICATION_REQUIRED") {
-        toast.error("Verify your email before rotating API keys")
+      if (err instanceof ApiRequestError && err.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        toast.error('Verify your email before rotating API keys')
         return
       }
-      toast.error("Failed to rotate key")
+      toast.error('Failed to rotate key')
     }
   }
 
@@ -317,7 +323,7 @@ export default function ApiKeysPage() {
   }
 
   return (
-    <div className="container max-w-6xl py-8 px-4">
+    <div className="py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">API Keys</h1>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -331,9 +337,7 @@ export default function ApiKeysPage() {
             <form onSubmit={handleCreate} className="flex max-h-[calc(100vh-5rem)] flex-col">
               <DialogHeader>
                 <DialogTitle>Create API key</DialogTitle>
-                <DialogDescription>
-                  Select the permissions this key should have.
-                </DialogDescription>
+                <DialogDescription>Select the permissions this key should have.</DialogDescription>
               </DialogHeader>
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4 pr-2">
                 <div>
@@ -346,7 +350,13 @@ export default function ApiKeysPage() {
                   <div className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-md border p-3">
                     {ALL_SCOPES.map((scope) => (
                       <label key={scope.value} className="flex items-start gap-2 cursor-pointer">
-                        <Checkbox name={`scope_${scope.value}`} defaultChecked={scope.value === "tiles:read" || scope.value === "styles:read"} className="mt-0.5" />
+                        <Checkbox
+                          name={`scope_${scope.value}`}
+                          defaultChecked={
+                            scope.value === 'tiles:read' || scope.value === 'styles:read'
+                          }
+                          className="mt-0.5"
+                        />
                         <div>
                           <div className="text-sm font-medium">{scope.label}</div>
                           <div className="text-xs text-muted-foreground">{scope.description}</div>
@@ -422,14 +432,17 @@ export default function ApiKeysPage() {
             {revealedKey}
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => revealedKey && copyKey(revealedKey)}
-            >
+            <Button variant="outline" onClick={() => revealedKey && copyKey(revealedKey)}>
               {copiedKey ? (
-                <><Check className="h-4 w-4 mr-2" />Copied</>
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  Copied
+                </>
               ) : (
-                <><Copy className="h-4 w-4 mr-2" />Copy</>
+                <>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy
+                </>
               )}
             </Button>
             <Button onClick={() => setRevealedKey(null)}>Done</Button>
@@ -483,10 +496,7 @@ export default function ApiKeysPage() {
           title="No API keys"
           description="Create a key to access the Planisfy API from your applications."
           action={
-            <Button
-              disabled={managedEmailBlocked}
-              onClick={() => setCreateOpen(true)}
-            >
+            <Button disabled={managedEmailBlocked} onClick={() => setCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Create key
             </Button>

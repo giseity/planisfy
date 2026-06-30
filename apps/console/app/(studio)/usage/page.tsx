@@ -1,16 +1,16 @@
-"use client"
+'use client'
 
-import { useEffect, useState, useCallback } from "react"
-import { api } from "@/lib/api"
-import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
-import { Badge } from "@planisfy/ui/components/badge"
+import { useEffect, useState, useCallback } from 'react'
+import { api } from '@/lib/api'
+import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
+import { Badge } from '@planisfy/ui/components/badge'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@planisfy/ui/components/select"
+} from '@planisfy/ui/components/select'
 import {
   Table,
   TableBody,
@@ -18,8 +18,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table"
-import { Button } from "@planisfy/ui/components/button"
+} from '@planisfy/ui/components/table'
+import { Button } from '@planisfy/ui/components/button'
 import {
   ChartContainer,
   ChartLegend,
@@ -27,9 +27,17 @@ import {
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "@planisfy/ui/components/chart"
-import { Skeleton } from "@planisfy/ui/components/skeleton"
-import { Activity, Zap, Key, TrendingUp, TrendingDown, ChevronLeft, ChevronRight } from "lucide-react"
+} from '@planisfy/ui/components/chart'
+import { Skeleton } from '@planisfy/ui/components/skeleton'
+import {
+  Activity,
+  Zap,
+  Key,
+  TrendingUp,
+  TrendingDown,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
 import {
   AreaChart,
   Area,
@@ -41,7 +49,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-} from "recharts"
+} from 'recharts'
 
 interface UsageSummary {
   totalRequests: number
@@ -103,25 +111,25 @@ interface UsageLogEntry {
 }
 
 const SERVICE_COLORS: Record<string, string> = {
-  tiles: "#3b82f6",
-  styles: "#8b5cf6",
-  geocoding: "#22c55e",
-  directions: "#f97316",
-  elevation: "#f59e0b",
-  static: "#06b6d4",
-  other: "#6b7280",
+  tiles: '#3b82f6',
+  styles: '#8b5cf6',
+  geocoding: '#22c55e',
+  directions: '#f97316',
+  elevation: '#f59e0b',
+  static: '#06b6d4',
+  other: '#6b7280',
 }
 
-const PIE_COLORS = ["#3b82f6", "#8b5cf6", "#22c55e", "#f97316", "#f59e0b", "#06b6d4", "#6b7280"]
+const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#22c55e', '#f97316', '#f59e0b', '#06b6d4', '#6b7280']
 
 const usageChartConfig = {
-  tiles: { label: "Tiles", color: SERVICE_COLORS.tiles },
-  styles: { label: "Styles", color: SERVICE_COLORS.styles },
-  geocoding: { label: "Geocoding", color: SERVICE_COLORS.geocoding },
-  directions: { label: "Directions", color: SERVICE_COLORS.directions },
-  elevation: { label: "Elevation", color: SERVICE_COLORS.elevation },
-  requests: { label: "Requests", color: SERVICE_COLORS.tiles },
-  value: { label: "Requests", color: SERVICE_COLORS.tiles },
+  tiles: { label: 'Tiles', color: SERVICE_COLORS.tiles },
+  styles: { label: 'Styles', color: SERVICE_COLORS.styles },
+  geocoding: { label: 'Geocoding', color: SERVICE_COLORS.geocoding },
+  directions: { label: 'Directions', color: SERVICE_COLORS.directions },
+  elevation: { label: 'Elevation', color: SERVICE_COLORS.elevation },
+  requests: { label: 'Requests', color: SERVICE_COLORS.tiles },
+  value: { label: 'Requests', color: SERVICE_COLORS.tiles },
 } satisfies ChartConfig
 
 function formatNumber(n: number): string {
@@ -131,7 +139,7 @@ function formatNumber(n: number): string {
 }
 
 function formatQuotaLimit(limit: number | null): string {
-  return limit === null ? "Unlimited" : formatNumber(limit)
+  return limit === null ? 'Unlimited' : formatNumber(limit)
 }
 
 function TrendIndicator({ current, previous }: { current: number; previous: number }) {
@@ -140,15 +148,19 @@ function TrendIndicator({ current, previous }: { current: number; previous: numb
   if (pct === 0) return null
   const isUp = pct > 0
   return (
-    <span className={`flex items-center text-xs ${isUp ? "text-emerald-600" : "text-red-500"}`}>
-      {isUp ? <TrendingUp className="h-3 w-3 mr-0.5" /> : <TrendingDown className="h-3 w-3 mr-0.5" />}
+    <span className={`flex items-center text-xs ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>
+      {isUp ? (
+        <TrendingUp className="h-3 w-3 mr-0.5" />
+      ) : (
+        <TrendingDown className="h-3 w-3 mr-0.5" />
+      )}
       {Math.abs(pct)}%
     </span>
   )
 }
 
 export default function UsagePage() {
-  const [period, setPeriod] = useState("30")
+  const [period, setPeriod] = useState('30')
   const [summary, setSummary] = useState<UsageSummary | null>(null)
   const [timeseries, setTimeseries] = useState<TimeseriesEntry[]>([])
   const [byKey, setByKey] = useState<ByKeyEntry[]>([])
@@ -161,10 +173,12 @@ export default function UsagePage() {
     setLoading(true)
     try {
       const [summaryRes, timeseriesRes, byKeyRes, logsRes] = await Promise.all([
-        api.get<{ data: UsageSummary }>("/usage/summary"),
+        api.get<{ data: UsageSummary }>('/usage/summary'),
         api.get<{ data: TimeseriesEntry[] }>(`/usage/timeseries?days=${period}`),
         api.get<{ data: ByKeyEntry[] }>(`/usage/by-key?days=${period}`),
-        api.get<{ data: UsageLogEntry[]; pagination: { total: number } }>(`/usage/logs?page=${logPage}&limit=20`),
+        api.get<{ data: UsageLogEntry[]; pagination: { total: number } }>(
+          `/usage/logs?page=${logPage}&limit=20`
+        ),
       ])
       setSummary(summaryRes.data)
       setTimeseries(timeseriesRes.data)
@@ -172,19 +186,23 @@ export default function UsagePage() {
       setLogs(logsRes.data)
       setLogTotal(logsRes.pagination.total)
     } catch (err) {
-      console.error("Failed to fetch usage data:", err)
+      console.error('Failed to fetch usage data:', err)
     } finally {
       setLoading(false)
     }
   }, [period, logPage])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   // Prepare pie data from by-key
-  const pieData = byKey.filter((k) => k.requests > 0).map((k) => ({
-    name: k.name,
-    value: k.requests,
-  }))
+  const pieData = byKey
+    .filter((k) => k.requests > 0)
+    .map((k) => ({
+      name: k.name,
+      value: k.requests,
+    }))
 
   // Quota metadata comes from the backend plan catalog.
   const quotaLimit = summary?.quota.limit ?? null
@@ -192,11 +210,11 @@ export default function UsagePage() {
   const quotaPercent = summary?.quota.percent ?? 0
 
   return (
-    <div className="container max-w-6xl py-8 px-4">
+    <div className="py-8">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold">Usage</h1>
-          <Badge variant="secondary">{summary?.plan.name ?? "Plan"}</Badge>
+          <Badge variant="secondary">{summary?.plan.name ?? 'Plan'}</Badge>
         </div>
         <Select value={period} onValueChange={setPeriod}>
           <SelectTrigger className="w-[140px]">
@@ -218,9 +236,7 @@ export default function UsagePage() {
             <p className="text-sm font-medium">
               You&apos;ve used {quotaPercent}% of your monthly quota.
             </p>
-            <p className="text-xs text-muted-foreground">
-              Upgrade to avoid service interruption.
-            </p>
+            <p className="text-xs text-muted-foreground">Upgrade to avoid service interruption.</p>
           </div>
           <Button size="sm">Upgrade</Button>
         </div>
@@ -235,7 +251,11 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? <Skeleton className="h-8 w-20" /> : formatNumber(summary?.totalRequests ?? 0)}
+              {loading ? (
+                <Skeleton className="h-8 w-20" />
+              ) : (
+                formatNumber(summary?.totalRequests ?? 0)
+              )}
             </div>
             {summary && (
               <TrendIndicator
@@ -253,11 +273,15 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? <Skeleton className="h-8 w-28" /> : `${formatNumber(quotaUsed)} / ${formatQuotaLimit(quotaLimit)}`}
+              {loading ? (
+                <Skeleton className="h-8 w-28" />
+              ) : (
+                `${formatNumber(quotaUsed)} / ${formatQuotaLimit(quotaLimit)}`
+              )}
             </div>
             <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${quotaPercent >= 80 ? "bg-amber-500" : "bg-primary"}`}
+                className={`h-full rounded-full transition-all ${quotaPercent >= 80 ? 'bg-amber-500' : 'bg-primary'}`}
                 style={{ width: `${quotaPercent}%` }}
               />
             </div>
@@ -271,7 +295,7 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {loading ? <Skeleton className="h-8 w-10" /> : summary?.activeApiKeys ?? 0}
+              {loading ? <Skeleton className="h-8 w-10" /> : (summary?.activeApiKeys ?? 0)}
             </div>
           </CardContent>
         </Card>
@@ -282,7 +306,7 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {period === "7" ? "7 days" : period === "30" ? "30 days" : "90 days"}
+              {period === '7' ? '7 days' : period === '30' ? '30 days' : '90 days'}
             </div>
             {summary && (
               <TrendIndicator
@@ -303,25 +327,64 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             {timeseries.length > 0 ? (
-              <ChartContainer
-                config={usageChartConfig}
-                className="h-[280px] aspect-auto"
-              >
+              <ChartContainer config={usageChartConfig} className="h-[280px] aspect-auto">
                 <AreaChart data={timeseries}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis
                     dataKey="date"
                     tick={{ fontSize: 12 }}
-                    tickFormatter={(v) => new Date(v).toLocaleDateString("en", { month: "short", day: "numeric" })}
+                    tickFormatter={(v) =>
+                      new Date(v).toLocaleDateString('en', { month: 'short', day: 'numeric' })
+                    }
                     className="text-muted-foreground"
                   />
                   <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
                   <ChartTooltip content={<ChartTooltipContent />} />
-                  <Area type="monotone" dataKey="tiles" stackId="1" stroke="var(--color-tiles)" fill="var(--color-tiles)" fillOpacity={0.6} name="Tiles" />
-                  <Area type="monotone" dataKey="styles" stackId="1" stroke="var(--color-styles)" fill="var(--color-styles)" fillOpacity={0.6} name="Styles" />
-                  <Area type="monotone" dataKey="geocoding" stackId="1" stroke="var(--color-geocoding)" fill="var(--color-geocoding)" fillOpacity={0.6} name="Geocoding" />
-                  <Area type="monotone" dataKey="directions" stackId="1" stroke="var(--color-directions)" fill="var(--color-directions)" fillOpacity={0.6} name="Directions" />
-                  <Area type="monotone" dataKey="elevation" stackId="1" stroke="var(--color-elevation)" fill="var(--color-elevation)" fillOpacity={0.6} name="Elevation" />
+                  <Area
+                    type="monotone"
+                    dataKey="tiles"
+                    stackId="1"
+                    stroke="var(--color-tiles)"
+                    fill="var(--color-tiles)"
+                    fillOpacity={0.6}
+                    name="Tiles"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="styles"
+                    stackId="1"
+                    stroke="var(--color-styles)"
+                    fill="var(--color-styles)"
+                    fillOpacity={0.6}
+                    name="Styles"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="geocoding"
+                    stackId="1"
+                    stroke="var(--color-geocoding)"
+                    fill="var(--color-geocoding)"
+                    fillOpacity={0.6}
+                    name="Geocoding"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="directions"
+                    stackId="1"
+                    stroke="var(--color-directions)"
+                    fill="var(--color-directions)"
+                    fillOpacity={0.6}
+                    name="Directions"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="elevation"
+                    stackId="1"
+                    stroke="var(--color-elevation)"
+                    fill="var(--color-elevation)"
+                    fillOpacity={0.6}
+                    name="Elevation"
+                  />
                   <ChartLegend content={<ChartLegendContent />} />
                 </AreaChart>
               </ChartContainer>
@@ -340,10 +403,7 @@ export default function UsagePage() {
           </CardHeader>
           <CardContent>
             {pieData.length > 0 ? (
-              <ChartContainer
-                config={usageChartConfig}
-                className="h-[280px] aspect-auto"
-              >
+              <ChartContainer config={usageChartConfig} className="h-[280px] aspect-auto">
                 <PieChart>
                   <Pie
                     data={pieData}
@@ -353,7 +413,9 @@ export default function UsagePage() {
                     outerRadius={90}
                     paddingAngle={2}
                     dataKey="value"
-                    label={({ name, percent }: { name?: string; percent?: number }) => `${(name ?? "").slice(0, 10)}${(name ?? "").length > 10 ? "..." : ""} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                    label={({ name, percent }: { name?: string; percent?: number }) =>
+                      `${(name ?? '').slice(0, 10)}${(name ?? '').length > 10 ? '...' : ''} ${((percent ?? 0) * 100).toFixed(0)}%`
+                    }
                   >
                     {pieData.map((_, index) => (
                       <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
@@ -386,14 +448,14 @@ export default function UsagePage() {
               <BarChart data={byKey} layout="vertical" margin={{ left: 100 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 12 }} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  tick={{ fontSize: 12 }}
-                  width={90}
-                />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={90} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="requests" fill="var(--color-requests)" radius={[0, 4, 4, 0]} name="Requests" />
+                <Bar
+                  dataKey="requests"
+                  fill="var(--color-requests)"
+                  radius={[0, 4, 4, 0]}
+                  name="Requests"
+                />
               </BarChart>
             </ChartContainer>
           </CardContent>
@@ -429,14 +491,20 @@ export default function UsagePage() {
                         {log.endpoint}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-[10px]">{log.method}</Badge>
+                        <Badge variant="outline" className="text-[10px]">
+                          {log.method}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant={
-                            log.statusCode < 300 ? "success" :
-                            log.statusCode < 400 ? "secondary" :
-                            log.statusCode < 500 ? "warning" : "destructive"
+                            log.statusCode < 300
+                              ? 'success'
+                              : log.statusCode < 400
+                                ? 'secondary'
+                                : log.statusCode < 500
+                                  ? 'warning'
+                                  : 'destructive'
                           }
                           className="text-[10px]"
                         >
@@ -445,7 +513,7 @@ export default function UsagePage() {
                       </TableCell>
                       <TableCell className="text-sm">{log.cost}</TableCell>
                       <TableCell className="text-muted-foreground text-xs font-mono">
-                        {log.apiKeyId?.slice(0, 12) || "session"}
+                        {log.apiKeyId?.slice(0, 12) || 'session'}
                       </TableCell>
                     </TableRow>
                   ))}

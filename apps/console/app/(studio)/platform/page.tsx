@@ -62,7 +62,7 @@ export default function PlatformPage() {
 
   if (loading) {
     return (
-      <div className="container max-w-6xl px-4 py-8">
+      <div className="py-8">
         <div className="flex min-h-[360px] items-center justify-center rounded-md border">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
@@ -72,7 +72,7 @@ export default function PlatformPage() {
 
   if (!preflight) {
     return (
-      <div className="container max-w-6xl px-4 py-8">
+      <div className="py-8">
         <Card>
           <CardContent className="flex items-center justify-between gap-3 p-5">
             <p className="text-sm text-muted-foreground">Platform checks are unavailable.</p>
@@ -87,7 +87,7 @@ export default function PlatformPage() {
   }
 
   return (
-    <div className="container max-w-6xl space-y-5 px-4 py-8">
+    <div className="space-y-5 py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Platform</h1>

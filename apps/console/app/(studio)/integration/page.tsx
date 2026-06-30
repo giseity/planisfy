@@ -1,114 +1,90 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import {
-  CheckCircle2,
-  Clipboard,
-  Code2,
-  ExternalLink,
-  XCircle,
-} from "lucide-react";
-import { toast } from "sonner";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@planisfy/ui/components/alert";
-import { Badge } from "@planisfy/ui/components/badge";
-import { Button } from "@planisfy/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@planisfy/ui/components/card";
-import { LoadingState } from "@planisfy/ui/components/loading-state";
-import { api, type ConsoleDashboard } from "@/lib/api";
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { CheckCircle2, Clipboard, Code2, ExternalLink, XCircle } from 'lucide-react'
+import { toast } from 'sonner'
+import { Alert, AlertDescription, AlertTitle } from '@planisfy/ui/components/alert'
+import { Badge } from '@planisfy/ui/components/badge'
+import { Button } from '@planisfy/ui/components/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
+import { LoadingState } from '@planisfy/ui/components/loading-state'
+import { api, type ConsoleDashboard } from '@/lib/api'
 
 const setupActions = [
   {
-    label: "API key",
-    description: "Create a key for authenticated production requests.",
-    href: "/keys",
-    complete: (dashboard: ConsoleDashboard) =>
-      dashboard.summary.activeApiKeys > 0,
+    label: 'API key',
+    description: 'Create a key for authenticated production requests.',
+    href: '/keys',
+    complete: (dashboard: ConsoleDashboard) => dashboard.summary.activeApiKeys > 0,
   },
   {
-    label: "Published style",
-    description: "Publish a style before using public style URLs.",
-    href: "/styles",
-    complete: (dashboard: ConsoleDashboard) =>
-      dashboard.summary.publishedStyles > 0,
+    label: 'Published style',
+    description: 'Publish a style before using public style URLs.',
+    href: '/styles',
+    complete: (dashboard: ConsoleDashboard) => dashboard.summary.publishedStyles > 0,
   },
   {
-    label: "Published tileset",
-    description: "Publish source data before using TileJSON and map snippets.",
-    href: "/tilesets",
-    complete: (dashboard: ConsoleDashboard) =>
-      dashboard.summary.publishedTilesets > 0,
+    label: 'Published tileset',
+    description: 'Publish source data before using TileJSON and map snippets.',
+    href: '/tilesets',
+    complete: (dashboard: ConsoleDashboard) => dashboard.summary.publishedTilesets > 0,
   },
-];
+]
 
 export default function IntegrationPage() {
-  const [dashboard, setDashboard] = useState<ConsoleDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [dashboard, setDashboard] = useState<ConsoleDashboard | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
 
     async function loadDashboard() {
-      setLoading(true);
+      setLoading(true)
       try {
-        const response = await api.getDashboard();
-        if (cancelled) return;
-        setDashboard(response.data);
-        setError(null);
+        const response = await api.getDashboard()
+        if (cancelled) return
+        setDashboard(response.data)
+        setError(null)
       } catch (err) {
-        if (cancelled) return;
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load integration details",
-        );
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : 'Failed to load integration details')
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoading(false)
       }
     }
 
-    void loadDashboard();
+    void loadDashboard()
 
     return () => {
-      cancelled = true;
-    };
-  }, []);
+      cancelled = true
+    }
+  }, [])
 
   if (loading) {
     return (
-      <div className="container max-w-6xl px-4 py-8">
+      <div className="py-8">
         <LoadingState label="Loading integration details..." />
       </div>
-    );
+    )
   }
 
   if (error || !dashboard) {
     return (
-      <div className="container max-w-6xl px-4 py-8">
+      <div className="py-8">
         <Alert variant="destructive">
           <AlertTitle>Integration details unavailable</AlertTitle>
-          <AlertDescription>
-            {error ?? "Dashboard data was not returned."}
-          </AlertDescription>
+          <AlertDescription>{error ?? 'Dashboard data was not returned.'}</AlertDescription>
         </Alert>
       </div>
-    );
+    )
   }
 
-  const missing = dashboard.integration.missing;
+  const missing = dashboard.integration.missing
 
   return (
-    <div className="container max-w-6xl space-y-6 px-4 py-8">
+    <div className="space-y-6 py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Integration</h1>
@@ -134,23 +110,14 @@ export default function IntegrationPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-0">
-              <CopyRow
-                label="API base URL"
-                value={dashboard.integration.apiBaseUrl}
-              />
+              <CopyRow label="API base URL" value={dashboard.integration.apiBaseUrl} />
               {dashboard.integration.publicStyleUrl ? (
-                <CopyRow
-                  label="Public style URL"
-                  value={dashboard.integration.publicStyleUrl}
-                />
+                <CopyRow label="Public style URL" value={dashboard.integration.publicStyleUrl} />
               ) : (
                 <MissingRow label="Public style URL" action="Publish a style" />
               )}
               {dashboard.integration.tilejsonUrl ? (
-                <CopyRow
-                  label="TileJSON URL"
-                  value={dashboard.integration.tilejsonUrl}
-                />
+                <CopyRow label="TileJSON URL" value={dashboard.integration.tilejsonUrl} />
               ) : (
                 <MissingRow label="TileJSON URL" action="Publish a tileset" />
               )}
@@ -163,20 +130,14 @@ export default function IntegrationPage() {
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-0">
               {dashboard.integration.mapLibreSnippet ? (
-                <CodeBlock
-                  label="MapLibre"
-                  value={dashboard.integration.mapLibreSnippet}
-                />
+                <CodeBlock label="MapLibre" value={dashboard.integration.mapLibreSnippet} />
               ) : (
                 <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-                  Complete {missing.join(", ")} to generate a MapLibre snippet.
+                  Complete {missing.join(', ')} to generate a MapLibre snippet.
                 </p>
               )}
               {dashboard.integration.curlSnippet ? (
-                <CodeBlock
-                  label="curl"
-                  value={dashboard.integration.curlSnippet}
-                />
+                <CodeBlock label="curl" value={dashboard.integration.curlSnippet} />
               ) : (
                 <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
                   Publish a tileset to generate a TileJSON curl example.
@@ -192,7 +153,7 @@ export default function IntegrationPage() {
           </CardHeader>
           <CardContent className="space-y-2 p-4 pt-0">
             {setupActions.map((item) => {
-              const complete = item.complete(dashboard);
+              const complete = item.complete(dashboard)
               return (
                 <Link
                   key={item.label}
@@ -207,26 +168,24 @@ export default function IntegrationPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium">{item.label}</p>
-                      <Badge variant={complete ? "success" : "warning"}>
-                        {complete ? "Ready" : "Required"}
+                      <Badge variant={complete ? 'success' : 'warning'}>
+                        {complete ? 'Ready' : 'Required'}
                       </Badge>
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {item.description}
-                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
                   </div>
                 </Link>
-              );
+              )
             })}
           </CardContent>
         </Card>
       </div>
     </div>
-  );
+  )
 }
 
 function CopyRow({ label, value }: { label: string; value: string }) {
-  const testId = copyRowTestId(label);
+  const testId = copyRowTestId(label)
 
   return (
     <div className="rounded-md border p-3" data-testid={testId}>
@@ -246,7 +205,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
         {value}
       </p>
     </div>
-  );
+  )
 }
 
 function MissingRow({ label, action }: { label: string; action: string }) {
@@ -255,7 +214,7 @@ function MissingRow({ label, action }: { label: string; action: string }) {
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className="mt-1 text-xs">{action}</p>
     </div>
-  );
+  )
 }
 
 function CodeBlock({ label, value }: { label: string; value: string }) {
@@ -277,23 +236,23 @@ function CodeBlock({ label, value }: { label: string; value: string }) {
         <code>{value}</code>
       </pre>
     </div>
-  );
+  )
 }
 
 async function copyText(value: string, message: string) {
-  await navigator.clipboard.writeText(value);
-  toast.success(message);
+  await navigator.clipboard.writeText(value)
+  toast.success(message)
 }
 
 function copyRowTestId(label: string) {
   switch (label) {
-    case "API base URL":
-      return "api-base-url";
-    case "Public style URL":
-      return "style-public-url";
-    case "TileJSON URL":
-      return "tilejson-url";
+    case 'API base URL':
+      return 'api-base-url'
+    case 'Public style URL':
+      return 'style-public-url'
+    case 'TileJSON URL':
+      return 'tilejson-url'
     default:
-      return label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      return label.toLowerCase().replace(/[^a-z0-9]+/g, '-')
   }
 }

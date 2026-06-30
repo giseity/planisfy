@@ -1,8 +1,8 @@
-"use client";
+'use client'
 
-import * as React from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import * as React from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import {
   Activity,
   ArchiveRestore,
@@ -13,26 +13,26 @@ import {
   RefreshCw,
   Route,
   ServerCog,
-} from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@planisfy/ui/components/button";
-import { MetricCard } from "@planisfy/ui/components/metric-card";
-import { LoadingState } from "@planisfy/ui/components/loading-state";
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@planisfy/ui/components/button'
+import { MetricCard } from '@planisfy/ui/components/metric-card'
+import { LoadingState } from '@planisfy/ui/components/loading-state'
 import {
   PageActions,
   PageDescription,
   PageHeader,
   PageHeaderText,
   PageTitle,
-} from "@planisfy/ui/components/page-header";
-import { cn } from "@planisfy/ui/lib/utils";
+} from '@planisfy/ui/components/page-header'
+import { cn } from '@planisfy/ui/lib/utils'
 import {
   api,
   type ConsoleJobTimeline,
   type ConsoleOperationsOverview,
   type ConsoleTileset,
-} from "@/lib/api";
-import { clientEnv } from "@/env.client";
+} from '@/lib/api'
+import { clientEnv } from '@/env.client'
 
 const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
   recentJobs: [],
@@ -44,140 +44,121 @@ const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
   previewLinks: [],
   customDomains: [],
   workflowTemplates: [],
-  workerHealth: { status: "offline", message: "Not checked", latencyMs: null },
+  workerHealth: { status: 'offline', message: 'Not checked', latencyMs: null },
   staleJobReconciliation: { reconciled: 0, latest: [] },
-};
-
-const operationRoutes = [
-  { href: "/operations/jobs", label: "Jobs", icon: Activity },
-  { href: "/operations/schedules", label: "Schedules", icon: CalendarClock },
-  { href: "/operations/notifications", label: "Notifications", icon: Bell },
-  { href: "/operations/workers", label: "Workers", icon: ServerCog },
-  { href: "/operations/routing", label: "Routing", icon: Route },
-  { href: "/operations/backups", label: "Backups", icon: ArchiveRestore },
-  { href: "/operations/delivery", label: "Delivery", icon: Globe },
-  { href: "/operations/templates", label: "Templates", icon: ClipboardList },
-];
-
-interface OperationsContextValue {
-  overview: ConsoleOperationsOverview;
-  timeline: ConsoleJobTimeline | null;
-  tilesets: ConsoleTileset[];
-  loading: boolean;
-  load: (options?: { silent?: boolean }) => void;
-  openTimeline: (jobId: string) => void;
-  reconcileStaleJobs: () => void;
 }
 
-const OperationsContext = React.createContext<OperationsContextValue | null>(
-  null,
-);
+const operationRoutes = [
+  { href: '/operations/jobs', label: 'Jobs', icon: Activity },
+  { href: '/operations/schedules', label: 'Schedules', icon: CalendarClock },
+  { href: '/operations/notifications', label: 'Notifications', icon: Bell },
+  { href: '/operations/workers', label: 'Workers', icon: ServerCog },
+  { href: '/operations/routing', label: 'Routing', icon: Route },
+  { href: '/operations/backups', label: 'Backups', icon: ArchiveRestore },
+  { href: '/operations/delivery', label: 'Delivery', icon: Globe },
+  { href: '/operations/templates', label: 'Templates', icon: ClipboardList },
+]
 
-export function OperationsProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [overview, setOverview] =
-    React.useState<ConsoleOperationsOverview>(EMPTY_OVERVIEW);
-  const [timeline, setTimeline] = React.useState<ConsoleJobTimeline | null>(
-    null,
-  );
-  const [tilesets, setTilesets] = React.useState<ConsoleTileset[]>([]);
-  const [loading, setLoading] = React.useState(true);
+interface OperationsContextValue {
+  overview: ConsoleOperationsOverview
+  timeline: ConsoleJobTimeline | null
+  tilesets: ConsoleTileset[]
+  loading: boolean
+  load: (options?: { silent?: boolean }) => void
+  openTimeline: (jobId: string) => void
+  reconcileStaleJobs: () => void
+}
+
+const OperationsContext = React.createContext<OperationsContextValue | null>(null)
+
+export function OperationsProvider({ children }: { children: React.ReactNode }) {
+  const [overview, setOverview] = React.useState<ConsoleOperationsOverview>(EMPTY_OVERVIEW)
+  const [timeline, setTimeline] = React.useState<ConsoleJobTimeline | null>(null)
+  const [tilesets, setTilesets] = React.useState<ConsoleTileset[]>([])
+  const [loading, setLoading] = React.useState(true)
 
   const load = React.useCallback(async (options: { silent?: boolean } = {}) => {
     try {
       const [operationsRes, tilesetsRes] = await Promise.all([
         api.getOperations(),
         api.listTilesets(),
-      ]);
-      setOverview(operationsRes.data);
-      setTilesets(tilesetsRes.data);
+      ])
+      setOverview(operationsRes.data)
+      setTilesets(tilesetsRes.data)
     } catch (err) {
       if (!options.silent) {
-        toast.error(
-          err instanceof Error ? err.message : "Failed to load operations",
-        );
+        toast.error(err instanceof Error ? err.message : 'Failed to load operations')
       }
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   React.useEffect(() => {
-    load();
-  }, [load]);
+    load()
+  }, [load])
 
   React.useEffect(() => {
-    let closed = false;
-    let reconnectTimer: number | undefined;
-    let source: EventSource | undefined;
+    let closed = false
+    let reconnectTimer: number | undefined
+    let source: EventSource | undefined
 
     const connect = () => {
-      source?.close();
+      source?.close()
       source = new EventSource(operationsEventsUrl(), {
         withCredentials: true,
-      });
+      })
 
-      source.addEventListener("operations", (event) => {
+      source.addEventListener('operations', (event) => {
         try {
-          setOverview(
-            JSON.parse(
-              (event as MessageEvent<string>).data,
-            ) as ConsoleOperationsOverview,
-          );
-          setLoading(false);
+          setOverview(JSON.parse((event as MessageEvent<string>).data) as ConsoleOperationsOverview)
+          setLoading(false)
         } catch {
-          window.setTimeout(() => load({ silent: true }), 0);
+          window.setTimeout(() => load({ silent: true }), 0)
         }
-      });
+      })
 
-      source.addEventListener("operations-error", () => {
-        window.setTimeout(() => load({ silent: true }), 0);
-      });
+      source.addEventListener('operations-error', () => {
+        window.setTimeout(() => load({ silent: true }), 0)
+      })
 
       source.onerror = () => {
-        source?.close();
-        if (closed) return;
-        window.setTimeout(() => load({ silent: true }), 0);
-        reconnectTimer = window.setTimeout(connect, 5_000);
-      };
-    };
+        source?.close()
+        if (closed) return
+        window.setTimeout(() => load({ silent: true }), 0)
+        reconnectTimer = window.setTimeout(connect, 5_000)
+      }
+    }
 
-    connect();
+    connect()
 
     return () => {
-      closed = true;
-      source?.close();
-      if (reconnectTimer) window.clearTimeout(reconnectTimer);
-    };
-  }, [load]);
+      closed = true
+      source?.close()
+      if (reconnectTimer) window.clearTimeout(reconnectTimer)
+    }
+  }, [load])
 
   const openTimeline = React.useCallback(async (jobId: string) => {
     try {
-      const res = await api.getJobTimeline(jobId);
-      setTimeline(res.data);
+      const res = await api.getJobTimeline(jobId)
+      setTimeline(res.data)
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to load job timeline",
-      );
+      toast.error(err instanceof Error ? err.message : 'Failed to load job timeline')
     }
-  }, []);
+  }, [])
 
   const reconcileStaleJobs = React.useCallback(async () => {
     try {
-      const res = await api.reconcileStaleJobs();
+      const res = await api.reconcileStaleJobs()
       toast.success(
-        `Reconciled ${res.data.reconciled} stale job${res.data.reconciled === 1 ? "" : "s"}.`,
-      );
-      await load({ silent: true });
+        `Reconciled ${res.data.reconciled} stale job${res.data.reconciled === 1 ? '' : 's'}.`
+      )
+      await load({ silent: true })
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to reconcile stale jobs",
-      );
+      toast.error(err instanceof Error ? err.message : 'Failed to reconcile stale jobs')
     }
-  }, [load]);
+  }, [load])
 
   const value = React.useMemo(
     () => ({
@@ -189,43 +170,34 @@ export function OperationsProvider({
       openTimeline,
       reconcileStaleJobs,
     }),
-    [
-      load,
-      loading,
-      openTimeline,
-      reconcileStaleJobs,
-      overview,
-      tilesets,
-      timeline,
-    ],
-  );
+    [load, loading, openTimeline, reconcileStaleJobs, overview, tilesets, timeline]
+  )
 
   return (
     <OperationsContext.Provider value={value}>
       <OperationsShell>{children}</OperationsShell>
     </OperationsContext.Provider>
-  );
+  )
 }
 
 function operationsEventsUrl() {
-  return `${clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH.replace(/\/$/, "")}/operations/events`;
+  return `${clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH.replace(/\/$/, '')}/operations/events`
 }
 
 export function useOperations() {
-  const value = React.useContext(OperationsContext);
-  if (!value)
-    throw new Error("useOperations must be used within OperationsProvider");
-  return value;
+  const value = React.useContext(OperationsContext)
+  if (!value) throw new Error('useOperations must be used within OperationsProvider')
+  return value
 }
 
 function OperationsShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const { overview, loading, load } = useOperations();
+  const pathname = usePathname()
+  const { overview, loading, load } = useOperations()
   const activeSchedules = overview.scheduledOperations.filter(
-    (schedule) => schedule.status === "active",
-  ).length;
+    (schedule) => schedule.status === 'active'
+  ).length
 
-  if (loading) return <LoadingState label="Loading operations..." />;
+  if (loading) return <LoadingState label="Loading operations..." />
 
   return (
     <div className="space-y-5">
@@ -233,8 +205,7 @@ function OperationsShell({ children }: { children: React.ReactNode }) {
         <PageHeaderText>
           <PageTitle>Operations</PageTitle>
           <PageDescription>
-            Monitor processing, automate rebuilds, validate workers, and manage
-            delivery controls.
+            Monitor processing, automate rebuilds, validate workers, and manage delivery controls.
           </PageDescription>
         </PageHeaderText>
         <PageActions>
@@ -272,27 +243,29 @@ function OperationsShell({ children }: { children: React.ReactNode }) {
         />
       </div>
 
-      <nav className="flex flex-wrap gap-1 rounded-md border bg-muted/20 p-1">
+      <nav className="flex flex-wrap gap-1 rounded-md bg-muted/20 p-1">
         {operationRoutes.map((route) => {
-          const active = pathname === route.href;
+          const active =
+            pathname === route.href ||
+            (pathname === '/operations' && route.href === '/operations/jobs')
           return (
             <Button
               key={route.href}
               asChild
               size="sm"
-              variant={active ? "secondary" : "ghost"}
-              className={cn("justify-start", active && "font-medium")}
+              variant={active ? 'secondary' : 'ghost'}
+              className={cn('justify-start', active && 'font-medium')}
             >
               <Link href={route.href}>
                 <route.icon className="h-4 w-4" />
                 {route.label}
               </Link>
             </Button>
-          );
+          )
         })}
       </nav>
 
       {children}
     </div>
-  );
+  )
 }

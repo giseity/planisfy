@@ -1,11 +1,11 @@
-"use client";
+'use client'
 
-import { useEffect, useState, useMemo } from "react";
-import { StyleCard } from "@/features/style-editor/components/style-card";
-import { StyleListItem } from "@/features/style-editor/components/style-list-item";
-import { Button } from "@planisfy/ui/components/button";
-import { Input } from "@planisfy/ui/components/input";
-import { Skeleton } from "@planisfy/ui/components/skeleton";
+import { useEffect, useState, useMemo } from 'react'
+import { StyleCard } from '@/features/style-editor/components/style-card'
+import { StyleListItem } from '@/features/style-editor/components/style-list-item'
+import { Button } from '@planisfy/ui/components/button'
+import { Input } from '@planisfy/ui/components/input'
+import { Skeleton } from '@planisfy/ui/components/skeleton'
 import {
   Dialog,
   DialogContent,
@@ -14,85 +14,76 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@planisfy/ui/components/dialog";
+} from '@planisfy/ui/components/dialog'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@planisfy/ui/components/select";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@planisfy/ui/components/toggle-group";
-import { Plus, Map, Search, LayoutGrid, List } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { api, type ApiEnvelope } from "@/lib/api";
-import { createStyle } from "@/features/style-editor/workflow/style-actions";
-import type { StudioStyleSummary } from "@/features/style-editor/workflow/style-workflow";
+} from '@planisfy/ui/components/select'
+import { ToggleGroup, ToggleGroupItem } from '@planisfy/ui/components/toggle-group'
+import { Plus, Map, Search, LayoutGrid, List } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { api, type ApiEnvelope } from '@/lib/api'
+import { createStyle } from '@/features/style-editor/workflow/style-actions'
+import type { StudioStyleSummary } from '@/features/style-editor/workflow/style-workflow'
 
-type SortMode = "updated" | "name" | "created";
-type ViewMode = "grid" | "list";
+type SortMode = 'updated' | 'name' | 'created'
+type ViewMode = 'grid' | 'list'
 
 export default function StylesPage() {
-  const [styles, setStyles] = useState<StudioStyleSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<SortMode>("updated");
-  const [view, setView] = useState<ViewMode>("grid");
+  const [styles, setStyles] = useState<StudioStyleSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<SortMode>('updated')
+  const [view, setView] = useState<ViewMode>('grid')
 
   const loadStyles = async () => {
     try {
-      const res = await api.get<ApiEnvelope<StudioStyleSummary[]>>("/styles");
-      setStyles(res.data);
+      const res = await api.get<ApiEnvelope<StudioStyleSummary[]>>('/styles')
+      setStyles(res.data)
     } catch {
       // ignore
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
-    loadStyles();
-  }, []);
+    loadStyles()
+  }, [])
 
   const filtered = useMemo(() => {
-    let result = styles;
+    let result = styles
 
     // Filter
     if (search.trim()) {
-      const q = search.toLowerCase();
+      const q = search.toLowerCase()
       result = result.filter(
-        (s) =>
-          s.name.toLowerCase().includes(q) ||
-          s.handle.toLowerCase().includes(q),
-      );
+        (s) => s.name.toLowerCase().includes(q) || s.handle.toLowerCase().includes(q)
+      )
     }
 
     // Sort
     result = [...result].sort((a, b) => {
       switch (sort) {
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "created":
-          return (
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-        case "updated":
+        case 'name':
+          return a.name.localeCompare(b.name)
+        case 'created':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        case 'updated':
         default:
-          return (
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-          );
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       }
-    });
+    })
 
-    return result;
-  }, [styles, search, sort]);
+    return result
+  }, [styles, search, sort])
 
   return (
-    <div className="container max-w-6xl py-8 px-4">
+    <div className="py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Styles</h1>
         <CreateStyleButton />
@@ -123,7 +114,7 @@ export default function StylesPage() {
           type="single"
           value={view}
           onValueChange={(value) => {
-            if (value) setView(value as ViewMode);
+            if (value) setView(value as ViewMode)
           }}
         >
           <ToggleGroupItem value="grid" size="icon" aria-label="Grid view">
@@ -152,11 +143,9 @@ export default function StylesPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-sm text-muted-foreground">
-            No styles match &ldquo;{search}&rdquo;
-          </p>
+          <p className="text-sm text-muted-foreground">No styles match &ldquo;{search}&rdquo;</p>
         </div>
-      ) : view === "grid" ? (
+      ) : view === 'grid' ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((style) => (
             <StyleCard key={style.id} style={style} onMutate={loadStyles} />
@@ -170,24 +159,24 @@ export default function StylesPage() {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function CreateStyleButton() {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
 
   async function handleCreate(formData: FormData) {
-    setCreating(true);
+    setCreating(true)
     try {
-      const created = await createStyle(String(formData.get("name") ?? ""));
-      setOpen(false);
-      router.push(`/styles/${created.id}`);
+      const created = await createStyle(String(formData.get('name') ?? ''))
+      setOpen(false)
+      router.push(`/styles/${created.id}`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create style");
+      toast.error(err instanceof Error ? err.message : 'Failed to create style')
     } finally {
-      setCreating(false);
+      setCreating(false)
     }
   }
 
@@ -204,8 +193,7 @@ function CreateStyleButton() {
           <DialogHeader>
             <DialogTitle>Create a new style</DialogTitle>
             <DialogDescription>
-              Start with a blank style. You can import an existing style from
-              JSON later.
+              Start with a blank style. You can import an existing style from JSON later.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -218,16 +206,12 @@ function CreateStyleButton() {
             />
           </div>
           <DialogFooter>
-            <Button
-              type="submit"
-              data-testid="create-style-submit"
-              disabled={creating}
-            >
-              {creating ? "Creating..." : "Create"}
+            <Button type="submit" data-testid="create-style-submit" disabled={creating}>
+              {creating ? 'Creating...' : 'Create'}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

@@ -1,13 +1,13 @@
-"use client"
+'use client'
 
-import { useState, useEffect, useCallback } from "react"
-import { useRouter } from "next/navigation"
-import { organization, useSession } from "@planisfy/auth/client"
-import { Button } from "@planisfy/ui/components/button"
-import { Input } from "@planisfy/ui/components/input"
-import { Label } from "@planisfy/ui/components/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
-import { Skeleton } from "@planisfy/ui/components/skeleton"
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { organization, useSession } from '@planisfy/auth/client'
+import { Button } from '@planisfy/ui/components/button'
+import { Input } from '@planisfy/ui/components/input'
+import { Label } from '@planisfy/ui/components/label'
+import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
+import { Skeleton } from '@planisfy/ui/components/skeleton'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,20 +17,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@planisfy/ui/components/alert-dialog"
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@planisfy/ui/components/tabs"
-import {
-  Building2,
-  Settings,
-  AlertTriangle,
-  Trash2,
-} from "lucide-react"
-import { toast } from "sonner"
+} from '@planisfy/ui/components/alert-dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@planisfy/ui/components/tabs'
+import { Building2, Settings, AlertTriangle, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -111,7 +101,7 @@ export default function OrgPage() {
 
   if (loading) {
     return (
-      <div className="container max-w-6xl py-8 px-4">
+      <div className="py-8">
         <h1 className="text-2xl font-bold mb-6">Organization</h1>
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
@@ -124,13 +114,13 @@ export default function OrgPage() {
 
   if (!activeOrgId || !org) {
     return (
-      <div className="container max-w-6xl py-8 px-4">
+      <div className="py-8">
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Building2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-medium">No organization selected</h3>
           <p className="text-sm text-muted-foreground mt-1 mb-4">
-            Switch to an organization using the context switcher in the top
-            navigation, or create a new one.
+            Switch to an organization using the context switcher in the top navigation, or create a
+            new one.
           </p>
         </div>
       </div>
@@ -138,10 +128,10 @@ export default function OrgPage() {
   }
 
   const currentMember = org.members.find((m) => m.userId === currentUserId)
-  const isAdmin = currentMember?.role === "owner" || currentMember?.role === "admin"
+  const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'admin'
 
   return (
-    <div className="container max-w-6xl py-8 px-4">
+    <div className="py-8">
       <div className="flex items-center gap-3 mb-6">
         <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
           <Building2 className="h-5 w-5 text-muted-foreground" />
@@ -186,20 +176,14 @@ export default function OrgPage() {
 
 function OverviewTab({ org }: { org: OrgData }) {
   const memberCount = org.members.length
-  const adminCount = org.members.filter(
-    (m) => m.role === "owner" || m.role === "admin"
-  ).length
-  const pendingInvites = org.invitations?.filter(
-    (i) => i.status === "pending"
-  ).length ?? 0
+  const adminCount = org.members.filter((m) => m.role === 'owner' || m.role === 'admin').length
+  const pendingInvites = org.invitations?.filter((i) => i.status === 'pending').length ?? 0
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Members
-          </CardTitle>
+          <CardTitle className="text-sm font-medium text-muted-foreground">Members</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-2xl font-bold">{memberCount}</p>
@@ -207,9 +191,7 @@ function OverviewTab({ org }: { org: OrgData }) {
       </Card>
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Admins
-          </CardTitle>
+          <CardTitle className="text-sm font-medium text-muted-foreground">Admins</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-2xl font-bold">{adminCount}</p>
@@ -242,9 +224,7 @@ function OverviewTab({ org }: { org: OrgData }) {
             </div>
             <div>
               <dt className="text-muted-foreground">Created</dt>
-              <dd className="font-medium">
-                {new Date(org.createdAt).toLocaleDateString()}
-              </dd>
+              <dd className="font-medium">{new Date(org.createdAt).toLocaleDateString()}</dd>
             </div>
           </dl>
         </CardContent>
@@ -257,22 +237,16 @@ function OverviewTab({ org }: { org: OrgData }) {
 // Settings Tab
 // ---------------------------------------------------------------------------
 
-function SettingsTab({
-  org,
-  onRefresh,
-}: {
-  org: OrgData
-  onRefresh: () => Promise<void>
-}) {
+function SettingsTab({ org, onRefresh }: { org: OrgData; onRefresh: () => Promise<void> }) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState("")
+  const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
 
   const handleSave = async (formData: FormData) => {
-    const name = formData.get("name") as string
-    const slug = formData.get("slug") as string
+    const name = formData.get('name') as string
+    const slug = formData.get('slug') as string
     if (!name?.trim() || !slug?.trim()) return
 
     setSaving(true)
@@ -283,7 +257,7 @@ function SettingsTab({
       })
       await onRefresh()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update organization")
+      toast.error(err instanceof Error ? err.message : 'Failed to update organization')
     } finally {
       setSaving(false)
     }
@@ -294,10 +268,10 @@ function SettingsTab({
     setDeleting(true)
     try {
       await organization.delete({ organizationId: org.id })
-      router.push("/styles")
+      router.push('/styles')
       router.refresh()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete organization")
+      toast.error(err instanceof Error ? err.message : 'Failed to delete organization')
       setDeleting(false)
     }
   }
@@ -313,13 +287,7 @@ function SettingsTab({
           <form action={handleSave} className="space-y-4">
             <div>
               <Label htmlFor="org-name">Organization name</Label>
-              <Input
-                id="org-name"
-                name="name"
-                defaultValue={org.name}
-                required
-                className="mt-1"
-              />
+              <Input id="org-name" name="name" defaultValue={org.name} required className="mt-1" />
             </div>
             <div>
               <Label htmlFor="org-slug">Slug</Label>
@@ -336,7 +304,7 @@ function SettingsTab({
               </p>
             </div>
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save changes"}
+              {saving ? 'Saving...' : 'Save changes'}
             </Button>
           </form>
         </CardContent>
@@ -352,13 +320,10 @@ function SettingsTab({
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Deleting an organization is permanent. All styles, tilesets, API
-            keys, and usage data owned by this organization will be lost.
+            Deleting an organization is permanent. All styles, tilesets, API keys, and usage data
+            owned by this organization will be lost.
           </p>
-          <Button
-            variant="destructive"
-            onClick={() => setDeleteOpen(true)}
-          >
+          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
             <Trash2 className="h-4 w-4 mr-2" />
             Delete organization
           </Button>
@@ -371,8 +336,8 @@ function SettingsTab({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete organization?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. All resources owned by{" "}
-              <strong>{org.name}</strong> will be permanently deleted.
+              This action cannot be undone. All resources owned by <strong>{org.name}</strong> will
+              be permanently deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4">
@@ -391,7 +356,7 @@ function SettingsTab({
             <AlertDialogCancel
               onClick={() => {
                 setDeleteOpen(false)
-                setDeleteConfirm("")
+                setDeleteConfirm('')
               }}
             >
               Cancel
@@ -401,7 +366,7 @@ function SettingsTab({
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleting ? "Deleting..." : "Delete organization"}
+              {deleting ? 'Deleting...' : 'Delete organization'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

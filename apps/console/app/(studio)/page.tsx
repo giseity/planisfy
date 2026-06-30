@@ -1,8 +1,8 @@
-"use client"
+'use client'
 
-import type React from "react"
-import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
+import type React from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   Activity,
   AlertTriangle,
@@ -24,63 +24,50 @@ import {
   Settings,
   Upload,
   XCircle,
-} from "lucide-react"
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-} from "recharts"
-import { toast } from "sonner"
-import { Badge } from "@planisfy/ui/components/badge"
-import { Button } from "@planisfy/ui/components/button"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@planisfy/ui/components/card"
+} from 'lucide-react'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import { toast } from 'sonner'
+import { Badge } from '@planisfy/ui/components/badge'
+import { Button } from '@planisfy/ui/components/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "@planisfy/ui/components/chart"
-import { cn } from "@planisfy/ui/lib/utils"
-import { api, type ConsoleDashboard, type DashboardHealthStatus } from "@/lib/api"
+} from '@planisfy/ui/components/chart'
+import { cn } from '@planisfy/ui/lib/utils'
+import { api, type ConsoleDashboard, type DashboardHealthStatus } from '@/lib/api'
 
 const statusColor: Record<DashboardHealthStatus, string> = {
-  healthy: "bg-emerald-500",
-  degraded: "bg-amber-500",
-  not_configured: "bg-muted-foreground",
-  offline: "bg-destructive",
+  healthy: 'bg-emerald-500',
+  degraded: 'bg-amber-500',
+  not_configured: 'bg-muted-foreground',
+  offline: 'bg-destructive',
 }
 
 const endpointLabels: Record<string, string> = {
-  tiles: "Tiles",
-  styles: "Styles",
-  geocoding: "Geocoding",
-  directions: "Directions",
-  elevation: "Elevation",
-  static: "Static maps",
-  other: "Other",
+  tiles: 'Tiles',
+  styles: 'Styles',
+  geocoding: 'Geocoding',
+  directions: 'Directions',
+  elevation: 'Elevation',
+  static: 'Static maps',
+  other: 'Other',
 }
 
 const dashboardChartConfig = {
-  total: { label: "Total", color: "hsl(var(--primary))" },
-  units: { label: "Units", color: "hsl(var(--primary))" },
+  total: { label: 'Total', color: 'hsl(var(--primary))' },
+  units: { label: 'Units', color: 'hsl(var(--primary))' },
 } satisfies ChartConfig
 
 const quickActions = [
-  { label: "Create style", href: "/styles", icon: Palette },
-  { label: "Upload tileset", href: "/tilesets", icon: Upload },
-  { label: "Create API key", href: "/keys", icon: Key },
-  { label: "View usage", href: "/usage", icon: BarChart3 },
-  { label: "Open docs", href: "https://docs.planisfy.localhost", icon: FileCode2 },
-  { label: "Settings", href: "/settings", icon: Settings },
+  { label: 'Create style', href: '/styles', icon: Palette },
+  { label: 'Upload tileset', href: '/tilesets', icon: Upload },
+  { label: 'Create API key', href: '/keys', icon: Key },
+  { label: 'View usage', href: '/usage', icon: BarChart3 },
+  { label: 'Open docs', href: 'https://docs.planisfy.localhost', icon: FileCode2 },
+  { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
 const HEALTH_PREVIEW_COUNT = 4
@@ -100,7 +87,7 @@ export default function StudioDashboardPage() {
       setDashboard(response.data)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load dashboard")
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard')
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -117,12 +104,12 @@ export default function StudioDashboardPage() {
 
   const blockingReadiness = useMemo(
     () => dashboard?.readiness.filter((item) => item.required && !item.complete) ?? [],
-    [dashboard],
+    [dashboard]
   )
 
   if (loading) {
     return (
-      <div className="container max-w-7xl px-4 py-6">
+      <div className="py-6">
         <div className="flex min-h-[420px] items-center justify-center rounded-lg border">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
@@ -132,7 +119,7 @@ export default function StudioDashboardPage() {
 
   if (error || !dashboard) {
     return (
-      <div className="container max-w-7xl px-4 py-6">
+      <div className="py-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -142,7 +129,7 @@ export default function StudioDashboardPage() {
           </CardHeader>
           <CardContent className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              {error ?? "The dashboard response was empty."}
+              {error ?? 'The dashboard response was empty.'}
             </p>
             <Button onClick={() => loadDashboard()} size="sm">
               <RefreshCcw className="h-4 w-4" />
@@ -157,7 +144,7 @@ export default function StudioDashboardPage() {
   const hasUsage = dashboard.usage.timeseries.some((point) => point.total > 0)
 
   return (
-    <div className="container max-w-7xl space-y-5 px-4 py-5">
+    <div className="space-y-5 py-5">
       {blockingReadiness.length > 0 && (
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
@@ -166,14 +153,12 @@ export default function StudioDashboardPage() {
               <div>
                 <p className="text-sm font-medium">Setup still needs attention</p>
                 <p className="text-sm text-muted-foreground">
-                  {blockingReadiness.map((item) => item.label).join(", ")}
+                  {blockingReadiness.map((item) => item.label).join(', ')}
                 </p>
               </div>
             </div>
             <Button asChild size="sm" variant="outline">
-              <Link href={blockingReadiness[0]?.actionHref ?? "/settings"}>
-                Continue setup
-              </Link>
+              <Link href={blockingReadiness[0]?.actionHref ?? '/settings'}>Continue setup</Link>
             </Button>
           </CardContent>
         </Card>
@@ -230,42 +215,42 @@ export default function StudioDashboardPage() {
 function StatusStrip({ dashboard }: { dashboard: ConsoleDashboard }) {
   const items = [
     {
-      label: "Plan",
+      label: 'Plan',
       value: dashboard.billing.planName,
       hint: `${dashboard.billing.quota.percent}% quota used`,
       icon: Gauge,
     },
     {
-      label: "Quota remaining",
+      label: 'Quota remaining',
       value:
         dashboard.billing.quota.remaining === null
-          ? "Unlimited"
+          ? 'Unlimited'
           : formatNumber(dashboard.billing.quota.remaining),
       hint: `${formatNumber(dashboard.billing.quota.used)} units used`,
       icon: Activity,
     },
     {
-      label: "Requests",
+      label: 'Requests',
       value: formatNumber(dashboard.summary.totalRequests),
       hint: `${dashboard.summary.errorRate}% error rate`,
       icon: BarChart3,
     },
     {
-      label: "API keys",
+      label: 'API keys',
       value: formatNumber(dashboard.summary.activeApiKeys),
-      hint: "active keys",
+      hint: 'active keys',
       icon: Key,
     },
     {
-      label: "Published",
+      label: 'Published',
       value: `${dashboard.summary.publishedStyles}/${dashboard.summary.publishedTilesets}`,
-      hint: "styles / tilesets",
+      hint: 'styles / tilesets',
       icon: Map,
     },
     {
-      label: "Jobs",
+      label: 'Jobs',
       value: `${dashboard.summary.runningJobs}/${dashboard.summary.failedJobs}`,
-      hint: "running / failed",
+      hint: 'running / failed',
       icon: Server,
     },
   ]
@@ -301,40 +286,25 @@ function OperationsAlerts({ dashboard }: { dashboard: ConsoleDashboard }) {
       </CardHeader>
       <CardContent className="space-y-2 p-4 pt-0">
         <div className="grid grid-cols-3 gap-2">
-          <SignalTile
-            label="Services"
-            value={dashboard.operations.unhealthyServices}
-          />
-          <SignalTile
-            label="Stale jobs"
-            value={dashboard.operations.jobSignals.staleRunningJobs}
-          />
-          <SignalTile
-            label="Failures"
-            value={dashboard.operations.jobSignals.failedJobs}
-          />
+          <SignalTile label="Services" value={dashboard.operations.unhealthyServices} />
+          <SignalTile label="Stale jobs" value={dashboard.operations.jobSignals.staleRunningJobs} />
+          <SignalTile label="Failures" value={dashboard.operations.jobSignals.failedJobs} />
         </div>
         {dashboard.operations.alerts.map((alert) => (
           <div
             key={alert.id}
             className={cn(
-              "rounded-md border p-3",
-              alert.severity === "critical" &&
-                "border-destructive/30 bg-destructive/5",
-              alert.severity === "warning" &&
-                "border-amber-500/30 bg-amber-500/5",
+              'rounded-md border p-3',
+              alert.severity === 'critical' && 'border-destructive/30 bg-destructive/5',
+              alert.severity === 'warning' && 'border-amber-500/30 bg-amber-500/5'
             )}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium">{alert.title}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {alert.message}
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{alert.message}</p>
               </div>
-              <Badge variant={alertVariant(alert.severity)}>
-                {alert.severity}
-              </Badge>
+              <Badge variant={alertVariant(alert.severity)}>{alert.severity}</Badge>
             </div>
             {alert.actionHref && alert.actionLabel && (
               <Button asChild className="mt-3" size="sm" variant="outline">
@@ -345,16 +315,13 @@ function OperationsAlerts({ dashboard }: { dashboard: ConsoleDashboard }) {
         ))}
         {dashboard.operations.jobSignals.recentFailures.length > 0 && (
           <div className="rounded-md border p-3">
-            <p className="text-xs font-medium text-muted-foreground">
-              Recent failures
-            </p>
+            <p className="text-xs font-medium text-muted-foreground">Recent failures</p>
             <div className="mt-2 space-y-2">
               {dashboard.operations.jobSignals.recentFailures.map((failure) => (
                 <div key={failure.id} className="min-w-0">
                   <p className="truncate text-xs font-medium">{failure.type}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {failure.errorCode ?? "FAILED"} /{" "}
-                    {failure.errorMessage ?? "No message"}
+                    {failure.errorCode ?? 'FAILED'} / {failure.errorMessage ?? 'No message'}
                   </p>
                 </div>
               ))}
@@ -398,7 +365,7 @@ function HealthRail({ dashboard }: { dashboard: ConsoleDashboard }) {
           >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className={cn("h-2 w-2 rounded-full", statusColor[entry.status])} />
+                <span className={cn('h-2 w-2 rounded-full', statusColor[entry.status])} />
                 <p className="truncate text-sm font-medium">{entry.label}</p>
               </div>
               <p className="truncate text-xs text-muted-foreground">
@@ -416,7 +383,7 @@ function HealthRail({ dashboard }: { dashboard: ConsoleDashboard }) {
             type="button"
             variant="ghost"
           >
-            {expanded ? "Show less" : `Show ${hiddenCount} more`}
+            {expanded ? 'Show less' : `Show ${hiddenCount} more`}
           </Button>
         )}
       </CardContent>
@@ -424,13 +391,7 @@ function HealthRail({ dashboard }: { dashboard: ConsoleDashboard }) {
   )
 }
 
-function UsageChart({
-  dashboard,
-  hasUsage,
-}: {
-  dashboard: ConsoleDashboard
-  hasUsage: boolean
-}) {
+function UsageChart({ dashboard, hasUsage }: { dashboard: ConsoleDashboard; hasUsage: boolean }) {
   return (
     <Card className="min-h-[360px]">
       <CardHeader className="p-4 pb-2">
@@ -442,10 +403,7 @@ function UsageChart({
       <CardContent className="p-4 pt-0">
         {hasUsage ? (
           <div className="h-[280px]">
-            <ChartContainer
-              config={dashboardChartConfig}
-              className="h-full aspect-auto"
-            >
+            <ChartContainer config={dashboardChartConfig} className="h-full aspect-auto">
               <AreaChart data={dashboard.usage.timeseries}>
                 <defs>
                   <linearGradient id="dashboardUsage" x1="0" x2="0" y1="0" y2="1">
@@ -481,9 +439,7 @@ function UsageChart({
 }
 
 function EndpointBreakdown({ dashboard }: { dashboard: ConsoleDashboard }) {
-  const rows = dashboard.usage.endpointBreakdown.filter(
-    (row) => row.requests > 0 || row.units > 0,
-  )
+  const rows = dashboard.usage.endpointBreakdown.filter((row) => row.requests > 0 || row.units > 0)
   return (
     <Card className="min-h-[300px]">
       <CardHeader className="p-4 pb-2">
@@ -492,10 +448,7 @@ function EndpointBreakdown({ dashboard }: { dashboard: ConsoleDashboard }) {
       <CardContent className="p-4 pt-0">
         {rows.length > 0 ? (
           <div className="h-[230px]">
-            <ChartContainer
-              config={dashboardChartConfig}
-              className="h-full aspect-auto"
-            >
+            <ChartContainer config={dashboardChartConfig} className="h-full aspect-auto">
               <BarChart data={rows}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis
@@ -537,7 +490,7 @@ function TopApiKeys({ dashboard }: { dashboard: ConsoleDashboard }) {
             <div key={key.apiKeyId ?? key.name} className="rounded-md border p-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="truncate text-sm font-medium">{key.name}</p>
-                <Badge variant={key.errorCount > 0 ? "warning" : "secondary"}>
+                <Badge variant={key.errorCount > 0 ? 'warning' : 'secondary'}>
                   {formatNumber(key.requests)} req
                 </Badge>
               </div>
@@ -583,9 +536,7 @@ function RecentJobs({ dashboard }: { dashboard: ConsoleDashboard }) {
                 {job.progress}% / {formatDateTime(job.updatedAt)}
               </p>
               {job.errorMessage && (
-                <p className="mt-1 truncate text-xs text-destructive">
-                  {job.errorMessage}
-                </p>
+                <p className="mt-1 truncate text-xs text-destructive">{job.errorMessage}</p>
               )}
             </div>
           ))
@@ -643,7 +594,10 @@ function RecentStyles({ dashboard }: { dashboard: ConsoleDashboard }) {
       <CardContent className="space-y-2 p-4 pt-0">
         {dashboard.resources.recentStyles.length > 0 ? (
           dashboard.resources.recentStyles.map((style) => (
-            <div key={style.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
+            <div
+              key={style.id}
+              className="flex items-center justify-between gap-3 rounded-md border p-3"
+            >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{style.name}</p>
                 <p className="truncate text-xs text-muted-foreground">
@@ -654,7 +608,7 @@ function RecentStyles({ dashboard }: { dashboard: ConsoleDashboard }) {
                 {style.publicUrl && (
                   <IconButton
                     label="Copy style URL"
-                    onClick={() => copyText(style.publicUrl, "Style URL copied")}
+                    onClick={() => copyText(style.publicUrl, 'Style URL copied')}
                   >
                     <Clipboard className="h-4 w-4" />
                   </IconButton>
@@ -689,7 +643,10 @@ function RecentTilesets({ dashboard }: { dashboard: ConsoleDashboard }) {
       <CardContent className="space-y-2 p-4 pt-0">
         {dashboard.resources.recentTilesets.length > 0 ? (
           dashboard.resources.recentTilesets.map((tileset) => (
-            <div key={tileset.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
+            <div
+              key={tileset.id}
+              className="flex items-center justify-between gap-3 rounded-md border p-3"
+            >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{tileset.name}</p>
                 <p className="truncate text-xs text-muted-foreground">
@@ -700,7 +657,7 @@ function RecentTilesets({ dashboard }: { dashboard: ConsoleDashboard }) {
                 {tileset.tilejsonUrl && (
                   <IconButton
                     label="Copy TileJSON URL"
-                    onClick={() => copyText(tileset.tilejsonUrl, "TileJSON URL copied")}
+                    onClick={() => copyText(tileset.tilejsonUrl, 'TileJSON URL copied')}
                   >
                     <Clipboard className="h-4 w-4" />
                   </IconButton>
@@ -734,7 +691,7 @@ function QuickActions() {
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-2 p-4 pt-0">
         {quickActions.map((action) => {
-          const external = action.href.startsWith("http")
+          const external = action.href.startsWith('http')
           const content = (
             <>
               <action.icon className="h-4 w-4" />
@@ -743,7 +700,7 @@ function QuickActions() {
           )
           return (
             <Button key={action.label} asChild size="sm" variant="outline">
-              <Link href={action.href} target={external ? "_blank" : undefined}>
+              <Link href={action.href} target={external ? '_blank' : undefined}>
                 {content}
               </Link>
             </Button>
@@ -763,7 +720,7 @@ function SetupReadiness({ dashboard }: { dashboard: ConsoleDashboard }) {
         const bPriority = Number(b.complete) + Number(!b.required)
         return aPriority - bPriority
       }),
-    [dashboard.readiness],
+    [dashboard.readiness]
   )
   const visibleReadiness = expanded
     ? sortedReadiness
@@ -786,8 +743,10 @@ function SetupReadiness({ dashboard }: { dashboard: ConsoleDashboard }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
                 <p className="truncate text-sm font-medium">{item.label}</p>
-                <Badge variant={item.complete ? "success" : item.required ? "warning" : "secondary"}>
-                  {item.required ? "Required" : "Optional"}
+                <Badge
+                  variant={item.complete ? 'success' : item.required ? 'warning' : 'secondary'}
+                >
+                  {item.required ? 'Required' : 'Optional'}
                 </Badge>
               </div>
               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
@@ -802,7 +761,7 @@ function SetupReadiness({ dashboard }: { dashboard: ConsoleDashboard }) {
             type="button"
             variant="ghost"
           >
-            {expanded ? "Show less" : `Show ${hiddenCount} more`}
+            {expanded ? 'Show less' : `Show ${hiddenCount} more`}
           </Button>
         )}
       </CardContent>
@@ -832,13 +791,10 @@ function IntegrationPanel({ dashboard }: { dashboard: ConsoleDashboard }) {
           <MissingRow label="TileJSON URL" action="Publish a tileset" />
         )}
         {dashboard.integration.mapLibreSnippet ? (
-          <CodeBlock
-            label="MapLibre"
-            value={dashboard.integration.mapLibreSnippet}
-          />
+          <CodeBlock label="MapLibre" value={dashboard.integration.mapLibreSnippet} />
         ) : (
           <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-            Complete {dashboard.integration.missing.join(", ")} to generate a client snippet.
+            Complete {dashboard.integration.missing.join(', ')} to generate a client snippet.
           </p>
         )}
         {dashboard.integration.curlSnippet && (
@@ -930,31 +886,31 @@ function IconButton({
 }
 
 function statusVariant(status: DashboardHealthStatus) {
-  if (status === "healthy") return "success"
-  if (status === "degraded") return "warning"
-  if (status === "offline") return "destructive"
-  return "secondary"
+  if (status === 'healthy') return 'success'
+  if (status === 'degraded') return 'warning'
+  if (status === 'offline') return 'destructive'
+  return 'secondary'
 }
 
-function alertVariant(severity: "info" | "warning" | "critical") {
-  if (severity === "critical") return "destructive" as const
-  if (severity === "warning") return "warning" as const
-  return "secondary" as const
+function alertVariant(severity: 'info' | 'warning' | 'critical') {
+  if (severity === 'critical') return 'destructive' as const
+  if (severity === 'warning') return 'warning' as const
+  return 'secondary' as const
 }
 
 function jobVariant(status: string) {
-  if (status === "FAILED") return "destructive"
-  if (status === "COMPLETED" || status === "READY") return "success"
-  if (status === "PROCESSING" || status === "PENDING") return "warning"
-  return "secondary"
+  if (status === 'FAILED') return 'destructive'
+  if (status === 'COMPLETED' || status === 'READY') return 'success'
+  if (status === 'PROCESSING' || status === 'PENDING') return 'warning'
+  return 'secondary'
 }
 
 function statusLabel(status: DashboardHealthStatus) {
-  return status.replace("_", " ")
+  return status.replace('_', ' ')
 }
 
 function latencyLabel(latencyMs?: number | null) {
-  return typeof latencyMs === "number" ? `${Math.round(latencyMs)}ms` : "No details"
+  return typeof latencyMs === 'number' ? `${Math.round(latencyMs)}ms` : 'No details'
 }
 
 function formatNumber(value: number) {
@@ -962,20 +918,20 @@ function formatNumber(value: number) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "never"
+  if (!value) return 'never'
   return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
+    month: 'short',
+    day: 'numeric',
   }).format(new Date(value))
 }
 
 function formatDateTime(value: string | null) {
-  if (!value) return "never"
+  if (!value) return 'never'
   return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   }).format(new Date(value))
 }
 
