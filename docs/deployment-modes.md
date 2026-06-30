@@ -4,7 +4,7 @@ Planisfy recognizes two deployment modes through `DEPLOYMENT_MODE`.
 
 ## self_host
 
-`self_host` is the default in `.env.example`. It allows local filesystem storage, dry-run email behavior, missing billing credentials, and optional supervisor/MinIO profiles. The stack should boot even when map datasets are missing, with degraded health/preflight messages.
+`self_host` is the default in `.env.example`. It uses MinIO/S3-compatible object storage by default, allows local filesystem storage only as a demo fallback, permits dry-run email behavior and missing billing credentials, and keeps supervisor/root-agent controls enabled by deployment mode. The stack should boot even when map datasets are missing, with degraded health/preflight messages.
 
 ## managed
 

@@ -15,3 +15,40 @@ Important groups:
 - Storage: `STORAGE_PROVIDER`, local storage paths, S3 settings, R2 settings.
 - Worker: concurrency, outbox polling, DuckDB, Tippecanoe, ogr2ogr, Overture release settings.
 - Managed providers: Dodo Payments and ZeptoMail.
+
+## Deployment mode
+
+Use `DEPLOYMENT_MODE=self_host` for Docker Compose, VPS platforms, and other environments where you operate the runtime services. Self-host mode disables hosted checkout and billing portal actions. It also bypasses managed subscription feature gates; usage and limits remain visible for operational awareness.
+
+Use `DEPLOYMENT_MODE=managed` only for a managed Planisfy environment with production provider configuration, including hosted billing, transactional email, and managed object storage.
+
+## Storage
+
+Self-host deployments should default to S3-compatible storage:
+
+```bash
+STORAGE_PROVIDER=s3
+S3_BUCKET=planisfy-artifacts
+S3_REGION=auto
+S3_ENDPOINT=http://localhost:9000
+CONTAINER_S3_ENDPOINT=http://minio:9000
+S3_PUBLIC_URL=http://localhost:9000/planisfy-artifacts
+AWS_ACCESS_KEY_ID=planisfy
+AWS_SECRET_ACCESS_KEY=planisfy-local-minio-password
+```
+
+`S3_ENDPOINT` is the host-visible endpoint. `CONTAINER_S3_ENDPOINT` is the endpoint used by containers on the Compose network.
+
+Use the `with-minio` Compose profile for local S3-compatible storage:
+
+```bash
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
+```
+
+`STORAGE_PROVIDER=local` writes to the local filesystem and is useful for development or small smoke tests. It cannot issue signed direct upload sessions, so it is not appropriate for regional or planet-scale routing artifacts.
+
+## Billing providers
+
+Dodo Payments settings are required for managed hosted checkout. In self-host mode they can remain empty unless you are building a custom billing integration outside the built-in hosted checkout flow.
+
+ZeptoMail settings are required for managed transactional email. Self-host deployments can configure their own mail provider settings or run with degraded email readiness while testing local workflows.

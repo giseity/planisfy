@@ -8,7 +8,7 @@ description: Start and inspect the current Compose stack.
 ```bash
 cp .env.example .env
 scripts/self-host-setup.sh
-docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
 pnpm db:migrate
 ```
 
@@ -22,3 +22,5 @@ curl http://localhost:4000/setup/preflight
 ```
 
 Default ports include API `4000`, Console `3001`, Admin `3003`, Docs `3002`, Marketing `3000`, Martin `3005`, Valhalla `3007`, Pelias `3100`, elevation `4011`, and static renderer `4300`.
+
+The `with-minio` profile starts local S3-compatible storage and initializes the artifact bucket. This is the recommended self-host storage path because it matches production object-storage behavior and supports direct root-agent artifact uploads. `STORAGE_PROVIDER=local` is available for development-only loops, but it cannot issue signed object-storage upload sessions.

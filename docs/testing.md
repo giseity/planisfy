@@ -83,7 +83,7 @@ runs the full upload/process/publish/render browser flow against real managed
 public URLs and an existing managed test user; it does not seed data or reset
 the environment.
 
-To exercise S3-compatible storage locally, run the same full product loop with
+Self-host tests default to S3-compatible MinIO. Run the full product loop with
 the `with-minio` Compose profile and these storage settings:
 
 ```bash

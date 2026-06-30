@@ -5,10 +5,21 @@ description: What the Docker self-host stack runs.
 
 # Self-Hosting Overview
 
-The Docker Compose stack runs the Planisfy apps, worker, database, Redis, and local geospatial engines. It is useful for development, demos, and self-host trials.
+The Docker Compose stack runs the Planisfy apps, worker, database, Redis, object storage, and local geospatial engines. It is useful for development, demos, self-host trials, and small production deployments where you operate the infrastructure yourself.
 
-Core services: API, Console, Admin, Docs, Marketing, worker-geodata, Postgres, Redis, Martin, Valhalla, Pelias, elevation, and static-renderer.
+Core services: API, Console, Admin, Docs, Marketing, worker-geodata, Postgres, Redis, Martin, Valhalla, Pelias, elevation, static-renderer, and MinIO when the `with-minio` profile is enabled.
 
 Optional profiles: MinIO, Traefik, Pelias fixture import, and self-host supervisor.
 
 Binary map data is not committed. Place PMTiles, fonts, Valhalla graph data, DEM files, and Pelias fixture/import data under `infra/docker/data` or configure external providers.
+
+## Managed vs self-host
+
+`DEPLOYMENT_MODE=self_host` keeps the same application code and public API shapes as managed Planisfy, but changes ownership boundaries:
+
+- You operate Postgres, Redis, storage, geospatial engines, backups, upgrades, and observability.
+- Hosted checkout, billing portal, and managed subscription feature gates are disabled. Billing screens show usage and limits for visibility.
+- Self-host deployments should use S3-compatible object storage, usually the bundled MinIO profile. Local filesystem storage is only a development or small-artifact fallback.
+- External compute uses polling root agents. Root agents connect outbound to the API, receive jobs, upload artifacts directly to object storage when supported, then finalize metadata through the API.
+
+Managed Planisfy operates the provider configuration and enforces hosted subscription gates. Self-host operators can still apply their own policy outside Planisfy, but the built-in hosted checkout workflow is not part of self-host mode.

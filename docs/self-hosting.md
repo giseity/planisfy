@@ -5,13 +5,13 @@ The local self-host path is Docker Compose from the repository root:
 ```bash
 cp .env.example .env
 pnpm self-host:setup
-docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
 pnpm db:migrate
 ```
 
 ## Compose Services
 
-The stack defines API, Console, Admin, Docs, Marketing, worker-geodata, Postgres, Redis, Martin, Valhalla, local elevation, static renderer, Pelias API, Pelias Elasticsearch, optional Pelias fixture import jobs, optional MinIO, optional Traefik, optional tile-worker, and optional self-host supervisor.
+The stack defines API, Console, Admin, Docs, Marketing, worker-geodata, Postgres, Redis, Martin, Valhalla, local elevation, static renderer, Pelias API, Pelias Elasticsearch, optional Pelias fixture import jobs, MinIO through the recommended `with-minio` profile, optional Traefik, optional tile-worker, and optional self-host supervisor.
 
 ## VPS Platforms
 
@@ -21,7 +21,7 @@ managed mode:
 
 - Public domains and TLS terminate correctly for API and Console.
 - Environment variables are injected into the app services.
-- Postgres, Redis, local object storage, PMTiles, Valhalla, and optional MinIO
+- Postgres, Redis, MinIO object storage, PMTiles, Valhalla, and optional local demo storage
   data live on persistent volumes.
 - Database and Redis ports are private to the deployment network.
 - Public routing exposes API and Console origins expected by `NEXT_PUBLIC_*`
@@ -39,7 +39,8 @@ Ignored runtime data lives under `infra/docker/data`:
 - `fonts`: glyph PBF files served by Martin.
 - `elevation`: SRTM HGT files used by `apps/elevation`.
 - `valhalla_data`: Valhalla graph/runtime data.
-- `storage`: local Planisfy artifact storage.
+- `minio`: default self-host artifact storage.
+- `storage`: local Planisfy artifact storage for demo/dev fallback.
 - `pelias/csv`: optional fixture CSV import data.
 
 Planisfy does not commit binary datasets. Missing data should produce degraded service checks, not prevent the core apps from booting.
@@ -69,8 +70,8 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with
 ```
 
 The `with-minio` profile starts local S3-compatible storage and a one-shot
-bucket initializer. Set `STORAGE_PROVIDER=s3`, `CONTAINER_S3_ENDPOINT=http://minio:9000`,
-and a host-visible `S3_PUBLIC_URL` before using it for artifact storage.
+bucket initializer. `.env.example` defaults to `STORAGE_PROVIDER=s3`,
+`CONTAINER_S3_ENDPOINT=http://minio:9000`, and a host-visible `S3_PUBLIC_URL`.
 
 ## Tile Worker Mode
 

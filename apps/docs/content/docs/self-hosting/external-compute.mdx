@@ -1,0 +1,163 @@
+---
+title: External Compute
+description: Register polling root agents for routing graph builds.
+---
+
+# External Compute
+
+Planisfy uses polling root agents for external compute. A root agent is a server process that connects outbound to the API, registers as a worker node, polls for work, runs build tooling such as Valhalla, uploads artifacts, and finalizes metadata.
+
+Polling agents are the default because they work behind NAT, firewalls, and VPS private networks. Planisfy does not require inbound webhook endpoints on worker machines for routing builds.
+
+## Machine requirements
+
+Use a Linux host with:
+
+- Outbound HTTPS access to the Planisfy API.
+- Docker, because Valhalla graph builds run inside the selected Valhalla image.
+- Node.js and pnpm for the current source-based root-agent build.
+- `tar`, `gzip`, and enough disk for source data, intermediate Valhalla tiles, final archives, and upload parts.
+- S3-compatible artifact storage reachable through the signed URLs returned by the API.
+
+For regional or planet builds, use S3-compatible MinIO, S3, or R2 storage. Local filesystem storage is only a small smoke-test fallback because it cannot create signed direct upload sessions.
+
+## Registration flow
+
+1. Create a root-agent registration token from Console operations.
+2. Start the root-agent process with the API URL and registration token.
+3. The agent exchanges the one-time registration token for a node auth token.
+4. The agent stores its node token locally and polls the API for assigned jobs.
+5. The API rejects node tokens if the worker node is deleted or the token is revoked.
+
+Registration tokens start with `par_`. They are short-lived one-time credentials used to register a node.
+
+Node auth tokens start with `pat_`. They are long-lived credentials used by an already registered root agent when polling and reporting job progress.
+
+## Install the current root agent
+
+The current distribution path is source based. On the compute host, install the repository or unpack a release checkout, install dependencies, and build the root-agent package:
+
+```bash
+cd /opt/planisfy
+pnpm install --frozen-lockfile
+pnpm --filter root-agent build
+sudo mkdir -p /etc/planisfy /var/lib/planisfy/root-agent/work
+sudo chown -R "$USER":"$USER" /var/lib/planisfy/root-agent
+```
+
+Create a registration token in Console, then create `/etc/planisfy/root-agent.env`:
+
+```bash
+PLANISFY_API_URL=https://api.example.com
+ROOT_AGENT_REGISTRATION_TOKEN=par_replace-with-one-time-token
+ROOT_AGENT_NAME=builder-1
+ROOT_AGENT_KIND=remote
+ROOT_AGENT_STATE_DIR=/var/lib/planisfy/root-agent
+ROOT_AGENT_WORK_DIR=/var/lib/planisfy/root-agent/work
+ROOT_AGENT_CAPABILITIES=valhalla_graph_build,dem_hydration,self_host_activation
+ROOT_AGENT_POLL_INTERVAL_MS=5000
+ROOT_AGENT_UPLOAD_RETRIES=5
+ROOT_AGENT_UPLOAD_CONCURRENCY=4
+```
+
+Optional activation settings let the agent install completed artifacts into a local Compose stack and restart affected services:
+
+```bash
+ROOT_AGENT_VALHALLA_DATA_DIR=/opt/planisfy/infra/docker/data/valhalla_data
+ROOT_AGENT_ELEVATION_DATA_DIR=/opt/planisfy/infra/docker/data/elevation
+ROOT_AGENT_COMPOSE_FILE=/opt/planisfy/infra/docker/docker-compose.yml
+ROOT_AGENT_COMPOSE_ENV_FILE=/opt/planisfy/.env
+ROOT_AGENT_COMPOSE_CWD=/opt/planisfy
+```
+
+Run the agent once to register it:
+
+```bash
+set -a
+. /etc/planisfy/root-agent.env
+set +a
+node /opt/planisfy/apps/root-agent/dist/index.js
+```
+
+After successful registration, the agent writes its `pat_` node token to `ROOT_AGENT_STATE_DIR/agent.json`. Remove `ROOT_AGENT_REGISTRATION_TOKEN` from the env file after the first successful registration. Keep the state directory persistent; deleting it forces re-registration.
+
+## Run with systemd
+
+Create a dedicated service user that can run Docker, then install a unit similar to this:
+
+```ini
+[Unit]
+Description=Planisfy root agent
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=planisfy-root-agent
+Group=planisfy-root-agent
+SupplementaryGroups=docker
+WorkingDirectory=/opt/planisfy
+EnvironmentFile=/etc/planisfy/root-agent.env
+ExecStart=/usr/bin/node /opt/planisfy/apps/root-agent/dist/index.js
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now planisfy-root-agent
+sudo systemctl status --no-pager planisfy-root-agent
+```
+
+If you use a different Node.js path, update `ExecStart`. If the service user cannot access Docker, builds will fail before Valhalla starts.
+
+## Validate the worker
+
+In Console, the registered worker node should appear under operations with a recent heartbeat. Before a regional build, verify the compute host:
+
+```bash
+df -h /var/lib/planisfy/root-agent /
+free -h
+docker ps
+systemctl status --no-pager planisfy-root-agent
+```
+
+Then run a tiny no-elevation routing build. Check that logs show a direct multipart upload when S3/R2 storage is configured. If logs show legacy proxied upload, the storage mode is not suitable for large artifacts.
+
+## Artifact uploads
+
+For S3-compatible storage and R2, root-agent artifacts use direct object-storage uploads:
+
+1. The root agent asks the API to create an artifact upload session.
+2. The API returns signed upload instructions.
+3. The root agent uploads the artifact directly to object storage.
+4. The root agent finalizes the artifact through the API with size, checksum, manifest, and storage metadata.
+5. The API records the storage object and routing graph artifact rows.
+
+The API is the control plane. It should not proxy regional or planet-scale artifacts through public HTTP ingress.
+
+Local filesystem storage cannot issue signed object-storage upload sessions. In local storage mode, root-agent uploads fall back to the legacy proxied path for small smoke artifacts only.
+
+## Build sizing
+
+Use no-elevation routing graph builds first when validating a new root-agent host. A typical progression is:
+
+1. A tiny country or city-region smoke build.
+2. A small regional build.
+3. Selected launch regions.
+4. Planet-scale no-elevation routing.
+5. DEM/elevation workflows as separate targets after routing is healthy.
+
+Before regional or planet builds, verify disk, memory, swap, Docker, storage, and root-agent service health on the compute host. Use S3-compatible object storage for artifacts so uploads can resume or retry without depending on API request body limits.
+
+## Token rotation and removal
+
+To remove a worker, delete the worker node in Console. Existing `pat_` tokens for that node are rejected after deletion.
+
+To rotate credentials, delete the worker node or revoke the current node token, create a new `par_` registration token, remove the old `agent.json`, set the new registration token in the env file, and restart the service.

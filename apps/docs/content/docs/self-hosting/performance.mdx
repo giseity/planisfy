@@ -8,3 +8,18 @@ description: Basic operational checks for self-hosting.
 Use `/health/detailed` and `/setup/preflight` before debugging clients. Together they report degraded dependencies such as missing worker heartbeat, storage issues, unavailable Martin, Valhalla readiness failures, missing Pelias, or missing static renderer. In production, call root diagnostics with internal authorization or use the authenticated Console preflight view.
 
 Use object storage for production-like artifact serving. Keep geodata worker concurrency conservative until CPU, memory, and disk behavior are measured with your imports. Use versioned published URLs for long-lived client caching.
+
+## Root-agent builds
+
+Before running regional or planet-scale routing builds, check:
+
+- Storage provider is S3-compatible MinIO, S3, or R2.
+- Root-agent API routes are reachable from the compute host.
+- The root-agent service can poll and report progress.
+- Disk space covers source data, intermediate build files, final tarballs, and temporary upload parts.
+- RAM and swap are sized for the selected Valhalla build target.
+- Docker can pull and run the selected Valhalla image.
+
+Start with no-elevation builds. Elevation and DEM generation should be treated as separate capacity planning work after routing graph builds are reliable.
+
+Use local filesystem storage only for small smoke artifacts. Local storage cannot create signed direct upload sessions and is not a planet-scale artifact path.

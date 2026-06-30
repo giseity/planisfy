@@ -37,6 +37,7 @@
         "self-hosting/overview",
         "self-hosting/docker",
         "self-hosting/configuration",
+        "self-hosting/external-compute",
         "self-hosting/data-sources",
         "self-hosting/performance"
       ]

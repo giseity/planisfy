@@ -5,7 +5,7 @@ description: Current request and quota behavior.
 
 # Rate Limits
 
-Authenticated service requests are checked against account plan limits. The API emits:
+Authenticated service requests are checked against runtime rate limits and monthly usage quotas. The API emits:
 
 - `X-RateLimit-Limit`
 - `X-RateLimit-Remaining`
@@ -16,3 +16,7 @@ Authenticated service requests are checked against account plan limits. The API 
 - `X-Quota-Remaining`
 
 Rate-limit failures return `429 RATE_LIMITED`. Monthly quota failures return `429 QUOTA_EXCEEDED`.
+
+In managed Planisfy, hosted subscription plans also gate features such as audit logs, operations controls, routing builds, external root agents, and planet-scale builds.
+
+In self-host mode, hosted checkout and managed subscription gates are disabled. Usage and limits are still shown in Console and API responses so operators can monitor load and decide whether to enforce their own policies outside the built-in hosted billing workflow.

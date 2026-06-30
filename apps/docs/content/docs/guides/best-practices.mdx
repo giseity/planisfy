@@ -11,3 +11,6 @@ description: Practical production notes for current Planisfy deployments.
 - Keep Valhalla, Pelias, Martin, elevation, and static renderer health visible in monitoring.
 - Run database migrations before starting upgraded app containers.
 - Test backup and restore before relying on self-host data.
+- Use polling root agents for external routing compute instead of exposing inbound worker endpoints.
+- Upload regional and planet-scale build artifacts directly to object storage. Treat API-proxied uploads as a small-artifact fallback only.
+- Validate no-elevation routing builds before adding DEM or elevation workflows.

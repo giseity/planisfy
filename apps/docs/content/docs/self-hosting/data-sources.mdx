@@ -12,3 +12,5 @@ Planisfy does not ship production map datasets.
 - Valhalla: place graph/runtime data under `infra/docker/data/valhalla_data`.
 - Pelias: use the bundled API/Elasticsearch for smoke coverage or run the official Pelias project for real imports.
 - Elevation: place SRTM `.hgt` files under `infra/docker/data/elevation`.
+
+Routing graph builds can also produce Valhalla artifacts through an external root agent. For regional or planet-scale outputs, use S3-compatible storage so the agent can upload artifacts directly to object storage and the API can record them after finalize.

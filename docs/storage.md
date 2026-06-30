@@ -2,15 +2,20 @@
 
 Planisfy supports `STORAGE_PROVIDER=local`, `s3`, or `r2`.
 
+Self-host deployments default to `STORAGE_PROVIDER=s3` backed by the bundled
+MinIO Compose profile. This keeps artifact behavior close to managed S3/R2
+storage and supports direct root-agent uploads. Use `STORAGE_PROVIDER=local`
+only for demos or small development loops.
+
 ## Local
 
-Local storage writes to `LOCAL_STORAGE_PATH`. In Docker Compose the API and worker mount the host path from `LOCAL_STORAGE_HOST_PATH` at `/data/storage`. Public processed tileset artifacts can be read through `/storage/*` only when a matching public `storage_objects` ledger row exists.
+Local storage writes to `LOCAL_STORAGE_PATH`. In Docker Compose the API and worker mount the host path from `LOCAL_STORAGE_HOST_PATH` at `/data/storage`. Public processed tileset artifacts can be read through `/storage/*` only when a matching public `storage_objects` ledger row exists. Local storage cannot issue signed direct upload sessions and is not a planet-scale artifact path.
 
 ## S3 And R2
 
 `@planisfy/storage` uses S3-compatible access for both S3 and Cloudflare R2. Configure bucket, endpoint/account, access key, secret, region, and public URL as appropriate. MinIO is available locally through the `with-minio` Compose profile.
 
-For local MinIO through Docker Compose, use:
+For local MinIO through Docker Compose, `.env.example` already provides:
 
 ```bash
 STORAGE_PROVIDER=s3
