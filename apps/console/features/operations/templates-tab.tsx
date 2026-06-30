@@ -62,9 +62,9 @@ export function TemplatesTab({
         <CardHeader>
           <CardTitle>Create Template</CardTitle>
           <CardDescription>
-            Store reusable JSON payloads for execution targets, schedules, and
-            preview workflows. Apply runs server-side validation for the
-            template category.
+            Store reusable JSON payloads for schedules, previews, and storage
+            workflows. Apply runs server-side validation for the template
+            category.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

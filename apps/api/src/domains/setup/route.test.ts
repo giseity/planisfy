@@ -132,7 +132,7 @@ test('setup preflight reports self-host product loop fixture readiness', async (
     const capabilities = new Map(
       body.data?.capabilities?.map((capability) => [capability.id, capability])
     )
-    assert.equal(capabilities.get('customExecutionTargets')?.visible, true)
+    assert.equal(capabilities.get('rootAgentCompute')?.visible, true)
     assert.equal(capabilities.get('localStorage')?.visible, true)
     assert.equal(checks.get('upload-storage')?.status, 'pass')
     assert.equal(checks.get('demo-style-fixtures')?.status, 'pass')
@@ -291,7 +291,7 @@ test('setup preflight reports blocking managed readiness without R2, Dodo, or Ze
     assert.equal(capabilities.get('managedStorage')?.status, 'unavailable')
     assert.equal(capabilities.get('billing')?.status, 'unavailable')
     assert.equal(capabilities.get('transactionalEmail')?.status, 'unavailable')
-    assert.equal(capabilities.get('customExecutionTargets')?.visible, false)
+    assert.equal(capabilities.get('rootAgentCompute')?.visible, false)
     assert.equal(capabilities.get('selfHostSupervisor')?.visible, false)
   } finally {
     if (previousMode === undefined) {

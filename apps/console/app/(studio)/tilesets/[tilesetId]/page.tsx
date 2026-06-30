@@ -30,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@planisfy/ui/components/table"
-import { api, type ConsoleExecutionTarget, type ConsoleProcessingJob, type ConsoleTileset, type ConsoleWorkerProfile } from "@/lib/api"
+import { api, type ConsoleProcessingJob, type ConsoleTileset } from "@/lib/api"
 import { OvertureImportDialog } from "@/features/tilesets/components/overture-import-dialog"
 import { TilesetUploadDialog } from "@/features/tilesets/components/tileset-upload-dialog"
 import type { ComponentProps } from "react"
@@ -39,28 +39,20 @@ export default function TilesetDetailPage() {
   const params = useParams<{ tilesetId: string }>()
   const [tilesets, setTilesets] = useState<ConsoleTileset[]>([])
   const [jobs, setJobs] = useState<ConsoleProcessingJob[]>([])
-  const [executionTargets, setExecutionTargets] = useState<ConsoleExecutionTarget[]>([])
-  const [workerProfiles, setWorkerProfiles] = useState<ConsoleWorkerProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
-  const [selectedExecutionTargetId, setSelectedExecutionTargetId] = useState("default")
-  const [selectedWorkerProfileId, setSelectedWorkerProfileId] = useState("default")
 
   useEffect(() => {
     let canceled = false
     Promise.all([
       api.listTilesets(),
       api.listJobs(),
-      api.listExecutionTargets(),
-      api.listWorkerProfiles(),
     ])
-      .then(([tilesetsRes, jobsRes, targetsRes, profilesRes]) => {
+      .then(([tilesetsRes, jobsRes]) => {
         if (canceled) return
         setTilesets(tilesetsRes.data)
         setJobs(jobsRes.data)
-        setExecutionTargets(targetsRes.data)
-        setWorkerProfiles(profilesRes.data)
       })
       .catch(() => {})
       .finally(() => {
@@ -128,12 +120,6 @@ export default function TilesetDetailPage() {
             tileset={tileset}
             open={uploadOpen}
             onOpenChange={setUploadOpen}
-            executionTargets={executionTargets}
-            workerProfiles={workerProfiles}
-            selectedExecutionTargetId={selectedExecutionTargetId}
-            selectedWorkerProfileId={selectedWorkerProfileId}
-            onExecutionTargetChange={setSelectedExecutionTargetId}
-            onWorkerProfileChange={setSelectedWorkerProfileId}
             onUploaded={reload}
           />
           <OvertureImportDialog

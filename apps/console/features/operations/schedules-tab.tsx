@@ -3,10 +3,8 @@
 import { useState } from "react";
 import {
   api,
-  type ConsoleExecutionTarget,
   type ConsoleScheduledOperation,
   type ConsoleTileset,
-  type ConsoleWorkerProfile,
 } from "@/lib/api";
 import { formatDate, schedulePayload } from "@/features/operations/model";
 import {
@@ -44,16 +42,12 @@ import { CalendarClock, Play, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export function SchedulesTab({
-  executionTargets,
   schedules,
   tilesets,
-  workerProfiles,
   onChanged,
 }: {
-  executionTargets: ConsoleExecutionTarget[];
   schedules: ConsoleScheduledOperation[];
   tilesets: ConsoleTileset[];
-  workerProfiles: ConsoleWorkerProfile[];
   onChanged: () => void;
 }) {
   const [name, setName] = useState("");
@@ -62,8 +56,6 @@ export function SchedulesTab({
   const [cron, setCron] = useState("0 2 * * *");
   const [timezone, setTimezone] = useState("UTC");
   const [tilesetId, setTilesetId] = useState("");
-  const [executionTargetId, setExecutionTargetId] = useState("");
-  const [workerProfileId, setWorkerProfileId] = useState("");
   const [payload, setPayload] = useState("{}");
   const [saving, setSaving] = useState(false);
   const requiresTileset = kind === "tileset_rebuild";
@@ -85,11 +77,9 @@ export function SchedulesTab({
         cron,
         timezone,
         payload: schedulePayload({
-          executionTargetId,
           kind,
           payload,
           tilesetId,
-          workerProfileId,
         }),
       });
       setName("");
@@ -188,48 +178,6 @@ export function SchedulesTab({
               </p>
             )}
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Execution target">
-              <Select
-                value={executionTargetId || "none"}
-                onValueChange={(value) =>
-                  setExecutionTargetId(value === "none" ? "" : value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Default target</SelectItem>
-                  {executionTargets.map((target) => (
-                    <SelectItem key={target.id} value={target.id}>
-                      {target.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Worker profile">
-              <Select
-                value={workerProfileId || "none"}
-                onValueChange={(value) =>
-                  setWorkerProfileId(value === "none" ? "" : value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Default profile</SelectItem>
-                  {workerProfiles.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
           <Field label="Advanced payload JSON">
             <Textarea
               rows={5}

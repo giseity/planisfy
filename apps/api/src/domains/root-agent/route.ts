@@ -630,6 +630,30 @@ async function authenticateAgent(c: Context<AgentEnv>) {
       ),
     };
   }
+  const [node] = await db
+    .select({ id: workerNodes.id })
+    .from(workerNodes)
+    .where(
+      and(
+        eq(workerNodes.id, row.workerNodeId),
+        eq(workerNodes.accountId, row.accountId),
+        isNull(workerNodes.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!node) {
+    await db
+      .update(rootAgentNodeTokens)
+      .set({ revokedAt: new Date() })
+      .where(eq(rootAgentNodeTokens.id, row.id));
+    return {
+      ok: false as const,
+      response: c.json(
+        { error: { code: "UNAUTHORIZED", message: "Root agent node is no longer active" } },
+        401,
+      ),
+    };
+  }
   await Promise.all([
     db
       .update(rootAgentNodeTokens)

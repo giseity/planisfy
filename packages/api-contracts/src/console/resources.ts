@@ -142,15 +142,11 @@ export interface ConsoleProcessingJob {
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
-  executionTargetId?: string | null;
-  workerProfileId?: string | null;
 }
 
 export interface TilesetUploadOptions {
   csvLatitude?: string;
   csvLongitude?: string;
-  executionTargetId?: string;
-  workerProfileId?: string;
 }
 
 export interface CreateTilesetOptions {
@@ -171,8 +167,6 @@ export interface DatasetTilesetOptions {
   datasetVersionId?: string;
   minZoom?: number;
   maxZoom?: number;
-  executionTargetId?: string;
-  workerProfileId?: string;
 }
 
 export interface DatasetTilesetResult {

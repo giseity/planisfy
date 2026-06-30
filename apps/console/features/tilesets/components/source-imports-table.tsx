@@ -1,10 +1,7 @@
 "use client";
 
 import type {
-  ConsoleExecutionTarget,
   ConsoleSourceImport,
-  ConsoleWorkerProfile,
-  ProcessingEstimate,
 } from "@/lib/api";
 import { Badge } from "@planisfy/ui/components/badge";
 import { Button } from "@planisfy/ui/components/button";
@@ -17,35 +14,19 @@ import {
   TableRow,
 } from "@planisfy/ui/components/table";
 import { Database, RefreshCw } from "lucide-react";
-import { SourceRuntimeSelectors } from "@/features/tilesets/components/source-runtime-selectors";
 import {
   canCreateTilesetFromImport,
   sourceImportStatusVariant,
   sourceImportSummary,
 } from "@/features/tilesets/workflow/import-workflow";
-import { estimateSummary } from "@/features/tilesets/workflow/source-runtime";
 
 export function SourceImportsTable({
   sourceImports,
-  importEstimates,
-  executionTargets,
-  workerProfiles,
-  selectedExecutionTargetId,
-  selectedWorkerProfileId,
   tilingImportId,
-  onExecutionTargetChange,
-  onWorkerProfileChange,
   onCreateTilesetFromImport,
 }: {
   sourceImports: ConsoleSourceImport[];
-  importEstimates: Record<string, ProcessingEstimate>;
-  executionTargets: ConsoleExecutionTarget[];
-  workerProfiles: ConsoleWorkerProfile[];
-  selectedExecutionTargetId: string;
-  selectedWorkerProfileId: string;
   tilingImportId: string | null;
-  onExecutionTargetChange: (value: string) => void;
-  onWorkerProfileChange: (value: string) => void;
   onCreateTilesetFromImport: (sourceImport: ConsoleSourceImport) => void;
 }) {
   return (
@@ -54,15 +35,6 @@ export function SourceImportsTable({
         <div>
           <h2 className="text-lg font-semibold">Imported datasets</h2>
         </div>
-        <SourceRuntimeSelectors
-          executionTargets={executionTargets}
-          workerProfiles={workerProfiles}
-          selectedExecutionTargetId={selectedExecutionTargetId}
-          selectedWorkerProfileId={selectedWorkerProfileId}
-          onExecutionTargetChange={onExecutionTargetChange}
-          onWorkerProfileChange={onWorkerProfileChange}
-          compact
-        />
       </div>
       <Table>
         <TableHeader>
@@ -91,12 +63,6 @@ export function SourceImportsTable({
                 {sourceImport.errorMessage && (
                   <div className="mt-1 text-xs text-destructive">
                     {sourceImport.errorMessage}
-                  </div>
-                )}
-                {importEstimates[sourceImport.id] && (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Estimate:{" "}
-                    {estimateSummary(importEstimates[sourceImport.id]!)}
                   </div>
                 )}
               </TableCell>

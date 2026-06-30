@@ -82,15 +82,6 @@ export const eventStatusEnum = pgEnum("event_status", [
   "FAILED",
   "ARCHIVED",
 ]);
-export const executionTargetProviderEnum = pgEnum("execution_target_provider", [
-  "local",
-  "aws_batch",
-  "gcp_batch",
-]);
-export const executionTargetAuthModeEnum = pgEnum(
-  "execution_target_auth_mode",
-  ["federated", "static", "external"],
-);
 export const notificationChannelProviderEnum = pgEnum(
   "notification_channel_provider",
   ["webhook", "email", "slack", "discord"],

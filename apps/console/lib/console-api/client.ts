@@ -11,8 +11,6 @@ import type {
   ConsoleAreaOfInterest,
   ConsoleCustomDomain,
   ConsoleDashboard,
-  ConsoleExecutionTarget,
-  ConsoleExecutionTargetEnvVar,
   ConsoleJobTimeline,
   ConsoleNotificationChannel,
   ConsoleOperationsOverview,
@@ -30,17 +28,13 @@ import type {
   ConsoleTileset,
   ConsoleWorkflowTemplate,
   ConsoleWorkerNode,
-  ConsoleWorkerProfile,
   CreateTilesetOptions,
   DatasetTilesetOptions,
   DatasetTilesetResult,
-  ExecutionTargetAuthMode,
-  ExecutionTargetProvider,
   OvertureCatalogTheme,
   OvertureImportOptions,
   OvertureImportResult,
   PlatformPreflight,
-  ProcessingEstimate,
   SavedRegionOptions,
   StylePublishResponse,
   TilesetUploadOptions,
@@ -61,8 +55,6 @@ export type {
   ConsoleAreaOfInterest,
   ConsoleCustomDomain,
   ConsoleDashboard,
-  ConsoleExecutionTarget,
-  ConsoleExecutionTargetEnvVar,
   ConsoleJobTimeline,
   ConsoleNotificationChannel,
   ConsoleOperationsOverview,
@@ -84,13 +76,10 @@ export type {
   ConsoleUploadValidation,
   ConsoleWorkflowTemplate,
   ConsoleWorkerNode,
-  ConsoleWorkerProfile,
   CreateTilesetOptions,
   DashboardHealthStatus,
   DatasetTilesetOptions,
   DatasetTilesetResult,
-  ExecutionTargetAuthMode,
-  ExecutionTargetProvider,
   OvertureCatalogTheme,
   OvertureCatalogType,
   OvertureImportOptions,
@@ -99,7 +88,6 @@ export type {
   PlatformPreflight,
   PlatformPreflightCheck,
   PlatformPreflightStatus,
-  ProcessingEstimate,
   SavedRegionOptions,
   StylePublishResponse,
   TilesetUploadOptions,
@@ -297,152 +285,6 @@ class ApiClient {
 
   listRegions() {
     return this.get<ApiEnvelope<ConsoleSavedRegion[]>>("/regions");
-  }
-
-  listExecutionTargets() {
-    return this.get<ApiEnvelope<ConsoleExecutionTarget[]>>(
-      "/execution-targets",
-    );
-  }
-
-  createExecutionTarget(options: {
-    name: string;
-    provider: ExecutionTargetProvider;
-    authMode: ExecutionTargetAuthMode;
-    region?: string;
-    config?: Record<string, unknown>;
-    credentials?: Record<string, unknown>;
-  }) {
-    return this.post<ApiEnvelope<ConsoleExecutionTarget>>(
-      "/execution-targets",
-      options,
-    );
-  }
-
-  updateExecutionTarget(
-    id: string,
-    options: Partial<{
-      name: string;
-      provider: ExecutionTargetProvider;
-      authMode: ExecutionTargetAuthMode;
-      region: string;
-      config: Record<string, unknown>;
-      credentials: Record<string, unknown>;
-    }>,
-  ) {
-    return this.patch<ApiEnvelope<ConsoleExecutionTarget>>(
-      `/execution-targets/${id}`,
-      options,
-    );
-  }
-
-  deleteExecutionTarget(id: string) {
-    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
-      `/execution-targets/${id}`,
-    );
-  }
-
-  listExecutionTargetEnv(targetId: string) {
-    return this.get<ApiEnvelope<ConsoleExecutionTargetEnvVar[]>>(
-      `/execution-targets/${targetId}/env`,
-    );
-  }
-
-  createExecutionTargetEnv(
-    targetId: string,
-    options: {
-      name: string;
-      value: string;
-      isSecret?: boolean;
-      description?: string;
-    },
-  ) {
-    return this.post<ApiEnvelope<ConsoleExecutionTargetEnvVar>>(
-      `/execution-targets/${targetId}/env`,
-      options,
-    );
-  }
-
-  updateExecutionTargetEnv(
-    targetId: string,
-    name: string,
-    options: Partial<{
-      value: string;
-      isSecret: boolean;
-      description: string | null;
-    }>,
-  ) {
-    return this.patch<ApiEnvelope<ConsoleExecutionTargetEnvVar>>(
-      `/execution-targets/${targetId}/env/${encodeURIComponent(name)}`,
-      options,
-    );
-  }
-
-  deleteExecutionTargetEnv(targetId: string, name: string) {
-    return this.delete<ApiEnvelope<{ name: string; deleted: boolean }>>(
-      `/execution-targets/${targetId}/env/${encodeURIComponent(name)}`,
-    );
-  }
-
-  listWorkerProfiles() {
-    return this.get<ApiEnvelope<ConsoleWorkerProfile[]>>("/worker-profiles");
-  }
-
-  createWorkerProfile(options: {
-    name: string;
-    image?: string;
-    command?: string[];
-    args?: string[];
-    cpu?: number;
-    memoryMb?: number;
-    timeoutSeconds?: number;
-    concurrency?: number;
-    config?: Record<string, unknown>;
-  }) {
-    return this.post<ApiEnvelope<ConsoleWorkerProfile>>(
-      "/worker-profiles",
-      options,
-    );
-  }
-
-  updateWorkerProfile(
-    id: string,
-    options: Partial<{
-      name: string;
-      image: string;
-      command: string[];
-      args: string[];
-      cpu: number;
-      memoryMb: number;
-      timeoutSeconds: number;
-      concurrency: number;
-      config: Record<string, unknown>;
-    }>,
-  ) {
-    return this.patch<ApiEnvelope<ConsoleWorkerProfile>>(
-      `/worker-profiles/${id}`,
-      options,
-    );
-  }
-
-  deleteWorkerProfile(id: string) {
-    return this.delete<ApiEnvelope<{ id: string; deleted: boolean }>>(
-      `/worker-profiles/${id}`,
-    );
-  }
-
-  estimateProcessingJob(options: {
-    executionTargetId?: string;
-    workerProfileId?: string;
-    sourceSizeBytes?: number;
-    featureCount?: number;
-    minZoom?: number;
-    maxZoom?: number;
-  }) {
-    return this.post<ApiEnvelope<ProcessingEstimate>>(
-      "/processing-jobs/estimate",
-      options,
-    );
   }
 
   getOperations() {

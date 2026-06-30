@@ -120,7 +120,7 @@ export default async function JobDetailPage({
           <Progress value={job.progress} className="h-2" />
           <div className="grid gap-3 text-sm sm:grid-cols-4">
             <Fact label="Started" value={formatDate(job.startedAt)} />
-            <Fact label="Worker" value={job.workerProfileId ? shortId(job.workerProfileId) : "default"} />
+            <Fact label="Worker" value="queue" />
             <Fact label="Retries" value={String(job.retryCount)} />
             <Fact label="Target" value={job.accountId ? shortId(job.accountId) : "-"} />
           </div>

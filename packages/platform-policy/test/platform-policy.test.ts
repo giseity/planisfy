@@ -6,12 +6,10 @@ import {
 } from "../src/index";
 
 describe("platform policy", () => {
-  it("keeps self-host local storage, supervisor, execution targets, and support bundles visible", () => {
+  it("keeps self-host local storage, supervisor, root-agent compute, and support bundles visible", () => {
     expect(isCapabilityVisible("self_host", "localStorage")).toBe(true);
     expect(isCapabilityVisible("self_host", "selfHostSupervisor")).toBe(true);
-    expect(isCapabilityVisible("self_host", "customExecutionTargets")).toBe(
-      true,
-    );
+    expect(isCapabilityVisible("self_host", "rootAgentCompute")).toBe(true);
     expect(isCapabilityVisible("self_host", "supportBundles")).toBe(true);
   });
 
@@ -25,15 +23,15 @@ describe("platform policy", () => {
 
   it("hides self-host-only operations from managed policy", () => {
     const managed = getDeploymentPolicy("managed");
-    const customTargets = managed.capabilities.find(
-      (capability) => capability.id === "customExecutionTargets",
+    const rootAgentCompute = managed.capabilities.find(
+      (capability) => capability.id === "rootAgentCompute",
     );
     const supervisor = managed.capabilities.find(
       (capability) => capability.id === "selfHostSupervisor",
     );
 
-    expect(customTargets?.policy).toBe("hidden");
-    expect(customTargets?.visible).toBe(false);
+    expect(rootAgentCompute?.policy).toBe("hidden");
+    expect(rootAgentCompute?.visible).toBe(false);
     expect(supervisor?.policy).toBe("hidden");
     expect(supervisor?.visible).toBe(false);
   });

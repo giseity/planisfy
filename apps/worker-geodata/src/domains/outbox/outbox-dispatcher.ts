@@ -25,7 +25,6 @@ import {
   runOvertureImport,
   type OvertureImportResult,
 } from "../imports/overture-import";
-import { resolveLocalExecutionRuntime } from "../runtime/execution-runtime";
 import type { SourceProcessingJob } from "../sources/source-worker";
 
 const DISPATCHABLE_EVENTS = [
@@ -684,13 +683,7 @@ async function dispatchTilesetBuildRequested(
     return;
   }
 
-  const runtime = await resolveLocalExecutionRuntime({
-    accountId: processingJob.accountId,
-    executionTargetId: processingJob.executionTargetId,
-    workerProfileId: processingJob.workerProfileId,
-    secret: credentialSecret(),
-  });
-  await queue.add("process", { ...input, ...runtime }, { jobId: payload.jobId });
+  await queue.add("process", input, { jobId: payload.jobId });
   await db.insert(processingJobLogs).values({
     jobId: payload.jobId,
     level: "info",
@@ -699,9 +692,6 @@ async function dispatchTilesetBuildRequested(
       outboxEventId: event.id,
       tilesetId: payload.tilesetId,
       uploadId: payload.sourceResourceId,
-      executionTargetId: processingJob.executionTargetId,
-      workerProfileId: processingJob.workerProfileId,
-      env: Object.keys(runtime.env),
     },
   });
 }

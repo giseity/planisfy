@@ -1,51 +1,6 @@
 import type { ConsoleProcessingJob } from "./resources";
 import type { ConsoleAreaOfInterest } from "./aoi";
 
-export type ExecutionTargetProvider = "local" | "aws_batch" | "gcp_batch";
-export type ExecutionTargetAuthMode = "federated" | "static" | "external";
-
-export interface ConsoleExecutionTarget {
-  id: string;
-  accountId: string;
-  name: string;
-  provider: ExecutionTargetProvider;
-  authMode: ExecutionTargetAuthMode;
-  region: string | null;
-  config: Record<string, unknown>;
-  hasCredentials: boolean;
-  lastUsedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ConsoleExecutionTargetEnvVar {
-  id: string;
-  accountId: string;
-  executionTargetId: string;
-  name: string;
-  value: string;
-  isSecret: boolean;
-  description: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ConsoleWorkerProfile {
-  id: string;
-  accountId: string;
-  name: string;
-  image: string | null;
-  command: string[];
-  args: string[];
-  cpu: number | null;
-  memoryMb: number | null;
-  timeoutSeconds: number | null;
-  concurrency: number | null;
-  config: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface ConsoleNotificationChannel {
   id: string;
   accountId: string;
@@ -292,11 +247,4 @@ export interface ConsoleJobTimelineEvent {
 export interface ConsoleJobTimeline {
   job: ConsoleProcessingJob;
   timeline: ConsoleJobTimelineEvent[];
-}
-
-export interface ProcessingEstimate {
-  minSeconds: number;
-  maxSeconds: number;
-  confidence: "low" | "medium" | "high";
-  basis: string[];
 }

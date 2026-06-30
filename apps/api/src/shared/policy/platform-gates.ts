@@ -18,16 +18,3 @@ export function apiKeyMutationGate(params: {
     status: 403,
   };
 }
-
-export function customerComputeMutationGate(
-  deploymentMode: DeploymentMode,
-): PlatformGateDenial | null {
-  if (deploymentMode !== "managed") return null;
-
-  return {
-    code: "CAPABILITY_UNAVAILABLE",
-    message:
-      "Customer-managed execution targets and worker profiles are unavailable in managed mode.",
-    status: 403,
-  };
-}

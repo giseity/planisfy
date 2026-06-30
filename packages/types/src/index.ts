@@ -74,8 +74,10 @@ export type PlanFeature =
   | "team"
   | "audit"
   | "operations"
+  | "routingBuilds"
+  | "externalRootAgents"
+  | "planetScaleBuilds"
   | "selfHostSupport"
-  | "customExecutionTargets"
   | "sla"
   | "onboarding";
 
@@ -252,10 +254,11 @@ export const PLANS: Record<PlanSlug, PlanDefinition> = {
       "8m Planisfy credits/month",
       "Audit log",
       "Operations controls",
+      "Regional routing graph builds",
       "Advanced usage controls",
       "Priority operations review",
     ],
-    entitlements: ["team", "audit", "operations"],
+    entitlements: ["team", "audit", "operations", "routingBuilds"],
     comparison: {
       publishedStyles: "50",
       hostedTilesets: "20",
@@ -289,7 +292,9 @@ export const PLANS: Record<PlanSlug, PlanDefinition> = {
     features: [
       "Custom Planisfy credit quota",
       "Self-hosting support",
-      "Custom storage and worker topology",
+      "Planet routing builds",
+      "External root-agent compute",
+      "Custom storage topology",
       "SLA and onboarding",
       "Operational readiness review",
     ],
@@ -297,8 +302,10 @@ export const PLANS: Record<PlanSlug, PlanDefinition> = {
       "team",
       "audit",
       "operations",
+      "routingBuilds",
+      "externalRootAgents",
+      "planetScaleBuilds",
       "selfHostSupport",
-      "customExecutionTargets",
       "sla",
       "onboarding",
     ],

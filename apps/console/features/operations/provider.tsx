@@ -28,11 +28,9 @@ import {
 import { cn } from "@planisfy/ui/lib/utils";
 import {
   api,
-  type ConsoleExecutionTarget,
   type ConsoleJobTimeline,
   type ConsoleOperationsOverview,
   type ConsoleTileset,
-  type ConsoleWorkerProfile,
 } from "@/lib/api";
 import { clientEnv } from "@/env.client";
 
@@ -65,8 +63,6 @@ interface OperationsContextValue {
   overview: ConsoleOperationsOverview;
   timeline: ConsoleJobTimeline | null;
   tilesets: ConsoleTileset[];
-  executionTargets: ConsoleExecutionTarget[];
-  workerProfiles: ConsoleWorkerProfile[];
   loading: boolean;
   load: (options?: { silent?: boolean }) => void;
   openTimeline: (jobId: string) => void;
@@ -88,27 +84,16 @@ export function OperationsProvider({
     null,
   );
   const [tilesets, setTilesets] = React.useState<ConsoleTileset[]>([]);
-  const [executionTargets, setExecutionTargets] = React.useState<
-    ConsoleExecutionTarget[]
-  >([]);
-  const [workerProfiles, setWorkerProfiles] = React.useState<
-    ConsoleWorkerProfile[]
-  >([]);
   const [loading, setLoading] = React.useState(true);
 
   const load = React.useCallback(async (options: { silent?: boolean } = {}) => {
     try {
-      const [operationsRes, tilesetsRes, targetsRes, profilesRes] =
-        await Promise.all([
-          api.getOperations(),
-          api.listTilesets(),
-          api.listExecutionTargets(),
-          api.listWorkerProfiles(),
-        ]);
+      const [operationsRes, tilesetsRes] = await Promise.all([
+        api.getOperations(),
+        api.listTilesets(),
+      ]);
       setOverview(operationsRes.data);
       setTilesets(tilesetsRes.data);
-      setExecutionTargets(targetsRes.data);
-      setWorkerProfiles(profilesRes.data);
     } catch (err) {
       if (!options.silent) {
         toast.error(
@@ -199,15 +184,12 @@ export function OperationsProvider({
       overview,
       timeline,
       tilesets,
-      executionTargets,
-      workerProfiles,
       loading,
       load,
       openTimeline,
       reconcileStaleJobs,
     }),
     [
-      executionTargets,
       load,
       loading,
       openTimeline,
@@ -215,7 +197,6 @@ export function OperationsProvider({
       overview,
       tilesets,
       timeline,
-      workerProfiles,
     ],
   );
 

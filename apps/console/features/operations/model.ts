@@ -9,19 +9,13 @@ export function parseJsonObject(value: string) {
 }
 
 export function schedulePayload(options: {
-  executionTargetId: string;
   kind: ConsoleScheduledOperation["kind"];
   payload: string;
   tilesetId: string;
-  workerProfileId: string;
 }) {
   const parsed = parseJsonObject(options.payload);
   const guided: Record<string, unknown> = {};
   if (options.tilesetId) guided.tilesetId = options.tilesetId;
-  if (options.executionTargetId) {
-    guided.executionTargetId = options.executionTargetId;
-  }
-  if (options.workerProfileId) guided.workerProfileId = options.workerProfileId;
   if (options.kind === "tileset_rebuild" && options.tilesetId) {
     guided.resourceType = "tileset";
   }

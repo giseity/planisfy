@@ -3,7 +3,6 @@ import type { AuthEnv } from "../../middleware/auth";
 import { auditRoute } from "../audit/route";
 import { billingRoute } from "../billing/route";
 import { dashboardRoute } from "../dashboard/route";
-import { executionTargetsRoute } from "../execution-targets/route";
 import { importsRoute } from "../imports/route";
 import { keysRoute } from "../keys/route";
 import { operationsRoute } from "../operations/route";
@@ -25,7 +24,6 @@ export const consoleRoute = new Hono<AuthEnv>()
   .route("/", securityRoute)
   .route("/", resourcesRoute)
   .route("/", importsRoute)
-  .route("/", executionTargetsRoute)
   .route("/", operationsRoute)
   .route("/", setupRoute);
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Cloud, Shield, User } from "lucide-react"
+import { Shield, User } from "lucide-react"
 import { Button } from "@planisfy/ui/components/button"
 import {
   PageDescription,
@@ -14,7 +14,6 @@ import {
 const settingsRoutes = [
   { href: "/settings/profile", label: "Profile", icon: User },
   { href: "/settings/security", label: "Security", icon: Shield },
-  { href: "/settings/execution", label: "Execution", icon: Cloud },
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
@@ -25,7 +24,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
       <PageHeader>
         <PageHeaderText>
           <PageTitle>Settings</PageTitle>
-          <PageDescription>Manage profile, account security, and execution preferences.</PageDescription>
+          <PageDescription>Manage profile and account security.</PageDescription>
         </PageHeaderText>
       </PageHeader>
       <nav className="flex flex-wrap gap-1 rounded-md border bg-muted/20 p-1">

@@ -41,10 +41,6 @@ import {
   unsupportedUploadFormatMessage,
 } from "./upload-policy";
 import { isRequestBodyTooLarge } from "./request-size";
-import {
-  ExecutionRuntimeSelectionError,
-  resolveExecutionRuntimeSelection,
-} from "../execution-targets/execution-runtime";
 import { requireOrgMutationPermission } from "../../middleware/auth";
 
 export const resourcesRoute = new Hono<AuthEnv>();
@@ -78,8 +74,6 @@ const createTilesetSchema = z.object({
 const uploadTilesetSchema = z.object({
   csvLatitude: z.string().max(128).optional(),
   csvLongitude: z.string().max(128).optional(),
-  executionTargetId: z.string().uuid().optional(),
-  workerProfileId: z.string().uuid().optional(),
 });
 
 resourcesRoute.get("/uploads", async (c) => {
@@ -315,21 +309,6 @@ resourcesRoute.post("/tilesets/:id/uploads", async (c) => {
     );
   }
 
-  let runtimeSelection: Awaited<
-    ReturnType<typeof resolveExecutionRuntimeSelection>
-  >;
-  try {
-    runtimeSelection = await resolveExecutionRuntimeSelection(accountId, {
-      executionTargetId: parsed.data.executionTargetId,
-      workerProfileId: parsed.data.workerProfileId,
-    });
-  } catch (err) {
-    if (err instanceof ExecutionRuntimeSelectionError) {
-      return c.json({ error: { code: err.code, message: err.message } }, 404);
-    }
-    throw err;
-  }
-
   const [upload] = await db
     .insert(uploads)
     .values({
@@ -390,8 +369,6 @@ resourcesRoute.post("/tilesets/:id/uploads", async (c) => {
     processingJob = await createProcessingJob({
       accountId,
       type: "tileset.process_upload",
-      executionTargetId: runtimeSelection.executionTargetId,
-      workerProfileId: runtimeSelection.workerProfileId,
       input: {
         tilesetId: tileset.id,
         uploadId: upload.id,
@@ -429,8 +406,6 @@ resourcesRoute.post("/tilesets/:id/uploads", async (c) => {
       tilesetId: tileset.id,
       uploadKey,
       format,
-      executionTargetId: runtimeSelection.executionTargetId,
-      workerProfileId: runtimeSelection.workerProfileId,
     },
   });
 

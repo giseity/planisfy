@@ -39,10 +39,6 @@ import {
   type OvertureImportRequest,
 } from "./source-import-requests";
 import { buildDatasetTilesetProcessingInput } from "@planisfy/geodata-contracts";
-import {
-  ExecutionRuntimeSelectionError,
-  resolveExecutionRuntimeSelection,
-} from "../execution-targets/execution-runtime";
 import { requireOrgMutationPermission } from "../../middleware/auth";
 
 export const importsRoute = new Hono<AuthEnv>();
@@ -113,8 +109,6 @@ const datasetTilesetSchema = z.object({
   datasetVersionId: z.string().uuid().optional(),
   minZoom: z.number().int().min(0).max(24).optional(),
   maxZoom: z.number().int().min(0).max(24).optional(),
-  executionTargetId: z.string().uuid().optional(),
-  workerProfileId: z.string().uuid().optional(),
 });
 
 importsRoute.get("/regions", async (c) => {
@@ -505,8 +499,6 @@ importsRoute.post("/tilesets/:id/dataset-builds", async (c) => {
     datasetVersionId: parsed.data.datasetVersionId,
     minZoom: parsed.data.minZoom,
     maxZoom: parsed.data.maxZoom,
-    executionTargetId: parsed.data.executionTargetId,
-    workerProfileId: parsed.data.workerProfileId,
     c,
   });
   if (result instanceof Response) return result;
@@ -521,8 +513,6 @@ async function queueExistingDatasetTilesetBuild(params: {
   datasetVersionId?: string;
   minZoom?: number;
   maxZoom?: number;
-  executionTargetId?: string;
-  workerProfileId?: string;
   c: Context;
 }) {
   const [tileset] = await db
@@ -622,26 +612,6 @@ async function queueExistingDatasetTilesetBuild(params: {
 
   const minZoom = params.minZoom ?? tileset.minZoom ?? 0;
   const maxZoom = params.maxZoom ?? tileset.maxZoom ?? 14;
-  let runtimeSelection: Awaited<
-    ReturnType<typeof resolveExecutionRuntimeSelection>
-  >;
-  try {
-    runtimeSelection = await resolveExecutionRuntimeSelection(
-      params.accountId,
-      {
-        executionTargetId: params.executionTargetId,
-        workerProfileId: params.workerProfileId,
-      },
-    );
-  } catch (err) {
-    if (err instanceof ExecutionRuntimeSelectionError) {
-      return params.c.json(
-        { error: { code: err.code, message: err.message } },
-        404,
-      );
-    }
-    throw err;
-  }
 
   const jobInput = buildDatasetTilesetProcessingInput({
     tilesetId: tileset.id,
@@ -656,8 +626,6 @@ async function queueExistingDatasetTilesetBuild(params: {
     processingJob = await createProcessingJob({
       accountId: params.accountId,
       type: "tileset.process_dataset",
-      executionTargetId: runtimeSelection.executionTargetId,
-      workerProfileId: runtimeSelection.workerProfileId,
       input: jobInput,
     });
   } catch (err) {
@@ -686,8 +654,6 @@ async function queueExistingDatasetTilesetBuild(params: {
       datasetVersionId: version.id,
       storageObjectId: storageObject.id,
       tilesetId: tileset.id,
-      executionTargetId: runtimeSelection.executionTargetId,
-      workerProfileId: runtimeSelection.workerProfileId,
     },
   });
   await enqueueOutboxEvent({

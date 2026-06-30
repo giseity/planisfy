@@ -55,25 +55,6 @@ export interface SourceProcessingJob {
     dropDensest?: boolean;
     simplification?: number;
   };
-  executionTarget?: {
-    id: string;
-    name: string;
-    provider: "local" | "aws_batch" | "gcp_batch";
-    config: Record<string, unknown>;
-  } | null;
-  workerProfile?: {
-    id: string;
-    name: string;
-    image: string | null;
-    command: string[];
-    args: string[];
-    cpu: number | null;
-    memoryMb: number | null;
-    timeoutSeconds: number | null;
-    concurrency: number | null;
-    config: Record<string, unknown>;
-  } | null;
-  env?: Record<string, string>;
 }
 
 export async function processSourceJob(job: Job<SourceProcessingJob>) {
@@ -85,14 +66,11 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     format,
     options,
     processingJobId,
-    executionTarget,
-    workerProfile,
   } = job.data;
   const storage = getStorage();
   const minZoom = options?.minZoom ?? 0;
   const maxZoom = options?.maxZoom ?? 14;
-  const childEnv = { ...process.env, ...(job.data.env ?? {}) };
-  const toolTimeoutMs = (workerProfile?.timeoutSeconds ?? 300) * 1000;
+  const toolTimeoutMs = 300 * 1000;
 
   console.log(`[worker-geodata] processing tileset ${tilesetId} (${format})`);
 
@@ -107,9 +85,6 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         uploadId,
         uploadKey,
         format,
-        executionTarget,
-        workerProfile,
-        env: Object.keys(job.data.env ?? {}),
       });
       await logToolchainCapabilities(processingJobId);
     }
@@ -196,7 +171,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         await execFileAsync(
           env.OGR2OGR_PATH,
           ["-f", "GeoJSONSeq", convertedPath, inputPath],
-          { env: childEnv, timeout: toolTimeoutMs },
+          { env: process.env, timeout: toolTimeoutMs },
         );
         if (processingJobId) {
           await throwIfCancellationRequested(processingJobId);
@@ -234,7 +209,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         await throwIfCancellationRequested(processingJobId);
       }
       await execFileAsync(env.TIPPECANOE_PATH, tippecanoeArgs, {
-        env: childEnv,
+        env: process.env,
         timeout: toolTimeoutMs,
       });
       if (processingJobId) {

@@ -1,8 +1,3 @@
-import type {
-  ExecutionTargetAuthMode,
-  ExecutionTargetProvider,
-} from "@/lib/api";
-
 export interface ProfileData {
   id: string;
   handle: string;
@@ -22,7 +17,8 @@ export interface BillingInfo {
     | "active_subscription"
     | "past_due"
     | "canceled"
-    | "free_plan";
+    | "free_plan"
+    | "self_hosted";
   plan: string;
   planName: string;
   price: number;
@@ -108,86 +104,6 @@ export interface SessionData {
   expiresAt: string;
 }
 
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | Record<string, unknown>
-  | unknown[];
-
-export const EXECUTION_PROVIDER_PRESETS: Record<
-  ExecutionTargetProvider,
-  {
-    authMode: ExecutionTargetAuthMode;
-    region: string;
-    config: Record<string, JsonValue>;
-    credentials: Record<string, JsonValue>;
-    profile: {
-      image: string;
-      cpu: string;
-      memory: string;
-      timeout: string;
-      concurrency: string;
-    };
-  }
-> = {
-  local: {
-    authMode: "federated",
-    region: "local",
-    config: {
-      queue: "geodata",
-      maxConcurrentJobs: 2,
-      workingDirectory: "/data/storage",
-    },
-    credentials: {},
-    profile: {
-      image: "",
-      cpu: "2",
-      memory: "4096",
-      timeout: "900",
-      concurrency: "2",
-    },
-  },
-  aws_batch: {
-    authMode: "federated",
-    region: "us-east-1",
-    config: {
-      jobQueue: "planisfy-geodata",
-      jobDefinition: "planisfy-geodata-worker",
-      retryAttempts: 1,
-    },
-    credentials: {
-      roleArn: "",
-    },
-    profile: {
-      image: "ghcr.io/planisfy/worker-geodata:latest",
-      cpu: "4",
-      memory: "8192",
-      timeout: "3600",
-      concurrency: "4",
-    },
-  },
-  gcp_batch: {
-    authMode: "federated",
-    region: "us-central1",
-    config: {
-      projectId: "",
-      location: "us-central1",
-      jobNamePrefix: "planisfy-geodata",
-    },
-    credentials: {
-      serviceAccountEmail: "",
-    },
-    profile: {
-      image: "ghcr.io/planisfy/worker-geodata:latest",
-      cpu: "4",
-      memory: "8192",
-      timeout: "3600",
-      concurrency: "4",
-    },
-  },
-};
-
 export function formatLimit(limit: number | null): string {
   return limit === null ? "\u221e" : limit.toLocaleString();
 }
@@ -214,52 +130,8 @@ export function timeAgo(date: string): string {
   return new Date(date).toLocaleDateString();
 }
 
-export function targetLabel(provider: ExecutionTargetProvider) {
-  if (provider === "aws_batch") return "AWS Batch";
-  if (provider === "gcp_batch") return "Google Cloud Batch";
-  return "Local";
-}
-
-export function parseJsonObject(value: string, label: string) {
-  const parsed = JSON.parse(value || "{}") as unknown;
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new Error(`${label} must be a JSON object`);
-  }
-  return parsed as Record<string, unknown>;
-}
-
-export function parseLooseJsonObject(value: string) {
-  try {
-    const parsed = JSON.parse(value || "{}") as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-      return {};
-    return parsed as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
-export function formatJson(value: Record<string, unknown>) {
-  return JSON.stringify(value, null, 2);
-}
-
-export function coerceProviderValue(value: string) {
-  const trimmed = value.trim();
-  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
-  if (trimmed === "true") return true;
-  if (trimmed === "false") return false;
-  return value;
-}
-
-export function splitShellList(value: string) {
-  return value.trim() ? value.trim().split(/\s+/) : [];
-}
-
-export function numberOrUndefined(value: string) {
-  return value.trim() ? Number(value) : undefined;
-}
-
 export function billingStatusLabel(status: BillingInfo["billingStatus"]) {
+  if (status === "self_hosted") return "Self-host read-only";
   if (status === "checkout_unavailable") return "Checkout unavailable";
   if (status === "active_subscription") return "Active subscription";
   if (status === "free_plan") return "Free plan";
@@ -274,6 +146,7 @@ export function billingStatusVariant(status: BillingInfo["billingStatus"]) {
   if (status === "checkout_unavailable" || status === "past_due") {
     return "warning";
   }
+  if (status === "self_hosted") return "secondary";
   if (status === "canceled") return "destructive";
   return "secondary";
 }

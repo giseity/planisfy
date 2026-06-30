@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { access, open, readFile, statfs } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -13,6 +13,7 @@ import {
   getDeploymentPolicy,
   parseDeploymentMode,
 } from '@planisfy/platform-policy'
+import { canOrg } from '@planisfy/utils'
 import type { AuthEnv } from '../../middleware/auth'
 import { env } from '../../env'
 import { isPeliasConfigured } from './geocoding-config'
@@ -56,6 +57,8 @@ setupRoute.get('/setup/preflight', async (c) => {
       401
     )
   }
+  const orgDenial = consoleOrgPermissionDenied(c)
+  if (orgDenial) return orgDenial
 
   const deploymentMode = activeDeploymentMode()
   const checks = await buildPreflightChecks(deploymentMode)
@@ -90,6 +93,22 @@ function isPublicSetupPreflightAllowed(path: string, headers: Headers) {
     process.env.NODE_ENV !== 'production' ||
     path.startsWith('/console/') ||
     isInternalRequestAuthorized(headers)
+  )
+}
+
+function consoleOrgPermissionDenied(c: Context<AuthEnv>) {
+  if (!c.req.path.startsWith('/console/')) return null
+  const session = c.get('session')
+  if (!session?.activeOrganizationId) return null
+  if (canOrg(c.get('orgRole'), 'platform.readiness.view')) return null
+  return c.json(
+    {
+      error: {
+        code: 'FORBIDDEN',
+        message: 'Requires platform.readiness.view permission for this organization.',
+      },
+    },
+    403
   )
 }
 
@@ -162,6 +181,29 @@ async function buildPreflightChecks(
       value: env.NEXT_PUBLIC_CONSOLE_URL,
     }),
     storage,
+    check({
+      id: 'root-agent-api',
+      group: 'Operations',
+      label: 'Root-agent API',
+      severity: 'required',
+      ok: true,
+      message: 'Polling root-agent API routes are enabled.',
+    }),
+    check({
+      id: 'root-agent-storage-mode',
+      group: 'Operations',
+      label: 'Root-agent artifact storage',
+      severity: 'recommended',
+      ok: env.STORAGE_PROVIDER !== 'local',
+      warnWhenMissing: true,
+      message:
+        env.STORAGE_PROVIDER === 'local'
+          ? 'Local filesystem storage is a small-artifact fallback and cannot issue direct object-storage upload sessions.'
+          : `${env.STORAGE_PROVIDER.toUpperCase()} storage can support direct root-agent artifact uploads.`,
+      action:
+        'Use S3-compatible MinIO, S3, or R2 storage for regional and planet-scale root-agent artifacts.',
+      value: env.STORAGE_PROVIDER,
+    }),
     ...productLoopChecks,
     ...upgradeChecks,
     check({
@@ -847,7 +889,7 @@ function capabilityChecks(id: CapabilityId, checks: PreflightCheck[]): Preflight
     managedStorage: ['storage'],
     localStorage: ['storage', 'upload-storage', 'martin-source-aliases'],
     selfHostSupervisor: [],
-    customExecutionTargets: [],
+    rootAgentCompute: ['root-agent-api', 'root-agent-storage-mode', 'storage'],
     publicSignup: ['auth-secret', 'console-url'],
     apiKeyCreation: ['auth-secret'],
     usageBilling: ['billing'],
@@ -888,13 +930,13 @@ function fallbackCapabilityState(
     }
   }
 
-  if (capability.id === 'customExecutionTargets') {
+  if (capability.id === 'rootAgentCompute') {
     return {
       ...capability,
       status: 'configured',
       message:
         deploymentMode === 'self_host'
-          ? 'Customer-managed execution targets and worker profiles are available.'
+          ? 'Polling root-agent compute is available for self-host operations.'
           : 'Managed compute is platform-operated for v1.',
     }
   }

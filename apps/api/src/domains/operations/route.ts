@@ -9,19 +9,18 @@ import {
   artifactBackups,
   customDomains,
   db,
-  executionTargets,
   notificationChannels,
   platformConfig,
   previewLinks,
   processingJobLogs,
   processingJobs,
+  rootAgentNodeTokens,
   rootAgentRegistrationTokens,
   routingGraphArtifacts,
   routingGraphBuildLogs,
   routingGraphBuilds,
   scheduledOperations,
   storageObjects,
-  workerProfiles,
   workerNodes,
   workflowTemplates,
 } from '@planisfy/database'
@@ -41,18 +40,76 @@ import {
   normalizeAreaOfInterest,
   type ConsoleAreaOfInterest,
 } from '@planisfy/api-contracts'
-import { requireOrgPermission, type AuthEnv } from '../../middleware/auth'
+import type { PlanFeature } from '@planisfy/types'
+import {
+  requireAnyOrgPermission,
+  requireOrgPermission,
+  type AuthEnv,
+} from '../../middleware/auth'
 import { env, redisConnection } from '../../env'
 import { enqueueOutboxEvent } from '../../shared/outbox/outbox'
-import { requirePlanFeature } from '../../shared/policy/plan-gates'
+import {
+  managedPlanFeatureDenial,
+  planGateErrorPayload,
+  requireManagedPlanFeature,
+} from '../../shared/policy/plan-gates'
 import { htmlParagraphFromText, sendEmail } from '../email/email'
 import { buildNotificationPayload } from './notification-adapters'
 import { SourceUrlRejectedError, validateOutboundUrl } from '../imports/source-url-policy'
 
 export const operationsRoute = new Hono<AuthEnv>()
 
-operationsRoute.use('/operations/*', requireOrgPermission('operations.manage'))
-operationsRoute.use('/operations/*', requirePlanFeature('operations'))
+const OPERATIONS_PERMISSIONS = [
+  'operations.jobs.manage',
+  'operations.schedules.manage',
+  'operations.notifications.manage',
+  'operations.backups.manage',
+  'operations.workers.manage',
+  'operations.routing.manage',
+  'operations.delivery.manage',
+  'operations.templates.manage',
+] as const
+
+operationsRoute.use('/operations', requireAnyOrgPermission([...OPERATIONS_PERMISSIONS]))
+operationsRoute.use('/operations/events', requireAnyOrgPermission([...OPERATIONS_PERMISSIONS]))
+operationsRoute.use('/operations', requireManagedPlanFeature('operations'))
+operationsRoute.use('/operations/*', requireManagedPlanFeature('operations'))
+operationsRoute.use('/operations/jobs/*', requireOrgPermission('operations.jobs.manage'))
+operationsRoute.use(
+  '/operations/notification-channels',
+  requireOrgPermission('operations.notifications.manage')
+)
+operationsRoute.use(
+  '/operations/notification-channels/*',
+  requireOrgPermission('operations.notifications.manage')
+)
+operationsRoute.use('/operations/schedules', requireOrgPermission('operations.schedules.manage'))
+operationsRoute.use('/operations/schedules/*', requireOrgPermission('operations.schedules.manage'))
+operationsRoute.use('/operations/artifact-backups', requireOrgPermission('operations.backups.manage'))
+operationsRoute.use(
+  '/operations/artifact-backups/*',
+  requireOrgPermission('operations.backups.manage')
+)
+operationsRoute.use('/operations/worker-nodes', requireOrgPermission('operations.workers.manage'))
+operationsRoute.use('/operations/worker-nodes/*', requireOrgPermission('operations.workers.manage'))
+operationsRoute.use(
+  '/operations/root-agent-registration-tokens',
+  requireOrgPermission('operations.workers.manage')
+)
+operationsRoute.use('/operations/routing-graphs', requireOrgPermission('operations.routing.manage'))
+operationsRoute.use('/operations/routing-graphs/*', requireOrgPermission('operations.routing.manage'))
+operationsRoute.use('/operations/preview-links', requireOrgPermission('operations.delivery.manage'))
+operationsRoute.use('/operations/preview-links/*', requireOrgPermission('operations.delivery.manage'))
+operationsRoute.use('/operations/custom-domains', requireOrgPermission('operations.delivery.manage'))
+operationsRoute.use('/operations/custom-domains/*', requireOrgPermission('operations.delivery.manage'))
+operationsRoute.use(
+  '/operations/workflow-templates',
+  requireOrgPermission('operations.templates.manage')
+)
+operationsRoute.use(
+  '/operations/workflow-templates/*',
+  requireOrgPermission('operations.templates.manage')
+)
 
 const notificationSchema = z
   .object({
@@ -244,27 +301,6 @@ const templateApplyBodySchema = z.object({
   values: z.record(z.string(), z.unknown()).default({}),
 })
 
-const executionTargetTemplateSchema = z.object({
-  name: z.string().min(1).max(128).optional(),
-  provider: z.enum(['local', 'aws_batch', 'gcp_batch']).default('local'),
-  authMode: z.enum(['federated', 'static', 'external']).default('federated'),
-  region: z.string().min(1).max(128).optional(),
-  config: z.record(z.string(), z.unknown()).default({}),
-  workerProfile: z
-    .object({
-      name: z.string().min(1).max(128).optional(),
-      image: z.string().max(512).optional(),
-      command: z.array(z.string().max(512)).default([]),
-      args: z.array(z.string().max(512)).default([]),
-      cpu: z.number().int().min(1).max(128).optional(),
-      memoryMb: z.number().int().min(128).max(1_048_576).optional(),
-      timeoutSeconds: z.number().int().min(1).max(604_800).optional(),
-      concurrency: z.number().int().min(1).max(10_000).optional(),
-      config: z.record(z.string(), z.unknown()).default({}),
-    })
-    .optional(),
-})
-
 const storageTemplateSchema = z
   .record(z.string(), z.unknown())
   .refine((value) => Object.keys(value).length > 0, {
@@ -282,10 +318,6 @@ const slackWebhookHosts = ['hooks.slack.com', 'hooks.slack-gov.com'] as const
 const discordWebhookHosts = ['discord.com', 'discordapp.com'] as const
 
 export type WorkflowTemplateApplication =
-  | {
-      category: 'execution-target'
-      values: z.infer<typeof executionTargetTemplateSchema>
-    }
   | { category: 'schedule'; values: z.infer<typeof scheduleSchema> }
   | { category: 'preview'; values: z.infer<typeof previewLinkSchema> }
   | { category: 'storage'; values: Record<string, unknown> }
@@ -441,6 +473,21 @@ async function buildOperationsOverview(accountId: string) {
 }
 
 type OperationsOverview = Awaited<ReturnType<typeof buildOperationsOverview>>
+
+async function managedPlanGateResponse(c: Context<AuthEnv>, feature: PlanFeature) {
+  const denial = await managedPlanFeatureDenial(c.get('ownerId'), feature)
+  if (!denial) return null
+  return c.json(planGateErrorPayload(denial), denial.status)
+}
+
+function isPlanetScaleRoutingBuild(
+  build: z.infer<typeof routingGraphBuildSchema>
+) {
+  return (
+    build.sourcePreset?.toLowerCase() === 'planet' ||
+    build.areaOfInterest?.kind === 'world'
+  )
+}
 
 export function operationsOverviewSignature(overview: OperationsOverview) {
   return JSON.stringify({
@@ -817,6 +864,8 @@ operationsRoute.delete('/operations/worker-nodes/:id', async (c) => {
 
 operationsRoute.post('/operations/root-agent-registration-tokens', async (c) => {
   const accountId = c.get('ownerId')
+  const denial = await managedPlanGateResponse(c, 'routingBuilds')
+  if (denial) return denial
   const parsed = rootAgentRegistrationTokenSchema.safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
   const token = `par_${randomBytes(32).toString('base64url')}`
@@ -853,6 +902,12 @@ operationsRoute.post('/operations/routing-graphs', async (c) => {
   const accountId = c.get('ownerId')
   const parsed = routingGraphBuildSchema.safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
+  const routingDenial = await managedPlanGateResponse(c, 'routingBuilds')
+  if (routingDenial) return routingDenial
+  if (isPlanetScaleRoutingBuild(parsed.data)) {
+    const planetDenial = await managedPlanGateResponse(c, 'planetScaleBuilds')
+    if (planetDenial) return planetDenial
+  }
   const worker = await findWorkerNode(accountId, parsed.data.workerNodeId)
   if (!worker) return notFound(c, 'Build worker node not found')
   if (parsed.data.activationWorkerNodeId) {
@@ -1095,67 +1150,6 @@ operationsRoute.post('/operations/workflow-templates/:id/apply', async (c) => {
     return c.json({ data: { applied: true, category: 'preview', previewLink: created } }, 201)
   }
 
-  if (application.category === 'execution-target') {
-    if (env.DEPLOYMENT_MODE === 'managed') {
-      return c.json(
-        {
-          error: {
-            code: 'CAPABILITY_UNAVAILABLE',
-            message: 'Customer execution targets are unavailable in managed deployments.',
-          },
-        },
-        409
-      )
-    }
-
-    const [target] = await db
-      .insert(executionTargets)
-      .values({
-        accountId,
-        name: application.values.name ?? template.name,
-        provider: application.values.provider,
-        authMode: application.values.authMode,
-        region: application.values.region ?? null,
-        config: application.values.config,
-        encryptedCredentials: {},
-      })
-      .returning()
-
-    let profile: typeof workerProfiles.$inferSelect | null = null
-    if (application.values.workerProfile) {
-      const [createdProfile] = await db
-        .insert(workerProfiles)
-        .values({
-          accountId,
-          name:
-            application.values.workerProfile.name ??
-            `${application.values.name ?? template.name} profile`,
-          image: application.values.workerProfile.image ?? null,
-          command: application.values.workerProfile.command,
-          args: application.values.workerProfile.args,
-          cpu: application.values.workerProfile.cpu ?? null,
-          memoryMb: application.values.workerProfile.memoryMb ?? null,
-          timeoutSeconds: application.values.workerProfile.timeoutSeconds ?? null,
-          concurrency: application.values.workerProfile.concurrency ?? null,
-          config: application.values.workerProfile.config,
-        })
-        .returning()
-      profile = createdProfile ?? null
-    }
-
-    return c.json(
-      {
-        data: {
-          applied: true,
-          category: 'execution-target',
-          executionTarget: target,
-          workerProfile: profile,
-        },
-      },
-      201
-    )
-  }
-
   const keys = Object.keys(application.values)
   const matchingConfig = await db
     .select({ key: platformConfig.key })
@@ -1218,40 +1212,6 @@ function builtInTemplates() {
       deletedAt: null,
     },
     {
-      id: 'builtin-aws-batch-target',
-      accountId: null,
-      name: 'AWS Batch geodata target',
-      category: 'execution-target',
-      description: 'Execution target defaults for AWS Batch geodata workers.',
-      template: {
-        provider: 'aws_batch',
-        authMode: 'federated',
-        region: 'us-east-1',
-        config: {
-          jobQueue: 'planisfy-geodata',
-          jobDefinition: 'planisfy-geodata-worker',
-        },
-      },
-      builtIn: true,
-      createdAt: now,
-      deletedAt: null,
-    },
-    {
-      id: 'builtin-local-worker',
-      accountId: null,
-      name: 'Local Docker worker',
-      category: 'execution-target',
-      description:
-        'Self-hosted tiling worker profile with common GDAL, DuckDB, and Tippecanoe defaults.',
-      template: {
-        provider: 'local',
-        workerProfile: { cpu: 2, memoryMb: 4096, timeoutSeconds: 900 },
-      },
-      builtIn: true,
-      createdAt: now,
-      deletedAt: null,
-    },
-    {
       id: 'builtin-overture-refresh',
       accountId: null,
       name: 'Nightly Overture refresh',
@@ -1289,16 +1249,6 @@ export function prepareWorkflowTemplateApplication(
 ): { success: true; data: WorkflowTemplateApplication } | { success: false; error: z.ZodError } {
   const base = isObjectRecord(template.template) ? template.template : {}
   const merged = { ...base, ...values }
-
-  if (template.category === 'execution-target') {
-    const parsed = executionTargetTemplateSchema.safeParse(merged)
-    return parsed.success
-      ? {
-          success: true,
-          data: { category: 'execution-target', values: parsed.data },
-        }
-      : { success: false, error: parsed.error }
-  }
 
   if (template.category === 'schedule') {
     const parsed = scheduleSchema.safeParse({
@@ -1777,7 +1727,19 @@ async function softDeleteWorkerNode(c: Context) {
     )
     .limit(1)
   if (!row) return notFound(c, 'Worker node not found')
-  await db.update(workerNodes).set({ deletedAt: new Date() }).where(eq(workerNodes.id, id))
+  const now = new Date()
+  await Promise.all([
+    db.update(workerNodes).set({ deletedAt: now, updatedAt: now }).where(eq(workerNodes.id, id)),
+    db
+      .update(rootAgentNodeTokens)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(rootAgentNodeTokens.workerNodeId, id),
+          isNull(rootAgentNodeTokens.revokedAt)
+        )
+      ),
+  ])
   return c.json({ data: { id, deleted: true } })
 }
 

@@ -169,7 +169,7 @@ const capabilityIcons: Record<PlatformCapability['id'], LucideIcon> = {
   managedStorage: Database,
   localStorage: HardDrive,
   selfHostSupervisor: ServerCog,
-  customExecutionTargets: Wrench,
+  rootAgentCompute: Wrench,
   publicSignup: ShieldCheck,
   apiKeyCreation: ShieldCheck,
   usageBilling: ClipboardCheck,
@@ -238,7 +238,7 @@ function deploymentModeDisplay(mode: PlatformPreflight['deploymentMode']) {
     detail:
       mode === 'managed'
         ? 'Dodo, ZeptoMail, R2, usage, and verification gates are required'
-        : 'local storage, supervisor, and custom execution controls remain visible',
+        : 'MinIO storage, supervisor, and root-agent compute controls remain visible',
     label: 'Deployment mode',
     variant: mode === 'managed' ? ('success' as const) : ('secondary' as const),
   }
