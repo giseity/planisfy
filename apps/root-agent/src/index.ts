@@ -369,6 +369,7 @@ async function buildBasemap(token: string, build: BasemapBuild) {
       "--osm-path=/data/source.osm.pbf",
       `--output=/data/basemap.${extension}`,
       "--force",
+      "--download",
       ...planetilerExtraArgs(build.config),
     ];
     await runLogged(token, build.id, "docker", [
