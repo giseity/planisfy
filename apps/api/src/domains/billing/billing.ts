@@ -1,5 +1,6 @@
 import { billingCustomers, db, plans, accounts, subscriptions, users } from '@planisfy/database'
 import {
+  PLAN_ORDER,
   PLANS,
   normalizePlanSlug,
   type BillingInterval,
@@ -72,6 +73,15 @@ interface DodoCustomerPortalResponse {
   url?: string
 }
 
+interface DodoSubscriptionResponse {
+  customer?: {
+    customer_id?: string
+    customerId?: string
+    id?: string
+    email?: string
+  }
+}
+
 export interface CheckoutSession {
   url: string
   checkoutId: string | null
@@ -80,8 +90,16 @@ export interface CheckoutSession {
 export interface ActivePaidSubscription {
   id: string
   planId: PlanSlug
+  billingInterval: BillingInterval
   providerSubscriptionId: string | null
 }
+
+export type SubscriptionPlanChangeResult =
+  | { changed: true }
+  | { changed: false; reason: 'no-active-paid-subscription' }
+  | { changed: false; reason: 'not-dodo-managed' }
+  | { changed: false; reason: 'portal-required' }
+  | { changed: false; reason: 'product-unavailable' }
 
 interface DodoWebhookPayload {
   type?: string
@@ -236,6 +254,7 @@ export async function getActivePaidSubscription(
     .select({
       id: subscriptions.id,
       planId: subscriptions.planId,
+      billingInterval: subscriptions.billingInterval,
       providerSubscriptionId: subscriptions.providerSubscriptionId,
     })
     .from(subscriptions)
@@ -255,6 +274,7 @@ export async function getActivePaidSubscription(
   return {
     id: subscription.id,
     planId,
+    billingInterval: billingIntervalValue(subscription.billingInterval) ?? 'monthly',
     providerSubscriptionId: subscription.providerSubscriptionId,
   }
 }
@@ -415,6 +435,56 @@ export async function createCustomerPortalSession(params: {
   return url
 }
 
+export async function changeSubscriptionPlan(params: {
+  accountId: string
+  planId: BillablePlanSlug
+  interval: BillingInterval
+}): Promise<SubscriptionPlanChangeResult> {
+  const subscription = await getActivePaidSubscription(params.accountId)
+  if (!subscription) return { changed: false, reason: 'no-active-paid-subscription' }
+  if (!subscription.providerSubscriptionId) {
+    return { changed: false, reason: 'not-dodo-managed' }
+  }
+  if (
+    subscription.billingInterval !== params.interval ||
+    planRank(params.planId) <= planRank(subscription.planId) ||
+    !isCheckoutPlan(subscription.planId)
+  ) {
+    return { changed: false, reason: 'portal-required' }
+  }
+
+  const product = resolveSubscriptionProduct(params.planId, params.interval)
+  if (!env.DODO_PAYMENTS_API_KEY || !product) {
+    return { changed: false, reason: 'product-unavailable' }
+  }
+
+  await dodoFetch(
+    `/subscriptions/${encodeURIComponent(subscription.providerSubscriptionId)}/change-plan`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        product_id: product.dodoProductId,
+        quantity: 1,
+        proration_billing_mode: 'difference_immediately',
+        effective_at: 'immediately',
+        on_payment_failure: 'prevent_change',
+        metadata: {
+          accountId: params.accountId,
+          previousPlanId: subscription.planId,
+          planId: params.planId,
+          interval: params.interval,
+        },
+      }),
+    }
+  )
+
+  return { changed: true }
+}
+
+export function planRank(planId: PlanSlug): number {
+  return PLAN_ORDER.indexOf(planId)
+}
+
 export async function reportUsage(): Promise<void> {
   // Dodo subscription usage metering is not wired yet. Keep request logging as
   // the source of truth for Planisfy quotas.
@@ -535,6 +605,7 @@ export async function applyDodoWebhookEvent(
         status,
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
+        billingInterval: product.interval,
         providerSubscriptionId: subscriptionId,
       })
       .onConflictDoUpdate({
@@ -545,6 +616,7 @@ export async function applyDodoWebhookEvent(
           status,
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
+          billingInterval: product.interval,
           updatedAt: new Date(),
         },
       })
@@ -564,6 +636,7 @@ export async function applyDodoWebhookEvent(
           status,
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
+          billingInterval: product.interval,
           updatedAt: new Date(),
         })
         .where(eq(subscriptions.id, existing.id))
@@ -574,6 +647,7 @@ export async function applyDodoWebhookEvent(
         status,
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
+        billingInterval: product.interval,
         providerSubscriptionId: null,
       })
     }
@@ -633,6 +707,9 @@ async function getOrCreateDodoCustomerId(params: {
 
   if (existing?.providerCustomerId) return existing.providerCustomerId
 
+  const subscriptionCustomerId = await getDodoCustomerIdFromActiveSubscription(params.accountId)
+  if (subscriptionCustomerId) return subscriptionCustomerId
+
   const [identity] = await db
     .select({
       email: users.email,
@@ -673,6 +750,30 @@ async function getOrCreateDodoCustomerId(params: {
       accountId: params.accountId,
       userId: params.userId,
     },
+  })
+
+  return providerCustomerId
+}
+
+async function getDodoCustomerIdFromActiveSubscription(accountId: string): Promise<string | null> {
+  const subscription = await getActivePaidSubscription(accountId)
+  if (!subscription?.providerSubscriptionId || !env.DODO_PAYMENTS_API_KEY) {
+    return null
+  }
+
+  const data = await dodoFetch<DodoSubscriptionResponse>(
+    `/subscriptions/${encodeURIComponent(subscription.providerSubscriptionId)}`,
+    { method: 'GET' }
+  )
+  const customer = data.customer
+  const providerCustomerId = customer?.customer_id ?? customer?.customerId ?? customer?.id
+  if (!providerCustomerId) return null
+
+  await upsertDodoCustomerMapping({
+    accountId,
+    providerCustomerId,
+    email: customer?.email ?? null,
+    metadata: data as Record<string, unknown>,
   })
 
   return providerCustomerId

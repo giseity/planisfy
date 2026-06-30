@@ -38,6 +38,7 @@ export interface BillingInfo {
   quotaPercent: number;
   billingConfigured: boolean;
   portalAvailable: boolean;
+  subscriptionInterval: "monthly" | "yearly" | null;
 }
 
 export interface BillingTransaction {

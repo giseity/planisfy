@@ -1,9 +1,10 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { z } from 'zod'
 import { Webhook, WebhookVerificationError } from 'standardwebhooks'
 import type { AuthEnv } from '../../middleware/auth'
 import {
   applyDodoWebhookEvent,
+  changeSubscriptionPlan,
   createCheckoutSession,
   createCustomerPortalSession,
   getAccountBillingStatus,
@@ -33,6 +34,8 @@ const checkoutSchema = z.object({
   planId: z.enum(['starter', 'scale']),
   interval: z.enum(['monthly', 'yearly']).default('monthly'),
 })
+
+const changePlanSchema = checkoutSchema
 
 export const billingRoute = new Hono<AuthEnv>()
 export const billingWebhookRoute = new Hono()
@@ -66,7 +69,10 @@ billingRoute.get('/billing', async (c) => {
   const ownerId = c.get('ownerId')
 
   const [plan, limits] = await Promise.all([getAccountPlan(ownerId), getAccountPlanLimits(ownerId)])
-  const billingStatus = await getAccountBillingStatus(ownerId)
+  const [billingStatus, activeSubscription] = await Promise.all([
+    getAccountBillingStatus(ownerId),
+    getActivePaidSubscription(ownerId),
+  ])
 
   const period = getMonthlyUsagePeriod()
 
@@ -109,7 +115,11 @@ billingRoute.get('/billing', async (c) => {
       end: period.end.toISOString(),
     },
     billingConfigured: env.DEPLOYMENT_MODE === 'managed' && isBillingConfigured(),
-    portalAvailable: env.DEPLOYMENT_MODE === 'managed' && isBillingConfigured() && plan !== 'free',
+    portalAvailable:
+      env.DEPLOYMENT_MODE === 'managed' &&
+      isBillingConfigured() &&
+      Boolean(activeSubscription?.providerSubscriptionId),
+    subscriptionInterval: activeSubscription?.billingInterval ?? null,
   })
 })
 
@@ -215,9 +225,99 @@ billingRoute.post('/billing/checkout', async (c) => {
   return c.json(session)
 })
 
-// ── GET /billing/portal — Get customer portal URL ───────────────────────────
+// ── POST /billing/subscription/change-plan — Upgrade active subscription ────
 
-billingRoute.get('/billing/portal', async (c) => {
+billingRoute.post('/billing/subscription/change-plan', async (c) => {
+  if (env.DEPLOYMENT_MODE === 'self_host') {
+    return c.json(
+      {
+        error: {
+          code: 'CAPABILITY_UNAVAILABLE',
+          message:
+            'Hosted subscription changes are disabled in self-host mode. Billing is read-only for usage and limits.',
+        },
+      },
+      409
+    )
+  }
+
+  const ownerId = c.get('ownerId')
+  const body = await c.req.json()
+  const { planId, interval } = changePlanSchema.parse(body)
+
+  try {
+    const result = await changeSubscriptionPlan({ accountId: ownerId, planId, interval })
+    if (result.changed) return c.json(result)
+
+    if (result.reason === 'no-active-paid-subscription') {
+      return c.json(
+        {
+          error: {
+            code: 'NO_ACTIVE_SUBSCRIPTION',
+            message: 'No active paid subscription was found.',
+          },
+        },
+        404
+      )
+    }
+    if (result.reason === 'not-dodo-managed') {
+      return c.json(
+        {
+          error: {
+            code: 'SUBSCRIPTION_NOT_DODO_MANAGED',
+            message: 'This subscription is not managed by Dodo.',
+          },
+        },
+        409
+      )
+    }
+    if (result.reason === 'portal-required') {
+      return c.json(
+        {
+          error: {
+            code: 'PORTAL_REQUIRED',
+            message: 'Use the billing portal to downgrade or change billing interval.',
+          },
+        },
+        400
+      )
+    }
+
+    return c.json(
+      {
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message:
+            'Billing is not configured. Set Dodo Payments credentials and product IDs to enable subscription changes.',
+        },
+      },
+      503
+    )
+  } catch (err) {
+    console.error('Failed to change Dodo subscription plan', {
+      err,
+      ownerId,
+      planId,
+      interval,
+    })
+    return c.json(
+      {
+        error: {
+          code: 'UPSTREAM_BILLING_ERROR',
+          message: 'Unable to change subscription plan.',
+        },
+      },
+      502
+    )
+  }
+})
+
+// ── GET/POST /billing/portal — Get customer portal URL ──────────────────────
+
+billingRoute.get('/billing/portal', createBillingPortalResponse)
+billingRoute.post('/billing/portal', createBillingPortalResponse)
+
+async function createBillingPortalResponse(c: Context<AuthEnv>) {
   if (env.DEPLOYMENT_MODE === 'self_host') {
     return c.json(
       {
@@ -279,7 +379,7 @@ billingRoute.get('/billing/portal', async (c) => {
   }
 
   return c.json({ url })
-})
+}
 
 billingWebhookRoute.post('/webhooks/dodo', async (c) => {
   if (!env.DODO_PAYMENTS_WEBHOOK_SECRET) {

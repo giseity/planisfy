@@ -73,6 +73,9 @@ export const subscriptions = pgTable(
       withTimezone: true,
     }),
     currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    billingInterval: varchar("billing_interval", { length: 16 })
+      .notNull()
+      .default("monthly"),
     providerSubscriptionId: text("provider_subscription_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

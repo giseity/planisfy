@@ -213,6 +213,24 @@ export function BillingTab() {
               const isCurrent = plan.id === billing.plan;
               const intervalPrice =
                 plan.pricing[billingInterval] ?? plan.pricing.monthly;
+              const paidSubscription = isPaidPlan(billing.plan);
+              const sameInterval =
+                billing.subscriptionInterval === billingInterval;
+              const canUsePortal = paidSubscription && billing.portalAvailable;
+              const canChangePlan =
+                paidSubscription &&
+                sameInterval &&
+                isPlanUpgrade(billing.plan, plan.id);
+              const canStartCheckout = !paidSubscription;
+              const actionEnabled =
+                Boolean(intervalPrice) &&
+                plan.checkoutAvailable &&
+                (canStartCheckout || canChangePlan || canUsePortal);
+              const actionLabel = !plan.checkoutAvailable
+                ? "Coming soon"
+                : canStartCheckout || canChangePlan
+                  ? `Upgrade to ${plan.name}`
+                  : "Manage in portal";
               return (
                 <Card key={plan.id} className={isCurrent ? "border-primary" : ""}>
                   <CardHeader>
@@ -269,28 +287,45 @@ export function BillingTab() {
                       <Button
                         className="w-full mt-4"
                         variant={plan.id === "starter" ? "default" : "outline"}
-                        disabled={!plan.checkoutAvailable || !intervalPrice}
+                        disabled={!actionEnabled}
                         onClick={async () => {
-                          if (!plan.checkoutAvailable || !intervalPrice) {
+                          if (!actionEnabled || !intervalPrice) {
                             toast.info(
-                              "Billing is not configured yet. Set Dodo Payments credentials to enable payments.",
+                              canUsePortal
+                                ? "Billing portal is not available"
+                                : "Billing is not configured yet. Set Dodo Payments credentials to enable payments.",
                             );
                             return;
                           }
                           try {
+                            if (canChangePlan) {
+                              await api.post<{ changed: true }>(
+                                "/billing/subscription/change-plan",
+                                { planId: plan.id, interval: billingInterval },
+                              );
+                              toast.success("Subscription change requested");
+                              return;
+                            }
+
+                            if (canStartCheckout) {
+                              const { url } = await api.post<{ url: string }>(
+                                "/billing/checkout",
+                                { planId: plan.id, interval: billingInterval },
+                              );
+                              window.open(url, "_blank");
+                              return;
+                            }
+
                             const { url } = await api.post<{ url: string }>(
-                              "/billing/checkout",
-                              { planId: plan.id, interval: billingInterval },
+                              "/billing/portal",
                             );
                             window.open(url, "_blank");
                           } catch {
-                            toast.error("Unable to start checkout");
+                            toast.error("Unable to update billing");
                           }
                         }}
                       >
-                        {plan.checkoutAvailable
-                          ? `Upgrade to ${plan.name}`
-                          : "Coming soon"}
+                        {actionLabel}
                       </Button>
                     )}
                   </CardContent>
@@ -378,4 +413,20 @@ function transactionStatusVariant(status: string) {
   if (status === "PAID") return "success";
   if (status === "FAILED" || status === "REFUNDED") return "destructive";
   return "secondary";
+}
+
+function isPaidPlan(planId: string) {
+  return planId !== "free" && planId !== "platform";
+}
+
+function isPlanUpgrade(currentPlanId: string, nextPlanId: string) {
+  return planRank(nextPlanId) > planRank(currentPlanId);
+}
+
+function planRank(planId: string) {
+  if (planId === "free") return 0;
+  if (planId === "starter") return 1;
+  if (planId === "scale") return 2;
+  if (planId === "platform") return 3;
+  return -1;
 }

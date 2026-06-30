@@ -90,6 +90,16 @@ test("self-host billing exposes read-only hosted billing actions", async () => {
       ).status,
       409,
     );
+    assert.equal(
+      (
+        await app.request("/billing/subscription/change-plan", {
+          method: "POST",
+          body: JSON.stringify({ planId: "scale", interval: "monthly" }),
+          headers: { "content-type": "application/json" },
+        })
+      ).status,
+      409,
+    );
     assert.equal((await app.request("/billing/portal")).status, 409);
   } finally {
     if (previousMode === undefined) {
