@@ -462,7 +462,9 @@ rootAgentRoute.post("/root-agent/activations/:id/state", async (c) => {
 });
 
 rootAgentRoute.post("/root-agent/jobs/:id/logs", async (c) => {
-  const job = await findBuildForAgent(c, c.req.param("id"));
+  const job =
+    (await findBuildForAgent(c, c.req.param("id"))) ??
+    (await findActivationForAgent(c, c.req.param("id")));
   if (!job) return notFound(c, "Build not found");
   const parsed = logSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
