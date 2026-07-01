@@ -14,6 +14,12 @@ import {
 } from '@planisfy/ui/components/card'
 import { Input } from '@planisfy/ui/components/input'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@planisfy/ui/components/dropdown-menu'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -28,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@planisfy/ui/components/table'
-import { Bell, CheckCircle2, Trash2 } from 'lucide-react'
+import { Bell, CheckCircle2, MoreHorizontal, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export function NotificationsTab({
@@ -113,41 +119,53 @@ export function NotificationsTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead className="min-w-[220px]">Name</TableHead>
                 <TableHead>Provider</TableHead>
-                <TableHead>Events</TableHead>
-                <TableHead className="w-[112px]" />
+                <TableHead className="min-w-[260px]">Events</TableHead>
+                <TableHead className="w-10 text-right" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {channels.map((channel) => (
                 <TableRow key={channel.id}>
-                  <TableCell className="font-medium">{channel.name}</TableCell>
+                  <TableCell className="min-w-[220px] font-medium">{channel.name}</TableCell>
                   <TableCell>
                     <StatusBadge status={channel.provider} />
                   </TableCell>
-                  <TableCell>{channel.events.join(', ') || 'All'}</TableCell>
-                  <TableCell className="space-x-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => testChannel(channel.id, onChanged)}
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        runAction(
-                          () => api.deleteNotificationChannel(channel.id),
-                          'Channel deleted',
-                          onChanged
-                        )
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <TableCell className="min-w-[260px]">
+                    {channel.events.join(', ') || 'All'}
+                  </TableCell>
+                  <TableCell className="w-10 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`${channel.name} actions`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => testChannel(channel.id, onChanged)}>
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Send test
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onSelect={() =>
+                            runAction(
+                              () => api.deleteNotificationChannel(channel.id),
+                              'Channel deleted',
+                              onChanged
+                            )
+                          }
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete channel
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}

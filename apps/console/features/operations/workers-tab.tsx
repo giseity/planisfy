@@ -1,30 +1,31 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { api, type ConsoleWorkerNode } from "@/lib/api";
-import { formatDate } from "@/features/operations/model";
-import {
-  EmptyRow,
-  Field,
-  runAction,
-  StatusBadge,
-} from "@/features/operations/ui";
-import { Button } from "@planisfy/ui/components/button";
+import { useState } from 'react'
+import { api, type ConsoleWorkerNode } from '@/lib/api'
+import { formatDate } from '@/features/operations/model'
+import { EmptyRow, Field, runAction, StatusBadge } from '@/features/operations/ui'
+import { Button } from '@planisfy/ui/components/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@planisfy/ui/components/card";
-import { Input } from "@planisfy/ui/components/input";
+} from '@planisfy/ui/components/card'
+import { Input } from '@planisfy/ui/components/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@planisfy/ui/components/dropdown-menu'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@planisfy/ui/components/select";
+} from '@planisfy/ui/components/select'
 import {
   Table,
   TableBody,
@@ -32,31 +33,30 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table";
-import { RefreshCw, ServerCog, Trash2 } from "lucide-react";
+} from '@planisfy/ui/components/table'
+import { MoreHorizontal, RefreshCw, ServerCog, Trash2 } from 'lucide-react'
 
 export function WorkersTab({
   nodes,
   onChanged,
 }: {
-  nodes: ConsoleWorkerNode[];
-  onChanged: () => void;
+  nodes: ConsoleWorkerNode[]
+  onChanged: () => void
 }) {
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<ConsoleWorkerNode["kind"]>("local");
-  const [endpoint, setEndpoint] = useState("");
+  const [name, setName] = useState('')
+  const [kind, setKind] = useState<ConsoleWorkerNode['kind']>('local')
+  const [endpoint, setEndpoint] = useState('')
 
   async function createNode() {
     await runAction(
-      () =>
-        api.createWorkerNode({ name, kind, endpoint: endpoint || undefined }),
-      "Worker node added",
+      () => api.createWorkerNode({ name, kind, endpoint: endpoint || undefined }),
+      'Worker node added',
       () => {
-        setName("");
-        setEndpoint("");
-        onChanged();
-      },
-    );
+        setName('')
+        setEndpoint('')
+        onChanged()
+      }
+    )
   }
 
   return (
@@ -65,8 +65,7 @@ export function WorkersTab({
         <CardHeader>
           <CardTitle>Register Worker</CardTitle>
           <CardDescription>
-            Local workers validate by heartbeat; remote and cloud workers
-            validate by endpoint.
+            Local workers validate by heartbeat; remote and cloud workers validate by endpoint.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -76,9 +75,7 @@ export function WorkersTab({
           <Field label="Kind">
             <Select
               value={kind}
-              onValueChange={(value) =>
-                setKind(value as ConsoleWorkerNode["kind"])
-              }
+              onValueChange={(value) => setKind(value as ConsoleWorkerNode['kind'])}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -111,59 +108,65 @@ export function WorkersTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead className="min-w-[220px]">Name</TableHead>
                 <TableHead>Kind</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last seen</TableHead>
-                <TableHead className="w-[112px]" />
+                <TableHead className="w-10 text-right" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {nodes.map((node) => (
                 <TableRow key={node.id}>
-                  <TableCell className="font-medium">{node.name}</TableCell>
+                  <TableCell className="min-w-[220px] font-medium">{node.name}</TableCell>
                   <TableCell>{node.kind}</TableCell>
                   <TableCell>
                     <StatusBadge status={node.status} />
                   </TableCell>
                   <TableCell>{formatDate(node.lastSeenAt)}</TableCell>
-                  <TableCell className="space-x-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        runAction(
-                          () => api.validateWorkerNode(node.id),
-                          "Worker validated",
-                          onChanged,
-                        )
-                      }
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        runAction(
-                          () => api.deleteWorkerNode(node.id),
-                          "Worker deleted",
-                          onChanged,
-                        )
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <TableCell className="w-10 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon-sm" aria-label={`${node.name} actions`}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            runAction(
+                              () => api.validateWorkerNode(node.id),
+                              'Worker validated',
+                              onChanged
+                            )
+                          }
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Validate worker
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onSelect={() =>
+                            runAction(
+                              () => api.deleteWorkerNode(node.id),
+                              'Worker deleted',
+                              onChanged
+                            )
+                          }
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete worker
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
-              {nodes.length === 0 && (
-                <EmptyRow colSpan={5} label="No worker nodes registered." />
-              )}
+              {nodes.length === 0 && <EmptyRow colSpan={5} label="No worker nodes registered." />}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

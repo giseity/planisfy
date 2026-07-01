@@ -1,18 +1,24 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { api, type ConsoleWorkflowTemplate } from "@/lib/api";
-import { parseJsonObject } from "@/features/operations/model";
-import { EmptyRow, Field, runAction } from "@/features/operations/ui";
-import { Button } from "@planisfy/ui/components/button";
+import { useState } from 'react'
+import { api, type ConsoleWorkflowTemplate } from '@/lib/api'
+import { parseJsonObject } from '@/features/operations/model'
+import { EmptyRow, Field, runAction } from '@/features/operations/ui'
+import { Button } from '@planisfy/ui/components/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@planisfy/ui/components/card";
-import { Input } from "@planisfy/ui/components/input";
+} from '@planisfy/ui/components/card'
+import { Input } from '@planisfy/ui/components/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@planisfy/ui/components/dropdown-menu'
 import {
   Table,
   TableBody,
@@ -20,22 +26,22 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table";
-import { Textarea } from "@planisfy/ui/components/textarea";
-import { CheckCircle2, ClipboardList, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+} from '@planisfy/ui/components/table'
+import { Textarea } from '@planisfy/ui/components/textarea'
+import { CheckCircle2, ClipboardList, MoreHorizontal, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export function TemplatesTab({
   templates,
   onChanged,
 }: {
-  templates: ConsoleWorkflowTemplate[];
-  onChanged: () => void;
+  templates: ConsoleWorkflowTemplate[]
+  onChanged: () => void
 }) {
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("import-workflow");
-  const [description, setDescription] = useState("");
-  const [template, setTemplate] = useState("{}");
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState('import-workflow')
+  const [description, setDescription] = useState('')
+  const [template, setTemplate] = useState('{}')
 
   async function createTemplate() {
     await runAction(
@@ -46,14 +52,14 @@ export function TemplatesTab({
           description: description || undefined,
           template: parseJsonObject(template),
         }),
-      "Template created",
+      'Template created',
       () => {
-        setName("");
-        setDescription("");
-        setTemplate("{}");
-        onChanged();
-      },
-    );
+        setName('')
+        setDescription('')
+        setTemplate('{}')
+        onChanged()
+      }
+    )
   }
 
   return (
@@ -62,9 +68,8 @@ export function TemplatesTab({
         <CardHeader>
           <CardTitle>Create Template</CardTitle>
           <CardDescription>
-            Store reusable JSON payloads for schedules, previews, and storage
-            workflows. Apply runs server-side validation for the template
-            category.
+            Store reusable JSON payloads for schedules, previews, and storage workflows. Apply runs
+            server-side validation for the template category.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -72,23 +77,13 @@ export function TemplatesTab({
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field label="Category">
-            <Input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            />
+            <Input value={category} onChange={(e) => setCategory(e.target.value)} />
           </Field>
           <Field label="Description">
-            <Input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} />
           </Field>
           <Field label="Template JSON">
-            <Textarea
-              rows={6}
-              value={template}
-              onChange={(e) => setTemplate(e.target.value)}
-            />
+            <Textarea rows={6} value={template} onChange={(e) => setTemplate(e.target.value)} />
           </Field>
           <Button onClick={createTemplate} disabled={!name || !category}>
             <ClipboardList className="mr-1.5 h-4 w-4" />
@@ -104,71 +99,73 @@ export function TemplatesTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead className="min-w-[220px]">Name</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Source</TableHead>
-                <TableHead className="w-[112px]" />
+                <TableHead className="w-10 text-right" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {templates.map((templateRow) => (
                 <TableRow key={templateRow.id}>
-                  <TableCell className="font-medium">
-                    {templateRow.name}
-                  </TableCell>
+                  <TableCell className="min-w-[220px] font-medium">{templateRow.name}</TableCell>
                   <TableCell>{templateRow.category}</TableCell>
-                  <TableCell>
-                    {templateRow.builtIn ? "Built-in" : "Custom"}
-                  </TableCell>
-                  <TableCell className="space-x-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => applyTemplate(templateRow.id, onChanged)}
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                    </Button>
-                    {!templateRow.builtIn && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          runAction(
-                            () => api.deleteWorkflowTemplate(templateRow.id),
-                            "Template deleted",
-                            onChanged,
-                          )
-                        }
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                  <TableCell>{templateRow.builtIn ? 'Built-in' : 'Custom'}</TableCell>
+                  <TableCell className="w-10 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`${templateRow.name} actions`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => applyTemplate(templateRow.id, onChanged)}>
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Apply template
+                        </DropdownMenuItem>
+                        {!templateRow.builtIn && (
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onSelect={() =>
+                              runAction(
+                                () => api.deleteWorkflowTemplate(templateRow.id),
+                                'Template deleted',
+                                onChanged
+                              )
+                            }
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete template
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
-              {templates.length === 0 && (
-                <EmptyRow colSpan={4} label="No templates available." />
-              )}
+              {templates.length === 0 && <EmptyRow colSpan={4} label="No templates available." />}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }
 
 async function applyTemplate(id: string, onChanged: () => void) {
   try {
-    const result = await api.applyWorkflowTemplate(id);
+    const result = await api.applyWorkflowTemplate(id)
     if (result.data.applied) {
-      toast.success("Template applied");
-      onChanged();
-      return;
+      toast.success('Template applied')
+      onChanged()
+      return
     }
-    toast.info(
-      result.data.message ?? result.data.status ?? "Template reviewed",
-    );
+    toast.info(result.data.message ?? result.data.status ?? 'Template reviewed')
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : "Template apply failed");
+    toast.error(err instanceof Error ? err.message : 'Template apply failed')
   }
 }

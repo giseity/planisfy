@@ -1,10 +1,14 @@
-"use client";
+'use client'
 
-import type {
-  ConsoleSourceImport,
-} from "@/lib/api";
-import { Badge } from "@planisfy/ui/components/badge";
-import { Button } from "@planisfy/ui/components/button";
+import type { ConsoleSourceImport } from '@/lib/api'
+import { Badge } from '@planisfy/ui/components/badge'
+import { Button } from '@planisfy/ui/components/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@planisfy/ui/components/dropdown-menu'
 import {
   Table,
   TableBody,
@@ -12,22 +16,22 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table";
-import { Database, RefreshCw } from "lucide-react";
+} from '@planisfy/ui/components/table'
+import { Database, MoreHorizontal, RefreshCw } from 'lucide-react'
 import {
   canCreateTilesetFromImport,
   sourceImportStatusVariant,
   sourceImportSummary,
-} from "@/features/tilesets/workflow/import-workflow";
+} from '@/features/tilesets/workflow/import-workflow'
 
 export function SourceImportsTable({
   sourceImports,
   tilingImportId,
   onCreateTilesetFromImport,
 }: {
-  sourceImports: ConsoleSourceImport[];
-  tilingImportId: string | null;
-  onCreateTilesetFromImport: (sourceImport: ConsoleSourceImport) => void;
+  sourceImports: ConsoleSourceImport[]
+  tilingImportId: string | null
+  onCreateTilesetFromImport: (sourceImport: ConsoleSourceImport) => void
 }) {
   return (
     <div className="space-y-3">
@@ -44,69 +48,75 @@ export function SourceImportsTable({
             <TableHead>Features</TableHead>
             <TableHead>Dataset</TableHead>
             <TableHead>Updated</TableHead>
-            <TableHead className="w-28">Actions</TableHead>
+            <TableHead className="w-10 text-right" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {sourceImports.map((sourceImport) => (
             <TableRow key={sourceImport.id}>
               <TableCell>
-                <div className="font-medium">
-                  {sourceImportSummary(sourceImport)}
-                </div>
-                {sourceImport.output?.warnings &&
-                  sourceImport.output.warnings.length > 0 && (
-                    <div className="mt-1 text-xs text-amber-600">
-                      {sourceImport.output.warnings.join(", ")}
-                    </div>
-                  )}
-                {sourceImport.errorMessage && (
-                  <div className="mt-1 text-xs text-destructive">
-                    {sourceImport.errorMessage}
+                <div className="font-medium">{sourceImportSummary(sourceImport)}</div>
+                {sourceImport.output?.warnings && sourceImport.output.warnings.length > 0 && (
+                  <div className="mt-1 text-xs text-amber-600">
+                    {sourceImport.output.warnings.join(', ')}
                   </div>
+                )}
+                {sourceImport.errorMessage && (
+                  <div className="mt-1 text-xs text-destructive">{sourceImport.errorMessage}</div>
                 )}
               </TableCell>
               <TableCell>
                 <Badge variant={sourceImportStatusVariant(sourceImport.status)}>
-                  {sourceImport.status === "PROCESSING" && (
+                  {sourceImport.status === 'PROCESSING' && (
                     <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
                   )}
                   {sourceImport.status}
                 </Badge>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
-                {typeof sourceImport.output?.featureCount === "number"
+                {typeof sourceImport.output?.featureCount === 'number'
                   ? sourceImport.output.featureCount.toLocaleString()
-                  : "-"}
+                  : '-'}
               </TableCell>
               <TableCell className="font-mono text-xs text-muted-foreground">
-                {sourceImport.datasetId ?? "-"}
+                {sourceImport.datasetId ?? '-'}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {new Date(sourceImport.updatedAt).toLocaleDateString()}
               </TableCell>
-              <TableCell>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onCreateTilesetFromImport(sourceImport)}
-                  disabled={
-                    !canCreateTilesetFromImport(sourceImport) ||
-                    tilingImportId === sourceImport.id
-                  }
-                  title="Create tileset from import"
-                >
-                  {tilingImportId === sourceImport.id ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Database className="h-4 w-4" />
-                  )}
-                </Button>
+              <TableCell className="w-10 text-right">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Actions for ${sourceImportSummary(sourceImport)}`}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      disabled={
+                        !canCreateTilesetFromImport(sourceImport) ||
+                        tilingImportId === sourceImport.id
+                      }
+                      onSelect={() => onCreateTilesetFromImport(sourceImport)}
+                    >
+                      {tilingImportId === sourceImport.id ? (
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Database className="mr-2 h-4 w-4" />
+                      )}
+                      Create tileset
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
     </div>
-  );
+  )
 }

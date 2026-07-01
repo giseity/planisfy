@@ -1,7 +1,7 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { ExternalLink, Info, Map, Play, RefreshCw, Square } from "lucide-react";
+import { useState } from 'react'
+import { ExternalLink, Info, Map, MoreHorizontal, Play, RefreshCw, Square } from 'lucide-react'
 import {
   api,
   type ConsoleBasemapBuild,
@@ -9,26 +9,32 @@ import {
   type ConsoleBasemapRelease,
   type ConsoleRuntimeInstallation,
   type ConsoleWorkerNode,
-} from "@/lib/api";
-import { docsUrl } from "@/lib/docs-url";
-import { formatDate } from "@/features/operations/model";
-import { EmptyRow, Field, runAction, StatusBadge } from "@/features/operations/ui";
-import { Button } from "@planisfy/ui/components/button";
+} from '@/lib/api'
+import { docsUrl } from '@/lib/docs-url'
+import { formatDate } from '@/features/operations/model'
+import { EmptyRow, Field, runAction, StatusBadge } from '@/features/operations/ui'
+import { Button } from '@planisfy/ui/components/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@planisfy/ui/components/card";
-import { Input } from "@planisfy/ui/components/input";
+} from '@planisfy/ui/components/card'
+import { Input } from '@planisfy/ui/components/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@planisfy/ui/components/dropdown-menu'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@planisfy/ui/components/select";
+} from '@planisfy/ui/components/select'
 import {
   Table,
   TableBody,
@@ -36,25 +42,25 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table";
+} from '@planisfy/ui/components/table'
 
 const SOURCE_PRESETS = [
   {
-    id: "africa/cameroon",
-    label: "Cameroon",
-    url: "https://download.geofabrik.de/africa/cameroon-latest.osm.pbf",
+    id: 'africa/cameroon',
+    label: 'Cameroon',
+    url: 'https://download.geofabrik.de/africa/cameroon-latest.osm.pbf',
   },
   {
-    id: "africa/nigeria",
-    label: "Nigeria",
-    url: "https://download.geofabrik.de/africa/nigeria-latest.osm.pbf",
+    id: 'africa/nigeria',
+    label: 'Nigeria',
+    url: 'https://download.geofabrik.de/africa/nigeria-latest.osm.pbf',
   },
   {
-    id: "planet",
-    label: "Planet",
-    url: "https://planet.openstreetmap.org/pbf/planet-latest.osm.pbf",
+    id: 'planet',
+    label: 'Planet',
+    url: 'https://planet.openstreetmap.org/pbf/planet-latest.osm.pbf',
   },
-];
+]
 
 export function BasemapsTab({
   builds,
@@ -63,38 +69,36 @@ export function BasemapsTab({
   nodes,
   onChanged,
 }: {
-  builds: ConsoleBasemapBuild[];
-  releases: ConsoleBasemapRelease[];
-  runtimeInstallations: ConsoleRuntimeInstallation[];
-  nodes: ConsoleWorkerNode[];
-  onChanged: () => void;
+  builds: ConsoleBasemapBuild[]
+  releases: ConsoleBasemapRelease[]
+  runtimeInstallations: ConsoleRuntimeInstallation[]
+  nodes: ConsoleWorkerNode[]
+  onChanged: () => void
 }) {
-  const [name, setName] = useState("cameroon-osm-basemap");
-  const [sourcePreset, setSourcePreset] = useState("africa/cameroon");
-  const [sourceUrl, setSourceUrl] = useState(SOURCE_PRESETS[0]?.url ?? "");
-  const [workerNodeId, setWorkerNodeId] = useState("");
-  const [activationWorkerNodeId, setActivationWorkerNodeId] = useState("");
-  const [planetilerImage, setPlanetilerImage] = useState(
-    "ghcr.io/onthegomap/planetiler:latest",
-  );
-  const [detail, setDetail] = useState<ConsoleBasemapBuildDetail | null>(null);
+  const [name, setName] = useState('cameroon-osm-basemap')
+  const [sourcePreset, setSourcePreset] = useState('africa/cameroon')
+  const [sourceUrl, setSourceUrl] = useState(SOURCE_PRESETS[0]?.url ?? '')
+  const [workerNodeId, setWorkerNodeId] = useState('')
+  const [activationWorkerNodeId, setActivationWorkerNodeId] = useState('')
+  const [planetilerImage, setPlanetilerImage] = useState('ghcr.io/onthegomap/planetiler:latest')
+  const [detail, setDetail] = useState<ConsoleBasemapBuildDetail | null>(null)
 
-  const buildNodes = nodes.filter((node) => hasCapability(node, "basemap_build"));
+  const buildNodes = nodes.filter((node) => hasCapability(node, 'basemap_build'))
   const servingNodes = nodes.filter(
     (node) =>
-      hasCapability(node, "self_host_activation") ||
-      hasCapability(node, "managed_runtime_activation"),
-  );
+      hasCapability(node, 'self_host_activation') ||
+      hasCapability(node, 'managed_runtime_activation')
+  )
   const basemapInstallations = runtimeInstallations.filter(
-    (installation) => installation.resourceType === "basemap",
-  );
+    (installation) => installation.resourceType === 'basemap'
+  )
 
   function choosePreset(value: string) {
-    setSourcePreset(value);
-    const preset = SOURCE_PRESETS.find((item) => item.id === value);
+    setSourcePreset(value)
+    const preset = SOURCE_PRESETS.find((item) => item.id === value)
     if (preset) {
-      setName(`${preset.id.replace(/[^A-Za-z0-9._-]/g, "-")}-osm-basemap`);
-      setSourceUrl(preset.url);
+      setName(`${preset.id.replace(/[^A-Za-z0-9._-]/g, '-')}-osm-basemap`)
+      setSourceUrl(preset.url)
     }
   }
 
@@ -107,21 +111,21 @@ export function BasemapsTab({
           sourcePreset,
           workerNodeId,
           activationWorkerNodeId: activationWorkerNodeId || undefined,
-          engine: "planetiler_osm",
-          sourceKind: "osm_pbf",
+          engine: 'planetiler_osm',
+          sourceKind: 'osm_pbf',
           planetilerImage,
-          profile: "openmaptiles",
-          outputFormat: "pmtiles",
-          config: { minZoom: 0, maxZoom: sourcePreset === "planet" ? 14 : 13 },
+          profile: 'openmaptiles',
+          outputFormat: 'pmtiles',
+          config: { minZoom: 0, maxZoom: sourcePreset === 'planet' ? 14 : 13 },
         }),
-      "Basemap build queued",
-      onChanged,
-    );
+      'Basemap build queued',
+      onChanged
+    )
   }
 
   async function loadDetail(id: string) {
-    const response = await api.getBasemapBuild(id);
-    setDetail(response.data);
+    const response = await api.getBasemapBuild(id)
+    setDetail(response.data)
   }
 
   return (
@@ -148,7 +152,7 @@ export function BasemapsTab({
                   </p>
                   <a
                     className="inline-flex items-center gap-1 text-primary"
-                    href={docsUrl("/docs/self-hosting/data-sources")}
+                    href={docsUrl('/docs/self-hosting/data-sources')}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -194,10 +198,8 @@ export function BasemapsTab({
             </Field>
             <Field label="Serving worker">
               <Select
-                value={activationWorkerNodeId || "none"}
-                onValueChange={(value) =>
-                  setActivationWorkerNodeId(value === "none" ? "" : value)
-                }
+                value={activationWorkerNodeId || 'none'}
+                onValueChange={(value) => setActivationWorkerNodeId(value === 'none' ? '' : value)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -253,17 +255,17 @@ export function BasemapsTab({
                     <TableCell>
                       <StatusBadge status={release.activationStatus} />
                     </TableCell>
-                    <TableCell>{release.isPrimary ? "Yes" : "No"}</TableCell>
+                    <TableCell>{release.isPrimary ? 'Yes' : 'No'}</TableCell>
                     <TableCell>
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={release.activationStatus !== "active" || release.isPrimary}
+                        disabled={release.activationStatus !== 'active' || release.isPrimary}
                         onClick={() =>
                           runAction(
                             () => api.promoteBasemapRelease(release.id),
-                            "Primary basemap updated",
-                            onChanged,
+                            'Primary basemap updated',
+                            onChanged
                           )
                         }
                       >
@@ -288,17 +290,17 @@ export function BasemapsTab({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
+                  <TableHead className="min-w-[260px]">Name</TableHead>
                   <TableHead>Build</TableHead>
                   <TableHead>Progress</TableHead>
                   <TableHead>Runtime</TableHead>
-                  <TableHead className="w-[172px]" />
+                  <TableHead className="w-10 text-right" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {builds.map((build) => (
                   <TableRow key={build.id}>
-                    <TableCell>
+                    <TableCell className="min-w-[260px]">
                       <div className="font-medium">{build.name}</div>
                       <div className="text-xs text-muted-foreground">
                         {build.engine} / {formatDate(build.updatedAt)}
@@ -311,42 +313,54 @@ export function BasemapsTab({
                     <TableCell>
                       <StatusBadge status={build.activationStatus} />
                     </TableCell>
-                    <TableCell className="space-x-1">
-                      <Button size="sm" variant="outline" onClick={() => loadDetail(build.id)}>
-                        <RefreshCw className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={build.status !== "succeeded"}
-                        onClick={() =>
-                          runAction(
-                            () =>
-                              api.activateBasemapBuild(
-                                build.id,
-                                build.activationWorkerNodeId ?? undefined,
-                              ),
-                            "Basemap activation requested",
-                            onChanged,
-                          )
-                        }
-                      >
-                        <Play className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={["succeeded", "failed", "canceled"].includes(build.status)}
-                        onClick={() =>
-                          runAction(
-                            () => api.cancelBasemapBuild(build.id),
-                            "Cancellation requested",
-                            onChanged,
-                          )
-                        }
-                      >
-                        <Square className="h-4 w-4" />
-                      </Button>
+                    <TableCell className="w-10 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`${build.name} actions`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onSelect={() => loadDetail(build.id)}>
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            View details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={build.status !== 'succeeded'}
+                            onSelect={() =>
+                              runAction(
+                                () =>
+                                  api.activateBasemapBuild(
+                                    build.id,
+                                    build.activationWorkerNodeId ?? undefined
+                                  ),
+                                'Basemap activation requested',
+                                onChanged
+                              )
+                            }
+                          >
+                            <Play className="mr-2 h-4 w-4" />
+                            Activate basemap
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={['succeeded', 'failed', 'canceled'].includes(build.status)}
+                            onSelect={() =>
+                              runAction(
+                                () => api.cancelBasemapBuild(build.id),
+                                'Cancellation requested',
+                                onChanged
+                              )
+                            }
+                          >
+                            <Square className="mr-2 h-4 w-4" />
+                            Cancel build
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -381,7 +395,7 @@ export function BasemapsTab({
                     </TableCell>
                     <TableCell>{workerName(nodes, installation.workerNodeId)}</TableCell>
                     <TableCell className="max-w-[360px] truncate text-xs">
-                      {installation.runtimePath ?? "Not reported"}
+                      {installation.runtimePath ?? 'Not reported'}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {formatDate(installation.activatedAt)}
@@ -409,7 +423,7 @@ export function BasemapsTab({
                 <StatusBox label="Build" value={detail.build.status} />
                 <StatusBox
                   label="Artifact"
-                  value={detail.artifacts[0]?.status ?? "not_available"}
+                  value={detail.artifacts[0]?.status ?? 'not_available'}
                 />
                 <StatusBox label="Runtime" value={detail.build.activationStatus} />
               </div>
@@ -442,18 +456,16 @@ export function BasemapsTab({
         )}
       </div>
     </div>
-  );
+  )
 }
 
 function hasCapability(node: ConsoleWorkerNode, capability: string) {
-  const capabilities = Array.isArray(node.metadata?.capabilities)
-    ? node.metadata.capabilities
-    : [];
-  return capabilities.includes(capability);
+  const capabilities = Array.isArray(node.metadata?.capabilities) ? node.metadata.capabilities : []
+  return capabilities.includes(capability)
 }
 
 function workerName(nodes: ConsoleWorkerNode[], id: string | null) {
-  return nodes.find((node) => node.id === id)?.name ?? "Unknown worker";
+  return nodes.find((node) => node.id === id)?.name ?? 'Unknown worker'
 }
 
 function StatusBox({ label, value }: { label: string; value: string }) {
@@ -464,5 +476,5 @@ function StatusBox({ label, value }: { label: string; value: string }) {
         <StatusBadge status={value} />
       </div>
     </div>
-  );
+  )
 }

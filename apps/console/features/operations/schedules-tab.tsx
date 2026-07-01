@@ -1,34 +1,31 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import {
-  api,
-  type ConsoleScheduledOperation,
-  type ConsoleTileset,
-} from "@/lib/api";
-import { formatDate, schedulePayload } from "@/features/operations/model";
-import {
-  EmptyRow,
-  Field,
-  runAction,
-  StatusBadge,
-} from "@/features/operations/ui";
-import { Button } from "@planisfy/ui/components/button";
+import { useState } from 'react'
+import { api, type ConsoleScheduledOperation, type ConsoleTileset } from '@/lib/api'
+import { formatDate, schedulePayload } from '@/features/operations/model'
+import { EmptyRow, Field, runAction, StatusBadge } from '@/features/operations/ui'
+import { Button } from '@planisfy/ui/components/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@planisfy/ui/components/card";
-import { Input } from "@planisfy/ui/components/input";
+} from '@planisfy/ui/components/card'
+import { Input } from '@planisfy/ui/components/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@planisfy/ui/components/dropdown-menu'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@planisfy/ui/components/select";
+} from '@planisfy/ui/components/select'
 import {
   Table,
   TableBody,
@@ -36,40 +33,37 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table";
-import { Textarea } from "@planisfy/ui/components/textarea";
-import { CalendarClock, Play, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+} from '@planisfy/ui/components/table'
+import { Textarea } from '@planisfy/ui/components/textarea'
+import { CalendarClock, MoreHorizontal, Play, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export function SchedulesTab({
   schedules,
   tilesets,
   onChanged,
 }: {
-  schedules: ConsoleScheduledOperation[];
-  tilesets: ConsoleTileset[];
-  onChanged: () => void;
+  schedules: ConsoleScheduledOperation[]
+  tilesets: ConsoleTileset[]
+  onChanged: () => void
 }) {
-  const [name, setName] = useState("");
-  const [kind, setKind] =
-    useState<ConsoleScheduledOperation["kind"]>("tileset_rebuild");
-  const [cron, setCron] = useState("0 2 * * *");
-  const [timezone, setTimezone] = useState("UTC");
-  const [tilesetId, setTilesetId] = useState("");
-  const [payload, setPayload] = useState("{}");
-  const [saving, setSaving] = useState(false);
-  const requiresTileset = kind === "tileset_rebuild";
+  const [name, setName] = useState('')
+  const [kind, setKind] = useState<ConsoleScheduledOperation['kind']>('tileset_rebuild')
+  const [cron, setCron] = useState('0 2 * * *')
+  const [timezone, setTimezone] = useState('UTC')
+  const [tilesetId, setTilesetId] = useState('')
+  const [payload, setPayload] = useState('{}')
+  const [saving, setSaving] = useState(false)
+  const requiresTileset = kind === 'tileset_rebuild'
   const canCreateSchedule =
-    name.trim().length > 0 &&
-    !saving &&
-    (!requiresTileset || Boolean(tilesetId));
+    name.trim().length > 0 && !saving && (!requiresTileset || Boolean(tilesetId))
 
   async function createSchedule() {
     if (requiresTileset && !tilesetId) {
-      toast.error("Select a tileset before creating a rebuild schedule");
-      return;
+      toast.error('Select a tileset before creating a rebuild schedule')
+      return
     }
-    setSaving(true);
+    setSaving(true)
     try {
       await api.createScheduledOperation({
         name,
@@ -81,34 +75,24 @@ export function SchedulesTab({
           payload,
           tilesetId,
         }),
-      });
-      setName("");
-      setPayload("{}");
-      toast.success("Schedule created");
-      onChanged();
+      })
+      setName('')
+      setPayload('{}')
+      toast.success('Schedule created')
+      onChanged()
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to create schedule",
-      );
+      toast.error(err instanceof Error ? err.message : 'Failed to create schedule')
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
   }
 
   async function runSchedule(id: string) {
-    await runAction(
-      () => api.runScheduledOperation(id),
-      "Schedule run queued",
-      onChanged,
-    );
+    await runAction(() => api.runScheduledOperation(id), 'Schedule run queued', onChanged)
   }
 
   async function deleteSchedule(id: string) {
-    await runAction(
-      () => api.deleteScheduledOperation(id),
-      "Schedule deleted",
-      onChanged,
-    );
+    await runAction(() => api.deleteScheduledOperation(id), 'Schedule deleted', onChanged)
   }
 
   return (
@@ -117,8 +101,8 @@ export function SchedulesTab({
         <CardHeader>
           <CardTitle>Create Schedule</CardTitle>
           <CardDescription>
-            Store recurring import, rebuild, or command requests. Runs enqueue
-            operational events for workers to process.
+            Store recurring import, rebuild, or command requests. Runs enqueue operational events
+            for workers to process.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -128,9 +112,7 @@ export function SchedulesTab({
           <Field label="Kind">
             <Select
               value={kind}
-              onValueChange={(value) =>
-                setKind(value as ConsoleScheduledOperation["kind"])
-              }
+              onValueChange={(value) => setKind(value as ConsoleScheduledOperation['kind'])}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -147,18 +129,13 @@ export function SchedulesTab({
               <Input value={cron} onChange={(e) => setCron(e.target.value)} />
             </Field>
             <Field label="Timezone">
-              <Input
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-              />
+              <Input value={timezone} onChange={(e) => setTimezone(e.target.value)} />
             </Field>
           </div>
           <Field label="Tileset">
             <Select
-              value={tilesetId || "none"}
-              onValueChange={(value) =>
-                setTilesetId(value === "none" ? "" : value)
-              }
+              value={tilesetId || 'none'}
+              onValueChange={(value) => setTilesetId(value === 'none' ? '' : value)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -179,11 +156,7 @@ export function SchedulesTab({
             )}
           </Field>
           <Field label="Advanced payload JSON">
-            <Textarea
-              rows={5}
-              value={payload}
-              onChange={(e) => setPayload(e.target.value)}
-            />
+            <Textarea rows={5} value={payload} onChange={(e) => setPayload(e.target.value)} />
           </Field>
           <Button onClick={createSchedule} disabled={!canCreateSchedule}>
             <CalendarClock className="mr-1.5 h-4 w-4" />
@@ -199,51 +172,55 @@ export function SchedulesTab({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead className="min-w-[220px]">Name</TableHead>
                 <TableHead>Kind</TableHead>
                 <TableHead>Cron</TableHead>
                 <TableHead>Next run</TableHead>
-                <TableHead className="w-[112px]" />
+                <TableHead className="w-10 text-right" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {schedules.map((schedule) => (
                 <TableRow key={schedule.id}>
-                  <TableCell className="font-medium">{schedule.name}</TableCell>
+                  <TableCell className="min-w-[220px] font-medium">{schedule.name}</TableCell>
                   <TableCell>
                     <StatusBadge status={schedule.kind} />
                   </TableCell>
                   <TableCell>{schedule.cron}</TableCell>
                   <TableCell>{formatDate(schedule.nextRunAt)}</TableCell>
-                  <TableCell className="space-x-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      aria-label={`Run schedule ${schedule.name}`}
-                      title="Run schedule"
-                      onClick={() => runSchedule(schedule.id)}
-                    >
-                      <Play className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      aria-label={`Delete schedule ${schedule.name}`}
-                      title="Delete schedule"
-                      onClick={() => deleteSchedule(schedule.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <TableCell className="w-10 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`${schedule.name} actions`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => runSchedule(schedule.id)}>
+                          <Play className="mr-2 h-4 w-4" />
+                          Run schedule
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onSelect={() => deleteSchedule(schedule.id)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete schedule
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
-              {schedules.length === 0 && (
-                <EmptyRow colSpan={5} label="No schedules configured." />
-              )}
+              {schedules.length === 0 && <EmptyRow colSpan={5} label="No schedules configured." />}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }
