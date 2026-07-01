@@ -1,27 +1,28 @@
-import { existsSync } from "node:fs";
-import { copyFile, link, mkdir, symlink, unlink } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
-import { getStorage, type StorageProvider } from "@planisfy/storage";
+import { existsSync } from 'node:fs'
+import { link, mkdir, unlink } from 'node:fs/promises'
+import { join } from 'node:path'
+import { getStorage, type StorageProvider } from '@planisfy/storage'
 
-type TileArtifactFormat = "PMTILES" | "MBTILES" | "DIRECTORY";
+type TileArtifactFormat = 'PMTILES' | 'MBTILES' | 'DIRECTORY'
 
 interface LocalStorageObject {
-  provider: string;
-  bucket?: string;
-  storageKey: string;
+  provider: string
+  bucket?: string
+  storageKey: string
 }
 
 export interface PublishedTileAliasRegistration {
-  stableAlias: string;
-  versionedAlias: string;
-  stablePath: string;
-  versionedPath: string;
-  delivery: "martin" | "object-storage";
-  provider: "local" | "s3" | "r2";
-  stableStorageKey?: string;
-  versionedStorageKey?: string;
-  stableUrl?: string;
-  versionedUrl?: string;
+  stableAlias: string
+  versionedAlias: string
+  stablePath: string
+  versionedPath: string
+  delivery: 'martin' | 'object-storage'
+  provider: 'local' | 's3' | 'r2'
+  aliasMode: 'hardlink' | 'object_copy'
+  stableStorageKey?: string
+  versionedStorageKey?: string
+  stableUrl?: string
+  versionedUrl?: string
 }
 
 export async function registerPublishedTileAliases({
@@ -32,42 +33,42 @@ export async function registerPublishedTileAliases({
   version,
   storage = getStorage(),
 }: {
-  storageObject: LocalStorageObject;
-  artifactFormat: TileArtifactFormat;
-  ownerHandle: string;
-  tilesetHandle: string;
-  version: number;
-  storage?: StorageProvider;
+  storageObject: LocalStorageObject
+  artifactFormat: TileArtifactFormat
+  ownerHandle: string
+  tilesetHandle: string
+  version: number
+  storage?: StorageProvider
 }): Promise<PublishedTileAliasRegistration | null> {
-  if (artifactFormat !== "PMTILES" && artifactFormat !== "MBTILES") return null;
+  if (artifactFormat !== 'PMTILES' && artifactFormat !== 'MBTILES') return null
 
-  const extension = artifactFormat === "MBTILES" ? "mbtiles" : "pmtiles";
-  const stableSource = `${ownerHandle}.${tilesetHandle}`;
-  const versionedSource = `${stableSource}.v${version}`;
+  const extension = artifactFormat === 'MBTILES' ? 'mbtiles' : 'pmtiles'
+  const stableSource = `${ownerHandle}.${tilesetHandle}`
+  const versionedSource = `${stableSource}.v${version}`
 
-  assertSafeMartinSource(stableSource);
-  assertSafeMartinSource(versionedSource);
+  assertSafeMartinSource(stableSource)
+  assertSafeMartinSource(versionedSource)
 
-  if (storageObject.provider === "local") {
+  if (storageObject.provider === 'local') {
     return registerLocalMartinSources({
       storageKey: storageObject.storageKey,
       extension,
       stableSource,
       versionedSource,
-    });
+    })
   }
 
-  if (storageObject.provider === "r2" || storageObject.provider === "s3") {
+  if (storageObject.provider === 'r2' || storageObject.provider === 's3') {
     return registerObjectStorageMartinSources({
       storage,
       storageObject,
       extension,
       stableSource,
       versionedSource,
-    });
+    })
   }
 
-  return null;
+  return null
 }
 
 async function registerLocalMartinSources({
@@ -76,36 +77,33 @@ async function registerLocalMartinSources({
   stableSource,
   versionedSource,
 }: {
-  storageKey: string;
-  extension: "pmtiles" | "mbtiles";
-  stableSource: string;
-  versionedSource: string;
+  storageKey: string
+  extension: 'pmtiles' | 'mbtiles'
+  stableSource: string
+  versionedSource: string
 }): Promise<PublishedTileAliasRegistration> {
-  const localStoragePath =
-    process.env.LOCAL_STORAGE_PATH ?? join(process.cwd(), ".storage");
-  const sourcesDir =
-    process.env.MARTIN_SOURCES_PATH ?? join(localStoragePath, "martin-sources");
-  const targetPath = join(localStoragePath, storageKey);
-  const stablePath = join(sourcesDir, `${stableSource}.${extension}`);
-  const versionedPath = join(sourcesDir, `${versionedSource}.${extension}`);
-  const staleExtension = extension === "pmtiles" ? "mbtiles" : "pmtiles";
+  const localStoragePath = process.env.LOCAL_STORAGE_PATH ?? join(process.cwd(), '.storage')
+  const sourcesDir = process.env.MARTIN_SOURCES_PATH ?? join(localStoragePath, 'martin-sources')
+  const targetPath = join(localStoragePath, storageKey)
+  const stablePath = join(sourcesDir, `${stableSource}.${extension}`)
+  const versionedPath = join(sourcesDir, `${versionedSource}.${extension}`)
+  const staleExtension = extension === 'pmtiles' ? 'mbtiles' : 'pmtiles'
 
-  await mkdir(sourcesDir, { recursive: true });
-  await unlinkIfExists(join(sourcesDir, `${stableSource}.${staleExtension}`));
-  await unlinkIfExists(
-    join(sourcesDir, `${versionedSource}.${staleExtension}`),
-  );
-  await replaceAlias(stablePath, targetPath);
-  await replaceAlias(versionedPath, targetPath);
+  await mkdir(sourcesDir, { recursive: true })
+  await unlinkIfExists(join(sourcesDir, `${stableSource}.${staleExtension}`))
+  await unlinkIfExists(join(sourcesDir, `${versionedSource}.${staleExtension}`))
+  await replaceAlias(stablePath, targetPath)
+  await replaceAlias(versionedPath, targetPath)
 
   return {
     stableAlias: stableSource,
     versionedAlias: versionedSource,
     stablePath,
     versionedPath,
-    delivery: "martin",
-    provider: "local",
-  };
+    delivery: 'martin',
+    provider: 'local',
+    aliasMode: 'hardlink',
+  }
 }
 
 async function registerObjectStorageMartinSources({
@@ -115,94 +113,88 @@ async function registerObjectStorageMartinSources({
   stableSource,
   versionedSource,
 }: {
-  storage: StorageProvider;
-  storageObject: LocalStorageObject;
-  extension: "pmtiles" | "mbtiles";
-  stableSource: string;
-  versionedSource: string;
+  storage: StorageProvider
+  storageObject: LocalStorageObject
+  extension: 'pmtiles' | 'mbtiles'
+  stableSource: string
+  versionedSource: string
 }): Promise<PublishedTileAliasRegistration> {
-  const info = storage.getInfo();
+  const info = storage.getInfo()
   if (info.provider !== storageObject.provider) {
     throw new Error(
-      `Storage provider mismatch: artifact uses ${storageObject.provider}, configured storage is ${info.provider}`,
-    );
+      `Storage provider mismatch: artifact uses ${storageObject.provider}, configured storage is ${info.provider}`
+    )
   }
   if (storageObject.bucket && storageObject.bucket !== info.bucket) {
     throw new Error(
-      `Storage bucket mismatch: artifact uses ${storageObject.bucket}, configured storage is ${info.bucket}`,
-    );
+      `Storage bucket mismatch: artifact uses ${storageObject.bucket}, configured storage is ${info.bucket}`
+    )
   }
   if (!(await storage.exists(storageObject.storageKey))) {
-    throw new Error(`Published tileset artifact not found: ${storageObject.storageKey}`);
+    throw new Error(`Published tileset artifact not found: ${storageObject.storageKey}`)
   }
 
   const prefix = normalizeStoragePrefix(
-    process.env.TILE_ALIAS_STORAGE_PREFIX ??
-      process.env.MARTIN_SOURCES_PREFIX ??
-      "tile-aliases",
-  );
-  const stableStorageKey = `${prefix}/${stableSource}.${extension}`;
-  const versionedStorageKey = `${prefix}/${versionedSource}.${extension}`;
-  const staleExtension = extension === "pmtiles" ? "mbtiles" : "pmtiles";
+    process.env.TILE_ALIAS_STORAGE_PREFIX ?? process.env.MARTIN_SOURCES_PREFIX ?? 'tile-aliases'
+  )
+  const stableStorageKey = `${prefix}/${stableSource}.${extension}`
+  const versionedStorageKey = `${prefix}/${versionedSource}.${extension}`
+  const staleExtension = extension === 'pmtiles' ? 'mbtiles' : 'pmtiles'
 
-  await storage.delete(`${prefix}/${stableSource}.${staleExtension}`);
-  await storage.delete(`${prefix}/${versionedSource}.${staleExtension}`);
-  await storage.copy(storageObject.storageKey, stableStorageKey);
-  await storage.copy(storageObject.storageKey, versionedStorageKey);
+  await storage.delete(`${prefix}/${stableSource}.${staleExtension}`)
+  await storage.delete(`${prefix}/${versionedSource}.${staleExtension}`)
+  await storage.copy(storageObject.storageKey, stableStorageKey)
+  await storage.copy(storageObject.storageKey, versionedStorageKey)
 
   return {
     stableAlias: stableSource,
     versionedAlias: versionedSource,
     stablePath: stableStorageKey,
     versionedPath: versionedStorageKey,
-    delivery: "object-storage",
+    delivery: 'object-storage',
     provider: info.provider,
+    aliasMode: 'object_copy',
     stableStorageKey,
     versionedStorageKey,
     stableUrl: storage.getUrl(stableStorageKey),
     versionedUrl: storage.getUrl(versionedStorageKey),
-  };
+  }
 }
 
 function assertSafeMartinSource(source: string) {
   if (!/^[A-Za-z0-9._-]+$/.test(source)) {
-    throw new Error(`Unsafe Martin source name: ${source}`);
+    throw new Error(`Unsafe Martin source name: ${source}`)
   }
 }
 
 async function replaceAlias(aliasPath: string, targetPath: string) {
   if (!existsSync(targetPath)) {
-    throw new Error(`Published tileset artifact not found: ${targetPath}`);
+    throw new Error(`Published tileset artifact not found: ${targetPath}`)
   }
 
-  await unlinkIfExists(aliasPath);
+  await unlinkIfExists(aliasPath)
   try {
-    await symlink(relative(dirname(aliasPath), targetPath), aliasPath);
-  } catch {
-    try {
-      await link(targetPath, aliasPath);
-    } catch {
-      await copyFile(targetPath, aliasPath);
-    }
+    await link(targetPath, aliasPath)
+  } catch (err) {
+    throw new Error(
+      `Published tileset alias hardlink failed for ${aliasPath}; ensure LOCAL_STORAGE_PATH and MARTIN_SOURCES_PATH are on one filesystem that supports hardlinks. ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    )
   }
 }
 
 async function unlinkIfExists(path: string) {
   try {
-    await unlink(path);
+    await unlink(path)
   } catch (err) {
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      err.code === "ENOENT"
-    ) {
-      return;
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT') {
+      return
     }
-    throw err;
+    throw err
   }
 }
 
 function normalizeStoragePrefix(prefix: string) {
-  return prefix.replace(/^\/+|\/+$/g, "") || "tile-aliases";
+  return prefix.replace(/^\/+|\/+$/g, '') || 'tile-aliases'
 }

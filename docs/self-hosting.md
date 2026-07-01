@@ -45,6 +45,10 @@ Ignored runtime data lives under `infra/docker/data`:
 
 Planisfy does not commit binary datasets. Missing data should produce degraded service checks, not prevent the core apps from booting.
 
+Local PMTiles/MBTiles serving aliases are hardlink-only. Keep local artifact
+storage and Martin source alias paths on the same hardlink-capable filesystem;
+Planisfy fails alias creation instead of silently copying large tile files.
+
 Use `scripts/self-host-setup.sh --demo-data` with `PLANISFY_FIXTURE_BASE_URL`
 or `DEMO_PMTILES_URL` to install the public Stuttgart PMTiles fixture. If the
 fixture is already present, setup validates and reuses it. `DEMO_PMTILES_FALLBACK_URL`

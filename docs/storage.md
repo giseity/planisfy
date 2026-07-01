@@ -43,6 +43,15 @@ The database ledger records provider, bucket, storage key, resource type, artifa
 
 Storage key construction belongs in `@planisfy/storage-paths`.
 
+## Tile Alias Policy
+
+Local Martin aliases are hardlink-only. `LOCAL_STORAGE_PATH`,
+`MARTIN_SOURCES_PATH`, and root-agent Martin runtime sources must be on a
+filesystem that supports hardlinks. Planisfy does not silently copy large
+PMTiles/MBTiles files as a fallback because that can hide multi-GB or planet
+scale disk duplication. S3/R2 aliases are explicit object-storage copies and
+record `aliasMode=object_copy` in publish evidence.
+
 ## Root-Agent Artifact Uploads
 
 Managed root-agent builds use direct multipart uploads for S3/R2 artifacts:
