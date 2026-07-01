@@ -700,12 +700,36 @@ rootAgentRoute.get("/root-agent/artifacts/:id/download", async (c) => {
     .limit(1);
   if (!object) return notFound(c, "Storage object not found");
   const storage = getStorage();
+  const totalSize = object.size ?? artifact.artifact.size ?? null;
+  const range = parseByteRange(c.req.header("range"), totalSize);
+  if (range.status === "invalid") {
+    return new Response(null, {
+      status: 416,
+      headers: totalSize === null ? undefined : { "content-range": `bytes */${totalSize}` },
+    });
+  }
+  if (range.status === "partial") {
+    const length = range.end - range.start + 1;
+    const chunk = await storage.readRange(object.storageKey, range.start, length);
+    return new Response(new Uint8Array(chunk), {
+      status: 206,
+      headers: {
+        "accept-ranges": "bytes",
+        "content-type": object.contentType ?? "application/octet-stream",
+        "content-length": String(chunk.length),
+        "content-range": `bytes ${range.start}-${range.start + chunk.length - 1}/${totalSize}`,
+        "content-disposition": `attachment; filename="${artifact.artifact.fileName}"`,
+      },
+    });
+  }
   const stream = storage.downloadStream
     ? await storage.downloadStream(object.storageKey)
     : Readable.from([await storage.download(object.storageKey)]);
   return new Response(Readable.toWeb(stream) as ReadableStream, {
     headers: {
+      "accept-ranges": totalSize === null ? "none" : "bytes",
       "content-type": object.contentType ?? "application/octet-stream",
+      ...(totalSize === null ? {} : { "content-length": String(totalSize) }),
       "content-disposition": `attachment; filename="${artifact.artifact.fileName}"`,
     },
   });
@@ -831,6 +855,28 @@ async function findActivationForAgent(c: Context<AgentEnv>, buildId: string) {
     )
     .limit(1);
   return basemapBuild ? { kind: "basemap" as const, build: basemapBuild } : null;
+}
+
+function parseByteRange(
+  header: string | undefined,
+  totalSize: number | null,
+):
+  | { status: "none" }
+  | { status: "partial"; start: number; end: number }
+  | { status: "invalid" } {
+  if (!header) return { status: "none" };
+  if (totalSize === null || totalSize < 0) return { status: "invalid" };
+  const match = /^bytes=(\d+)-(\d*)$/.exec(header.trim());
+  if (!match) return { status: "invalid" };
+  const start = Number(match[1]);
+  const requestedEnd = match[2] ? Number(match[2]) : totalSize - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd)) {
+    return { status: "invalid" };
+  }
+  if (start < 0 || requestedEnd < start || start >= totalSize) {
+    return { status: "invalid" };
+  }
+  return { status: "partial", start, end: Math.min(requestedEnd, totalSize - 1) };
 }
 
 async function recordRuntimeInstallation(params: {

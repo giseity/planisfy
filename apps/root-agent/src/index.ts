@@ -54,6 +54,11 @@ const envSchema = z.object({
   ROOT_AGENT_RUNTIME_SUPERVISOR_TOKEN: z.string().optional(),
   ROOT_AGENT_UPLOAD_RETRIES: z.coerce.number().int().min(1).default(5),
   ROOT_AGENT_UPLOAD_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
+  ROOT_AGENT_DOWNLOAD_PART_SIZE_BYTES: z.coerce
+    .number()
+    .int()
+    .min(5 * 1024 * 1024)
+    .default(64 * 1024 * 1024),
 });
 
 const config = envSchema.parse(process.env);
@@ -90,6 +95,7 @@ type RoutingGraphArtifact = {
   id: string;
   kind: string;
   fileName: string;
+  size: number | null;
   checksumSha256: string | null;
 };
 
@@ -111,6 +117,7 @@ type BasemapArtifact = {
   id: string;
   kind: string;
   fileName: string;
+  size: number | null;
   checksumSha256: string | null;
 };
 
@@ -534,12 +541,13 @@ async function activateRoutingGraph(
   const artifactPath = join(activationDir, graph.fileName);
   const extractDir = join(activationDir, "extract");
   try {
-    await rm(activationDir, { recursive: true, force: true });
+    await rm(extractDir, { recursive: true, force: true });
     await mkdir(extractDir, { recursive: true });
-    await downloadArtifact(token, graph.id, artifactPath);
+    await downloadArtifact(token, graph.id, artifactPath, graph.size ?? undefined);
     if (graph.checksumSha256) {
       const actual = await sha256File(artifactPath);
       if (actual !== graph.checksumSha256) {
+        await rm(artifactPath, { force: true });
         throw new Error("Routing graph artifact checksum mismatch");
       }
     }
@@ -590,13 +598,14 @@ async function activateBasemap(
     `${versionedSource}.${extension}`,
   );
   try {
-    await rm(activationDir, { recursive: true, force: true });
+    await rm(join(activationDir, "extract"), { recursive: true, force: true });
     await mkdir(activationDir, { recursive: true });
     await mkdir(config.ROOT_AGENT_MARTIN_SOURCES_DIR, { recursive: true });
-    await downloadArtifact(token, tiles.id, artifactPath);
+    await downloadArtifact(token, tiles.id, artifactPath, tiles.size ?? undefined);
     if (tiles.checksumSha256) {
       const actual = await sha256File(artifactPath);
       if (actual !== tiles.checksumSha256) {
+        await rm(artifactPath, { force: true });
         throw new Error("Basemap artifact checksum mismatch");
       }
     }
@@ -628,7 +637,7 @@ async function activateDemCompanion(
   const artifactPath = join(activationDir, artifact.fileName);
   const extractDir = join(activationDir, "extract");
   await mkdir(extractDir, { recursive: true });
-  await downloadArtifact(token, artifact.id, artifactPath);
+  await downloadArtifact(token, artifact.id, artifactPath, artifact.size ?? undefined);
   if (artifact.checksumSha256) {
     const actual = await sha256File(artifactPath);
     if (actual !== artifact.checksumSha256) {
@@ -952,18 +961,60 @@ async function uploadMultipartPart(
   return { partNumber: part.partNumber, eTag };
 }
 
-async function downloadArtifact(token: string, artifactId: string, target: string) {
+async function downloadArtifact(
+  token: string,
+  artifactId: string,
+  target: string,
+  expectedSize?: number,
+) {
   await mkdir(dirname(target), { recursive: true });
-  const response = await fetch(`${apiBase}/root-agent/artifacts/${artifactId}/download`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!response.ok || !response.body) {
-    throw new Error(`Artifact download failed: ${response.status}`);
+  if (!expectedSize || expectedSize <= 0) {
+    const response = await fetch(`${apiBase}/root-agent/artifacts/${artifactId}/download`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!response.ok || !response.body) {
+      throw new Error(`Artifact download failed: ${response.status}`);
+    }
+    await pipeline(
+      Readable.fromWeb(response.body as unknown as import("node:stream/web").ReadableStream),
+      createWriteStream(target),
+    );
+    return;
   }
-  await pipeline(
-    Readable.fromWeb(response.body as unknown as import("node:stream/web").ReadableStream),
-    createWriteStream(target),
-  );
+
+  const existingSize = await fileSize(target);
+  if (existingSize > expectedSize) {
+    await rm(target, { force: true });
+  }
+
+  for (;;) {
+    const start = await fileSize(target);
+    if (start === expectedSize) return;
+    const end = Math.min(start + config.ROOT_AGENT_DOWNLOAD_PART_SIZE_BYTES, expectedSize) - 1;
+    await withRetry(async () => {
+      const currentStart = await fileSize(target);
+      if (currentStart >= expectedSize) return;
+      const currentEnd =
+        Math.min(currentStart + config.ROOT_AGENT_DOWNLOAD_PART_SIZE_BYTES, expectedSize) - 1;
+      const response = await fetch(`${apiBase}/root-agent/artifacts/${artifactId}/download`, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          range: `bytes=${currentStart}-${currentEnd}`,
+        },
+      });
+      if (response.status !== 206 || !response.body) {
+        throw new Error(`Artifact range download failed: ${response.status}`);
+      }
+      await pipeline(
+        Readable.fromWeb(response.body as unknown as import("node:stream/web").ReadableStream),
+        createWriteStream(target, { flags: "a" }),
+      );
+      const downloaded = await fileSize(target);
+      if (downloaded <= currentStart) {
+        throw new Error(`Artifact range download made no progress at byte ${currentStart}`);
+      }
+    }, `download artifact ${artifactId} bytes ${start}-${end}`);
+  }
 }
 
 async function updateBuild(
@@ -1091,6 +1142,14 @@ async function sha256File(path: string) {
     hash.update(chunk);
   }
   return hash.digest("hex");
+}
+
+async function fileSize(path: string) {
+  try {
+    return (await stat(path)).size;
+  } catch {
+    return 0;
+  }
 }
 
 async function readOptionalJson<T>(path: string): Promise<T | null> {
