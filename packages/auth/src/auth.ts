@@ -20,6 +20,7 @@ import { randomUUID } from 'crypto'
 import {
   getAuthBaseURL,
   getAuthSecret,
+  getAuthTrustedOrigins,
   getOAuthProxyURL,
   getSocialProviderCredentials,
 } from './env'
@@ -32,7 +33,7 @@ if (!apiUrl) {
 const authBaseURL = getAuthBaseURL()
 const oauthProxyURL = getOAuthProxyURL()
 const authCookieDomain = getAuthCookieDomain(authBaseURL)
-const trustedOrigins = buildTrustedOrigins(authBaseURL, oauthProxyURL)
+const trustedOrigins = getAuthTrustedOrigins()
 const betterAuthBaseURL = oauthProxyURL
   ? {
       allowedHosts: Array.from(new Set([new URL(authBaseURL).host, new URL(oauthProxyURL).host])),
@@ -131,16 +132,6 @@ function getAuthCookieDomain(baseURL: string) {
   }
 
   return undefined
-}
-
-function buildTrustedOrigins(authURL: string, proxyURL: string | undefined) {
-  return Array.from(
-    new Set(
-      [authURL, proxyURL]
-        .filter((url): url is string => Boolean(url))
-        .map((url) => new URL(url).origin)
-    )
-  )
 }
 
 // ============================================================================

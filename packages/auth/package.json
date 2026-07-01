@@ -10,7 +10,8 @@
   },
   "scripts": {
     "lint": "node ../eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@better-auth/api-key": "1.6.11",
