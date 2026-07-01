@@ -4,5 +4,8 @@ export default defineConfig({
   entry: ["src/index.ts"],
   format: ["esm"],
   outDir: "dist",
-  noExternal: [/^@planisfy\//],
+  platform: "node",
+  target: "node24",
+  sourcemap: true,
+  clean: true,
 });
