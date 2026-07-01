@@ -60,12 +60,26 @@ export default async function UpgradePage() {
         <PageHeaderText>
           <PageTitle>Upgrade Center</PageTitle>
           <PageDescription>
-            Pinned self-host releases, backups, and guarded rollback.
+            {data.deploymentMode === "self_host"
+              ? "Pinned self-host releases, backups, and guarded rollback."
+              : "Managed upgrades are operated outside the self-host supervisor."}
           </PageDescription>
         </PageHeaderText>
         <PageActions>
-          <Badge variant={data.configured && !data.error ? "success" : "warning"}>
-            {data.configured ? "Supervisor configured" : "Supervisor disabled"}
+          <Badge
+            variant={
+              data.configured && !data.error
+                ? "success"
+                : data.deploymentMode === "managed"
+                  ? "secondary"
+                  : "warning"
+            }
+          >
+            {data.deploymentMode === "managed"
+              ? "Managed mode"
+              : data.configured
+                ? "Supervisor configured"
+                : "Supervisor disabled"}
           </Badge>
         </PageActions>
       </PageHeader>
@@ -79,142 +93,146 @@ export default async function UpgradePage() {
         />
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <MetricCard
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          label="Current Version"
-          value={data.version?.version ?? "-"}
-          detail={data.version?.composeFile ?? "Supervisor unavailable"}
-        />
-        <MetricCard
-          icon={<ArchiveRestore className="h-4 w-4" />}
-          label="Latest Backup"
-          value={data.latestBackup?.status ?? "None"}
-          detail={data.latestBackup?.backupDir ?? "Run backup before apply"}
-        />
-        <MetricCard
-          icon={<ClipboardList className="h-4 w-4" />}
-          label="Active Operation"
-          value={data.activeOperation?.status ?? "Idle"}
-          detail={data.activeOperation?.type ?? "No recent operation"}
-        />
-      </div>
+      {data.deploymentMode === "self_host" && (
+        <>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <MetricCard
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              label="Current Version"
+              value={data.version?.version ?? "-"}
+              detail={data.version?.composeFile ?? "Supervisor unavailable"}
+            />
+            <MetricCard
+              icon={<ArchiveRestore className="h-4 w-4" />}
+              label="Latest Backup"
+              value={data.latestBackup?.status ?? "None"}
+              detail={data.latestBackup?.backupDir ?? "Run backup before apply"}
+            />
+            <MetricCard
+              icon={<ClipboardList className="h-4 w-4" />}
+              label="Active Operation"
+              value={data.activeOperation?.status ?? "Idle"}
+              detail={data.activeOperation?.type ?? "No recent operation"}
+            />
+          </div>
 
-      <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Release Actions</CardTitle>
-            <CardDescription>
-              Actions run from the Admin server through the token-protected
-              supervisor.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <form action={supervisorPreflightAction}>
-                <Button variant="outline" disabled={!data.configured}>
-                  <RefreshCw className="h-4 w-4" />
-                  Preflight
-                </Button>
-              </form>
-              <form action={supervisorBackupAction}>
-                <Button variant="outline" disabled={!data.configured}>
-                  <ArchiveRestore className="h-4 w-4" />
-                  Backup
-                </Button>
-              </form>
-            </div>
+          <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+            <Card>
+              <CardHeader>
+                <CardTitle>Release Actions</CardTitle>
+                <CardDescription>
+                  Actions run from the Admin server through the token-protected
+                  supervisor.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <form action={supervisorPreflightAction}>
+                    <Button variant="outline" disabled={!data.configured}>
+                      <RefreshCw className="h-4 w-4" />
+                      Preflight
+                    </Button>
+                  </form>
+                  <form action={supervisorBackupAction}>
+                    <Button variant="outline" disabled={!data.configured}>
+                      <ArchiveRestore className="h-4 w-4" />
+                      Backup
+                    </Button>
+                  </form>
+                </div>
 
-            <form action={supervisorApplyAction} className="space-y-3">
-              <Field label="Target manifest path">
-                <Input
-                  name="manifestPath"
-                  placeholder="/data/releases/planisfy-1.0.0.json"
-                />
-              </Field>
-              <Field label="Successful backup operation ID">
-                <Input
-                  name="backupOperationId"
-                  defaultValue={data.latestBackup?.id ?? ""}
-                />
-              </Field>
-              <Button disabled={!data.configured || !data.latestBackup}>
-                <UploadCloud className="h-4 w-4" />
-                Apply pinned release
-              </Button>
-            </form>
+                <form action={supervisorApplyAction} className="space-y-3">
+                  <Field label="Target manifest path">
+                    <Input
+                      name="manifestPath"
+                      placeholder="/data/releases/planisfy-1.0.0.json"
+                    />
+                  </Field>
+                  <Field label="Successful backup operation ID">
+                    <Input
+                      name="backupOperationId"
+                      defaultValue={data.latestBackup?.id ?? ""}
+                    />
+                  </Field>
+                  <Button disabled={!data.configured || !data.latestBackup}>
+                    <UploadCloud className="h-4 w-4" />
+                    Apply pinned release
+                  </Button>
+                </form>
 
-            <form action={supervisorRollbackAction} className="space-y-3">
-              <Field label="Rollback manifest path">
-                <Input
-                  name="manifestPath"
-                  placeholder="/data/releases/planisfy-previous.json"
-                />
-              </Field>
-              <Field label="Backup directory">
-                <Input
-                  name="backupDir"
-                  defaultValue={data.latestBackup?.backupDir ?? ""}
-                />
-              </Field>
-              <Button
-                variant="outline"
-                disabled={!data.configured || !data.latestBackup?.backupDir}
-              >
-                <RotateCcw className="h-4 w-4" />
-                Roll back
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                <form action={supervisorRollbackAction} className="space-y-3">
+                  <Field label="Rollback manifest path">
+                    <Input
+                      name="manifestPath"
+                      placeholder="/data/releases/planisfy-previous.json"
+                    />
+                  </Field>
+                  <Field label="Backup directory">
+                    <Input
+                      name="backupDir"
+                      defaultValue={data.latestBackup?.backupDir ?? ""}
+                    />
+                  </Field>
+                  <Button
+                    variant="outline"
+                    disabled={!data.configured || !data.latestBackup?.backupDir}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Roll back
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Operation Log</CardTitle>
-            <CardDescription>
-              Recent supervisor operations and the latest log tail.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead>Target</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.operations.map((operation) => (
-                  <TableRow key={operation.id}>
-                    <TableCell className="font-medium">
-                      {operation.type}
-                    </TableCell>
-                    <TableCell>
-                      <OperationBadge status={operation.status} />
-                    </TableCell>
-                    <TableCell>{formatDate(operation.startedAt)}</TableCell>
-                    <TableCell>{operation.targetVersion ?? "-"}</TableCell>
-                  </TableRow>
-                ))}
-                {data.operations.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={4}
-                      className="h-20 text-center text-sm text-muted-foreground"
-                    >
-                      No supervisor operations recorded.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+            <Card>
+              <CardHeader>
+                <CardTitle>Operation Log</CardTitle>
+                <CardDescription>
+                  Recent supervisor operations and the latest log tail.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Started</TableHead>
+                      <TableHead>Target</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.operations.map((operation) => (
+                      <TableRow key={operation.id}>
+                        <TableCell className="font-medium">
+                          {operation.type}
+                        </TableCell>
+                        <TableCell>
+                          <OperationBadge status={operation.status} />
+                        </TableCell>
+                        <TableCell>{formatDate(operation.startedAt)}</TableCell>
+                        <TableCell>{operation.targetVersion ?? "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                    {data.operations.length === 0 && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="h-20 text-center text-sm text-muted-foreground"
+                        >
+                          No supervisor operations recorded.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
 
-            <LogTail operation={data.activeOperation} />
-          </CardContent>
-        </Card>
-      </div>
+                <LogTail operation={data.activeOperation} />
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 }

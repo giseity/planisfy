@@ -17,10 +17,13 @@ import {
   Users,
 } from "lucide-react"
 
+export type AdminDeploymentMode = "self_host" | "managed"
+
 export interface AdminNavItem {
   href: string
   label: string
   icon: ComponentType<{ className?: string }>
+  modes?: AdminDeploymentMode[]
 }
 
 export interface AdminNavGroup {
@@ -56,7 +59,7 @@ export const adminNavGroups: AdminNavGroup[] = [
     items: [
       { href: "/audit", label: "Audit Log", icon: ScrollText },
       { href: "/health", label: "System Health", icon: Activity },
-      { href: "/upgrade", label: "Upgrade", icon: PackageCheck },
+      { href: "/upgrade", label: "Upgrade", icon: PackageCheck, modes: ["self_host"] },
       { href: "/configuration", label: "Configuration", icon: SlidersHorizontal },
       { href: "/feature-flags", label: "Feature Flags", icon: Flag },
       { href: "/announcements", label: "Announcements", icon: Megaphone },
@@ -69,10 +72,19 @@ export function isAdminNavActive(item: AdminNavItem, pathname: string) {
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
 }
 
-export function adminBreadcrumbs(pathname: string) {
+export function filterAdminNavGroups(deploymentMode: AdminDeploymentMode) {
+  return adminNavGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.modes || item.modes.includes(deploymentMode)),
+    }))
+    .filter((group) => group.items.length > 0)
+}
+
+export function adminBreadcrumbs(pathname: string, deploymentMode: AdminDeploymentMode) {
   if (pathname === "/") return [{ label: "Dashboard" }]
 
-  const items = adminNavGroups.flatMap((group) => group.items)
+  const items = filterAdminNavGroups(deploymentMode).flatMap((group) => group.items)
   const match = items
     .filter((item) => item.href !== "/")
     .sort((a, b) => b.href.length - a.href.length)

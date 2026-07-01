@@ -31,38 +31,61 @@ import { Textarea } from '@planisfy/ui/components/textarea'
 import { Database, Save, SlidersHorizontal } from 'lucide-react'
 import { requirePlatformPermission } from '@/features/auth/admin-auth'
 import { upsertPlatformConfigAction } from '@/features/platform/platform-admin-actions'
+import type { AdminDeploymentMode } from '@/features/navigation/admin-navigation'
 
 export const dynamic = 'force-dynamic'
 
-const runtimeKeys = [
-  'DEPLOYMENT_MODE',
-  'NODE_ENV',
-  'NEXT_PUBLIC_API_URL',
-  'NEXT_PUBLIC_CONSOLE_URL',
-  'APP_VERSION',
-  'STORAGE_PROVIDER',
-  'MARTIN_URL',
-  'PELIAS_URL',
-  'VALHALLA_URL',
-  'ZEPTOMAIL_SEND_MAIL_TOKEN',
-  'ZEPTOMAIL_FROM_AUTH',
-  'ZEPTOMAIL_FROM_NOTIFICATIONS',
-  'DODO_PAYMENTS_API_KEY',
+const runtimeKeys: Array<{
+  key: string
+  modes?: AdminDeploymentMode[]
+}> = [
+  { key: 'DEPLOYMENT_MODE' },
+  { key: 'NODE_ENV' },
+  { key: 'NEXT_PUBLIC_API_URL' },
+  { key: 'NEXT_PUBLIC_CONSOLE_URL' },
+  { key: 'APP_VERSION' },
+  { key: 'STORAGE_PROVIDER' },
+  { key: 'S3_BUCKET' },
+  { key: 'S3_ENDPOINT' },
+  { key: 'R2_ACCOUNT_ID', modes: ['managed'] },
+  { key: 'R2_BUCKET', modes: ['managed'] },
+  { key: 'R2_ACCESS_KEY_ID', modes: ['managed'] },
+  { key: 'R2_SECRET_ACCESS_KEY', modes: ['managed'] },
+  { key: 'R2_ENDPOINT', modes: ['managed'] },
+  { key: 'R2_PUBLIC_URL', modes: ['managed'] },
+  { key: 'MINIO_ROOT_USER', modes: ['self_host'] },
+  { key: 'MINIO_ROOT_PASSWORD', modes: ['self_host'] },
+  { key: 'SUPERVISOR_URL', modes: ['self_host'] },
+  { key: 'SUPERVISOR_TOKEN', modes: ['self_host'] },
+  { key: 'MARTIN_URL' },
+  { key: 'PELIAS_URL' },
+  { key: 'VALHALLA_URL' },
+  { key: 'ZEPTOMAIL_SEND_MAIL_TOKEN', modes: ['managed'] },
+  { key: 'ZEPTOMAIL_FROM_AUTH', modes: ['managed'] },
+  { key: 'ZEPTOMAIL_FROM_NOTIFICATIONS', modes: ['managed'] },
+  { key: 'DODO_PAYMENTS_API_KEY', modes: ['managed'] },
+  { key: 'DODO_PAYMENTS_WEBHOOK_SECRET', modes: ['managed'] },
+  { key: 'DODO_STARTER_MONTHLY_PRODUCT_ID', modes: ['managed'] },
+  { key: 'DODO_SCALE_MONTHLY_PRODUCT_ID', modes: ['managed'] },
 ]
 
 const secretPattern = /(SECRET|KEY|TOKEN|PASSWORD|DATABASE_URL|REDIS_URL)/i
 
 export default async function ConfigurationPage() {
   await requirePlatformPermission('platform.configuration.manage')
+  const deploymentMode: AdminDeploymentMode =
+    process.env.DEPLOYMENT_MODE === 'managed' ? 'managed' : 'self_host'
   const rows = await db
     .select()
     .from(platformConfig)
     .orderBy(platformConfig.category, platformConfig.key)
-  const runtimeRows = runtimeKeys.map((key) => ({
-    key,
-    configured: Boolean(process.env[key]),
-    value: formatEnvValue(key, process.env[key]),
-  }))
+  const runtimeRows = runtimeKeys
+    .filter((item) => !item.modes || item.modes.includes(deploymentMode))
+    .map((item) => ({
+      key: item.key,
+      configured: Boolean(process.env[item.key]),
+      value: formatEnvValue(item.key, process.env[item.key]),
+    }))
 
   return (
     <div className="space-y-5">
@@ -74,6 +97,9 @@ export default async function ConfigurationPage() {
           </PageDescription>
         </PageHeaderText>
         <PageActions>
+          <Badge variant={deploymentMode === 'managed' ? 'success' : 'secondary'}>
+            {deploymentMode === 'managed' ? 'Managed' : 'Self-host'}
+          </Badge>
           <Badge variant="secondary">{rows.length} persisted</Badge>
         </PageActions>
       </PageHeader>

@@ -1,4 +1,5 @@
 import { unstable_noStore as noStore } from "next/cache";
+import type { AdminDeploymentMode } from "@/features/navigation/admin-navigation";
 
 export type SupervisorOperation = {
   id: string;
@@ -19,6 +20,7 @@ export type SupervisorVersion = {
 };
 
 export type UpgradeCenterData = {
+  deploymentMode: AdminDeploymentMode;
   configured: boolean;
   error: string | null;
   version: SupervisorVersion | null;
@@ -31,10 +33,24 @@ type SupervisorEnvelope<T> = { data: T };
 
 export async function getUpgradeCenterData(): Promise<UpgradeCenterData> {
   noStore();
+  const deploymentMode = activeDeploymentMode();
+  if (deploymentMode !== "self_host") {
+    return {
+      activeOperation: null,
+      configured: false,
+      deploymentMode,
+      error: "Self-host supervisor upgrades are not available in managed mode.",
+      latestBackup: null,
+      operations: [],
+      version: null,
+    };
+  }
+
   if (!isSupervisorConfigured()) {
     return {
       activeOperation: null,
       configured: false,
+      deploymentMode,
       error: "SUPERVISOR_URL and SUPERVISOR_TOKEN are not configured.",
       latestBackup: null,
       operations: [],
@@ -61,6 +77,7 @@ export async function getUpgradeCenterData(): Promise<UpgradeCenterData> {
     return {
       activeOperation,
       configured: true,
+      deploymentMode,
       error: null,
       latestBackup,
       operations,
@@ -70,12 +87,17 @@ export async function getUpgradeCenterData(): Promise<UpgradeCenterData> {
     return {
       activeOperation: null,
       configured: true,
+      deploymentMode,
       error: error instanceof Error ? error.message : "Supervisor unavailable.",
       latestBackup: null,
       operations: [],
       version: null,
     };
   }
+}
+
+export function activeDeploymentMode(): AdminDeploymentMode {
+  return process.env.DEPLOYMENT_MODE === "managed" ? "managed" : "self_host";
 }
 
 export async function runSupervisorPreflight() {

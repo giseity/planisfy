@@ -16,19 +16,35 @@ import {
   ArrowLeft,
 } from "lucide-react"
 import {
-  adminNavGroups,
+  filterAdminNavGroups,
   isAdminNavActive,
+  type AdminDeploymentMode,
 } from "@/features/navigation/admin-navigation"
+import { clientEnv } from "@/env.client"
 
-export function AdminSidebar({ pathname }: { pathname: string }) {
+export function AdminSidebar({
+  deploymentMode,
+  pathname,
+}: {
+  deploymentMode: AdminDeploymentMode
+  pathname: string
+}) {
   return (
     <Sidebar>
-      <AdminSidebarContent pathname={pathname} />
+      <AdminSidebarContent pathname={pathname} deploymentMode={deploymentMode} />
     </Sidebar>
   )
 }
 
-export function AdminSidebarContent({ pathname }: { pathname: string }) {
+export function AdminSidebarContent({
+  deploymentMode,
+  pathname,
+}: {
+  deploymentMode: AdminDeploymentMode
+  pathname: string
+}) {
+  const navGroups = filterAdminNavGroups(deploymentMode)
+
   return (
     <>
       <SidebarHeader>
@@ -37,7 +53,7 @@ export function AdminSidebarContent({ pathname }: { pathname: string }) {
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        {adminNavGroups.map((group) => (
+        {navGroups.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarMenu>
@@ -64,7 +80,7 @@ export function AdminSidebarContent({ pathname }: { pathname: string }) {
       </SidebarContent>
       <SidebarFooter>
         <a
-          href="https://console.planisfy.localhost/styles"
+          href={new URL("/styles", clientEnv.NEXT_PUBLIC_CONSOLE_URL).toString()}
           className="flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
