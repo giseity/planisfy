@@ -7,6 +7,7 @@ FROM base AS deps
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/runtime-supervisor/package.json apps/runtime-supervisor/
+COPY packages/env/package.json packages/env/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter runtime-supervisor...
 
