@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { cors } from "hono/cors";
 import { ZodError } from "zod";
 import { randomUUID } from "crypto";
+import { env } from "./env";
 import { requestLogger } from "./shared/logging/logger";
 import { metricsMiddleware } from "./shared/metrics/metrics";
 import {
@@ -31,7 +32,6 @@ import { consoleRoute } from "./domains/console/route";
 import { rootAgentRoute } from "./domains/root-agent/route";
 import { setupRoute } from "./domains/setup/route";
 import { auth } from "@planisfy/auth/auth";
-import { env } from "./env";
 import { apiCorsOrigins } from "./shared/http/cors-origins";
 import { buildPublicOpenApiDocument } from "./openapi/public";
 

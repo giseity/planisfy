@@ -4,8 +4,16 @@ import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, isNull, ne } from "drizzle-orm";
-import { auth } from "@planisfy/auth/auth";
-import {
+import { loadWorkspaceEnv } from "@planisfy/env/node";
+
+loadWorkspaceEnv();
+
+const [{ auth }, database] = await Promise.all([
+  import("@planisfy/auth/auth"),
+  import("@planisfy/database"),
+]);
+
+const {
   accounts,
   apiKeys,
   db,
@@ -18,7 +26,7 @@ import {
   tilesets,
   tilesetVersions,
   users,
-} from "@planisfy/database";
+} = database;
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 

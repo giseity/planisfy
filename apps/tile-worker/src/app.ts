@@ -1,3 +1,4 @@
+import { env } from "./env";
 import {
   parsePublicTilesetSlug,
   parseTileCoordinates,
@@ -15,7 +16,6 @@ import {
   type TileRuntimeError,
 } from "@planisfy/tile-runtime";
 import { Hono, type Context } from "hono";
-import { env } from "./env";
 
 type TileWorkerDeps = {
   resolveTileset: typeof resolveTileset;

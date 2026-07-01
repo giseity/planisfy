@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 import { and, asc, eq, inArray, isNull, lte, max, sql } from "drizzle-orm";
+import { env, redisConnection } from "../../env";
 import {
   SOURCE_PROCESSING_QUEUE_NAME,
   buildDatasetTilesetProcessingInput,
@@ -19,7 +20,6 @@ import {
 import { parseEventPayload } from "@planisfy/events";
 import { getStorage } from "@planisfy/storage";
 import { StoragePaths } from "@planisfy/storage-paths";
-import { env, redisConnection } from "../../env";
 import {
   parseOvertureImportInput,
   runOvertureImport,
@@ -748,14 +748,6 @@ export function parseSourceProcessingJobInput(
     csv: parsed.csv,
     options: parsed.options,
   };
-}
-
-function credentialSecret() {
-  return (
-    env.SOURCE_CREDENTIAL_ENCRYPTION_KEY ||
-    env.BETTER_AUTH_SECRET ||
-    env.INTERNAL_API_SECRET
-  );
 }
 
 async function completeOutboxEvent(id: string) {

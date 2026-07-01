@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
-import { app } from "./app";
 import { env } from "./env";
+import { app } from "./app";
 
 serve({ fetch: app.fetch, hostname: env.HOST, port: env.PORT }, (info) => {
   console.log(`Planisfy tile-worker listening on ${env.HOST}:${info.port}`);

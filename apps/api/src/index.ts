@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
-import { app } from "./app";
 import { env } from "./env";
+import { app } from "./app";
 import { logger } from "./shared/logging/logger";
 
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {

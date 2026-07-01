@@ -1,5 +1,6 @@
 import { Queue, Worker } from "bullmq";
 import Redis from "ioredis";
+import { env, redisConnection } from "./env";
 import {
   isQueueStateActive,
   reconcileStaleProcessingJobs,
@@ -8,7 +9,6 @@ import {
   SOURCE_PROCESSING_QUEUE_NAME,
   WORKER_GEODATA_HEARTBEAT_KEY,
 } from "@planisfy/geodata-contracts";
-import { env, redisConnection } from "./env";
 import { startOutboxDispatcher } from "./domains/outbox/outbox-dispatcher";
 import { processSourceJob, type SourceProcessingJob } from "./domains/sources/source-worker";
 import {

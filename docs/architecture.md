@@ -21,7 +21,7 @@ Important packages include `@planisfy/auth`, `@planisfy/database`, `@planisfy/en
 
 ## Data Flow
 
-1. Console creates resources through Hono console routes or colocated server code that uses shared database helpers.
+1. Console creates resources through Hono console routes and its local API client. Admin-only operator workflows may use colocated server code with shared database helpers.
 2. Uploads and imports create `processing_jobs`, `storage_objects`, and `event_outbox` rows.
 3. The geodata worker claims outbox events, dispatches BullMQ work, invokes DuckDB/GDAL/Tippecanoe as needed, writes artifacts to local/S3/R2 storage, and updates job status.
 4. Published style and tileset routes read publication state from PostgreSQL and artifacts from the configured storage backend. When `TILE_DELIVERY_MODE=worker`, API tile and tilequery routes proxy published PMTiles reads to `apps/tile-worker` while keeping TileJSON URLs stable.
@@ -31,5 +31,5 @@ Important packages include `@planisfy/auth`, `@planisfy/database`, `@planisfy/en
 
 - Pure contract packages should not import database, Redis, HTTP, filesystem, or provider SDK code.
 - API and workers may import database and provider packages.
-- Next.js apps should compose shared UI and API/database helpers rather than duplicating backend rules.
+- User-facing Next.js apps should compose shared UI and published API contracts/clients rather than importing backend internals. Admin may use database helpers for internal control-plane workflows.
 - Worker images can carry heavy geodata tools; the API image should stay focused on request handling.
