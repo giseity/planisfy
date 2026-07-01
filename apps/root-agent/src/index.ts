@@ -64,6 +64,7 @@ const envSchema = z.object({
 
 const config = envSchema.parse(process.env);
 const apiBase = config.PLANISFY_API_URL.replace(/\/$/, "");
+const runtimeServiceAttempts = Math.max(10, config.ROOT_AGENT_UPLOAD_RETRIES);
 const capabilities = config.ROOT_AGENT_CAPABILITIES.split(",")
   .map((item) => item.trim())
   .filter(Boolean);
@@ -668,8 +669,16 @@ async function restartRuntimeServices(
     throw new Error("Runtime supervisor is required for activation");
   }
   for (const service of services) {
-    const restarted = await supervisorPost(service, "restart");
-    const health = await supervisorPost(service, "health");
+    const restarted = await withRetry(
+      () => supervisorPost(service, "restart"),
+      `restart ${service} runtime service`,
+      runtimeServiceAttempts,
+    );
+    const health = await withRetry(
+      () => supervisorPost(service, "health"),
+      `check ${service} runtime service health`,
+      runtimeServiceAttempts,
+    );
     if (isSupervisorUnhealthy(health)) {
       throw new Error(`Runtime supervisor reported ${service} unhealthy after restart`);
     }
