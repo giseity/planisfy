@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import {
   copyFile,
+  link,
   lstat,
   mkdir,
   readFile,
@@ -539,8 +540,10 @@ async function activateRoutingGraph(
   }
   const activationDir = join(config.ROOT_AGENT_WORK_DIR, "activation", build.id);
   const artifactPath = join(activationDir, graph.fileName);
-  const extractDir = join(activationDir, "extract");
+  const legacyExtractDir = join(activationDir, "extract");
+  const extractDir = join(dirname(config.ROOT_AGENT_VALHALLA_DATA_DIR), ".incoming", build.id);
   try {
+    await rm(legacyExtractDir, { recursive: true, force: true });
     await rm(extractDir, { recursive: true, force: true });
     await mkdir(extractDir, { recursive: true });
     await downloadArtifact(token, graph.id, artifactPath, graph.size ?? undefined);
@@ -570,6 +573,7 @@ async function activateRoutingGraph(
         valhallaReleaseDir: releaseDir,
       },
     });
+    await cleanupActivationWork(token, build.id, activationDir);
   } catch (err) {
     await updateActivation(token, build.id, "failed", "Routing graph activation failed", {
       errorMessage: err instanceof Error ? err.message : String(err),
@@ -610,7 +614,7 @@ async function activateBasemap(
       }
     }
     await copyFileAtomic(artifactPath, versionedPath);
-    await copyFileAtomic(artifactPath, stablePath);
+    await linkFileAtomic(versionedPath, stablePath);
     await restartRuntimeServices(token, build.id, ["martin"]);
     await updateActivation(token, build.id, "active", "Basemap artifact activated", {
       output: {
@@ -621,6 +625,7 @@ async function activateBasemap(
         martinPathVersioned: versionedPath,
       },
     });
+    await cleanupActivationWork(token, build.id, activationDir);
   } catch (err) {
     await updateActivation(token, build.id, "failed", "Basemap activation failed", {
       errorMessage: err instanceof Error ? err.message : String(err),
@@ -715,6 +720,21 @@ async function installReleaseDirectory(from: string, activePath: string, release
   await movePathIfExists(activePath, previousPath);
   await symlink(join(".releases", releaseId), activePath, "dir");
   return releaseDir;
+}
+
+async function cleanupActivationWork(token: string, buildId: string, activationDir: string) {
+  void token;
+  void buildId;
+  try {
+    await rm(activationDir, { recursive: true, force: true });
+    console.log(`[root-agent] cleaned activation work directory ${activationDir}`);
+  } catch (err) {
+    console.warn(
+      `[root-agent] activation work directory cleanup failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
 }
 
 async function writeValhallaConfig(buildDir: string) {
@@ -1178,6 +1198,18 @@ async function copyFileAtomic(from: string, to: string) {
   const tmp = `${to}.tmp-${Date.now()}`;
   await copyFile(from, tmp);
   await rename(tmp, to);
+}
+
+async function linkFileAtomic(from: string, to: string) {
+  const tmp = `${to}.tmp-${Date.now()}`;
+  try {
+    await rm(tmp, { force: true });
+    await link(from, tmp);
+    await rename(tmp, to);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw err;
+  }
 }
 
 function planetilerExtraArgs(configValue: Record<string, unknown>) {
