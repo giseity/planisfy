@@ -44,6 +44,7 @@ const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
   routingGraphBuilds: [],
   basemapBuilds: [],
   basemapReleases: [],
+  runtimeInstallations: [],
   previewLinks: [],
   customDomains: [],
   workflowTemplates: [],

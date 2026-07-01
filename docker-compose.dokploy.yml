@@ -54,8 +54,8 @@ x-api-env: &api-env
   DEMO_PMTILES_PATH: ${DEMO_PMTILES_PATH:-}
   TILE_DELIVERY_MODE: api
   TILE_WORKER_URL: ''
-  MARTIN_URL: http://127.0.0.1:3005
-  VALHALLA_URL: http://127.0.0.1:3007
+  MARTIN_URL: http://martin:3000
+  VALHALLA_URL: http://valhalla:8002
   PELIAS_URL: http://127.0.0.1:3100
   GLYPHS_URL: https://api.planisfy.com/fonts
   STATIC_MAP_URL: http://static-renderer:4300
@@ -323,8 +323,10 @@ services:
     environment:
       PORT: 8080
       HOST: 0.0.0.0
-      ELEVATION_DEM_DIR: /data/elevation
+      ELEVATION_DEM_DIR: /data/elevation/active
       NODE_ENV: production
+    volumes:
+      - elevation-data:/data/elevation:ro
     networks:
       - planisfy-internal
 
@@ -344,6 +346,90 @@ services:
     networks:
       - planisfy-internal
 
+  martin:
+    image: ${MARTIN_IMAGE:-ghcr.io/maplibre/martin:v0.13.0}
+    restart: unless-stopped
+    environment:
+      MARTIN_CONFIG: /config/config.yaml
+    volumes:
+      - ./infra/docker/configs/martin-runtime.yaml:/config/config.yaml:ro
+      - martin-sources:/data:ro
+    command: ['--config', '/config/config.yaml']
+    networks:
+      - planisfy-internal
+
+  valhalla:
+    image: ${VALHALLA_IMAGE:-ghcr.io/valhalla/valhalla:3.7.0}
+    restart: unless-stopped
+    environment:
+      RUN_MODES: auto
+      USE_TLS: 'false'
+      BUILD_EGRESS: 'false'
+    volumes:
+      - valhalla-data:/custom_files
+      - ./infra/docker/configs/valhalla.json:/etc/valhalla/valhalla.json:ro
+    command: ['valhalla_service', '/etc/valhalla/valhalla.json', '1']
+    networks:
+      - planisfy-internal
+
+  runtime-supervisor:
+    build:
+      context: .
+      dockerfile: apps/runtime-supervisor/Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_VERSION: ${APP_VERSION:-dokploy-main}
+      PORT: 4012
+      RUNTIME_SUPERVISOR_TOKEN: ${RUNTIME_SUPERVISOR_TOKEN:?RUNTIME_SUPERVISOR_TOKEN must be set}
+      RUNTIME_SUPERVISOR_DRIVER: docker
+      RUNTIME_SUPERVISOR_MARTIN_HEALTH_URL: http://martin:3000/health
+      RUNTIME_SUPERVISOR_VALHALLA_HEALTH_URL: http://valhalla:8002/status
+      RUNTIME_SUPERVISOR_ELEVATION_HEALTH_URL: http://elevation:8080/api/v1/health
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - martin
+      - valhalla
+      - elevation
+    networks:
+      - planisfy-internal
+
+  root-agent-runtime:
+    build:
+      context: .
+      dockerfile: apps/root-agent/Dockerfile
+    restart: unless-stopped
+    environment:
+      PLANISFY_API_URL: http://api:4000
+      ROOT_AGENT_TOKEN: ${RUNTIME_ROOT_AGENT_TOKEN:-}
+      ROOT_AGENT_REGISTRATION_TOKEN: ${RUNTIME_ROOT_AGENT_REGISTRATION_TOKEN:-}
+      ROOT_AGENT_NAME: ${RUNTIME_ROOT_AGENT_NAME:-managed-runtime-main}
+      ROOT_AGENT_KIND: cloud
+      ROOT_AGENT_CAPABILITIES: managed_runtime_activation
+      ROOT_AGENT_STATE_DIR: /data/state
+      ROOT_AGENT_WORK_DIR: /data/work
+      ROOT_AGENT_VALHALLA_DATA_DIR: /runtime/valhalla/active
+      ROOT_AGENT_ELEVATION_DATA_DIR: /runtime/elevation/active
+      ROOT_AGENT_MARTIN_SOURCES_DIR: /runtime/martin-sources
+      ROOT_AGENT_RUNTIME_SUPERVISOR_URL: http://runtime-supervisor:4012
+      ROOT_AGENT_RUNTIME_SUPERVISOR_TOKEN: ${RUNTIME_SUPERVISOR_TOKEN:?RUNTIME_SUPERVISOR_TOKEN must be set}
+      ROOT_AGENT_POLL_INTERVAL_MS: 5000
+      ROOT_AGENT_UPLOAD_RETRIES: 5
+      ROOT_AGENT_UPLOAD_CONCURRENCY: 4
+    volumes:
+      - root-agent-runtime-state:/data/state
+      - root-agent-runtime-work:/data/work
+      - martin-sources:/runtime/martin-sources
+      - valhalla-data:/runtime/valhalla
+      - elevation-data:/runtime/elevation
+    depends_on:
+      api:
+        condition: service_healthy
+      runtime-supervisor:
+        condition: service_started
+    networks:
+      - planisfy-internal
+
 volumes:
   postgres-data:
     external: true
@@ -351,6 +437,11 @@ volumes:
   redis-data:
     external: true
     name: deploy_redis-data
+  root-agent-runtime-state:
+  root-agent-runtime-work:
+  martin-sources:
+  valhalla-data:
+  elevation-data:
 
 networks:
   planisfy-internal:

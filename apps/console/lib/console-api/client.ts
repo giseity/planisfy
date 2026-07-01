@@ -70,6 +70,7 @@ export type {
   ConsoleProcessingJob,
   ConsoleProfile,
   ConsoleRootAgentRegistrationToken,
+  ConsoleRuntimeInstallation,
   ConsoleRoutingGraphArtifact,
   ConsoleRoutingGraphBuild,
   ConsoleRoutingGraphBuildDetail,

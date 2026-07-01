@@ -176,6 +176,13 @@
       "when": 1782865000000,
       "tag": "0024_build_lifecycle_releases",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1782866000000,
+      "tag": "0025_runtime_installations",
+      "breakpoints": true
     }
   ]
 }

@@ -290,6 +290,25 @@ export interface ConsoleBasemapBuildDetail {
   logs: ConsoleBasemapBuildLog[];
 }
 
+export interface ConsoleRuntimeInstallation {
+  id: string;
+  accountId: string;
+  workerNodeId: string | null;
+  resourceType: "routing_graph" | "basemap" | string;
+  buildId: string | null;
+  artifactId: string | null;
+  releaseId: string | null;
+  status: "installing" | "active" | "failed" | string;
+  runtimePath: string | null;
+  versionedPath: string | null;
+  metadata: Record<string, unknown>;
+  errorMessage: string | null;
+  installedAt: string | null;
+  activatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConsoleRootAgentRegistrationToken {
   token: string;
   expiresAt: string;
@@ -374,6 +393,7 @@ export interface ConsoleOperationsOverview {
   routingGraphBuilds: ConsoleRoutingGraphBuild[];
   basemapBuilds: ConsoleBasemapBuild[];
   basemapReleases: ConsoleBasemapRelease[];
+  runtimeInstallations: ConsoleRuntimeInstallation[];
   previewLinks: ConsolePreviewLink[];
   customDomains: ConsoleCustomDomain[];
   workflowTemplates: ConsoleWorkflowTemplate[];

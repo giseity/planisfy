@@ -19,10 +19,11 @@ In production, `/health/detailed`, `/metrics`, and the root `/setup/preflight` r
 pnpm --filter worker-geodata dev
 ```
 
-Root agents are polling workers for large build and runtime deployment jobs.
-Build workers create artifacts. Serving workers activate artifacts into Valhalla
-or Martin runtimes. A successful build does not imply that the runtime is
-serving the artifact.
+Root agents are polling workers for large build and runtime activation jobs.
+Build workers create artifacts. Serving workers copy selected artifacts to local
+Martin or Valhalla runtime disk, then call `apps/runtime-supervisor` to
+restart and health-check the service. A successful build does not imply that
+the runtime is serving the artifact.
 
 ## Backup And Restore
 
@@ -44,3 +45,7 @@ The bundle captures redacted environment presence, Compose config/status/logs, a
 ## Supervisor
 
 The optional `with-supervisor` profile starts `apps/self-host-supervisor` on `127.0.0.1:4010`. Routes other than `/health` require `SUPERVISOR_TOKEN`. Admin calls it server-side for preflight, backup, apply, rollback, and operation status.
+
+`apps/runtime-supervisor` is separate from the self-host upgrade supervisor. It
+is installed only on serving machines and exposes narrow token-protected
+restart/health operations for Martin, Valhalla, and elevation.

@@ -11,6 +11,7 @@ import {
   basemapReleases,
   rootAgentNodeTokens,
   rootAgentRegistrationTokens,
+  runtimeInstallations,
   routingGraphArtifacts,
   routingGraphBuildLogs,
   routingGraphBuilds,
@@ -440,6 +441,15 @@ rootAgentRoute.post("/root-agent/activations/:id/state", async (c) => {
         .where(eq(basemapReleases.buildId, job.build.id));
     }
   }
+  await recordRuntimeInstallation({
+    accountId: c.get("accountId"),
+    workerNodeId: c.get("workerNodeId"),
+    job,
+    activationStatus: parsed.data.activationStatus,
+    output: parsed.data.output,
+    errorMessage: parsed.data.errorMessage,
+    now,
+  });
   if (parsed.data.message) {
     await appendLog(
       job.build.id,
@@ -823,6 +833,76 @@ async function findActivationForAgent(c: Context<AgentEnv>, buildId: string) {
   return basemapBuild ? { kind: "basemap" as const, build: basemapBuild } : null;
 }
 
+async function recordRuntimeInstallation(params: {
+  accountId: string;
+  workerNodeId: string;
+  job: NonNullable<Awaited<ReturnType<typeof findActivationForAgent>>>;
+  activationStatus: "active" | "failed";
+  output: Record<string, unknown> | undefined;
+  errorMessage: string | undefined;
+  now: Date;
+}) {
+  const output = asRecord(params.output);
+  const [artifact] =
+    params.job.kind === "routing"
+      ? await db
+          .select({ id: routingGraphArtifacts.id })
+          .from(routingGraphArtifacts)
+          .where(
+            and(
+              eq(routingGraphArtifacts.buildId, params.job.build.id),
+              eq(routingGraphArtifacts.status, "available"),
+            ),
+          )
+          .limit(1)
+      : await db
+          .select({ id: basemapArtifacts.id })
+          .from(basemapArtifacts)
+          .where(
+            and(
+              eq(basemapArtifacts.buildId, params.job.build.id),
+              eq(basemapArtifacts.status, "available"),
+            ),
+          )
+          .limit(1);
+  const [release] =
+    params.job.kind === "routing"
+      ? await db
+          .select({ id: routingGraphReleases.id })
+          .from(routingGraphReleases)
+          .where(eq(routingGraphReleases.buildId, params.job.build.id))
+          .limit(1)
+      : await db
+          .select({ id: basemapReleases.id })
+          .from(basemapReleases)
+          .where(eq(basemapReleases.buildId, params.job.build.id))
+          .limit(1);
+  const runtimePath =
+    stringFromRecord(output, "valhallaDataDir") ??
+    stringFromRecord(output, "martinPath") ??
+    stringFromRecord(output, "martinSourcesDir");
+  const versionedPath =
+    stringFromRecord(output, "valhallaReleaseDir") ??
+    stringFromRecord(output, "martinPathVersioned");
+
+  await db.insert(runtimeInstallations).values({
+    accountId: params.accountId,
+    workerNodeId: params.workerNodeId,
+    resourceType: params.job.kind === "routing" ? "routing_graph" : "basemap",
+    buildId: params.job.build.id,
+    artifactId: artifact?.id ?? null,
+    releaseId: release?.id ?? null,
+    status: params.activationStatus === "active" ? "active" : "failed",
+    runtimePath,
+    versionedPath,
+    metadata: output,
+    errorMessage: params.errorMessage ?? null,
+    installedAt: params.activationStatus === "active" ? params.now : null,
+    activatedAt: params.activationStatus === "active" ? params.now : null,
+    updatedAt: params.now,
+  });
+}
+
 async function appendLog(
   buildId: string,
   level: string,
@@ -1153,4 +1233,9 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function stringFromRecord(value: Record<string, unknown>, key: string) {
+  const field = value[key];
+  return typeof field === "string" && field ? field : null;
 }

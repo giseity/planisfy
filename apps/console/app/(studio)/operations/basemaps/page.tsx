@@ -9,6 +9,7 @@ export default function BasemapsOperationsPage() {
     <BasemapsTab
       builds={overview.basemapBuilds}
       releases={overview.basemapReleases}
+      runtimeInstallations={overview.runtimeInstallations}
       nodes={overview.workerNodes}
       onChanged={load}
     />

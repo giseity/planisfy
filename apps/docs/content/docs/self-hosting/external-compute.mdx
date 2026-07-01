@@ -1,13 +1,19 @@
 ---
 title: External Compute
-description: Register polling root agents for routing graph builds.
+description: Register polling root agents for builds and serving activation.
 ---
 
 # External Compute
 
 Planisfy uses polling root agents for external compute. A root agent is a server process that connects outbound to the API, registers as a worker node, polls for work, runs build tooling such as Valhalla or Planetiler, uploads artifacts, and finalizes metadata.
 
-Polling agents are the default because they work behind NAT, firewalls, and VPS private networks. Planisfy does not require inbound webhook endpoints on worker machines for routing builds.
+Polling agents are the default because they work behind NAT, firewalls, and VPS private networks. Planisfy does not require inbound webhook endpoints on worker machines for routing or basemap builds.
+
+Build workers and serving workers are separate roles:
+
+- Build workers produce artifacts and upload them to S3-compatible storage.
+- Serving workers run on the machine that serves Martin or Valhalla. They copy selected artifacts to local runtime disk and activate them.
+- The runtime supervisor is a narrow local service used by serving workers to restart and health-check Martin, Valhalla, and elevation.
 
 ## Machine requirements
 
@@ -54,21 +60,31 @@ ROOT_AGENT_NAME=builder-1
 ROOT_AGENT_KIND=remote
 ROOT_AGENT_STATE_DIR=/var/lib/planisfy/root-agent
 ROOT_AGENT_WORK_DIR=/var/lib/planisfy/root-agent/work
-ROOT_AGENT_CAPABILITIES=valhalla_graph_build,basemap_build,dem_hydration,self_host_activation
+ROOT_AGENT_CAPABILITIES=valhalla_graph_build,basemap_build,dem_hydration
 ROOT_AGENT_POLL_INTERVAL_MS=5000
 ROOT_AGENT_UPLOAD_RETRIES=5
 ROOT_AGENT_UPLOAD_CONCURRENCY=4
 ```
 
-Optional activation settings let the agent install completed artifacts into a local Compose stack and restart affected services:
+Serving workers need activation paths and a runtime supervisor:
 
 ```bash
+ROOT_AGENT_CAPABILITIES=self_host_activation
 ROOT_AGENT_VALHALLA_DATA_DIR=/opt/planisfy/infra/docker/data/valhalla_data
 ROOT_AGENT_ELEVATION_DATA_DIR=/opt/planisfy/infra/docker/data/elevation
 ROOT_AGENT_MARTIN_SOURCES_DIR=/opt/planisfy/infra/docker/data/martin-sources
-ROOT_AGENT_COMPOSE_FILE=/opt/planisfy/infra/docker/docker-compose.yml
-ROOT_AGENT_COMPOSE_ENV_FILE=/opt/planisfy/.env
-ROOT_AGENT_COMPOSE_CWD=/opt/planisfy
+ROOT_AGENT_RUNTIME_SUPERVISOR_URL=http://127.0.0.1:4012
+ROOT_AGENT_RUNTIME_SUPERVISOR_TOKEN=replace-with-local-supervisor-token
+```
+
+Start the runtime supervisor on the serving machine. For Docker Compose installs, it can use the Docker driver and only restart allowlisted runtime services:
+
+```bash
+RUNTIME_SUPERVISOR_TOKEN=replace-with-local-supervisor-token
+RUNTIME_SUPERVISOR_DRIVER=docker
+RUNTIME_SUPERVISOR_MARTIN_HEALTH_URL=http://martin:3000/health
+RUNTIME_SUPERVISOR_VALHALLA_HEALTH_URL=http://valhalla:8002/status
+RUNTIME_SUPERVISOR_ELEVATION_HEALTH_URL=http://elevation:8080/api/v1/health
 ```
 
 Run the agent once to register it:
@@ -127,7 +143,7 @@ A build worker creates artifacts. A serving worker installs an artifact into the
 - Basemap build: OSM PBF to PMTiles through Planetiler.
 - Basemap deployment: PMTiles artifact to `ROOT_AGENT_MARTIN_SOURCES_DIR`, then restart/probe Martin.
 
-Small installs can use one root agent for both roles. Larger installs often use separate build and serving machines.
+Small installs can use one machine for both roles, but it should still run the serving role with a runtime supervisor. Larger installs should use separate build and serving machines.
 
 ## Validate the worker
 

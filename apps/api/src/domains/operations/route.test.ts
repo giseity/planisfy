@@ -39,6 +39,7 @@ test('operationsOverviewSignature ignores volatile display-only fields', () => {
     routingGraphBuilds: [],
     basemapBuilds: [],
     basemapReleases: [],
+    runtimeInstallations: [],
     previewLinks: [],
     customDomains: [],
     workflowTemplates: [
@@ -111,6 +112,7 @@ test('operationsOverviewSignature tracks basemap build and release state', () =>
       },
     ],
     previewLinks: [],
+    runtimeInstallations: [],
     customDomains: [],
     workflowTemplates: [],
     workerHealth: { status: 'healthy', message: 'ok', latencyMs: 1 },
@@ -164,6 +166,20 @@ test('validateServingWorker requires activation capability and config', () => {
       metadata: {
         capabilities: ['self_host_activation'],
         activation: { martinSourcesDir: '/data/martin-sources' },
+      },
+    } as never)?.code,
+    'SERVING_WORKER_SUPERVISOR_REQUIRED'
+  )
+  assert.equal(
+    validateServingWorker({
+      ...baseNode,
+      status: 'healthy',
+      metadata: {
+        capabilities: ['self_host_activation'],
+        activation: {
+          martinSourcesDir: '/data/martin-sources',
+          runtimeSupervisorConfigured: true,
+        },
       },
     } as never),
     null

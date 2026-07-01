@@ -15,6 +15,7 @@
 #   - marketing:  Landing page (port 3000)
 #   - worker:     Geodata processing worker
 #   - supervisor: Local-only self-host upgrade supervisor (optional)
+#   - runtime-supervisor: Local-only serving runtime supervisor (optional)
 #   - postgres:   PostgreSQL database (port 5432)
 #   - redis:      Redis for rate limiting (port 6379)
 #   - martin:     Vector tile server (port 3005)
@@ -335,6 +336,30 @@ services:
       - ../../.env:/app/.env:ro
       - ./data:/app/infra/docker/data
       - ./data/supervisor:/data/supervisor
+    restart: unless-stopped
+    networks:
+      - planisfy-network
+
+  runtime-supervisor:
+    build:
+      context: ../../
+      dockerfile: apps/runtime-supervisor/Dockerfile
+    image: planisfy/runtime-supervisor:${PLANISFY_IMAGE_TAG:-dev}
+    profiles:
+      - with-runtime-supervisor
+    ports:
+      - '127.0.0.1:4012:4012'
+    environment:
+      - PORT=4012
+      - HOST=0.0.0.0
+      - APP_VERSION=${APP_VERSION:-self-host}
+      - RUNTIME_SUPERVISOR_TOKEN=${RUNTIME_SUPERVISOR_TOKEN:-}
+      - RUNTIME_SUPERVISOR_DRIVER=docker
+      - RUNTIME_SUPERVISOR_MARTIN_HEALTH_URL=http://martin:3000/health
+      - RUNTIME_SUPERVISOR_VALHALLA_HEALTH_URL=http://valhalla:8002/status
+      - RUNTIME_SUPERVISOR_ELEVATION_HEALTH_URL=http://elevation:8080/api/v1/health
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:
       - planisfy-network

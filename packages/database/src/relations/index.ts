@@ -27,6 +27,7 @@ import {
   scheduledOperations,
   artifactBackups,
   workerNodes,
+  runtimeInstallations,
   previewLinks,
   customDomains,
   workflowTemplates,
@@ -77,6 +78,7 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   scheduledOperations: many(scheduledOperations),
   artifactBackups: many(artifactBackups),
   workerNodes: many(workerNodes),
+  runtimeInstallations: many(runtimeInstallations),
   previewLinks: many(previewLinks),
   customDomains: many(customDomains),
   workflowTemplates: many(workflowTemplates),
@@ -376,10 +378,22 @@ export const artifactBackupsRelations = relations(artifactBackups, ({ one }) => 
   }),
 }));
 
-export const workerNodesRelations = relations(workerNodes, ({ one }) => ({
+export const workerNodesRelations = relations(workerNodes, ({ one, many }) => ({
   account: one(accounts, {
     fields: [workerNodes.accountId],
     references: [accounts.id],
+  }),
+  runtimeInstallations: many(runtimeInstallations),
+}));
+
+export const runtimeInstallationsRelations = relations(runtimeInstallations, ({ one }) => ({
+  account: one(accounts, {
+    fields: [runtimeInstallations.accountId],
+    references: [accounts.id],
+  }),
+  workerNode: one(workerNodes, {
+    fields: [runtimeInstallations.workerNodeId],
+    references: [workerNodes.id],
   }),
 }));
 

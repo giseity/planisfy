@@ -20,6 +20,7 @@ import {
   processingJobs,
   rootAgentNodeTokens,
   rootAgentRegistrationTokens,
+  runtimeInstallations,
   routingGraphArtifacts,
   routingGraphBuildLogs,
   routingGraphBuilds,
@@ -442,6 +443,7 @@ async function buildOperationsOverview(accountId: string) {
     routingBuilds,
     basemapBuildRows,
     basemapReleaseRows,
+    runtimeInstallationRows,
     previews,
     domains,
     templates,
@@ -499,6 +501,12 @@ async function buildOperationsOverview(accountId: string) {
       .limit(20),
     db
       .select()
+      .from(runtimeInstallations)
+      .where(eq(runtimeInstallations.accountId, accountId))
+      .orderBy(desc(runtimeInstallations.updatedAt))
+      .limit(20),
+    db
+      .select()
       .from(previewLinks)
       .where(and(eq(previewLinks.accountId, accountId), isNull(previewLinks.deletedAt)))
       .orderBy(desc(previewLinks.createdAt)),
@@ -521,6 +529,7 @@ async function buildOperationsOverview(accountId: string) {
     routingGraphBuilds: routingBuilds.map(serializeRoutingGraphBuild),
     basemapBuilds: basemapBuildRows.map(serializeBasemapBuild),
     basemapReleases: basemapReleaseRows,
+    runtimeInstallations: runtimeInstallationRows,
     previewLinks: previews,
     customDomains: domains,
     workflowTemplates: templates,
@@ -606,6 +615,14 @@ export function operationsOverviewSignature(overview: OperationsOverview) {
       updatedAt: release.updatedAt,
       publishedAt: release.publishedAt,
       activatedAt: release.activatedAt,
+    })),
+    runtimeInstallations: overview.runtimeInstallations.map((installation) => ({
+      id: installation.id,
+      resourceType: installation.resourceType,
+      workerNodeId: installation.workerNodeId,
+      status: installation.status,
+      activatedAt: installation.activatedAt,
+      updatedAt: installation.updatedAt,
     })),
     previewLinks: overview.previewLinks.map((link) => ({
       id: link.id,
@@ -2431,6 +2448,13 @@ export function validateServingWorker(node: Awaited<ReturnType<typeof findWorker
       code: 'SERVING_WORKER_ACTIVATION_CONFIG_REQUIRED',
       message:
         'Serving worker must report activation paths before deployment. Restart the root-agent with activation settings configured.',
+    }
+  }
+  if (metadata.activation.runtimeSupervisorConfigured !== true) {
+    return {
+      code: 'SERVING_WORKER_SUPERVISOR_REQUIRED',
+      message:
+        'Serving worker must report a configured runtime supervisor before deployment.',
     }
   }
   return null

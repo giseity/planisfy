@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import {
   api,
+  type ConsoleRuntimeInstallation,
   type ConsoleRoutingGraphBuild,
   type ConsoleRoutingGraphBuildDetail,
   type ConsoleWorkerNode,
@@ -91,10 +92,12 @@ const AOI_PRESETS: AreaOfInterestPreset[] = SOURCE_PRESETS.map((preset) => ({
 
 export function RoutingTab({
   builds,
+  runtimeInstallations,
   nodes,
   onChanged,
 }: {
   builds: ConsoleRoutingGraphBuild[];
+  runtimeInstallations: ConsoleRuntimeInstallation[];
   nodes: ConsoleWorkerNode[];
   onChanged: () => void;
 }) {
@@ -130,6 +133,9 @@ export function RoutingTab({
     (node) =>
       hasCapability(node, "self_host_activation") ||
       hasCapability(node, "managed_runtime_activation"),
+  );
+  const routingInstallations = runtimeInstallations.filter(
+    (installation) => installation.resourceType === "routing_graph",
   );
   const areaOfInterest = useMemo(
     () => draftToAreaOfInterest(areaOfInterestDraft),
@@ -424,7 +430,7 @@ export function RoutingTab({
                   <TableHead>Name</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Progress</TableHead>
-                  <TableHead>Activation</TableHead>
+                  <TableHead>Runtime</TableHead>
                   <TableHead className="w-[172px]" />
                 </TableRow>
               </TableHeader>
@@ -459,7 +465,7 @@ export function RoutingTab({
                                 build.id,
                                 build.activationWorkerNodeId ?? undefined,
                               ),
-                            "Deployment requested",
+                            "Routing graph activation requested",
                             onChanged,
                           )
                         }
@@ -485,6 +491,46 @@ export function RoutingTab({
                 ))}
                 {builds.length === 0 && (
                   <EmptyRow colSpan={5} label="No routing graph builds yet." />
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Runtime Installations</CardTitle>
+            <CardDescription>
+              Routing graph artifacts copied to serving machines for Valhalla.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Worker</TableHead>
+                  <TableHead>Runtime path</TableHead>
+                  <TableHead>Activated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {routingInstallations.map((installation) => (
+                  <TableRow key={installation.id}>
+                    <TableCell>
+                      <StatusBadge status={installation.status} />
+                    </TableCell>
+                    <TableCell>{workerName(nodes, installation.workerNodeId)}</TableCell>
+                    <TableCell className="max-w-[360px] truncate text-xs">
+                      {installation.runtimePath ?? "Not reported"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">
+                      {formatDate(installation.activatedAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!routingInstallations.length && (
+                  <EmptyRow colSpan={4} label="No routing runtime installations yet." />
                 )}
               </TableBody>
             </Table>
@@ -531,4 +577,8 @@ function hasCapability(node: ConsoleWorkerNode, capability: string) {
     ? node.metadata.capabilities
     : [];
   return capabilities.includes(capability);
+}
+
+function workerName(nodes: ConsoleWorkerNode[], id: string | null) {
+  return nodes.find((node) => node.id === id)?.name ?? "Unknown worker";
 }

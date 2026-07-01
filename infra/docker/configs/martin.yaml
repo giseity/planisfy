@@ -4,6 +4,8 @@
 # configured artifact storage, so Martin does not need to watch upload storage
 # or object-store alias prefixes.
 pmtiles:
+  paths:
+    - "/data"
   sources:
     stuttgart-base: "/data/stuttgart.pmtiles"
     planisfy.basic: "/data/stuttgart.pmtiles"

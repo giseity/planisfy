@@ -7,6 +7,7 @@ import {
   type ConsoleBasemapBuild,
   type ConsoleBasemapBuildDetail,
   type ConsoleBasemapRelease,
+  type ConsoleRuntimeInstallation,
   type ConsoleWorkerNode,
 } from "@/lib/api";
 import { docsUrl } from "@/lib/docs-url";
@@ -58,11 +59,13 @@ const SOURCE_PRESETS = [
 export function BasemapsTab({
   builds,
   releases,
+  runtimeInstallations,
   nodes,
   onChanged,
 }: {
   builds: ConsoleBasemapBuild[];
   releases: ConsoleBasemapRelease[];
+  runtimeInstallations: ConsoleRuntimeInstallation[];
   nodes: ConsoleWorkerNode[];
   onChanged: () => void;
 }) {
@@ -81,6 +84,9 @@ export function BasemapsTab({
     (node) =>
       hasCapability(node, "self_host_activation") ||
       hasCapability(node, "managed_runtime_activation"),
+  );
+  const basemapInstallations = runtimeInstallations.filter(
+    (installation) => installation.resourceType === "basemap",
   );
 
   function choosePreset(value: string) {
@@ -285,7 +291,7 @@ export function BasemapsTab({
                   <TableHead>Name</TableHead>
                   <TableHead>Build</TableHead>
                   <TableHead>Progress</TableHead>
-                  <TableHead>Deploy</TableHead>
+                  <TableHead>Runtime</TableHead>
                   <TableHead className="w-[172px]" />
                 </TableRow>
               </TableHeader>
@@ -320,7 +326,7 @@ export function BasemapsTab({
                                 build.id,
                                 build.activationWorkerNodeId ?? undefined,
                               ),
-                            "Basemap deployment requested",
+                            "Basemap activation requested",
                             onChanged,
                           )
                         }
@@ -345,6 +351,46 @@ export function BasemapsTab({
                   </TableRow>
                 ))}
                 {!builds.length && <EmptyRow colSpan={5} label="No basemap builds yet." />}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Runtime Installations</CardTitle>
+            <CardDescription>
+              Basemap artifacts copied to serving machines for Martin.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Worker</TableHead>
+                  <TableHead>Runtime path</TableHead>
+                  <TableHead>Activated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {basemapInstallations.map((installation) => (
+                  <TableRow key={installation.id}>
+                    <TableCell>
+                      <StatusBadge status={installation.status} />
+                    </TableCell>
+                    <TableCell>{workerName(nodes, installation.workerNodeId)}</TableCell>
+                    <TableCell className="max-w-[360px] truncate text-xs">
+                      {installation.runtimePath ?? "Not reported"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs">
+                      {formatDate(installation.activatedAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!basemapInstallations.length && (
+                  <EmptyRow colSpan={4} label="No basemap runtime installations yet." />
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -404,6 +450,10 @@ function hasCapability(node: ConsoleWorkerNode, capability: string) {
     ? node.metadata.capabilities
     : [];
   return capabilities.includes(capability);
+}
+
+function workerName(nodes: ConsoleWorkerNode[], id: string | null) {
+  return nodes.find((node) => node.id === id)?.name ?? "Unknown worker";
 }
 
 function StatusBox({ label, value }: { label: string; value: string }) {

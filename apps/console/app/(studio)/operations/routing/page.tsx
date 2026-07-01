@@ -8,6 +8,7 @@ export default function OperationsRoutingPage() {
   return (
     <RoutingTab
       builds={overview.routingGraphBuilds}
+      runtimeInstallations={overview.runtimeInstallations}
       nodes={overview.workerNodes}
       onChanged={load}
     />

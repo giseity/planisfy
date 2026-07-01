@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import {
   copyFile,
+  lstat,
   mkdir,
   readFile,
   rename,
   rm,
+  symlink,
   stat,
   writeFile,
 } from "node:fs/promises";
@@ -29,7 +31,7 @@ const envSchema = z.object({
   ROOT_AGENT_KIND: z.enum(["local", "remote", "cloud"]).default("remote"),
   ROOT_AGENT_CAPABILITIES: z
     .string()
-    .default("valhalla_graph_build,basemap_build,dem_hydration,self_host_activation"),
+    .default("valhalla_graph_build,basemap_build,dem_hydration"),
   ROOT_AGENT_POLL_INTERVAL_MS: z.coerce.number().int().min(1000).default(5000),
   ROOT_AGENT_WORK_DIR: z.string().default("/var/lib/planisfy/root-agent/work"),
   ROOT_AGENT_VALHALLA_DATA_DIR: z
@@ -48,6 +50,8 @@ const envSchema = z.object({
   ROOT_AGENT_COMPOSE_FILE: z.string().optional(),
   ROOT_AGENT_COMPOSE_ENV_FILE: z.string().optional(),
   ROOT_AGENT_COMPOSE_CWD: z.string().optional(),
+  ROOT_AGENT_RUNTIME_SUPERVISOR_URL: z.string().url().optional(),
+  ROOT_AGENT_RUNTIME_SUPERVISOR_TOKEN: z.string().optional(),
   ROOT_AGENT_UPLOAD_RETRIES: z.coerce.number().int().min(1).default(5),
   ROOT_AGENT_UPLOAD_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
 });
@@ -57,6 +61,18 @@ const apiBase = config.PLANISFY_API_URL.replace(/\/$/, "");
 const capabilities = config.ROOT_AGENT_CAPABILITIES.split(",")
   .map((item) => item.trim())
   .filter(Boolean);
+const activationCapable =
+  capabilities.includes("self_host_activation") ||
+  capabilities.includes("managed_runtime_activation");
+
+if (
+  activationCapable &&
+  (!config.ROOT_AGENT_RUNTIME_SUPERVISOR_URL || !config.ROOT_AGENT_RUNTIME_SUPERVISOR_TOKEN)
+) {
+  throw new Error(
+    "Activation-capable root agents require ROOT_AGENT_RUNTIME_SUPERVISOR_URL and ROOT_AGENT_RUNTIME_SUPERVISOR_TOKEN",
+  );
+}
 
 type RoutingGraphBuild = {
   id: string;
@@ -220,6 +236,8 @@ function activationMetadata() {
     valhallaDataDir: config.ROOT_AGENT_VALHALLA_DATA_DIR,
     elevationDataDir: config.ROOT_AGENT_ELEVATION_DATA_DIR,
     martinSourcesDir: config.ROOT_AGENT_MARTIN_SOURCES_DIR,
+    runtimeSupervisorConfigured: Boolean(config.ROOT_AGENT_RUNTIME_SUPERVISOR_URL),
+    runtimeSupervisorUrl: config.ROOT_AGENT_RUNTIME_SUPERVISOR_URL ?? null,
     composeFileConfigured: Boolean(config.ROOT_AGENT_COMPOSE_FILE),
     composeCwd: config.ROOT_AGENT_COMPOSE_CWD ?? null,
   };
@@ -526,19 +544,24 @@ async function activateRoutingGraph(
       }
     }
     await runLogged(token, build.id, "tar", ["-xzf", artifactPath, "-C", extractDir]);
-    await mkdir(dirname(config.ROOT_AGENT_VALHALLA_DATA_DIR), { recursive: true });
-    const previousDir = `${config.ROOT_AGENT_VALHALLA_DATA_DIR}.previous`;
-    await rm(previousDir, { recursive: true, force: true });
-    await renameIfExists(config.ROOT_AGENT_VALHALLA_DATA_DIR, previousDir);
-    await rename(extractDir, config.ROOT_AGENT_VALHALLA_DATA_DIR);
+    const releaseDir = await installReleaseDirectory(
+      extractDir,
+      config.ROOT_AGENT_VALHALLA_DATA_DIR,
+      build.id,
+    );
     if (dem) {
       await activateDemCompanion(token, build.id, dem);
     }
-    await restartComposeServicesIfConfigured(token, build.id, [
+    await restartRuntimeServices(token, build.id, [
       "valhalla",
       ...(dem ? ["elevation"] : []),
     ]);
-    await updateActivation(token, build.id, "active", "Routing graph artifact activated");
+    await updateActivation(token, build.id, "active", "Routing graph artifact activated", {
+      output: {
+        valhallaDataDir: config.ROOT_AGENT_VALHALLA_DATA_DIR,
+        valhallaReleaseDir: releaseDir,
+      },
+    });
   } catch (err) {
     await updateActivation(token, build.id, "failed", "Routing graph activation failed", {
       errorMessage: err instanceof Error ? err.message : String(err),
@@ -579,12 +602,14 @@ async function activateBasemap(
     }
     await copyFileAtomic(artifactPath, versionedPath);
     await copyFileAtomic(artifactPath, stablePath);
-    await restartComposeServicesIfConfigured(token, build.id, ["martin"]);
+    await restartRuntimeServices(token, build.id, ["martin"]);
     await updateActivation(token, build.id, "active", "Basemap artifact activated", {
       output: {
         martinSource: stableSource,
         martinSourceVersioned: versionedSource,
         martinSourcesDir: config.ROOT_AGENT_MARTIN_SOURCES_DIR,
+        martinPath: stablePath,
+        martinPathVersioned: versionedPath,
       },
     });
   } catch (err) {
@@ -611,39 +636,76 @@ async function activateDemCompanion(
     }
   }
   await runLogged(token, buildId, "tar", ["-xzf", artifactPath, "-C", extractDir]);
-  await mkdir(dirname(config.ROOT_AGENT_ELEVATION_DATA_DIR), { recursive: true });
-  const previousDir = `${config.ROOT_AGENT_ELEVATION_DATA_DIR}.previous`;
-  await rm(previousDir, { recursive: true, force: true });
-  await renameIfExists(config.ROOT_AGENT_ELEVATION_DATA_DIR, previousDir);
-  await rename(extractDir, config.ROOT_AGENT_ELEVATION_DATA_DIR);
+  await installReleaseDirectory(extractDir, config.ROOT_AGENT_ELEVATION_DATA_DIR, buildId);
 }
 
-async function restartComposeServicesIfConfigured(
+async function restartRuntimeServices(
   token: string,
   buildId: string,
   services: string[],
 ) {
-  if (!config.ROOT_AGENT_COMPOSE_FILE) {
+  if (!config.ROOT_AGENT_RUNTIME_SUPERVISOR_URL || !config.ROOT_AGENT_RUNTIME_SUPERVISOR_TOKEN) {
     await sendLogs(token, buildId, [
       {
-        level: "warn",
-        message:
-          "ROOT_AGENT_COMPOSE_FILE is not set; activated files but did not restart services.",
+        level: "error",
+        message: "Runtime supervisor is not configured; activated files were not made live.",
       },
     ]);
-    return;
+    throw new Error("Runtime supervisor is required for activation");
   }
-  const args = [
-    "compose",
-    ...(config.ROOT_AGENT_COMPOSE_ENV_FILE
-      ? ["--env-file", config.ROOT_AGENT_COMPOSE_ENV_FILE]
-      : []),
-    "-f",
-    config.ROOT_AGENT_COMPOSE_FILE,
-    "restart",
-    ...services,
-  ];
-  await runLogged(token, buildId, "docker", args);
+  for (const service of services) {
+    const restarted = await supervisorPost(service, "restart");
+    const health = await supervisorPost(service, "health");
+    if (isSupervisorUnhealthy(health)) {
+      throw new Error(`Runtime supervisor reported ${service} unhealthy after restart`);
+    }
+    await sendLogs(token, buildId, [
+      {
+        level: "info",
+        message: `Runtime supervisor restarted ${service}`,
+        metadata: { restart: restarted, health },
+      },
+    ]);
+  }
+}
+
+async function supervisorPost(service: string, action: "restart" | "health") {
+  const response = await fetch(
+    `${config.ROOT_AGENT_RUNTIME_SUPERVISOR_URL}/services/${service}/${action}`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.ROOT_AGENT_RUNTIME_SUPERVISOR_TOKEN}`,
+      },
+    },
+  );
+  const body = (await response.json().catch(() => ({}))) as { data?: unknown; error?: unknown };
+  if (!response.ok) {
+    throw new Error(`Runtime supervisor ${service}/${action} failed: ${response.status}`);
+  }
+  return body.data ?? body;
+}
+
+function isSupervisorUnhealthy(value: unknown) {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "healthy" in value &&
+    (value as { healthy?: unknown }).healthy === false
+  );
+}
+
+async function installReleaseDirectory(from: string, activePath: string, releaseId: string) {
+  const releasesRoot = join(dirname(activePath), ".releases");
+  const releaseDir = join(releasesRoot, releaseId);
+  const previousPath = `${activePath}.previous`;
+  await mkdir(releasesRoot, { recursive: true });
+  await rm(releaseDir, { recursive: true, force: true });
+  await rename(from, releaseDir);
+  await rm(previousPath, { recursive: true, force: true });
+  await movePathIfExists(activePath, previousPath);
+  await symlink(join(".releases", releaseId), activePath, "dir");
+  return releaseDir;
 }
 
 async function writeValhallaConfig(buildDir: string) {
@@ -945,7 +1007,7 @@ async function cancelRequested(token: string, id: string) {
 async function sendLogs(
   token: string,
   buildId: string,
-  entries: Array<{ level: string; message: string }>,
+  entries: Array<{ level: string; message: string; metadata?: unknown }>,
 ) {
   const filtered = entries.filter((entry) => entry.message.trim());
   if (!filtered.length) return;
@@ -1044,12 +1106,12 @@ async function writeJson(path: string, data: unknown) {
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
-async function renameIfExists(from: string, to: string) {
+async function movePathIfExists(from: string, to: string) {
   try {
-    await stat(from);
+    await lstat(from);
     await rename(from, to);
   } catch {
-    // Missing active graph is acceptable for first activation.
+    // Missing active runtime data is acceptable for first activation.
   }
 }
 

@@ -1,0 +1,11 @@
+# Martin runtime configuration for activated basemap artifacts.
+
+pmtiles:
+  paths:
+    - "/data"
+
+server:
+  listen_address: "0.0.0.0:3000"
+  cors:
+    allowed_origins: ["*"]
+  cache_control_max_age: 604800

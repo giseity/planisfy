@@ -419,6 +419,41 @@ export const rootAgentNodeTokens = pgTable(
   ],
 );
 
+export const runtimeInstallations = pgTable(
+  "runtime_installations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    workerNodeId: uuid("worker_node_id").references(() => workerNodes.id, {
+      onDelete: "set null",
+    }),
+    resourceType: varchar("resource_type", { length: 64 }).notNull(),
+    buildId: uuid("build_id"),
+    artifactId: uuid("artifact_id"),
+    releaseId: uuid("release_id"),
+    status: varchar("status", { length: 32 }).notNull().default("installing"),
+    runtimePath: text("runtime_path"),
+    versionedPath: text("versioned_path"),
+    metadata: jsonb("metadata").notNull().default({}),
+    errorMessage: text("error_message"),
+    installedAt: timestamp("installed_at", { withTimezone: true }),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("runtime_installations_account_idx").on(table.accountId),
+    index("runtime_installations_worker_idx").on(table.workerNodeId),
+    index("runtime_installations_resource_idx").on(table.resourceType, table.status),
+  ],
+);
+
 export const routingGraphBuilds = pgTable(
   "routing_graph_builds",
   {
