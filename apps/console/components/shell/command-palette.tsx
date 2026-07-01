@@ -13,7 +13,10 @@ import {
   CommandShortcut,
 } from "@planisfy/ui/components/command"
 import { Button } from "@planisfy/ui/components/button"
-import { consoleNavGroups } from "@/lib/console-navigation"
+import { filterConsoleNavGroups } from "@/lib/console-navigation"
+import { api } from "@/lib/api"
+import type { BillingInfo } from "@/features/settings/model"
+import type { DeploymentMode } from "@/lib/deployment-mode"
 import { Database, KeyRound, Palette, Search, Upload } from "lucide-react"
 
 const workflowItems = [
@@ -98,16 +101,25 @@ export function CommandPaletteContent({
   onSelect?: () => void
 }) {
   const router = useRouter()
+  const [deploymentMode, setDeploymentMode] = useState<DeploymentMode | null>(null)
+
+  useEffect(() => {
+    api
+      .get<BillingInfo>("/billing")
+      .then((billing) => setDeploymentMode(billing.deploymentMode))
+      .catch(() => setDeploymentMode(null))
+  }, [])
+
   const navGroups = useMemo(
     () =>
-      consoleNavGroups.map((group) => ({
+      filterConsoleNavGroups(deploymentMode).map((group) => ({
         ...group,
         items: group.items.map((item) => ({
           ...item,
           keywords: `${group.label} ${item.label} ${item.href}`,
         })),
       })),
-    [],
+    [deploymentMode],
   )
 
   function go(href: string) {

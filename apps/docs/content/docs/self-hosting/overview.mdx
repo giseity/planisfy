@@ -18,7 +18,7 @@ Binary map data is not committed. Place PMTiles, fonts, Valhalla graph data, DEM
 `DEPLOYMENT_MODE=self_host` keeps the same application code and public API shapes as managed Planisfy, but changes ownership boundaries:
 
 - You operate Postgres, Redis, storage, geospatial engines, backups, upgrades, and observability.
-- Hosted checkout, billing portal, and managed subscription feature gates are disabled. Billing screens show usage and limits for visibility.
+- Hosted checkout, billing portal, managed subscription feature gates, and hosted plan quotas are disabled. Billing screens show usage for visibility.
 - Self-host deployments should use S3-compatible object storage, usually the bundled MinIO profile. Local filesystem storage is only a development or small-artifact fallback.
 - External compute uses polling root agents. Root agents connect outbound to the API, receive jobs, upload artifacts directly to object storage when supported, then finalize metadata through the API.
 

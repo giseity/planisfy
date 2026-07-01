@@ -307,6 +307,8 @@ export async function getUserPlan(userId: string): Promise<PlanSlug> {
 }
 
 export async function getAccountPlanLimits(accountId: string): Promise<PlanLimits> {
+  if (env.DEPLOYMENT_MODE === 'self_host') return PLANS.platform
+
   const plan = await getAccountPlan(accountId)
   return (await getPlanDefinition(plan)).limits
 }

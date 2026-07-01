@@ -283,6 +283,9 @@ test('setup preflight reports blocking managed readiness without R2, Dodo, or Ze
     assert.equal(checks.get('storage')?.status, 'fail')
     assert.equal(checks.get('email')?.severity, 'required')
     assert.equal(checks.get('billing')?.severity, 'required')
+    assert.equal(checks.has('root-agent-api'), false)
+    assert.equal(checks.has('root-agent-storage-mode'), false)
+    assert.equal(checks.has('upgrade-release-manifest'), false)
 
     const capabilities = new Map(
       body.data?.capabilities?.map((capability) => [capability.id, capability])

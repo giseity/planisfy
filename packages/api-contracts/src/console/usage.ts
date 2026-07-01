@@ -22,6 +22,7 @@ export const usageSummarySchema = z.object({
   totalRequests: z.number(),
   totalUnits: z.number(),
   activeApiKeys: z.number(),
+  deploymentMode: z.enum(["self_host", "managed"]),
   plan: z.object({
     id: z.string(),
     name: z.string(),

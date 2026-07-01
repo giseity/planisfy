@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { cn } from '@planisfy/ui/lib/utils'
 import { CommandPalette } from '@/components/shell/command-palette'
@@ -24,7 +25,14 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@planisfy/ui/components/sidebar'
-import { consoleBreadcrumbs, consoleNavGroups, isConsoleNavActive } from '@/lib/console-navigation'
+import {
+  consoleBreadcrumbs,
+  filterConsoleNavGroups,
+  isConsoleNavActive,
+} from '@/lib/console-navigation'
+import { api } from '@/lib/api'
+import type { BillingInfo } from '@/features/settings/model'
+import type { DeploymentMode } from '@/lib/deployment-mode'
 
 export function StudioShell({
   children,
@@ -34,6 +42,7 @@ export function StudioShell({
   defaultSidebarOpen: boolean
 }) {
   const pathname = usePathname()
+  const deploymentMode = useConsoleDeploymentMode()
 
   // Hide nav on the style editor page (full-screen)
   const isEditor = /^\/styles\/[^/]+$/.test(pathname)
@@ -41,15 +50,18 @@ export function StudioShell({
 
   return (
     <SidebarProvider defaultOpen={defaultSidebarOpen}>
-      <ConsoleSidebar pathname={pathname} />
+      <ConsoleSidebar pathname={pathname} deploymentMode={deploymentMode} />
       <SidebarInset>
         <AppShellHeader>
           <SidebarMobile title="Console navigation">
-            <ConsoleSidebarContent pathname={pathname} />
+            <ConsoleSidebarContent pathname={pathname} deploymentMode={deploymentMode} />
           </SidebarMobile>
           <SidebarTrigger className="-ml-1 hidden md:inline-flex" />
           <Separator orientation="vertical" className="hidden data-vertical:h-4 md:block" />
-          <RouteBreadcrumbs items={consoleBreadcrumbs(pathname)} LinkComponent={Link} />
+          <RouteBreadcrumbs
+            items={consoleBreadcrumbs(pathname, deploymentMode)}
+            LinkComponent={Link}
+          />
           <div className="ml-auto flex items-center gap-2">
             <CommandPalette />
             <ThemeToggle />
@@ -64,22 +76,36 @@ export function StudioShell({
   )
 }
 
-function ConsoleSidebar({ pathname }: { pathname: string }) {
+function ConsoleSidebar({
+  pathname,
+  deploymentMode,
+}: {
+  pathname: string
+  deploymentMode: DeploymentMode | null
+}) {
   return (
     <Sidebar variant="inset" collapsible="icon">
-      <ConsoleSidebarContent pathname={pathname} />
+      <ConsoleSidebarContent pathname={pathname} deploymentMode={deploymentMode} />
     </Sidebar>
   )
 }
 
-function ConsoleSidebarContent({ pathname }: { pathname: string }) {
+function ConsoleSidebarContent({
+  pathname,
+  deploymentMode,
+}: {
+  pathname: string
+  deploymentMode: DeploymentMode | null
+}) {
+  const navGroups = filterConsoleNavGroups(deploymentMode)
+
   return (
     <>
       <SidebarHeader>
         <NavAccountSwitcher />
       </SidebarHeader>
       <SidebarContent>
-        {consoleNavGroups.map((group) => (
+        {navGroups.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarMenu>
@@ -111,4 +137,17 @@ function ConsoleSidebarContent({ pathname }: { pathname: string }) {
       </SidebarFooter>
     </>
   )
+}
+
+function useConsoleDeploymentMode() {
+  const [deploymentMode, setDeploymentMode] = useState<DeploymentMode | null>(null)
+
+  useEffect(() => {
+    api
+      .get<BillingInfo>('/billing')
+      .then((billing) => setDeploymentMode(billing.deploymentMode))
+      .catch(() => setDeploymentMode(null))
+  }, [])
+
+  return deploymentMode
 }

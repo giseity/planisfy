@@ -19,4 +19,4 @@ Rate-limit failures return `429 RATE_LIMITED`. Monthly quota failures return `42
 
 In managed Planisfy, hosted subscription plans also gate features such as audit logs, operations controls, routing builds, external root agents, and planet-scale builds.
 
-In self-host mode, hosted checkout and managed subscription gates are disabled. Usage and limits are still shown in Console and API responses so operators can monitor load and decide whether to enforce their own policies outside the built-in hosted billing workflow.
+In self-host mode, hosted checkout and managed subscription gates are disabled. Usage remains visible for operational monitoring, while hosted plan quotas use the platform allowance instead of blocking self-host operators. Apply custom limits outside the built-in hosted billing workflow if your deployment needs them.

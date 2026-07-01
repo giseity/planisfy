@@ -6,6 +6,7 @@ import {
   usageLogsQuerySchema,
 } from "@planisfy/api-contracts";
 import type { AuthEnv } from "../../middleware/auth";
+import { env } from "../../env";
 import {
   getAccountPlan,
   getAccountPlanLimits,
@@ -93,6 +94,7 @@ usageRoute.get("/usage/summary", async (c) => {
       totalRequests: currentMonth?.totalRequests ?? 0,
       totalUnits,
       activeApiKeys: keysCount?.count ?? 0,
+      deploymentMode: env.DEPLOYMENT_MODE,
       plan: {
         id: plan,
         name: PLANS[plan]?.name ?? PLANS.free.name,

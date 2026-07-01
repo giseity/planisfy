@@ -3,6 +3,7 @@ import test from "node:test";
 import { Hono } from "hono";
 import type { AuthEnv } from "../../middleware/auth";
 import { billingRoute, serializeBillingTransaction } from "./route";
+import { getAccountPlanLimits, PLANS } from "./billing";
 
 test("serializeBillingTransaction returns local Dodo ledger fields", () => {
   const createdAt = new Date("2026-06-15T10:00:00.000Z");
@@ -101,6 +102,21 @@ test("self-host billing exposes read-only hosted billing actions", async () => {
       409,
     );
     assert.equal((await app.request("/billing/portal")).status, 409);
+  } finally {
+    if (previousMode === undefined) {
+      delete process.env.DEPLOYMENT_MODE;
+    } else {
+      process.env.DEPLOYMENT_MODE = previousMode;
+    }
+  }
+});
+
+test("self-host account limits use the platform allowance", async () => {
+  const previousMode = process.env.DEPLOYMENT_MODE;
+  process.env.DEPLOYMENT_MODE = "self_host";
+
+  try {
+    assert.deepEqual(await getAccountPlanLimits("account-1"), PLANS.platform);
   } finally {
     if (previousMode === undefined) {
       delete process.env.DEPLOYMENT_MODE;

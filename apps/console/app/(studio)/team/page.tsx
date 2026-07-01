@@ -73,6 +73,7 @@ import {
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import type { BillingInfo } from "@/features/settings/model"
+import { allowsHostedUpgradePrompts } from "@/lib/deployment-mode"
 
 interface OrgData {
   id: string
@@ -171,7 +172,7 @@ export default function TeamPage() {
     )
   }
 
-  if (billing?.plan === "free") {
+  if (billing?.plan === "free" && allowsHostedUpgradePrompts(billing.deploymentMode)) {
     return (
       <div className="flex min-h-[360px] items-center justify-center rounded-lg border">
         <div className="text-center">

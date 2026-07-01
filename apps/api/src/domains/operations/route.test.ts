@@ -24,6 +24,7 @@ test('formatSseEvent emits EventSource-compatible frames', () => {
 
 test('operationsOverviewSignature ignores volatile display-only fields', () => {
   const overview = {
+    deploymentMode: 'self_host',
     recentJobs: [
       {
         id: 'job-1',
@@ -83,6 +84,7 @@ test('operationsOverviewSignature ignores volatile display-only fields', () => {
 
 test('operationsOverviewSignature tracks basemap build and release state', () => {
   const overview = {
+    deploymentMode: 'self_host',
     recentJobs: [],
     notificationChannels: [],
     scheduledOperations: [],

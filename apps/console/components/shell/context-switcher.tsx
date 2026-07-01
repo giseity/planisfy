@@ -27,6 +27,7 @@ import { Building2, ChevronDown, Plus, User } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { BillingInfo } from "@/features/settings/model";
+import { allowsHostedUpgradePrompts } from "@/lib/deployment-mode";
 
 interface OrgItem {
   id: string;
@@ -149,7 +150,7 @@ export function ContextSwitcher() {
             </>
           )}
           <DropdownMenuSeparator />
-          {billing?.plan !== "free" ? (
+          {billing?.plan !== "free" || !allowsHostedUpgradePrompts(billing?.deploymentMode) ? (
             <DropdownMenuItem onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Create organization

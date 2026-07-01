@@ -1,5 +1,6 @@
 import type { ConsoleProcessingJob } from "./resources";
 import type { ConsoleAreaOfInterest } from "./aoi";
+import type { DeploymentMode } from "@planisfy/platform-policy";
 
 export interface ConsoleNotificationChannel {
   id: string;
@@ -385,6 +386,7 @@ export interface ConsoleStaleJobReconciliationRun {
 }
 
 export interface ConsoleOperationsOverview {
+  deploymentMode: DeploymentMode;
   recentJobs: ConsoleProcessingJob[];
   notificationChannels: ConsoleNotificationChannel[];
   scheduledOperations: ConsoleScheduledOperation[];

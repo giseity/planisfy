@@ -521,6 +521,7 @@ async function buildOperationsOverview(accountId: string) {
   ])
 
   return {
+    deploymentMode: env.DEPLOYMENT_MODE,
     recentJobs,
     notificationChannels: channels.map(stripNotificationSecrets),
     scheduledOperations: schedules,
@@ -557,6 +558,7 @@ function isPlanetScaleRoutingBuild(
 
 export function operationsOverviewSignature(overview: OperationsOverview) {
   return JSON.stringify({
+    deploymentMode: overview.deploymentMode,
     recentJobs: overview.recentJobs.map((job) => ({
       id: job.id,
       status: job.status,

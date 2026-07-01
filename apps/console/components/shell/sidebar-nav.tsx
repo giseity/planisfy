@@ -9,6 +9,7 @@ import {
 } from '@/lib/profile-avatar-events'
 import { api } from '@/lib/api'
 import type { BillingInfo } from '@/features/settings/model'
+import { allowsHostedUpgradePrompts } from '@/lib/deployment-mode'
 import { normalizeConsoleUrl } from '@/lib/console-api/normalizers'
 import { cn } from '@planisfy/ui/lib/utils'
 import { Button } from '@planisfy/ui/components/button'
@@ -259,7 +260,7 @@ export function NavAccountSwitcher() {
             </>
           )}
           <DropdownMenuSeparator />
-          {billing?.plan !== 'free' ? (
+          {billing?.plan !== 'free' || !allowsHostedUpgradePrompts(billing?.deploymentMode) ? (
             <DropdownMenuItem onSelect={() => setCreateOpen(true)}>
               <Plus className="mr-2 size-4" />
               Create organization

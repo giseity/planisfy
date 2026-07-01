@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import { Badge } from '@planisfy/ui/components/badge'
 import {
   Card,
@@ -14,7 +17,9 @@ import {
   PageTitle,
 } from '@planisfy/ui/components/page-header'
 import { StatusAlert } from '@planisfy/ui/components/status-alert'
-import { Database, HardDrive, Info, Mail, Server, Shield } from 'lucide-react'
+import { Cloud, Database, HardDrive, Info, Mail, Server, Shield } from 'lucide-react'
+import { api } from '@/lib/api'
+import type { BillingInfo } from '@/features/settings/model'
 
 const envGroups = [
   {
@@ -157,6 +162,19 @@ const envGroups = [
 ]
 
 export default function EnvironmentPage() {
+  const [deploymentMode, setDeploymentMode] = useState<BillingInfo['deploymentMode'] | null>(null)
+
+  useEffect(() => {
+    api
+      .get<BillingInfo>('/billing')
+      .then((billing) => setDeploymentMode(billing.deploymentMode))
+      .catch(() => setDeploymentMode(null))
+  }, [])
+
+  if (deploymentMode === 'managed') {
+    return <ManagedEnvironmentPage />
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader>
@@ -200,6 +218,30 @@ export default function EnvironmentPage() {
           </Card>
         )
       })}
+    </div>
+  )
+}
+
+function ManagedEnvironmentPage() {
+  return (
+    <div className="space-y-5">
+      <PageHeader>
+        <PageHeaderText>
+          <PageTitle>Environment</PageTitle>
+          <PageDescription>
+            Managed deployments are operated by the Planisfy platform.
+          </PageDescription>
+        </PageHeaderText>
+        <PageActions>
+          <Badge variant="success">Managed</Badge>
+        </PageActions>
+      </PageHeader>
+
+      <StatusAlert
+        icon={<Cloud className="h-4 w-4" />}
+        title="Platform-managed configuration"
+        description="Provider credentials, storage buckets, supervisors, and runtime workers are configured by the Planisfy platform. Use Platform readiness for customer-visible service status."
+      />
     </div>
   )
 }

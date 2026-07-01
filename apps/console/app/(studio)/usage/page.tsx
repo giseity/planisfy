@@ -55,6 +55,7 @@ interface UsageSummary {
   totalRequests: number
   totalUnits: number
   activeApiKeys: number
+  deploymentMode: 'self_host' | 'managed'
   plan: {
     id: string
     name: string
@@ -208,6 +209,7 @@ export default function UsagePage() {
   const quotaLimit = summary?.quota.limit ?? null
   const quotaUsed = summary?.quota.used ?? 0
   const quotaPercent = summary?.quota.percent ?? 0
+  const isManaged = summary?.deploymentMode === 'managed'
 
   return (
     <div className="py-8">
@@ -236,9 +238,13 @@ export default function UsagePage() {
             <p className="text-sm font-medium">
               You&apos;ve used {quotaPercent}% of your monthly quota.
             </p>
-            <p className="text-xs text-muted-foreground">Upgrade to avoid service interruption.</p>
+            <p className="text-xs text-muted-foreground">
+              {isManaged
+                ? 'Upgrade to avoid service interruption.'
+                : 'Review local capacity or adjust self-host quotas before traffic is throttled.'}
+            </p>
           </div>
-          <Button size="sm">Upgrade</Button>
+          {isManaged && <Button size="sm">Upgrade</Button>}
         </div>
       )}
 

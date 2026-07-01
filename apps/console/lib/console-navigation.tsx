@@ -15,11 +15,13 @@ import {
   SlidersHorizontal,
   Users,
 } from "lucide-react"
+import type { DeploymentMode } from "@/lib/deployment-mode"
 
 export interface ConsoleNavItem {
   href: string
   label: string
   icon: ComponentType<{ className?: string }>
+  modes?: DeploymentMode[]
   match?: (pathname: string) => boolean
 }
 
@@ -53,7 +55,12 @@ export const consoleNavGroups: ConsoleNavGroup[] = [
     items: [
       { href: "/operations", label: "Operations", icon: ServerCog, match: (pathname) => pathname.startsWith("/operations") },
       { href: "/platform", label: "Platform", icon: SlidersHorizontal, match: (pathname) => pathname === "/platform" },
-      { href: "/platform/environment", label: "Environment", icon: HardDrive },
+      {
+        href: "/platform/environment",
+        label: "Environment",
+        icon: HardDrive,
+        modes: ["self_host"],
+      },
     ],
   },
   {
@@ -73,9 +80,20 @@ export function isConsoleNavActive(item: ConsoleNavItem, pathname: string) {
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
 }
 
-export function consoleBreadcrumbs(pathname: string) {
+export function filterConsoleNavGroups(deploymentMode?: DeploymentMode | null) {
+  return consoleNavGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => !item.modes || (deploymentMode ? item.modes.includes(deploymentMode) : false),
+      ),
+    }))
+    .filter((group) => group.items.length > 0)
+}
+
+export function consoleBreadcrumbs(pathname: string, deploymentMode?: DeploymentMode | null) {
   if (pathname === "/") return [{ label: "Dashboard" }]
-  const allItems = consoleNavGroups.flatMap((group) => group.items)
+  const allItems = filterConsoleNavGroups(deploymentMode).flatMap((group) => group.items)
   const match = allItems
     .filter((item) => item.href !== "/")
     .sort((a, b) => b.href.length - a.href.length)

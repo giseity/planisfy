@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   Activity,
   ArchiveRestore,
@@ -34,8 +34,10 @@ import {
   type ConsoleTileset,
 } from '@/lib/api'
 import { clientEnv } from '@/env.client'
+import type { DeploymentMode } from '@/lib/deployment-mode'
 
 const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
+  deploymentMode: 'self_host',
   recentJobs: [],
   notificationChannels: [],
   scheduledOperations: [],
@@ -56,13 +58,33 @@ const operationRoutes = [
   { href: '/operations/jobs', label: 'Jobs', icon: Activity },
   { href: '/operations/schedules', label: 'Schedules', icon: CalendarClock },
   { href: '/operations/notifications', label: 'Notifications', icon: Bell },
-  { href: '/operations/workers', label: 'Workers', icon: ServerCog },
-  { href: '/operations/routing', label: 'Routing', icon: Route },
-  { href: '/operations/basemaps', label: 'Basemaps', icon: Map },
+  {
+    href: '/operations/workers',
+    label: 'Workers',
+    icon: ServerCog,
+    modes: ['self_host'] as DeploymentMode[],
+  },
+  {
+    href: '/operations/routing',
+    label: 'Routing',
+    icon: Route,
+    modes: ['self_host'] as DeploymentMode[],
+  },
+  {
+    href: '/operations/basemaps',
+    label: 'Basemaps',
+    icon: Map,
+    modes: ['self_host'] as DeploymentMode[],
+  },
   { href: '/operations/backups', label: 'Backups', icon: ArchiveRestore },
   { href: '/operations/delivery', label: 'Delivery', icon: Globe },
   { href: '/operations/templates', label: 'Templates', icon: ClipboardList },
-]
+] satisfies Array<{
+  href: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  modes?: DeploymentMode[]
+}>
 
 interface OperationsContextValue {
   overview: ConsoleOperationsOverview
@@ -197,12 +219,28 @@ export function useOperations() {
 
 function OperationsShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { overview, loading, load } = useOperations()
+  const visibleRoutes = operationRoutes.filter(
+    (route) => !route.modes || route.modes.includes(overview.deploymentMode)
+  )
+  const activeRouteVisible = visibleRoutes.some(
+    (route) =>
+      pathname === route.href ||
+      (pathname === '/operations' && route.href === '/operations/jobs')
+  )
   const activeSchedules = overview.scheduledOperations.filter(
     (schedule) => schedule.status === 'active'
   ).length
 
+  React.useEffect(() => {
+    if (!loading && !activeRouteVisible) {
+      router.replace('/operations/jobs')
+    }
+  }, [activeRouteVisible, loading, router])
+
   if (loading) return <LoadingState label="Loading operations..." />
+  if (!activeRouteVisible) return <LoadingState label="Opening operations..." />
 
   return (
     <div className="space-y-5">
@@ -210,7 +248,9 @@ function OperationsShell({ children }: { children: React.ReactNode }) {
         <PageHeaderText>
           <PageTitle>Operations</PageTitle>
           <PageDescription>
-            Monitor processing, automate rebuilds, validate workers, and manage delivery controls.
+            {overview.deploymentMode === 'managed'
+              ? 'Monitor processing, automate rebuilds, and manage delivery controls.'
+              : 'Monitor processing, automate rebuilds, validate workers, and manage delivery controls.'}
           </PageDescription>
         </PageHeaderText>
         <PageActions>
@@ -222,12 +262,21 @@ function OperationsShell({ children }: { children: React.ReactNode }) {
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          label="Worker"
-          value={overview.workerHealth.status}
-          detail={overview.workerHealth.message}
-          icon={<Activity className="h-4 w-4" />}
-        />
+        {overview.deploymentMode === 'self_host' ? (
+          <MetricCard
+            label="Worker"
+            value={overview.workerHealth.status}
+            detail={overview.workerHealth.message}
+            icon={<Activity className="h-4 w-4" />}
+          />
+        ) : (
+          <MetricCard
+            label="Deployment"
+            value="managed"
+            detail="Runtime workers are platform-operated"
+            icon={<Activity className="h-4 w-4" />}
+          />
+        )}
         <MetricCard
           label="Active schedules"
           value={activeSchedules.toString()}
@@ -249,7 +298,7 @@ function OperationsShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <nav className="flex flex-wrap gap-1 rounded-md bg-muted/20 p-1">
-        {operationRoutes.map((route) => {
+        {visibleRoutes.map((route) => {
           const active =
             pathname === route.href ||
             (pathname === '/operations' && route.href === '/operations/jobs')

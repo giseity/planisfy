@@ -118,7 +118,7 @@ async function buildPreflightChecks(
   const managed = deploymentMode === 'managed'
   const storage = await storageCheck(deploymentMode)
   const productLoopChecks = await buildProductLoopChecks(deploymentMode)
-  const upgradeChecks = await buildUpgradeReadinessChecks(storage)
+  const upgradeChecks = managed ? [] : await buildUpgradeReadinessChecks(storage)
   const valhalla = await valhallaReadinessCheck()
   const starterProductConfigured = Boolean(
     env.DODO_STARTER_MONTHLY_PRODUCT_ID || env.DODO_PRO_PRODUCT_ID
@@ -181,29 +181,7 @@ async function buildPreflightChecks(
       value: env.NEXT_PUBLIC_CONSOLE_URL,
     }),
     storage,
-    check({
-      id: 'root-agent-api',
-      group: 'Operations',
-      label: 'Root-agent API',
-      severity: 'required',
-      ok: true,
-      message: 'Polling root-agent API routes are enabled.',
-    }),
-    check({
-      id: 'root-agent-storage-mode',
-      group: 'Operations',
-      label: 'Root-agent artifact storage',
-      severity: 'recommended',
-      ok: env.STORAGE_PROVIDER !== 'local',
-      warnWhenMissing: true,
-      message:
-        env.STORAGE_PROVIDER === 'local'
-          ? 'Local filesystem storage is a small-artifact fallback and cannot issue direct object-storage upload sessions.'
-          : `${env.STORAGE_PROVIDER.toUpperCase()} storage can support direct root-agent artifact uploads.`,
-      action:
-        'Use S3-compatible MinIO, S3, or R2 storage for regional and planet-scale root-agent artifacts.',
-      value: env.STORAGE_PROVIDER,
-    }),
+    ...rootAgentChecks(deploymentMode),
     ...productLoopChecks,
     ...upgradeChecks,
     check({
@@ -326,6 +304,36 @@ async function buildPreflightChecks(
             ? 'Dodo Payments checkout is partially configured.'
             : 'Billing checkout is disabled.',
       action: 'Set Dodo API key, webhook secret, and product IDs to enable managed billing.',
+    }),
+  ]
+}
+
+function rootAgentChecks(deploymentMode: DeploymentMode): PreflightCheck[] {
+  if (deploymentMode !== 'self_host') return []
+
+  return [
+    check({
+      id: 'root-agent-api',
+      group: 'Operations',
+      label: 'Root-agent API',
+      severity: 'required',
+      ok: true,
+      message: 'Polling root-agent API routes are enabled.',
+    }),
+    check({
+      id: 'root-agent-storage-mode',
+      group: 'Operations',
+      label: 'Root-agent artifact storage',
+      severity: 'recommended',
+      ok: env.STORAGE_PROVIDER !== 'local',
+      warnWhenMissing: true,
+      message:
+        env.STORAGE_PROVIDER === 'local'
+          ? 'Local filesystem storage is a small-artifact fallback and cannot issue direct object-storage upload sessions.'
+          : `${env.STORAGE_PROVIDER.toUpperCase()} storage can support direct root-agent artifact uploads.`,
+      action:
+        'Use S3-compatible MinIO, S3, or R2 storage for regional and planet-scale root-agent artifacts.',
+      value: env.STORAGE_PROVIDER,
     }),
   ]
 }
