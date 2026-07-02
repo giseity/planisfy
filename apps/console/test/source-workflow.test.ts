@@ -5,6 +5,7 @@ import type {
   ConsoleTilesetVersion,
 } from "@/lib/api";
 import { normalizeApiUrl } from "@/lib/api";
+import { normalizeTilesetUrls } from "@/lib/console-api/normalizers";
 import { useStyleStore } from "@/features/style-editor/store/style-store";
 import {
   canRebuildTileset,
@@ -465,6 +466,32 @@ describe("publish URL normalization", () => {
     );
     expect(normalizeApiUrl("https://cdn.example.com/style.json")).toBe(
       "https://cdn.example.com/style.json",
+    );
+  });
+
+  it("normalizes relative artifact download URLs against the console API path", () => {
+    const tileset = normalizeTilesetUrls(
+      tilesetFixture({
+        versions: [
+          versionFixture({
+            artifact: {
+              id: "artifact-1",
+              provider: "r2",
+              bucket: "planisfy",
+              storageKey: "tiles.pmtiles",
+              fileName: "tiles.pmtiles",
+              contentType: "application/octet-stream",
+              size: 100,
+              url: "/console/artifacts/artifact-1/download",
+              availability: { ok: true },
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(tileset.versions[0]?.artifact?.url).toBe(
+      "https://api.planisfy.localhost/console/artifacts/artifact-1/download",
     );
   });
 });

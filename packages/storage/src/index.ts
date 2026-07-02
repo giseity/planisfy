@@ -63,6 +63,12 @@ export interface MultipartUploadSession {
   parts: MultipartUploadPartUrl[];
 }
 
+export interface DownloadUrlOptions {
+  expiresInSeconds?: number;
+  fileName?: string;
+  contentType?: string;
+}
+
 export interface StorageProvider {
   upload(
     key: string,
@@ -89,6 +95,10 @@ export interface StorageProvider {
     parts: Array<{ partNumber: number; eTag: string }>,
   ): Promise<void>;
   abortMultipartUpload?(key: string, uploadId: string): Promise<void>;
+  createDownloadUrl(
+    key: string,
+    options?: DownloadUrlOptions,
+  ): Promise<string>;
   getUrl(key: string): string;
   getInfo(): StorageProviderInfo;
 }
@@ -250,6 +260,23 @@ export class S3Storage implements StorageProvider {
     );
     if (!object.Body) return Buffer.alloc(0);
     return Buffer.from(await object.Body.transformToByteArray());
+  }
+
+  async createDownloadUrl(
+    key: string,
+    options: DownloadUrlOptions = {},
+  ): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ...(options.fileName && {
+        ResponseContentDisposition: `attachment; filename="${safeContentDispositionFileName(options.fileName)}"`,
+      }),
+      ...(options.contentType && { ResponseContentType: options.contentType }),
+    });
+    return getS3SignedUrl(this.client, command, {
+      expiresIn: options.expiresInSeconds ?? 60 * 60,
+    });
   }
 
   async copy(sourceKey: string, targetKey: string): Promise<void> {
@@ -445,6 +472,10 @@ export class LocalStorage implements StorageProvider {
     return Buffer.concat(chunks);
   }
 
+  async createDownloadUrl(key: string): Promise<string> {
+    return this.getUrl(key);
+  }
+
   async copy(sourceKey: string, targetKey: string): Promise<void> {
     const { copyFile } = await import("fs/promises");
     const sourcePath = join(this.basePath, sourceKey);
@@ -549,7 +580,7 @@ function configured(value: string | undefined) {
 
 function getS3SignedUrl(
   client: S3Client,
-  command: UploadPartCommand,
+  command: unknown,
   options: { expiresIn: number },
 ) {
   const signer = getSignedUrl as unknown as (
@@ -558,6 +589,10 @@ function getS3SignedUrl(
     options: { expiresIn: number },
   ) => Promise<string>;
   return signer(client, command, options);
+}
+
+function safeContentDispositionFileName(fileName: string) {
+  return fileName.replace(/["\r\n]/g, "");
 }
 
 function resolveMultipartPartSize(contentLength: number, requested?: number) {

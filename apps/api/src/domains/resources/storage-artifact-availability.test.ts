@@ -81,6 +81,10 @@ class MemoryStorage implements StorageProvider {
     return Buffer.alloc(0);
   }
 
+  async createDownloadUrl(key: string) {
+    return this.getUrl(key);
+  }
+
   async copy() {
     throw new Error("Not implemented");
   }

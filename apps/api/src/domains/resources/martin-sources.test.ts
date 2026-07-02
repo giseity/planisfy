@@ -227,6 +227,10 @@ class MemoryStorage implements StorageProvider {
     return Buffer.from(this.objects.get(key) ?? '', 'utf8').subarray(offset, offset + length)
   }
 
+  async createDownloadUrl(key: string) {
+    return this.getUrl(key)
+  }
+
   async copy(sourceKey: string, targetKey: string) {
     const value = this.objects.get(sourceKey)
     if (value === undefined) throw new Error(`Missing ${sourceKey}`)

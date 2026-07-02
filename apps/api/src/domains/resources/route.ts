@@ -58,6 +58,7 @@ resourcesRoute.use("/jobs/*", requireOrgMutationPermission("resource.write"));
 
 const MAX_UPLOAD_SIZE = 250 * 1024 * 1024;
 const MAX_MULTIPART_UPLOAD_SIZE = MAX_UPLOAD_SIZE + 1024 * 1024;
+const CONSOLE_ARTIFACT_DOWNLOAD_EXPIRES_SECONDS = 10 * 60;
 
 const createTilesetSchema = z.object({
   name: z.string().min(1).max(128),
@@ -1211,11 +1212,50 @@ resourcesRoute.get("/tilesets/:id/artifact", async (c) => {
 
   return c.json({
     data: {
-      url: getStorage().getUrl(object.storageKey),
+      url: consoleArtifactDownloadUrl(object.id),
       storageKey: object.storageKey,
       format: version.format,
     },
   });
+});
+
+resourcesRoute.get("/artifacts/:id/download", async (c) => {
+  const accountId = c.get("ownerId");
+  const id = c.req.param("id");
+
+  const [object] = await db
+    .select()
+    .from(storageObjects)
+    .where(
+      and(
+        eq(storageObjects.id, id),
+        eq(storageObjects.accountId, accountId),
+        isNull(storageObjects.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!object) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Artifact not found" } },
+      404,
+    );
+  }
+
+  const storage = getStorage();
+  const availability = await verifyStorageArtifactAvailable(object, storage);
+  if (!availability.ok) {
+    return c.json(
+      { error: { code: availability.code, message: availability.message } },
+      availability.code === "ARTIFACT_MISSING" ? 404 : 409,
+    );
+  }
+
+  const url = await storage.createDownloadUrl(object.storageKey, {
+    expiresInSeconds: CONSOLE_ARTIFACT_DOWNLOAD_EXPIRES_SECONDS,
+    fileName: object.fileName ?? undefined,
+    contentType: object.contentType ?? undefined,
+  });
+  return c.redirect(url, 302);
 });
 
 async function getOwnerHandle(accountId: string) {
@@ -1275,7 +1315,7 @@ async function fetchArtifactMap(
             fileName: object.fileName,
             contentType: object.contentType,
             size: object.size,
-            url: storage.getUrl(object.storageKey),
+            url: consoleArtifactDownloadUrl(object.id),
             availability: await verifyStorageArtifactAvailable(object, storage),
           },
         ] as const,
@@ -1466,3 +1506,7 @@ type ConsoleArtifact = {
 type ConsoleArtifactAvailability =
   | { ok: true }
   | { ok: false; code: string; message: string };
+
+function consoleArtifactDownloadUrl(storageObjectId: string) {
+  return `/console/artifacts/${storageObjectId}/download`;
+}

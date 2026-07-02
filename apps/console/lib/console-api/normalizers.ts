@@ -3,6 +3,7 @@ import type {
   ConsoleProfile,
   ConsoleSpriteAsset,
   ConsoleTileset,
+  ConsoleTilesetVersion,
 } from "@planisfy/api-contracts";
 import { API_ROOT, CONSOLE_API_BASE } from "./config";
 
@@ -11,6 +12,9 @@ export function normalizeTilesetUrls(tileset: ConsoleTileset): ConsoleTileset {
     ...tileset,
     tilejsonUrl: normalizeApiUrl(tileset.tilejsonUrl),
     versionedTilejsonUrl: normalizeApiUrl(tileset.versionedTilejsonUrl),
+    versions: tileset.versions.map(normalizeTilesetVersionUrls),
+    latestVersion: normalizeNullableTilesetVersionUrls(tileset.latestVersion),
+    currentVersion: normalizeNullableTilesetVersionUrls(tileset.currentVersion),
   };
 }
 
@@ -50,6 +54,25 @@ export function normalizeDashboardUrls(
 export function normalizeApiUrl(url: string | null) {
   if (!url || /^https?:\/\//.test(url)) return url;
   return `${API_ROOT}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
+function normalizeNullableTilesetVersionUrls(
+  version: ConsoleTilesetVersion | null,
+): ConsoleTilesetVersion | null {
+  return version ? normalizeTilesetVersionUrls(version) : null;
+}
+
+function normalizeTilesetVersionUrls(
+  version: ConsoleTilesetVersion,
+): ConsoleTilesetVersion {
+  if (!version?.artifact) return version;
+  return {
+    ...version,
+    artifact: {
+      ...version.artifact,
+      url: normalizeConsoleUrl(version.artifact.url) ?? version.artifact.url,
+    },
+  };
 }
 
 export function normalizeSpriteAssetPreviewUrl(
