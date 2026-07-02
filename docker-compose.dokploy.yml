@@ -177,6 +177,10 @@ services:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-replace-me-github-client-id}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       NEXT_PUBLIC_API_URL: https://api.planisfy.com
       CONSOLE_API_INTERNAL_ORIGIN: http://api:4000
       NEXT_PUBLIC_AUTH_ORIGIN: https://console.planisfy.com
@@ -221,6 +225,10 @@ services:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-replace-me-github-client-id}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       NEXT_PUBLIC_API_URL: https://api.planisfy.com
       NEXT_PUBLIC_AUTH_ORIGIN: https://planisfy.com
       NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
