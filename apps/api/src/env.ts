@@ -40,7 +40,6 @@ const schema = z.object({
   ZEPTOMAIL_FROM_AUTH: emptyableString,
   ZEPTOMAIL_FROM_NOTIFICATIONS: emptyableString,
   DODO_PAYMENTS_API_KEY: emptyableString,
-  DODO_PAYMENTS_API_URL: emptyableUrl,
   DODO_PAYMENTS_ENVIRONMENT: z.enum(['test_mode', 'live_mode']),
   DODO_PAYMENTS_WEBHOOK_SECRET: emptyableString,
   DODO_PAYMENTS_BRAND_ID: optionalEmptyableString,
@@ -48,8 +47,6 @@ const schema = z.object({
   DODO_STARTER_YEARLY_PRODUCT_ID: optionalEmptyableString,
   DODO_SCALE_MONTHLY_PRODUCT_ID: optionalEmptyableString,
   DODO_SCALE_YEARLY_PRODUCT_ID: optionalEmptyableString,
-  DODO_PRO_PRODUCT_ID: emptyableString,
-  DODO_ENTERPRISE_PRODUCT_ID: emptyableString,
   SOURCE_CREDENTIAL_ENCRYPTION_KEY: emptyableString,
   ALLOW_PRIVATE_SOURCE_URLS: z.preprocess(
     (value) => value === 'true' || value === true,
@@ -124,7 +121,7 @@ function managedProductionEnvIssues(value: typeof env): string[] {
     issues.push('DODO_PAYMENTS_WEBHOOK_SECRET')
   }
   if (!value.DODO_PAYMENTS_BRAND_ID) issues.push('DODO_PAYMENTS_BRAND_ID')
-  if (!value.DODO_STARTER_MONTHLY_PRODUCT_ID && !value.DODO_PRO_PRODUCT_ID) {
+  if (!value.DODO_STARTER_MONTHLY_PRODUCT_ID) {
     issues.push('DODO_STARTER_MONTHLY_PRODUCT_ID')
   }
   if (!value.ZEPTOMAIL_SEND_MAIL_TOKEN) {

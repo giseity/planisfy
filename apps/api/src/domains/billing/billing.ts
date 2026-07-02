@@ -151,7 +151,7 @@ export function isBillingConfigured(): boolean {
   return Boolean(
     env.DODO_PAYMENTS_API_KEY &&
     env.DODO_PAYMENTS_WEBHOOK_SECRET &&
-    (env.DODO_STARTER_MONTHLY_PRODUCT_ID || env.DODO_PRO_PRODUCT_ID)
+    env.DODO_STARTER_MONTHLY_PRODUCT_ID
   )
 }
 
@@ -666,10 +666,9 @@ export async function applyDodoWebhookEvent(
 }
 
 function getDodoApiUrl(): string {
-  if (!env.DODO_PAYMENTS_API_URL) {
-    throw new Error('DODO_PAYMENTS_API_URL is required when billing is enabled.')
-  }
-  return env.DODO_PAYMENTS_API_URL.replace(/\/$/, '')
+  return env.DODO_PAYMENTS_ENVIRONMENT === 'test_mode'
+    ? 'https://test.dodopayments.com'
+    : 'https://live.dodopayments.com'
 }
 
 async function dodoFetch<T>(path: string, options?: RequestInit): Promise<T> {

@@ -120,9 +120,7 @@ async function buildPreflightChecks(
   const productLoopChecks = await buildProductLoopChecks(deploymentMode)
   const upgradeChecks = managed ? [] : await buildUpgradeReadinessChecks(storage)
   const valhalla = await valhallaReadinessCheck()
-  const starterProductConfigured = Boolean(
-    env.DODO_STARTER_MONTHLY_PRODUCT_ID || env.DODO_PRO_PRODUCT_ID
-  )
+  const starterProductConfigured = Boolean(env.DODO_STARTER_MONTHLY_PRODUCT_ID)
 
   return [
     check({

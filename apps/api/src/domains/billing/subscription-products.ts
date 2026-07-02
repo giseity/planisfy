@@ -22,8 +22,6 @@ interface DodoProductEnv {
   DODO_STARTER_YEARLY_PRODUCT_ID: string;
   DODO_SCALE_MONTHLY_PRODUCT_ID: string;
   DODO_SCALE_YEARLY_PRODUCT_ID: string;
-  DODO_PRO_PRODUCT_ID: string;
-  DODO_ENTERPRISE_PRODUCT_ID: string;
 }
 
 export function resolveSubscriptionProduct(
@@ -76,8 +74,8 @@ function dodoProductIdForPlan(
 ) {
   if (planId === "starter") {
     if (interval === "yearly") return source.DODO_STARTER_YEARLY_PRODUCT_ID;
-    return source.DODO_STARTER_MONTHLY_PRODUCT_ID || source.DODO_PRO_PRODUCT_ID;
+    return source.DODO_STARTER_MONTHLY_PRODUCT_ID;
   }
   if (interval === "yearly") return source.DODO_SCALE_YEARLY_PRODUCT_ID;
-  return source.DODO_SCALE_MONTHLY_PRODUCT_ID || source.DODO_ENTERPRISE_PRODUCT_ID;
+  return source.DODO_SCALE_MONTHLY_PRODUCT_ID;
 }

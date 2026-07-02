@@ -9,14 +9,15 @@ Billing configuration is optional. Console can show billing capability as unavai
 ## Managed Mode
 
 Managed mode requires Dodo configuration through `DODO_PAYMENTS_API_KEY`,
-`DODO_PAYMENTS_API_URL`, `DODO_PAYMENTS_ENVIRONMENT`,
-`DODO_PAYMENTS_WEBHOOK_SECRET`, `DODO_PAYMENTS_BRAND_ID`, and product IDs for
+`DODO_PAYMENTS_ENVIRONMENT`, `DODO_PAYMENTS_WEBHOOK_SECRET`,
+`DODO_PAYMENTS_BRAND_ID`, and product IDs for
 paid self-serve plans:
 `DODO_STARTER_MONTHLY_PRODUCT_ID`, `DODO_STARTER_YEARLY_PRODUCT_ID`,
 `DODO_SCALE_MONTHLY_PRODUCT_ID`, and `DODO_SCALE_YEARLY_PRODUCT_ID`.
 
-`DODO_PRO_PRODUCT_ID` and `DODO_ENTERPRISE_PRODUCT_ID` are legacy monthly
-fallbacks while older deployments migrate to Starter and Scale naming.
+The API base URL is derived from `DODO_PAYMENTS_ENVIRONMENT`: test mode uses
+`https://test.dodopayments.com`, and live mode uses
+`https://live.dodopayments.com`.
 
 ## Runtime
 
