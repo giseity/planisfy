@@ -65,6 +65,7 @@ USER nextjs
 
 COPY --from=build --chown=nextjs:nodejs /app/apps/console/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/apps/console/.next/static ./apps/console/.next/static
+COPY --from=build --chown=nextjs:nodejs /app/apps/console/public ./apps/console/public
 
 EXPOSE 3000
 ENV PORT=3000
