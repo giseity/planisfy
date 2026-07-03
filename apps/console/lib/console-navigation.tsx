@@ -54,7 +54,13 @@ export const consoleNavGroups: ConsoleNavGroup[] = [
     label: "Operations",
     items: [
       { href: "/operations", label: "Operations", icon: ServerCog, match: (pathname) => pathname.startsWith("/operations") },
-      { href: "/platform", label: "Platform", icon: SlidersHorizontal, match: (pathname) => pathname === "/platform" },
+      {
+        href: "/platform",
+        label: "Platform",
+        icon: SlidersHorizontal,
+        modes: ["self_host"],
+        match: (pathname) => pathname === "/platform",
+      },
       {
         href: "/platform/environment",
         label: "Environment",

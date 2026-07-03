@@ -8,6 +8,8 @@ import { toast } from 'sonner'
 
 export function EmailVerificationBanner() {
   const { data: session, refetch } = useSession()
+  const userEmail = session?.user?.email
+  const userEmailVerified = session?.user?.emailVerified
   const [mounted, setMounted] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [sending, setSending] = useState(false)
@@ -18,24 +20,24 @@ export function EmailVerificationBanner() {
   }, [])
 
   useEffect(() => {
-    if (!mounted || !session?.user || session.user.emailVerified) return
+    if (!mounted || !userEmail || userEmailVerified) return
 
     const timeout = window.setTimeout(() => {
       void refetch?.()
     }, 1500)
 
     return () => window.clearTimeout(timeout)
-  }, [mounted, refetch, session?.user?.email, session?.user?.emailVerified])
+  }, [mounted, refetch, userEmail, userEmailVerified])
 
   if (!mounted) return null
-  if (dismissed || !session?.user) return null
-  if (session.user.emailVerified) return null
+  if (dismissed || !userEmail) return null
+  if (userEmailVerified) return null
 
   const handleResend = async () => {
     setSending(true)
     try {
       const result = await authClient.sendVerificationEmail({
-        email: session.user.email,
+        email: userEmail,
         callbackURL: '/styles',
       })
       if (result.error) {

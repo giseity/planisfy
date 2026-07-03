@@ -76,9 +76,19 @@ const operationRoutes = [
     icon: Map,
     modes: ['self_host'] as DeploymentMode[],
   },
-  { href: '/operations/backups', label: 'Backups', icon: ArchiveRestore },
+  {
+    href: '/operations/backups',
+    label: 'Backups',
+    icon: ArchiveRestore,
+    modes: ['self_host'] as DeploymentMode[],
+  },
   { href: '/operations/delivery', label: 'Delivery', icon: Globe },
-  { href: '/operations/templates', label: 'Templates', icon: ClipboardList },
+  {
+    href: '/operations/templates',
+    label: 'Templates',
+    icon: ClipboardList,
+    modes: ['self_host'] as DeploymentMode[],
+  },
 ] satisfies Array<{
   href: string
   label: string
@@ -284,10 +294,10 @@ function OperationsShell({ children }: { children: React.ReactNode }) {
           icon={<CalendarClock className="h-4 w-4" />}
         />
         <MetricCard
-          label="Backups"
-          value={overview.artifactBackups.length.toString()}
-          detail="Recent artifact backups"
-          icon={<ArchiveRestore className="h-4 w-4" />}
+          label="Recent jobs"
+          value={overview.recentJobs.length.toString()}
+          detail="Latest tenant processing activity"
+          icon={<Activity className="h-4 w-4" />}
         />
         <MetricCard
           label="Delivery"

@@ -373,6 +373,35 @@ export function validateScheduleInput(input: unknown) {
   return scheduleSchema.safeParse(input)
 }
 
+type DeploymentMode = 'self_host' | 'managed'
+type ScheduledOperationKind = z.infer<typeof scheduleSchema>['kind']
+type ManagedConsoleOperatorOperation =
+  | 'artifact_backups'
+  | 'workflow_templates'
+  | 'custom_command_schedules'
+  | 'job_reconciliation'
+
+export function canUseConsoleOperatorOperation(
+  deploymentMode: DeploymentMode,
+  operation: ManagedConsoleOperatorOperation
+) {
+  return deploymentMode !== 'managed' || !MANAGED_CONSOLE_OPERATOR_OPERATIONS.includes(operation)
+}
+
+const MANAGED_CONSOLE_OPERATOR_OPERATIONS: ManagedConsoleOperatorOperation[] = [
+  'artifact_backups',
+  'workflow_templates',
+  'custom_command_schedules',
+  'job_reconciliation',
+]
+
+export function canConsoleCreateScheduleKind(
+  deploymentMode: DeploymentMode,
+  kind: ScheduledOperationKind
+) {
+  return deploymentMode !== 'managed' || kind !== 'custom_command'
+}
+
 operationsRoute.get('/operations/events', async (c) => {
   const accountId = c.get('ownerId')
   const encoder = new TextEncoder()
@@ -520,21 +549,27 @@ async function buildOperationsOverview(accountId: string) {
     fetchStaleJobReconciliationSummary(accountId),
   ])
 
+  const managed = env.DEPLOYMENT_MODE === 'managed'
+
   return {
     deploymentMode: env.DEPLOYMENT_MODE,
     recentJobs,
     notificationChannels: channels.map(stripNotificationSecrets),
-    scheduledOperations: schedules,
-    artifactBackups: backups,
-    workerNodes: nodes,
-    routingGraphBuilds: routingBuilds.map(serializeRoutingGraphBuild),
-    basemapBuilds: basemapBuildRows.map(serializeBasemapBuild),
-    basemapReleases: basemapReleaseRows,
-    runtimeInstallations: runtimeInstallationRows,
+    scheduledOperations: managed
+      ? schedules.filter((schedule) => schedule.kind !== 'custom_command')
+      : schedules,
+    artifactBackups: managed ? [] : backups,
+    workerNodes: managed ? [] : nodes,
+    routingGraphBuilds: managed ? [] : routingBuilds.map(serializeRoutingGraphBuild),
+    basemapBuilds: managed ? [] : basemapBuildRows.map(serializeBasemapBuild),
+    basemapReleases: managed ? [] : basemapReleaseRows,
+    runtimeInstallations: managed ? [] : runtimeInstallationRows,
     previewLinks: previews,
     customDomains: domains,
-    workflowTemplates: templates,
-    workerHealth,
+    workflowTemplates: managed ? [] : templates,
+    workerHealth: managed
+      ? { status: 'managed' as const, message: 'Platform-operated runtime', latencyMs: null }
+      : workerHealth,
     staleJobReconciliation,
   }
 }
@@ -545,6 +580,22 @@ async function managedPlanGateResponse(c: Context<AuthEnv>, feature: PlanFeature
   const denial = await managedPlanFeatureDenial(c.get('ownerId'), feature)
   if (!denial) return null
   return c.json(planGateErrorPayload(denial), denial.status)
+}
+
+function managedConsoleOperatorResponse(
+  c: Context<AuthEnv>,
+  operation: ManagedConsoleOperatorOperation
+) {
+  return c.json(
+    {
+      error: {
+        code: 'MANAGED_CONSOLE_OPERATOR_ACTION',
+        message:
+          `The ${operation.replace(/_/g, ' ')} operation is available from the admin console only.`,
+      },
+    },
+    403
+  )
 }
 
 function isPlanetScaleRoutingBuild(
@@ -652,6 +703,10 @@ export function operationsOverviewSignature(overview: OperationsOverview) {
 }
 
 operationsRoute.post('/operations/jobs/reconcile-stale', async (c) => {
+  if (!canUseConsoleOperatorOperation(env.DEPLOYMENT_MODE, 'job_reconciliation')) {
+    return managedConsoleOperatorResponse(c, 'job_reconciliation')
+  }
+
   const accountId = c.get('ownerId')
   const workerHealth = await fetchWorkerHealth()
   const result = await reconcileStaleProcessingJobs({
@@ -743,6 +798,9 @@ operationsRoute.post('/operations/schedules', async (c) => {
   const accountId = c.get('ownerId')
   const parsed = scheduleSchema.safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
+  if (!canConsoleCreateScheduleKind(env.DEPLOYMENT_MODE, parsed.data.kind)) {
+    return managedConsoleOperatorResponse(c, 'custom_command_schedules')
+  }
   const [created] = await db
     .insert(scheduledOperations)
     .values({
@@ -769,6 +827,12 @@ operationsRoute.post('/operations/schedules/:id/run', async (c) => {
     )
     .limit(1)
   if (!schedule) return notFound(c, 'Schedule not found')
+  if (
+    schedule.kind === 'custom_command' &&
+    !canUseConsoleOperatorOperation(env.DEPLOYMENT_MODE, 'custom_command_schedules')
+  ) {
+    return managedConsoleOperatorResponse(c, 'custom_command_schedules')
+  }
   const prepared = prepareScheduledOperationRun(schedule)
   if (!prepared.success) {
     return c.json(
@@ -791,10 +855,33 @@ operationsRoute.post('/operations/schedules/:id/run', async (c) => {
 })
 
 operationsRoute.delete('/operations/schedules/:id', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const [schedule] = await db
+    .select({ kind: scheduledOperations.kind })
+    .from(scheduledOperations)
+    .where(
+      and(
+        eq(scheduledOperations.id, id),
+        eq(scheduledOperations.accountId, accountId),
+        isNull(scheduledOperations.deletedAt)
+      )
+    )
+    .limit(1)
+  if (
+    schedule?.kind === 'custom_command' &&
+    !canUseConsoleOperatorOperation(env.DEPLOYMENT_MODE, 'custom_command_schedules')
+  ) {
+    return managedConsoleOperatorResponse(c, 'custom_command_schedules')
+  }
   return softDeleteSchedule(c)
 })
 
 operationsRoute.post('/operations/artifact-backups', async (c) => {
+  if (!canUseConsoleOperatorOperation(env.DEPLOYMENT_MODE, 'artifact_backups')) {
+    return managedConsoleOperatorResponse(c, 'artifact_backups')
+  }
+
   const accountId = c.get('ownerId')
   const parsed = z.object({ storageObjectId: z.string().uuid() }).safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
@@ -862,6 +949,10 @@ operationsRoute.post('/operations/artifact-backups', async (c) => {
 })
 
 operationsRoute.post('/operations/artifact-backups/:id/restore', async (c) => {
+  if (!canUseConsoleOperatorOperation(env.DEPLOYMENT_MODE, 'artifact_backups')) {
+    return managedConsoleOperatorResponse(c, 'artifact_backups')
+  }
+
   const accountId = c.get('ownerId')
   const id = c.req.param('id')
   const result = await db.transaction(async (tx) => {
@@ -1369,6 +1460,10 @@ operationsRoute.delete('/operations/custom-domains/:id', async (c) => {
 })
 
 operationsRoute.post('/operations/workflow-templates', async (c) => {
+  if (!canUseConsoleOperatorOperation(env.DEPLOYMENT_MODE, 'workflow_templates')) {
+    return managedConsoleOperatorResponse(c, 'workflow_templates')
+  }
+
   const accountId = c.get('ownerId')
   const parsed = templateSchema.safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
@@ -1380,6 +1475,10 @@ operationsRoute.post('/operations/workflow-templates', async (c) => {
 })
 
 operationsRoute.post('/operations/workflow-templates/:id/apply', async (c) => {
+  if (!canUseConsoleOperatorOperation(env.DEPLOYMENT_MODE, 'workflow_templates')) {
+    return managedConsoleOperatorResponse(c, 'workflow_templates')
+  }
+
   const accountId = c.get('ownerId')
   const id = c.req.param('id')
   const template = (await listTemplates(accountId)).find((row) => row.id === id)
@@ -1450,6 +1549,10 @@ operationsRoute.post('/operations/workflow-templates/:id/apply', async (c) => {
 })
 
 operationsRoute.delete('/operations/workflow-templates/:id', async (c) => {
+  if (!canUseConsoleOperatorOperation(env.DEPLOYMENT_MODE, 'workflow_templates')) {
+    return managedConsoleOperatorResponse(c, 'workflow_templates')
+  }
+
   return softDeleteWorkflowTemplate(c)
 })
 

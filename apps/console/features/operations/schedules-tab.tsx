@@ -38,6 +38,11 @@ import { Textarea } from '@planisfy/ui/components/textarea'
 import { CalendarClock, MoreHorizontal, Play, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
+type CustomerScheduleKind = Extract<
+  ConsoleScheduledOperation['kind'],
+  'tileset_rebuild' | 'source_import'
+>
+
 export function SchedulesTab({
   schedules,
   tilesets,
@@ -48,7 +53,7 @@ export function SchedulesTab({
   onChanged: () => void
 }) {
   const [name, setName] = useState('')
-  const [kind, setKind] = useState<ConsoleScheduledOperation['kind']>('tileset_rebuild')
+  const [kind, setKind] = useState<CustomerScheduleKind>('tileset_rebuild')
   const [cron, setCron] = useState('0 2 * * *')
   const [timezone, setTimezone] = useState('UTC')
   const [tilesetId, setTilesetId] = useState('')
@@ -112,7 +117,7 @@ export function SchedulesTab({
           <Field label="Kind">
             <Select
               value={kind}
-              onValueChange={(value) => setKind(value as ConsoleScheduledOperation['kind'])}
+              onValueChange={(value) => setKind(value as CustomerScheduleKind)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -120,7 +125,6 @@ export function SchedulesTab({
               <SelectContent>
                 <SelectItem value="tileset_rebuild">Tileset rebuild</SelectItem>
                 <SelectItem value="source_import">Source import</SelectItem>
-                <SelectItem value="custom_command">Custom command</SelectItem>
               </SelectContent>
             </Select>
           </Field>

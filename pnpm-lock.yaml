@@ -50,6 +50,9 @@ importers:
       '@planisfy/geodata-contracts':
         specifier: workspace:*
         version: link:../../packages/geodata-contracts
+      '@planisfy/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../../packages/ui

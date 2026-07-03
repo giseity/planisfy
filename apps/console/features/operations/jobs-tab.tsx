@@ -25,20 +25,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@planisfy/ui/components/dropdown-menu'
-import { ClipboardList, MoreHorizontal, RefreshCw } from 'lucide-react'
+import { ClipboardList, MoreHorizontal } from 'lucide-react'
 
 export function JobsTab({
   jobs,
   staleJobReconciliation,
   timeline,
   onTimeline,
-  onReconcileStale,
 }: {
   jobs: ConsoleOperationsOverview['recentJobs']
   staleJobReconciliation: ConsoleOperationsOverview['staleJobReconciliation']
   timeline: ConsoleJobTimeline | null
   onTimeline: (jobId: string) => void
-  onReconcileStale: () => void
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
@@ -51,15 +49,6 @@ export function JobsTab({
                 {staleJobReconciliation.reconciled} stale reconciliations recorded.
               </CardDescription>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              title="Reconcile stale jobs"
-              onClick={onReconcileStale}
-            >
-              <RefreshCw className="h-4 w-4" />
-              Reconcile
-            </Button>
           </div>
         </CardHeader>
         <CardContent>

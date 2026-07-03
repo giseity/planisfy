@@ -3,6 +3,8 @@ import test from 'node:test'
 import {
   deliverNotification,
   buildNotificationDeliveryProof,
+  canConsoleCreateScheduleKind,
+  canUseConsoleOperatorOperation,
   formatSseEvent,
   isValidScheduleTimezone,
   nextScheduleRunAt,
@@ -204,6 +206,20 @@ test('validateScheduleInput requires tilesetId for rebuild schedules', () => {
     }).success,
     true
   )
+})
+
+test('managed console blocks operator-only operations', () => {
+  assert.equal(canUseConsoleOperatorOperation('managed', 'artifact_backups'), false)
+  assert.equal(canUseConsoleOperatorOperation('managed', 'workflow_templates'), false)
+  assert.equal(canUseConsoleOperatorOperation('managed', 'custom_command_schedules'), false)
+  assert.equal(canUseConsoleOperatorOperation('self_host', 'artifact_backups'), true)
+})
+
+test('managed console allows only tenant-safe schedule creation kinds', () => {
+  assert.equal(canConsoleCreateScheduleKind('managed', 'tileset_rebuild'), true)
+  assert.equal(canConsoleCreateScheduleKind('managed', 'source_import'), true)
+  assert.equal(canConsoleCreateScheduleKind('managed', 'custom_command'), false)
+  assert.equal(canConsoleCreateScheduleKind('self_host', 'custom_command'), true)
 })
 
 test('validateScheduleInput rejects invalid cron and timezone values', () => {

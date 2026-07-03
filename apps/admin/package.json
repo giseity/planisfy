@@ -18,6 +18,7 @@
     "@planisfy/env": "workspace:*",
     "@planisfy/events": "workspace:*",
     "@planisfy/geodata-contracts": "workspace:*",
+    "@planisfy/storage": "workspace:*",
     "@planisfy/ui": "workspace:*",
     "@planisfy/utils": "workspace:*",
     "drizzle-orm": "^0.45.2",

@@ -13,6 +13,7 @@ COPY packages/auth/package.json packages/auth/
 COPY packages/env/package.json packages/env/
 COPY packages/events/package.json packages/events/
 COPY packages/geodata-contracts/package.json packages/geodata-contracts/
+COPY packages/storage/package.json packages/storage/
 COPY packages/types/package.json packages/types/
 COPY packages/utils/package.json packages/utils/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
