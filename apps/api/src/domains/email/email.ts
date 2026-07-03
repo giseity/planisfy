@@ -34,7 +34,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
     const res = await fetch('https://api.zeptomail.com/v1.1/email', {
       method: 'POST',
       headers: {
-        Authorization: `Zoho-enczapikey ${ZEPTOMAIL_SEND_MAIL_TOKEN}`,
+        Authorization: zeptoMailAuthorizationHeader(ZEPTOMAIL_SEND_MAIL_TOKEN),
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
@@ -49,7 +49,11 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
 
     if (!res.ok) {
       const err = await res.text()
-      console.error('[email] Send failed:', err)
+      console.error('[email] Send failed:', {
+        status: res.status,
+        statusText: res.statusText,
+        body: err,
+      })
       return false
     }
 
@@ -58,6 +62,10 @@ export async function sendEmail(options: SendEmailOptions): Promise<boolean> {
     console.error('[email] Send error:', err)
     return false
   }
+}
+
+function zeptoMailAuthorizationHeader(value: string) {
+  return /^Zoho-enczapikey\s+/i.test(value) ? value : `Zoho-enczapikey ${value}`
 }
 
 function fromAddress(sender: EmailSender) {

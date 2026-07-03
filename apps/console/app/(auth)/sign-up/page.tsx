@@ -2,6 +2,8 @@
 
 import { SignUpForm } from "@planisfy/auth/ui"
 
+import { clientEnv } from "@/env.client"
+
 export default function SignUpPage() {
-  return <SignUpForm defaultCallbackUrl="/styles" />
+  return <SignUpForm defaultCallbackUrl={`${clientEnv.NEXT_PUBLIC_APP_URL}/styles`} />
 }

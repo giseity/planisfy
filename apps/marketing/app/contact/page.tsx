@@ -7,8 +7,8 @@ import { Footer } from '@/components/footer'
 import { HeroHeader } from '@/components/header'
 import { clientEnv } from '@/env.client'
 
-const signInHref = `${clientEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
-const signUpHref = `${clientEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
+const signInHref = `${clientEnv.NEXT_PUBLIC_CONSOLE_URL}/sign-in`
+const signUpHref = `${clientEnv.NEXT_PUBLIC_CONSOLE_URL}/sign-up`
 const contactEmail = clientEnv.NEXT_PUBLIC_CONTACT_EMAIL
 const contactHref = `mailto:${contactEmail}?subject=Planisfy%20self-hosted%20deployment%20conversation`
 

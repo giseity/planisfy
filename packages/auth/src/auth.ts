@@ -117,7 +117,21 @@ function socialProviders() {
   const providers = getSocialProviderCredentials()
   return {
     ...(providers.github ? { github: providers.github } : {}),
-    ...(providers.google ? { google: providers.google } : {}),
+    ...(providers.google
+      ? {
+          google: {
+            ...providers.google,
+            mapProfileToUser: (profile: { email_verified?: boolean | string }) => ({
+              ...(profile.email_verified === undefined
+                ? {}
+                : {
+                    emailVerified:
+                      profile.email_verified === true || profile.email_verified === 'true',
+                  }),
+            }),
+          },
+        }
+      : {}),
   }
 }
 
@@ -143,6 +157,13 @@ export const auth = betterAuth({
   baseURL: betterAuthBaseURL,
   trustedOrigins,
   socialProviders: socialProviders(),
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ['google'],
+      requireLocalEmailVerified: false,
+    },
+  },
 
   database: drizzleAdapter(db, {
     provider: 'pg',
@@ -268,11 +289,12 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
+    requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
       console.log(`[password-reset] Sending reset link to ${user.email}`)
       if (process.env.ZEPTOMAIL_SEND_MAIL_TOKEN) {
         try {
-          await fetch(`${apiUrl}/internal/send-password-reset-email`, {
+          const response = await fetch(`${apiUrl}/internal/send-password-reset-email`, {
             method: 'POST',
             headers: internalHeaders(),
             body: JSON.stringify({
@@ -280,11 +302,10 @@ export const auth = betterAuth({
               name: user.name,
               resetUrl: url,
             }),
-          }).catch(() => {
-            /* fire and forget */
           })
+          if (!response.ok) throw new Error(`Password reset email failed: ${response.status}`)
         } catch {
-          // Ignore — email delivery is best-effort
+          throw new Error('Password reset email delivery failed')
         }
       }
     },
@@ -297,7 +318,7 @@ export const auth = betterAuth({
       console.log(`[email-verify] Sending verification to ${user.email}`)
       if (process.env.ZEPTOMAIL_SEND_MAIL_TOKEN) {
         try {
-          await fetch(`${apiUrl}/internal/send-verification-email`, {
+          const response = await fetch(`${apiUrl}/internal/send-verification-email`, {
             method: 'POST',
             headers: internalHeaders(),
             body: JSON.stringify({
@@ -305,11 +326,10 @@ export const auth = betterAuth({
               name: user.name,
               verifyUrl: url,
             }),
-          }).catch(() => {
-            /* fire and forget */
           })
+          if (!response.ok) throw new Error(`Verification email failed: ${response.status}`)
         } catch {
-          // Ignore — email delivery is best-effort
+          throw new Error('Verification email delivery failed')
         }
       }
     },

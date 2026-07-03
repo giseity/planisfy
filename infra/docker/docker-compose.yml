@@ -58,7 +58,10 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
-      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3001
+      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
+      - NEXT_PUBLIC_ADMIN_URL=http://localhost:3003
+      - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
+      - NEXT_PUBLIC_DOCS_URL=http://localhost:3002
       - SOURCE_CREDENTIAL_ENCRYPTION_KEY=${SOURCE_CREDENTIAL_ENCRYPTION_KEY:-}
       - ALLOW_PRIVATE_SOURCE_URLS=${ALLOW_PRIVATE_SOURCE_URLS:-false}
       - OVERTURE_ALLOW_EXPERIMENTAL_TYPES=${OVERTURE_ALLOW_EXPERIMENTAL_TYPES:-false}
@@ -254,13 +257,9 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      - AUTH_INTERNAL_ORIGIN=http://localhost:3000
-      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
-      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
+      - AUTH_INTERNAL_ORIGIN=http://api:4000
       - NEXT_PUBLIC_APP_URL=http://localhost:3001
-      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3001
+      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
       - NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - CONSOLE_API_INTERNAL_ORIGIN=http://api:4000
@@ -291,12 +290,8 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
-      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       - NEXT_PUBLIC_APP_URL=http://localhost:3003
-      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3003
+      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
       - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
@@ -374,7 +369,7 @@ services:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - NEXT_PUBLIC_APP_URL=http://localhost:3000
-      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3000
+      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
     depends_on:
@@ -390,7 +385,7 @@ services:
       dockerfile: apps/marketing/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://localhost:4000
-        NEXT_PUBLIC_AUTH_ORIGIN: http://localhost:3000
+        NEXT_PUBLIC_AUTH_ORIGIN: http://localhost:4000
         NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
         NEXT_PUBLIC_CONSOLE_URL: http://localhost:3001
         NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
@@ -402,12 +397,8 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-replace-me-github-client-id}
-      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
-      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3000
+      - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
       - NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
       - NEXT_PUBLIC_CONTACT_EMAIL=${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}

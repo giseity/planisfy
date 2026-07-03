@@ -13,7 +13,10 @@ x-api-env: &api-env
   INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
   NEXT_PUBLIC_API_URL: https://api.planisfy.com
   NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
-  NEXT_PUBLIC_AUTH_ORIGIN: https://console.planisfy.com
+  NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
+  NEXT_PUBLIC_ADMIN_URL: https://admin.planisfy.com
+  NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
+  NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:?NEXT_PUBLIC_DOCS_URL must be set}
   STORAGE_PROVIDER: r2
   LOCAL_STORAGE_PATH: /data/storage
   LOCAL_STORAGE_BUCKET: planisfy-local
@@ -165,7 +168,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: https://api.planisfy.com
         CONSOLE_API_INTERNAL_ORIGIN: http://api:4000
-        NEXT_PUBLIC_AUTH_ORIGIN: https://console.planisfy.com
+        NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
         NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
         NEXT_PUBLIC_APP_URL: https://console.planisfy.com
         NEXT_PUBLIC_ADMIN_URL: https://admin.planisfy.com
@@ -177,13 +180,9 @@ services:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-replace-me-github-client-id}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       NEXT_PUBLIC_API_URL: https://api.planisfy.com
       CONSOLE_API_INTERNAL_ORIGIN: http://api:4000
-      NEXT_PUBLIC_AUTH_ORIGIN: https://console.planisfy.com
+      NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
       NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
       NEXT_PUBLIC_APP_URL: https://console.planisfy.com
       NEXT_PUBLIC_ADMIN_URL: https://admin.planisfy.com
@@ -216,7 +215,7 @@ services:
       dockerfile: apps/marketing/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: https://api.planisfy.com
-        NEXT_PUBLIC_AUTH_ORIGIN: https://planisfy.com
+        NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
         NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
         NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
         NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
@@ -225,12 +224,8 @@ services:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-replace-me-github-client-id}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-replace-me-google-client-secret}
       NEXT_PUBLIC_API_URL: https://api.planisfy.com
-      NEXT_PUBLIC_AUTH_ORIGIN: https://planisfy.com
+      NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
       NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
       NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
       NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
@@ -256,7 +251,7 @@ services:
       context: .
       dockerfile: apps/docs/Dockerfile
       args:
-        NEXT_PUBLIC_AUTH_ORIGIN: https://docs.planisfy.com
+        NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
         NEXT_PUBLIC_API_URL: https://api.planisfy.com
         NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
     restart: unless-stopped
@@ -264,7 +259,7 @@ services:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      NEXT_PUBLIC_AUTH_ORIGIN: https://docs.planisfy.com
+      NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
       NEXT_PUBLIC_API_URL: https://api.planisfy.com
       NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
       NODE_ENV: production
@@ -290,7 +285,7 @@ services:
       dockerfile: apps/admin/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: https://api.planisfy.com
-        NEXT_PUBLIC_AUTH_ORIGIN: https://admin.planisfy.com
+        NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
         NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
         NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
     restart: unless-stopped
@@ -299,7 +294,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       NEXT_PUBLIC_APP_URL: https://admin.planisfy.com
-      NEXT_PUBLIC_AUTH_ORIGIN: https://admin.planisfy.com
+      NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
       NEXT_PUBLIC_API_URL: https://api.planisfy.com
       NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
       NEXT_PUBLIC_MARKETING_URL: https://planisfy.com

@@ -6,8 +6,8 @@ import { HeroSection } from '@/components/hero-section'
 import { WorkflowSection } from '@/components/workflow'
 import { clientEnv } from '@/env.client'
 
-const signInHref = `${clientEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-in`
-const signUpHref = `${clientEnv.NEXT_PUBLIC_AUTH_ORIGIN}/sign-up`
+const signInHref = `${clientEnv.NEXT_PUBLIC_CONSOLE_URL}/sign-in`
+const signUpHref = `${clientEnv.NEXT_PUBLIC_CONSOLE_URL}/sign-up`
 
 export default function Page() {
   return (

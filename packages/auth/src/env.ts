@@ -32,6 +32,7 @@ export function getAuthTrustedOrigins() {
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.NEXT_PUBLIC_CONSOLE_URL,
     process.env.NEXT_PUBLIC_ADMIN_URL,
+    process.env.NEXT_PUBLIC_DOCS_URL,
     process.env.NEXT_PUBLIC_MARKETING_URL
   )
 }

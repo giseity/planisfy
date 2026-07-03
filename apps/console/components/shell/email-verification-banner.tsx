@@ -7,15 +7,25 @@ import { Mail, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 export function EmailVerificationBanner() {
-  const { data: session } = useSession()
+  const { data: session, refetch } = useSession()
   const [mounted, setMounted] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [requested, setRequested] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (!mounted || !session?.user || session.user.emailVerified) return
+
+    const timeout = window.setTimeout(() => {
+      void refetch?.()
+    }, 1500)
+
+    return () => window.clearTimeout(timeout)
+  }, [mounted, refetch, session?.user?.email, session?.user?.emailVerified])
 
   if (!mounted) return null
   if (dismissed || !session?.user) return null
@@ -31,8 +41,9 @@ export function EmailVerificationBanner() {
       if (result.error) {
         throw new Error(result.error.message ?? 'Failed to send verification email')
       }
-      setSent(true)
-      toast.success('Verification email sent')
+      await refetch?.()
+      setRequested(true)
+      toast.success('Verification email requested')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send verification email')
     } finally {
@@ -46,7 +57,7 @@ export function EmailVerificationBanner() {
         <Mail className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
         <p className="text-amber-800 dark:text-amber-200 flex-1">
           Please verify your email address.
-          {sent ? (
+          {requested ? (
             <span className="ml-1 font-medium">Check your inbox!</span>
           ) : (
             <Button

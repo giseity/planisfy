@@ -29,7 +29,7 @@ ENV GITHUB_CLIENT_SECRET=replace-me-github-client-secret
 ENV GOOGLE_CLIENT_ID=replace-me-google-client-id
 ENV GOOGLE_CLIENT_SECRET=replace-me-google-client-secret
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
-ARG NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:3000
+ARG NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
 ARG NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=
 ARG NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
 ARG NEXT_PUBLIC_DOCS_URL

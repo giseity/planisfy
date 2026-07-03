@@ -25,7 +25,8 @@ describe("console product correctness regressions", () => {
     );
 
     expect(source).toContain("result.error");
-    expect(source).toContain("Verification email sent");
+    expect(source).toContain("Verification email requested");
+    expect(source).toContain("Check your inbox!");
   });
 
   it("refetches sprite metadata when the sprite URL changes", () => {

@@ -50,6 +50,9 @@ app.use(
     origin: apiCorsOrigins({
       apiUrl: env.NEXT_PUBLIC_API_URL,
       consoleUrl: env.NEXT_PUBLIC_CONSOLE_URL,
+      adminUrl: env.NEXT_PUBLIC_ADMIN_URL,
+      marketingUrl: env.NEXT_PUBLIC_MARKETING_URL,
+      docsUrl: env.NEXT_PUBLIC_DOCS_URL,
     }),
     credentials: true,
   }),
