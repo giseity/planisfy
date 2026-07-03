@@ -132,6 +132,9 @@ importers:
       '@planisfy/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@planisfy/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@planisfy/env':
         specifier: workspace:*
         version: link:../../packages/env
@@ -900,6 +903,21 @@ importers:
       drizzle-kit:
         specifier: ^0.31.9
         version: 0.31.9
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+
+  packages/email:
+    devDependencies:
+      '@planisfy/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.2
+      tsx:
+        specifier: ^4.19.4
+        version: 4.21.0
       typescript:
         specifier: 5.9.2
         version: 5.9.2

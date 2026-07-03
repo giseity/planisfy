@@ -21,6 +21,7 @@
     "@planisfy/api-contracts": "workspace:*",
     "@planisfy/credentials": "workspace:*",
     "@planisfy/database": "workspace:*",
+    "@planisfy/email": "workspace:*",
     "@planisfy/env": "workspace:*",
     "@planisfy/events": "workspace:*",
     "@planisfy/geodata-contracts": "workspace:*",

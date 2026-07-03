@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  escapeHtml,
-  htmlParagraphFromText,
-  validateEmailActionUrl,
-} from "./email";
+import { escapeHtml, htmlParagraphFromText } from "@planisfy/email";
+import { validateEmailActionUrl } from "./email";
 
 test("escapeHtml escapes text and attribute-sensitive characters", () => {
   assert.equal(

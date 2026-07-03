@@ -41,6 +41,7 @@ import {
   WORKER_GEODATA_HEARTBEAT_STALE_MS,
 } from '@planisfy/geodata-contracts'
 import { getStorage } from '@planisfy/storage'
+import { renderGenericNotificationEmail } from '@planisfy/email'
 import {
   areaOfInterestToBBox,
   normalizeAreaOfInterest,
@@ -59,7 +60,7 @@ import {
   planGateErrorPayload,
   requireManagedPlanFeature,
 } from '../../shared/policy/plan-gates'
-import { htmlParagraphFromText, sendEmail } from '../email/email'
+import { sendEmail } from '../email/email'
 import { buildNotificationPayload } from './notification-adapters'
 import { SourceUrlRejectedError, validateOutboundUrl } from '../imports/source-url-policy'
 
@@ -1876,12 +1877,17 @@ export async function deliverNotification(
         message: 'Email delivery is unavailable because ZeptoMail is not configured.',
       }
     }
+    const rendered = renderGenericNotificationEmail({
+      title: body.subject,
+      body: body.text,
+      accountSettingsUrl: new URL('/settings/profile', env.NEXT_PUBLIC_CONSOLE_URL).toString(),
+    })
     const delivered = await sendEmail({
       from: 'notifications',
       to: channel.target,
-      subject: body.subject,
-      html: htmlParagraphFromText(body.text),
-      text: body.text,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
     })
     return {
       delivered,

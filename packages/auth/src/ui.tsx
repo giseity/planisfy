@@ -51,6 +51,30 @@ function callbackUrl(fallback: string) {
   )
 }
 
+function verificationUrl(callbackURL: string) {
+  const params = new URLSearchParams({ callbackUrl: callbackURL })
+  return `/verify-email?${params.toString()}`
+}
+
+function isEmailNotVerifiedError(error: { code?: string; message?: string; statusText?: string }) {
+  const value = [error.code, error.message, error.statusText].filter(Boolean).join(' ')
+  return /email[_ -]?not[_ -]?verified/i.test(value)
+}
+
+function authRedirectFromData(data: unknown) {
+  if (!data || typeof data !== 'object' || !('url' in data)) return null
+  const url = (data as { url?: unknown }).url
+  if (typeof url !== 'string' || !url) return null
+  if (typeof window === 'undefined') return url
+  return sanitizeCallbackUrl(url, window.location.origin, window.location.origin)
+}
+
+function hasSessionToken(data: unknown) {
+  if (!data || typeof data !== 'object' || !('token' in data)) return false
+  const token = (data as { token?: unknown }).token
+  return typeof token === 'string' && token.length > 0
+}
+
 function tokenFromUrl() {
   if (typeof window === 'undefined') return null
   return new URLSearchParams(window.location.search).get('token')
@@ -317,10 +341,15 @@ export function SignInForm({
       password,
       callbackURL: target,
       fetchOptions: {
-        onSuccess: () => {
-          window.location.assign(target)
+        onSuccess: (ctx: { data?: unknown }) => {
+          window.location.assign(authRedirectFromData(ctx.data) ?? target)
         },
-        onError: (ctx: { error: { message: string } }) => {
+        onError: (ctx: { error: { code?: string; message: string; statusText?: string } }) => {
+          if (isEmailNotVerifiedError(ctx.error)) {
+            toast.info('Check your inbox to verify your email address.')
+            window.location.assign(verificationUrl(target))
+            return
+          }
           toast.error(ctx.error.message)
         },
       },
@@ -405,8 +434,14 @@ export function SignUpForm({
       name: name.trim(),
       callbackURL: target,
       fetchOptions: {
-        onSuccess: () => {
-          window.location.assign(target)
+        onSuccess: (ctx: { data?: unknown }) => {
+          if (hasSessionToken(ctx.data)) {
+            window.location.assign(authRedirectFromData(ctx.data) ?? target)
+            return
+          }
+
+          toast.info('Check your inbox to verify your email address.')
+          window.location.assign(verificationUrl(target))
         },
         onError: (ctx: { error: { message: string } }) => {
           toast.error(ctx.error.message)

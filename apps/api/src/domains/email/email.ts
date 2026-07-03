@@ -1,5 +1,12 @@
 // ── Email service via ZeptoMail ──────────────────────────────────────────────
 
+import {
+  renderInvitationEmail,
+  renderPasswordResetEmail,
+  renderQuotaWarningEmail,
+  renderVerificationEmail,
+  renderWelcomeEmail,
+} from '@planisfy/email'
 import { env } from '../../env'
 
 const ZEPTOMAIL_SEND_MAIL_TOKEN = env.ZEPTOMAIL_SEND_MAIL_TOKEN
@@ -9,6 +16,11 @@ const allowedActionUrlOrigins = new Set(
 )
 
 type EmailSender = 'auth' | 'notifications'
+
+const senderDisplayNames = {
+  auth: 'Planisfy Auth',
+  notifications: 'Planisfy Notifications',
+} satisfies Record<EmailSender, string>
 
 interface SendEmailOptions {
   to: string | string[]
@@ -71,7 +83,7 @@ function zeptoMailAuthorizationHeader(value: string) {
 function fromAddress(sender: EmailSender) {
   const value =
     sender === 'notifications' ? env.ZEPTOMAIL_FROM_NOTIFICATIONS : env.ZEPTOMAIL_FROM_AUTH
-  return value ? parseMailbox(value) : null
+  return value ? parseMailbox(value, senderDisplayNames[sender]) : null
 }
 
 function recipients(to: string | string[]) {
@@ -80,31 +92,18 @@ function recipients(to: string | string[]) {
   }))
 }
 
-function parseMailbox(value: string) {
+function parseMailbox(value: string, fallbackName?: string) {
   const match = value.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/)
   const rawName = match?.[1]
   const rawAddress = match?.[2]
   if (rawAddress) {
     return {
       address: rawAddress.trim(),
-      name: rawName?.trim() || undefined,
+      name: rawName?.trim() || fallbackName,
     }
   }
 
-  return { address: value.trim() }
-}
-
-export function escapeHtml(value: unknown) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
-
-export function htmlParagraphFromText(value: string) {
-  return `<p>${escapeHtml(value).replaceAll('\n', '<br />')}</p>`
+  return { address: value.trim(), name: fallbackName }
 }
 
 export function validateEmailActionUrl(value: string) {
@@ -138,27 +137,18 @@ export async function sendInvitationEmail(params: {
   const acceptUrl = consoleActionUrl('/organization', {
     accept: params.invitationId,
   })
-  const organizationName = escapeHtml(params.organizationName)
-  const inviterName = escapeHtml(params.inviterName)
-  const role = escapeHtml(params.role)
+  const rendered = renderInvitationEmail({
+    organizationName: params.organizationName,
+    inviterName: params.inviterName,
+    role: params.role,
+    acceptUrl,
+    accountSettingsUrl: consoleActionUrl('/settings/profile'),
+  })
 
   return sendEmail({
     from: 'auth',
     to: params.email,
-    subject: `You've been invited to ${params.organizationName} on Planisfy`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #1a1a1a;">Join ${organizationName} on Planisfy</h2>
-        <p>${inviterName} has invited you to join <strong>${organizationName}</strong> as a <strong>${role}</strong>.</p>
-        <a href="${escapeHtml(acceptUrl)}" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">
-          Accept Invitation
-        </a>
-        <p style="color: #666; font-size: 14px;">If you don't have a Planisfy account, you'll be asked to create one first.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #999; font-size: 12px;">Planisfy — Open-source mapping platform</p>
-      </div>
-    `,
-    text: `${params.inviterName} has invited you to join ${params.organizationName} as a ${params.role}.\n\nAccept: ${acceptUrl}`,
+    ...rendered,
   })
 }
 
@@ -168,26 +158,16 @@ export async function sendPasswordResetEmail(params: {
   name: string
 }) {
   const resetUrl = validateEmailActionUrl(params.resetUrl)
-  const name = escapeHtml(params.name)
+  const rendered = renderPasswordResetEmail({
+    name: params.name,
+    resetUrl,
+    accountSettingsUrl: consoleActionUrl('/settings/profile'),
+  })
 
   return sendEmail({
     from: 'auth',
     to: params.email,
-    subject: 'Reset your Planisfy password',
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #1a1a1a;">Reset your password</h2>
-        <p>Hi ${name},</p>
-        <p>We received a request to reset your Planisfy password.</p>
-        <a href="${escapeHtml(resetUrl)}" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">
-          Reset Password
-        </a>
-        <p style="color: #666; font-size: 14px;">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #999; font-size: 12px;">Planisfy — Open-source mapping platform</p>
-      </div>
-    `,
-    text: `Hi ${params.name},\n\nReset your Planisfy password: ${resetUrl}\n\nThis link expires in 1 hour.`,
+    ...rendered,
   })
 }
 
@@ -199,30 +179,19 @@ export async function sendQuotaWarningEmail(params: {
   percentUsed: number
 }) {
   const billingUrl = consoleActionUrl('/billing')
-  const name = escapeHtml(params.name)
-  const percentUsed = Math.min(Math.max(params.percentUsed, 0), 100)
+  const rendered = renderQuotaWarningEmail({
+    name: params.name,
+    usedUnits: params.usedUnits,
+    totalUnits: params.totalUnits,
+    percentUsed: params.percentUsed,
+    billingUrl,
+    accountSettingsUrl: consoleActionUrl('/settings/profile'),
+  })
 
   return sendEmail({
     from: 'notifications',
     to: params.email,
-    subject: `Planisfy: You've used ${params.percentUsed}% of your monthly quota`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #1a1a1a;">Quota Warning</h2>
-        <p>Hi ${name},</p>
-        <p>You've used <strong>${params.usedUnits.toLocaleString()}</strong> of your <strong>${params.totalUnits.toLocaleString()}</strong> monthly Planisfy credits (<strong>${params.percentUsed}%</strong>).</p>
-        <div style="background: #f5f5f5; border-radius: 8px; padding: 4px; margin: 16px 0;">
-          <div style="background: ${percentUsed >= 90 ? '#ef4444' : '#f59e0b'}; height: 8px; border-radius: 6px; width: ${percentUsed}%;"></div>
-        </div>
-        <p>To avoid service interruptions, consider upgrading your plan.</p>
-        <a href="${escapeHtml(billingUrl)}" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">
-          View Plan Options
-        </a>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #999; font-size: 12px;">Planisfy — Open-source mapping platform</p>
-      </div>
-    `,
-    text: `Hi ${params.name},\n\nYou've used ${params.usedUnits.toLocaleString()} of ${params.totalUnits.toLocaleString()} monthly Planisfy credits (${params.percentUsed}%).\n\nUpgrade: ${billingUrl}`,
+    ...rendered,
   })
 }
 
@@ -232,54 +201,30 @@ export async function sendVerificationEmail(params: {
   verifyUrl: string
 }) {
   const verifyUrl = validateEmailActionUrl(params.verifyUrl)
-  const name = escapeHtml(params.name)
+  const rendered = renderVerificationEmail({
+    name: params.name,
+    verifyUrl,
+    accountSettingsUrl: consoleActionUrl('/settings/profile'),
+  })
 
   return sendEmail({
     from: 'auth',
     to: params.email,
-    subject: 'Verify your Planisfy email address',
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #1a1a1a;">Verify your email</h2>
-        <p>Hi ${name},</p>
-        <p>Please verify your email address to get full access to Planisfy.</p>
-        <a href="${escapeHtml(verifyUrl)}" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">
-          Verify Email
-        </a>
-        <p style="color: #666; font-size: 14px;">If you didn't create a Planisfy account, you can safely ignore this email.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #999; font-size: 12px;">Planisfy — Open-source mapping platform</p>
-      </div>
-    `,
-    text: `Hi ${params.name},\n\nVerify your email: ${verifyUrl}`,
+    ...rendered,
   })
 }
 
 export async function sendWelcomeEmail(params: { email: string; name: string }) {
   const stylesUrl = consoleActionUrl('/styles')
-  const name = escapeHtml(params.name)
+  const rendered = renderWelcomeEmail({
+    name: params.name,
+    stylesUrl,
+    accountSettingsUrl: consoleActionUrl('/settings/profile'),
+  })
 
   return sendEmail({
     from: 'auth',
     to: params.email,
-    subject: 'Welcome to Planisfy!',
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #1a1a1a;">Welcome to Planisfy!</h2>
-        <p>Hi ${name},</p>
-        <p>Thanks for signing up. Here are some things you can do:</p>
-        <ul style="line-height: 1.8;">
-          <li><strong>Create a map style</strong> — Use our visual editor to design custom maps</li>
-          <li><strong>Generate API keys</strong> — Access tiles, geocoding, and routing APIs</li>
-          <li><strong>Invite your team</strong> — Create an organization and collaborate</li>
-        </ul>
-        <a href="${escapeHtml(stylesUrl)}" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">
-          Get Started
-        </a>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #999; font-size: 12px;">Planisfy — Open-source mapping platform</p>
-      </div>
-    `,
-    text: `Hi ${params.name},\n\nWelcome to Planisfy! Get started: ${stylesUrl}`,
+    ...rendered,
   })
 }

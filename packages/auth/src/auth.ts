@@ -313,6 +313,7 @@ export const auth = betterAuth({
 
   emailVerification: {
     sendOnSignUp: true,
+    sendOnSignIn: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
       console.log(`[email-verify] Sending verification to ${user.email}`)
