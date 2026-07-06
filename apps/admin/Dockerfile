@@ -7,6 +7,7 @@ FROM base AS deps
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/admin/package.json apps/admin/
+COPY packages/assets/package.json packages/assets/
 COPY packages/ui/package.json packages/ui/
 COPY packages/database/package.json packages/database/
 COPY packages/auth/package.json packages/auth/

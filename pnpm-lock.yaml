@@ -445,6 +445,9 @@ importers:
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      assets:
+        specifier: workspace:*
+        version: link:../../packages/assets
       better-auth:
         specifier: 1.6.11
         version: 1.6.11(drizzle-kit@0.31.9)(drizzle-orm@0.45.2(kysely@0.28.17)(postgres@3.4.8))(next@16.2.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@24.13.2)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
@@ -796,6 +799,15 @@ importers:
       vitest:
         specifier: 4.0.18
         version: 4.0.18(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0)
+
+  packages/assets:
+    devDependencies:
+      '@planisfy/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
 
   packages/auth:
     dependencies:
@@ -1186,6 +1198,9 @@ importers:
       '@tanstack/react-table':
         specifier: ^8.21.3
         version: 8.21.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      assets:
+        specifier: workspace:*
+        version: link:../assets
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

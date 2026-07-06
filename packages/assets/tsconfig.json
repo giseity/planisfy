@@ -1,0 +1,4 @@
+{
+  "extends": "@planisfy/typescript-config/source-package.json",
+  "include": ["src/**/*.ts"]
+}

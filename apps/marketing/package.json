@@ -17,6 +17,7 @@
     "@planisfy/env": "workspace:*",
     "@planisfy/types": "workspace:*",
     "@planisfy/ui": "workspace:*",
+    "assets": "workspace:*",
     "better-auth": "1.6.11",
     "lucide-react": "^0.563.0",
     "motion": "^12.40.0",
