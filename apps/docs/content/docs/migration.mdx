@@ -1,29 +1,46 @@
 ---
-title: Migration
-description: Move MapLibre/Mapbox-style clients to implemented Planisfy routes.
+title: Migration from Mapbox-style APIs
+description: Move MapLibre and Mapbox-style clients to the implemented Planisfy routes and authentication model.
 ---
 
-# Migration
+# Migration from Mapbox-style APIs
 
-Planisfy intentionally uses familiar style, tile, and coordinate shapes, but it is not a complete Mapbox API clone.
+Planisfy intentionally uses familiar style, tile, and coordinate shapes, but it is not a complete Mapbox API clone. Treat route compatibility as a practical migration layer, not a promise that every Mapbox endpoint or query parameter exists.
 
-## URL Changes
+## URL changes
 
-| Need                 | Planisfy route                                                           |
-| -------------------- | ------------------------------------------------------------------------ |
-| Style JSON           | `/styles/v1/{owner}/{style}`                                             |
-| Versioned style JSON | `/styles/v1/{owner}/{style}@{version}`                                   |
-| TileJSON             | `/tiles/v1/{owner}.{tileset}.json` or `/tiles/v1/{owner}/{tileset}.json` |
-| Vector tile          | `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}`                                |
-| Tilequery            | `/v4/{owner}.{tileset}/tilequery/{lon},{lat}.json`                       |
-| Style sprite         | `/styles/v1/{owner}/{style}/sprite(.json\|.png\|@2x.json\|@2x.png)`      |
-| Glyph PBF            | `/fonts/v1/{fontstack}/{range}.pbf`                                      |
-| Directions           | `/directions/v1/{profile}/{lon,lat;lon,lat}`                             |
+| Need | Planisfy route |
+| --- | --- |
+| Style JSON | `/styles/v1/{owner}/{style}` |
+| Versioned style JSON | `/styles/v1/{owner}/{style}@{version}` |
+| TileJSON | `/tiles/v1/{owner}.{tileset}.json` or `/tiles/v1/{owner}/{tileset}.json` |
+| Versioned TileJSON | `/tiles/v1/{owner}.{tileset}@{version}.json` or `/tiles/v1/{owner}/{tileset}/versions/{version}.json` |
+| Vector tile | `/tiles/v1/{owner}.{tileset}/{z}/{x}/{y}` or `/tiles/v1/{owner}/{tileset}/{z}/{x}/{y}` |
+| Tilequery | `/v4/{owner}.{tileset}/tilequery/{lon},{lat}.json` |
+| Style sprite | `/styles/v1/{owner}/{style}/sprite.json`, `.png`, `@2x.json`, or `@2x.png` |
+| Glyph PBF | `/fonts/v1/{fontstack}/{range}.pbf` |
+| Directions | `/directions/v1/{profile}/{lon,lat;lon,lat}` |
+| Static map | `/static/v1/{owner}/{style}/{lon},{lat},{zoom}/{width}x{height}.png` |
 
-## Auth Changes
+## Authentication changes
 
-Use `X-API-Key: pk_...` for service APIs. Do not pass Mapbox-style `access_token` as the primary auth mechanism; the implemented middleware validates the `X-API-Key` header and session cookies.
+Use `X-API-Key: pk_...` for service APIs. The API middleware validates API keys and authenticated Console sessions. Do not pass Mapbox-style `access_token` as the primary auth mechanism.
 
-## Compatibility Limits
+Public published styles, tiles, and glyphs can load anonymously when the resource is public. Private-owner reads and metered service APIs need an API key or session. See [authentication](/docs/guides/authentication) and [API key management](/docs/guides/api-keys).
 
-Tilequery is implemented for PMTiles-backed vector tilesets. Raster tilequery is not supported. Sprite routes are published only when the style references sprite assets; styles without sprite assets return `404 Sprite not configured`.
+## Compatibility limits
+
+Tilequery is implemented for PMTiles-backed vector tilesets. Raster tilequery is not supported.
+
+Sprite routes are published only when the style references sprite assets. Styles without sprite assets return `404 Sprite not configured`.
+
+Routing profiles are mapped to Valhalla costing. Review [directions](/docs/api/directions), [isochrone](/docs/api/isochrone), [matrix](/docs/api/matrix), and [optimized trips](/docs/api/optimization) before migrating route-heavy clients.
+
+## Suggested migration order
+
+1. Move style URLs to `/styles/v1/{owner}/{style}`.
+2. Confirm glyph and sprite URLs resolve from the published style JSON.
+3. Move TileJSON and vector tile URLs to `/tiles/v1/*`.
+4. Replace `access_token` usage with `X-API-Key`.
+5. Migrate geocoding, routing, elevation, and static map calls one service at a time.
+6. Use [error handling](/docs/guides/error-handling) and [rate limits](/docs/guides/rate-limits) to update client retries and monitoring.

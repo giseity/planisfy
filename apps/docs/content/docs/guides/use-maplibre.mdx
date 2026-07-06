@@ -1,0 +1,62 @@
+---
+title: Use MapLibre
+description: Integrate Planisfy style, tile, glyph, and sprite URLs with MapLibre clients.
+---
+
+# Use MapLibre
+
+Planisfy published style URLs are designed to be consumed directly by MapLibre GL JS and other MapLibre-compatible clients.
+
+## Basic browser map
+
+```html
+<link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
+<div id="map" style="height: 100vh"></div>
+<script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+<script>
+  const map = new maplibregl.Map({
+    container: "map",
+    style: "https://api.example.com/styles/v1/acme/streets",
+    center: [9.1829, 48.7758],
+    zoom: 12
+  });
+
+  map.addControl(new maplibregl.NavigationControl(), "top-right");
+</script>
+```
+
+The published style JSON contains the source, sprite, and glyph URLs needed by the map. If you publish a new version, the stable style URL resolves to the new published version.
+
+## Stable and versioned styles
+
+Use a stable URL while iterating:
+
+```text
+https://api.example.com/styles/v1/acme/streets
+```
+
+Use a versioned URL for pinned production clients:
+
+```text
+https://api.example.com/styles/v1/acme/streets@7
+```
+
+See [styles](/docs/api/styles) and [caching](/docs/guides/caching).
+
+## Tiles, glyphs, and sprites
+
+Planisfy serves the resources MapLibre expects:
+
+- TileJSON and vector tiles: [tiles](/docs/api/tiles)
+- Glyph PBFs: [glyphs and fonts](/docs/api/glyphs)
+- Sprite metadata and PNGs: [sprites](/docs/api/sprites)
+
+If a map renders geometry but not labels, check glyph configuration. If icon layers render without icons, check sprite publication.
+
+## Private maps
+
+Public published assets can load anonymously. For private-owner reads, provide an API key from a server-controlled context where possible. Be careful exposing private keys in browser apps. If a browser map must use restricted keys, configure domain restrictions and narrow scopes in Console. See [API key management](/docs/guides/api-keys).
+
+## Static previews
+
+For thumbnails, emails, or environments where an interactive map is not needed, use [static maps](/docs/api/static) instead of running MapLibre in the client.

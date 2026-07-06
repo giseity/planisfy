@@ -1,19 +1,39 @@
 ---
-title: Matrix
-description: Valhalla sources_to_targets proxy.
+title: Matrix API
+description: Request Valhalla sources_to_targets distance and duration matrices.
 ---
 
 # Matrix API
 
-```text
-GET /matrix/v1/{profile}/{lon,lat;lon,lat}
+Matrix requests proxy coordinates to Valhalla `sources_to_targets`.
+
+## Route
+
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/matrix/v1/{profile}/{lon,lat;lon,lat}` | Distance and duration matrix. |
+
+At least two coordinates are required. A request can include at most 25 matrix locations and 100 source-target cells.
+
+## Query parameters
+
+| Parameter | Notes |
+| --- | --- |
+| `sources` | Semicolon-separated coordinate indexes to use as sources. |
+| `destinations` | Semicolon-separated coordinate indexes to use as targets. |
+
+If omitted, all points are used as both sources and targets.
+
+```bash
+curl "https://api.example.com/matrix/v1/driving/9.18,48.77;9.20,48.78;9.25,48.80?sources=0&destinations=1;2" \
+  -H "X-API-Key: pk_your_key_here"
 ```
 
-The API sends coordinates to Valhalla `sources_to_targets`.
+## Auth and errors
 
-Optional query parameters:
+Requests require API key or session auth and a reachable Valhalla service. Invalid indexes, too many locations, or too many cells return `400 BAD_REQUEST`.
 
-- `sources`: semicolon-separated coordinate indexes.
-- `destinations`: semicolon-separated coordinate indexes.
+## Related
 
-If omitted, all points are used as both sources and targets. Requests require API key or session auth.
+- [Directions API](/docs/api/directions)
+- [Rate limits](/docs/guides/rate-limits)

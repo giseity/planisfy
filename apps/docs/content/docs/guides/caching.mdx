@@ -1,10 +1,50 @@
 ---
 title: Caching
-description: Cache behavior of public map APIs.
+description: Understand cache behavior for Planisfy styles, TileJSON, vector tiles, glyphs, routing, geocoding, elevation, and static maps.
 ---
 
 # Caching
 
-Stable published TileJSON and style URLs use short public cache windows. Versioned TileJSON URLs use long immutable caching. Glyphs cache for one day. Static maps cache for one hour when rendered successfully. Service API responses such as geocoding and routing use the headers set by their route implementations.
+Planisfy uses different cache behavior for stable aliases, immutable versions, and service API responses.
 
-Use version-pinned style and tileset URLs when a client needs immutable assets.
+## Stable published URLs
+
+Stable style and TileJSON URLs point to the currently published version:
+
+```text
+/styles/v1/{owner}/{style}
+/tiles/v1/{owner}/{tileset}.json
+```
+
+They use short public cache windows so clients can pick up newly published versions without waiting too long.
+
+## Versioned URLs
+
+Versioned TileJSON URLs receive long immutable cache headers:
+
+```text
+/tiles/v1/{owner}/{tileset}/versions/{version}.json
+/tiles/v1/{owner}.{tileset}@{version}.json
+```
+
+Versioned style URLs resolve a specific publication:
+
+```text
+/styles/v1/{owner}/{style}@{version}
+```
+
+Use versioned URLs for production releases when clients need repeatable rendering.
+
+## Glyphs, static maps, and services
+
+Glyph PBFs cache for one day. Static maps cache for one hour after a successful render. Elevation responses cache for one day. Geocoding and routing responses use the route-level headers set by the API implementation.
+
+## Client guidance
+
+Use stable URLs for editing and previews. Use versioned URLs when releasing a map into production, embedding a static report, or debugging a rendering issue where the underlying asset must not change.
+
+Related pages:
+
+- [Styles API](/docs/api/styles)
+- [Tiles API](/docs/api/tiles)
+- [Use MapLibre](/docs/guides/use-maplibre)

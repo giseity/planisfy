@@ -1,23 +1,47 @@
 ---
-title: Sprites
-description: Published style sprite routes.
+title: Sprites API
+description: Serve published MapLibre sprite metadata and PNG atlases for Planisfy styles.
 ---
 
 # Sprites API
 
-Published style sprite paths live under the style URL namespace:
+Published style sprite paths live under the style URL namespace.
 
-```text
-GET /styles/v1/{owner}/{style}/sprite.json
-GET /styles/v1/{owner}/{style}/sprite.png
-GET /styles/v1/{owner}/{style}/sprite@2x.json
-GET /styles/v1/{owner}/{style}/sprite@2x.png
-```
+## Routes
 
-Published style JSON includes:
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/styles/v1/{owner}/{style}/sprite.json` | Standard-resolution sprite metadata. |
+| `GET` | `/styles/v1/{owner}/{style}/sprite.png` | Standard-resolution sprite atlas. |
+| `GET` | `/styles/v1/{owner}/{style}/sprite@2x.json` | High-resolution sprite metadata. |
+| `GET` | `/styles/v1/{owner}/{style}/sprite@2x.png` | High-resolution sprite atlas. |
+
+Published style JSON includes a sprite base URL when the published style references sprite assets:
 
 ```json
-{ "sprite": "/styles/v1/{owner}/{style}/sprite" }
+{
+  "sprite": "/styles/v1/{owner}/{style}/sprite"
+}
 ```
 
-The sprite URL is emitted only when the published style references sprite assets. Styles without sprite assets return `404 Sprite not configured` for sprite routes.
+## Auth and caching
+
+Sprite access follows the parent style access rules. Public styles can serve sprites anonymously. Private styles require owner context from a valid API key or session.
+
+Sprite responses use the style cache policy and an `ETag`.
+
+## Common errors
+
+| Code | Meaning |
+| --- | --- |
+| `NOT_FOUND` | Style, owner, version, or sprite asset was not found. |
+| `FORBIDDEN` | The style is private and the request lacks owner access. |
+| `VALIDATION_ERROR` | The style version suffix is invalid. |
+
+Styles without sprite assets return `404 Sprite not configured`.
+
+## Related
+
+- [Styles API](/docs/api/styles)
+- [Publish a style](/docs/guides/publish-style)
+- [Use MapLibre](/docs/guides/use-maplibre)

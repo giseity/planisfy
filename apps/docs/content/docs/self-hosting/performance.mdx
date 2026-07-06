@@ -1,15 +1,35 @@
 ---
-title: Operations And Performance
-description: Basic operational checks for self-hosting.
+title: Self-Host Operations and Performance
+description: Validate health, monitor dependencies, size workers, and troubleshoot self-hosted Planisfy deployments.
 ---
 
-# Operations And Performance
+# Self-Host Operations and Performance
 
-Use `/health/detailed` and `/setup/preflight` before debugging clients. Together they report degraded dependencies such as missing worker heartbeat, storage issues, unavailable Martin, Valhalla readiness failures, missing Pelias, or missing static renderer. In production, call root diagnostics with internal authorization or use the authenticated Console preflight view.
+Use health and preflight diagnostics before debugging clients.
 
-Use object storage for production-like artifact serving. Keep geodata worker concurrency conservative until CPU, memory, and disk behavior are measured with your imports. Use versioned published URLs for long-lived client caching.
+## Readiness checks
 
-## Root-agent builds
+```bash
+curl http://localhost:4000/health
+curl http://localhost:4000/health/detailed
+curl http://localhost:4000/setup/preflight
+```
+
+Together these reports identify degraded dependencies such as missing worker heartbeat, storage issues, unavailable Martin, Valhalla readiness failures, missing Pelias, or missing static renderer. In production, call root diagnostics with internal authorization or use the authenticated Console preflight view.
+
+## What to monitor
+
+- API latency, errors, request IDs, and rate-limit responses.
+- Postgres connections, slow queries, storage growth, and backup success.
+- Redis availability and queue depth.
+- Worker heartbeat, failed jobs, and outbox lag.
+- Object storage errors, missing artifacts, and bucket policy drift.
+- Martin, Valhalla, Pelias, elevation, and static renderer readiness.
+- Disk, memory, and swap on build and serving machines.
+
+## Worker sizing
+
+Keep geodata worker concurrency conservative until CPU, memory, and disk behavior are measured with your imports. Use S3-compatible storage for production-like artifact serving and direct uploads.
 
 Before running regional or planet-scale routing builds, check:
 
@@ -22,6 +42,33 @@ Before running regional or planet-scale routing builds, check:
 
 Start with no-elevation builds. Elevation and DEM generation should be treated as separate capacity planning work after routing graph builds are reliable.
 
-Use local filesystem storage only for small smoke artifacts. Local storage cannot create signed direct upload sessions and is not a planet-scale artifact path.
+## Backup and restore
+
+Test backup and restore before trusting a deployment. At minimum, protect:
+
+- Postgres data.
+- Object storage buckets.
+- Runtime data directories for PMTiles, fonts, Valhalla, Pelias, and elevation.
+- Root-agent state directories and serving activation state.
+
+Use the repository smoke scripts where appropriate:
+
+```bash
+pnpm smoke:self-host-backup-restore
+pnpm smoke:self-host-restart-persistence
+pnpm smoke:self-host-support-bundle
+```
+
+## Troubleshooting
+
+If public maps are blank, inspect the style JSON, TileJSON, tile URL, and storage artifact availability in that order.
+
+If service APIs fail, check auth first, then the backing service readiness. For example, routing depends on Valhalla graph data, and geocoding depends on Pelias configuration.
 
 Runtime health is separate from build state. A Valhalla or Martin build can succeed while the runtime remains unavailable until the artifact is deployed to a serving worker and the readiness probe passes.
+
+## Related
+
+- [Error handling](/docs/guides/error-handling)
+- [Data sources](/docs/self-hosting/data-sources)
+- [External compute](/docs/self-hosting/external-compute)

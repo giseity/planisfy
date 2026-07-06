@@ -1,16 +1,41 @@
 ---
 title: Production Best Practices
-description: Practical production notes for current Planisfy deployments.
+description: Practical production guidance for secure, observable, and reliable Planisfy deployments.
 ---
 
 # Production Best Practices
 
+Use this checklist before relying on a Planisfy deployment for production traffic.
+
+## Security
+
 - Set strong `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, and source credential encryption.
+- Keep privileged API keys server-side.
+- Use narrow scopes, domain restrictions, and regular key rotation for browser-facing keys.
+- Keep database, Redis, and object storage ports private to the deployment network.
+
+## Data and storage
+
 - Use S3/R2-compatible object storage for production-like artifacts.
+- Treat local filesystem storage as a development or small smoke-test fallback.
 - Pin production clients to versioned style and TileJSON URLs when cache immutability matters.
-- Keep Valhalla, Pelias, Martin, elevation, and static renderer health visible in monitoring.
+- Keep PMTiles, fonts, Valhalla graph data, Pelias data, DEM files, and renderer configuration visible in readiness checks.
+
+## Operations
+
 - Run database migrations before starting upgraded app containers.
 - Test backup and restore before relying on self-host data.
-- Use polling root agents for external routing compute instead of exposing inbound worker endpoints.
-- Upload regional and planet-scale build artifacts directly to object storage. Treat API-proxied uploads as a small-artifact fallback only.
+- Monitor `/health`, `/health/detailed`, `/setup/preflight`, worker heartbeats, queue depth, storage errors, and upstream map engine health.
+- Preserve `X-Request-Id` in logs and support reports.
+
+## External compute
+
+- Use polling root agents for routing and basemap compute instead of exposing inbound worker endpoints.
+- Upload regional and planet-scale build artifacts directly to object storage.
 - Validate no-elevation routing builds before adding DEM or elevation workflows.
+
+## What to read next
+
+- [Self-hosting overview](/docs/self-hosting/overview)
+- [External compute](/docs/self-hosting/external-compute)
+- [Error handling](/docs/guides/error-handling)

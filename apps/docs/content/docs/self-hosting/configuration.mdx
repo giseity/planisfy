@@ -1,26 +1,52 @@
 ---
-title: Configuration
-description: Important self-host environment variables.
+title: Self-Host Configuration
+description: Configure Planisfy self-host secrets, public URLs, storage, geospatial services, workers, and provider settings.
 ---
 
-# Configuration
+# Self-Host Configuration
 
-Start from `.env.example`.
+Start from `.env.example` and keep production secrets out of source control.
 
-Important groups:
+## Important groups
 
-- Identity: `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, OAuth credentials, `SOURCE_CREDENTIAL_ENCRYPTION_KEY`.
-- Deployment: `DEPLOYMENT_MODE`, `APP_VERSION`, public `NEXT_PUBLIC_*` URLs.
-- Geospatial: `MARTIN_URL`, `VALHALLA_URL`, `PELIAS_URL`, `GLYPHS_URL`, `ELEVATION_URL`, `STATIC_MAP_URL`.
-- Storage: `STORAGE_PROVIDER`, local storage paths, S3 settings, R2 settings.
-- Worker: concurrency, outbox polling, DuckDB, Tippecanoe, ogr2ogr, Overture release settings.
-- Managed providers: Dodo Payments and ZeptoMail.
+| Group | Examples |
+| --- | --- |
+| Identity and security | `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, OAuth credentials, `SOURCE_CREDENTIAL_ENCRYPTION_KEY` |
+| Deployment | `DEPLOYMENT_MODE`, `APP_VERSION`, public `NEXT_PUBLIC_*` URLs |
+| Geospatial services | `MARTIN_URL`, `VALHALLA_URL`, `PELIAS_URL`, `GLYPHS_URL`, `ELEVATION_URL`, `STATIC_MAP_URL` |
+| Storage | `STORAGE_PROVIDER`, local storage paths, S3 settings, R2 settings |
+| Worker processing | concurrency, outbox polling, DuckDB, Tippecanoe, ogr2ogr, Overture release settings |
+| Managed providers | Dodo Payments and ZeptoMail settings |
 
 ## Deployment mode
 
-Use `DEPLOYMENT_MODE=self_host` for Docker Compose, VPS platforms, and other environments where you operate the runtime services. Self-host mode disables hosted checkout, billing portal actions, managed subscription feature gates, and hosted plan quotas. Usage remains visible for operational awareness.
+Use self-host mode for Docker Compose, VPS platforms, and customer-managed environments:
 
-Use `DEPLOYMENT_MODE=managed` only for a managed Planisfy environment with production provider configuration, including hosted billing, transactional email, and managed object storage.
+```bash
+DEPLOYMENT_MODE=self_host
+```
+
+Use managed mode only for a managed Planisfy environment with production provider configuration:
+
+```bash
+DEPLOYMENT_MODE=managed
+```
+
+See [deployment modes](/docs/concepts/deployment-modes).
+
+## Public URLs
+
+Make sure public URLs match the domains clients will use:
+
+```bash
+NEXT_PUBLIC_API_URL=https://api.example.com
+NEXT_PUBLIC_APP_URL=https://console.example.com
+NEXT_PUBLIC_CONSOLE_URL=https://console.example.com
+NEXT_PUBLIC_DOCS_URL=https://docs.example.com
+NEXT_PUBLIC_MARKETING_URL=https://example.com
+```
+
+For local Docker Compose, keep the localhost defaults from `.env.example`.
 
 ## Storage
 
@@ -37,18 +63,30 @@ AWS_ACCESS_KEY_ID=planisfy
 AWS_SECRET_ACCESS_KEY=planisfy-local-minio-password
 ```
 
-`S3_ENDPOINT` is the host-visible endpoint. `CONTAINER_S3_ENDPOINT` is the endpoint used by containers on the Compose network.
-
-Use the `with-minio` Compose profile for local S3-compatible storage:
-
-```bash
-docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
-```
+`S3_ENDPOINT` is host-visible. `CONTAINER_S3_ENDPOINT` is used by containers on the Compose network.
 
 `STORAGE_PROVIDER=local` writes to the local filesystem and is useful for development or small smoke tests. It cannot issue signed direct upload sessions, so it is not appropriate for regional or planet-scale routing artifacts.
 
-## Billing providers
+## Geospatial services
+
+The API can start when map engines are degraded, but service APIs need configured backends:
+
+- Geocoding needs `PELIAS_URL`.
+- Routing needs `VALHALLA_URL` and compatible graph data.
+- Tiles and glyphs need Martin sources and fonts.
+- Elevation needs `ELEVATION_URL` and DEM files.
+- Static maps need `STATIC_MAP_URL`.
+
+Review [data sources](/docs/self-hosting/data-sources) before testing clients.
+
+## Billing and email providers
 
 Dodo Payments settings are required for managed hosted checkout. In self-host mode they can remain empty unless you are building a custom billing integration outside the built-in hosted checkout flow.
 
-ZeptoMail settings are required for managed transactional email. Self-host deployments can configure their own mail provider settings or run with degraded email readiness while testing local workflows.
+ZeptoMail settings are required for managed transactional email. Self-host deployments can configure provider settings or run with degraded email readiness while testing local workflows.
+
+## Related
+
+- [Docker Compose](/docs/self-hosting/docker)
+- [Data sources](/docs/self-hosting/data-sources)
+- [Production best practices](/docs/guides/best-practices)

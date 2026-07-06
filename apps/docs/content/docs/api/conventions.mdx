@@ -1,0 +1,76 @@
+---
+title: API Conventions
+description: Base URLs, authentication, coordinate formats, errors, rate limits, and caching for Planisfy APIs.
+---
+
+# API Conventions
+
+Use this page before integrating individual API endpoints.
+
+## Base URLs
+
+| Environment | Base URL |
+| --- | --- |
+| Managed production | `https://api.planisfy.com` |
+| Local Docker Compose | `http://localhost:4000` |
+| Portless local development | `https://api.planisfy.localhost` |
+| Self-hosted deployment | Your public API origin |
+
+## Authentication
+
+Service APIs require an API key or session:
+
+```bash
+curl "https://api.example.com/geocoding/v1/forward?q=Lagos" \
+  -H "X-API-Key: pk_your_key_here"
+```
+
+The header name is case-insensitive, but examples use `X-API-Key`. Public published styles, tiles, and glyphs can be loaded anonymously when public. See [authentication](/docs/guides/authentication).
+
+## Coordinates
+
+Coordinate path parameters use longitude first:
+
+```text
+{lon},{lat}
+{lon},{lat};{lon},{lat}
+```
+
+Longitude must be between `-180` and `180`. Latitude must be between `-90` and `90`.
+
+## JSON errors
+
+Most API errors use:
+
+```json
+{
+  "error": {
+    "code": "BAD_REQUEST",
+    "message": "Invalid request"
+  }
+}
+```
+
+Every request receives `X-Request-Id`. Preserve it in logs and support reports. See [error handling](/docs/guides/error-handling).
+
+## Rate and quota headers
+
+Authenticated service APIs can return rate and quota headers:
+
+```text
+X-RateLimit-Limit
+X-RateLimit-Remaining
+X-RateLimit-Reset
+Retry-After
+X-Quota-Limit
+X-Quota-Used
+X-Quota-Remaining
+```
+
+See [rate limits](/docs/guides/rate-limits).
+
+## Stable and versioned URLs
+
+Stable published style and TileJSON URLs point to the current published version. Versioned URLs point to a specific immutable release and receive longer cache headers where supported.
+
+Use stable URLs in development and versioned URLs in production clients that need release pinning. See [caching](/docs/guides/caching), [styles](/docs/api/styles), and [tiles](/docs/api/tiles).

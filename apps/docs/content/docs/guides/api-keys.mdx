@@ -1,0 +1,48 @@
+---
+title: API Key Management
+description: Create, scope, restrict, rotate, and revoke Planisfy API keys.
+---
+
+# API Key Management
+
+API keys authenticate service API requests and can also attach owner context to private map asset reads.
+
+## Create a key
+
+In Console, open API keys and create a key with:
+
+- A name that identifies the app or environment.
+- Only the scopes the integration needs.
+- Optional domain restrictions for browser-facing keys.
+- An expiry date when the key is temporary or used by automation.
+
+Use the key with:
+
+```bash
+curl "https://api.example.com/geocoding/v1/forward?q=Lagos" \
+  -H "X-API-Key: pk_your_key_here"
+```
+
+## Scopes
+
+Use narrow scopes for public clients. A map display client usually needs public asset reads and selected service scopes. Server-side automation can use broader scopes, but should still be separated by environment and purpose.
+
+Common service areas include geocoding, directions/routing, elevation, static maps, and tiles/styles access.
+
+## Domain restrictions
+
+Domain restrictions reduce blast radius for keys embedded in browser apps. If a request origin does not match the key policy, the API can return `403 DOMAIN_NOT_ALLOWED`.
+
+Domain restrictions are not a replacement for keeping privileged keys on the server. Use them for public clients, not for administrative automation.
+
+## Rotation
+
+Rotate keys by creating a replacement, deploying the new value, watching traffic shift, and deleting the old key after clients have moved.
+
+Expired keys return `401 KEY_EXPIRED`. Deleted or invalid keys return `401 UNAUTHORIZED`.
+
+## What to read next
+
+- [Authentication](/docs/guides/authentication)
+- [Rate limits](/docs/guides/rate-limits)
+- [API conventions](/docs/api/conventions)

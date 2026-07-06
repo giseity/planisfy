@@ -1,16 +1,42 @@
 ---
-title: Glyphs And Fonts
-description: MapLibre glyph PBF proxy route.
+title: Glyphs and Fonts API
+description: Serve MapLibre glyph PBF ranges from the configured Planisfy glyph backend.
 ---
 
-# Glyphs And Fonts
+# Glyphs and Fonts API
 
 Planisfy proxies glyph PBF files from `GLYPHS_URL`.
 
-```text
-GET /fonts/v1/{fontstack}/{range}.pbf
+## Route
+
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/fonts/v1/{fontstack}/{range}.pbf` | MapLibre glyph PBF range. |
+
+`{range}` must be a valid glyph range such as `0-255.pbf`. The API strips the `.pbf` suffix before requesting the configured glyph backend.
+
+## Example
+
+```bash
+curl "https://api.example.com/fonts/v1/Noto%20Sans%20Regular/0-255.pbf" \
+  --output 0-255.pbf
 ```
 
-The API strips the `.pbf` suffix before requesting the configured glyph backend. Docker Compose points glyphs at Martin's font endpoint.
+MapLibre normally reads this route from the published style `glyphs` property.
 
-Responses use `Content-Type: application/x-protobuf` and `Cache-Control: public, max-age=86400`.
+## Auth and caching
+
+Glyphs can load anonymously when used by public styles. Responses use `Content-Type: application/x-protobuf`, `Access-Control-Allow-Origin: *`, and `Cache-Control: public, max-age=86400`.
+
+## Common errors
+
+| Code | Meaning |
+| --- | --- |
+| `VALIDATION_ERROR` | Invalid glyph range or unsafe fontstack. |
+| `NOT_FOUND` | The configured font backend does not have the requested range. |
+| `INTERNAL_ERROR` | The font backend is unavailable. |
+
+## Related
+
+- [Use MapLibre](/docs/guides/use-maplibre)
+- [Self-host data sources](/docs/self-hosting/data-sources)

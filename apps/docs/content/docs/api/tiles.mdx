@@ -1,6 +1,6 @@
 ---
-title: Tiles
-description: Implemented TileJSON and vector tile routes.
+title: Tiles API
+description: Serve published TileJSON, vector tiles, dotted aliases, immutable versions, and PMTiles-backed tilequery.
 ---
 
 # Tiles API
@@ -9,29 +9,59 @@ Tiles are served from published uploaded PMTiles artifacts or proxied Martin sou
 
 ## Routes
 
-```text
-GET /tiles/v1/{owner}/{handle}.json
-GET /tiles/v1/{owner}/{handle}/{z}/{x}/{y}
-GET /tiles/v1/{owner}/{handle}/versions/{version}.json
-GET /tiles/v1/{owner}/{handle}/versions/{version}/{z}/{x}/{y}
-GET /tiles/v1/{owner}.{handle}.json
-GET /tiles/v1/{owner}.{handle}@{version}.json
-GET /tiles/v1/{owner}.{handle}/{z}/{x}/{y}
-GET /tiles/v1/{source}.json
-GET /tiles/v1/{source}/{z}/{x}/{y}
-GET /v4/{owner}.{handle}/tilequery/{lon},{lat}.json
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/tiles/v1/{owner}/{handle}.json` | Stable TileJSON for the promoted version. |
+| `GET` | `/tiles/v1/{owner}/{handle}@{version}.json` | Stable path with inline version suffix. |
+| `GET` | `/tiles/v1/{owner}/{handle}/{z}/{x}/{y}` | Stable vector tile. |
+| `GET` | `/tiles/v1/{owner}/{handle}/versions/{version}.json` | Immutable version TileJSON. |
+| `GET` | `/tiles/v1/{owner}/{handle}/versions/{version}/{z}/{x}/{y}` | Immutable version vector tile. |
+| `GET` | `/tiles/v1/{owner}.{handle}.json` | Dotted stable TileJSON alias. |
+| `GET` | `/tiles/v1/{owner}.{handle}@{version}.json` | Dotted immutable TileJSON alias. |
+| `GET` | `/tiles/v1/{owner}.{handle}/{z}/{x}/{y}` | Dotted stable vector tile alias. |
+| `GET` | `/tiles/v1/{source}.json` | Legacy Martin TileJSON proxy when the source is not a Planisfy tileset slug. |
+| `GET` | `/tiles/v1/{source}/{z}/{x}/{y}` | Legacy Martin tile proxy when the source is not a Planisfy tileset slug. |
+| `GET` | `/v4/{owner}.{handle}/tilequery/{lon},{lat}.json` | PMTiles-backed vector tilequery. |
+
+Stable URLs resolve to the promoted current version. Version URLs are immutable and receive long cache headers where supported.
+
+## Example
+
+```bash
+curl "https://api.example.com/tiles/v1/acme/places.json"
 ```
 
-Stable URLs resolve to the promoted current version. Version URLs are immutable and receive long cache headers.
+```js
+const source = {
+  type: "vector",
+  url: "https://api.example.com/tiles/v1/acme/places.json"
+};
+```
 
 ## Auth
 
 Published public tiles can be read anonymously. Valid API keys or sessions may attach identity for private-owner reads and metering.
 
-## Errors
-
-Common responses include `404 NOT_FOUND` for missing tilesets or versions, `400 VALIDATION_ERROR` for invalid versions, and `503 ARTIFACT_MISSING` when the database points at a missing published artifact.
-
 ## Tilequery
 
-Tilequery is available for PMTiles-backed vector tilesets. Supported query parameters are `z`, `radius`, `limit`, `layers`, and `geometry=point|full`. Raster tilequery is not supported.
+Tilequery is available for PMTiles-backed vector tilesets:
+
+```bash
+curl "https://api.example.com/v4/acme.places/tilequery/9.1829,48.7758.json?radius=50&limit=5&geometry=point"
+```
+
+Supported query parameters are `z`, `radius`, `limit`, `layers`, and `geometry=point|full`. Raster tilequery is not supported.
+
+## Common errors
+
+| Code | Meaning |
+| --- | --- |
+| `NOT_FOUND` | Tileset, version, source, or tile was not found. |
+| `VALIDATION_ERROR` | Invalid version, tile coordinate, or tilequery request. |
+| `ARTIFACT_MISSING` | Published metadata points at a missing storage artifact. |
+
+## Related
+
+- [Upload a tileset](/docs/guides/upload-tileset)
+- [Use MapLibre](/docs/guides/use-maplibre)
+- [Caching](/docs/guides/caching)

@@ -1,11 +1,11 @@
 ---
 title: Error Handling
-description: JSON error shape and common codes.
+description: Learn the Planisfy JSON error shape, request IDs, common codes, and retry behavior.
 ---
 
 # Error Handling
 
-Most API errors use:
+Most API errors use this shape:
 
 ```json
 {
@@ -16,4 +16,29 @@ Most API errors use:
 }
 ```
 
-Validation errors include an `issues` array. Unhandled errors include `requestId` in production-safe responses. The API also returns `X-Request-Id` on every request.
+Validation errors can include additional details. Production-safe unhandled errors include a request ID in the response body, and every request receives an `X-Request-Id` header.
+
+## Common status codes
+
+| Status | Meaning |
+| --- | --- |
+| `400` | Invalid parameters, coordinates, versions, or request body. |
+| `401` | Missing, invalid, or expired authentication. |
+| `403` | Authenticated caller is not allowed to access the resource or scope. |
+| `404` | Resource, version, tile, font range, or configured asset was not found. |
+| `429` | Runtime rate limit or monthly quota was exceeded. |
+| `501` | A feature exists but the backing service is not configured, such as static rendering. |
+| `502` | An upstream map service returned an error. |
+| `503` | Required backing service is unavailable or not configured. |
+
+## Retry guidance
+
+Retry `429` only after `Retry-After` or `X-RateLimit-Reset`. Retry `502` and `503` with backoff. Do not retry `400`, `401`, `403`, or `404` without changing the request.
+
+For self-hosted deployments, check `/health/detailed` and `/setup/preflight` before debugging clients. See [operations and performance](/docs/self-hosting/performance).
+
+## What to read next
+
+- [API conventions](/docs/api/conventions)
+- [Authentication](/docs/guides/authentication)
+- [Rate limits](/docs/guides/rate-limits)

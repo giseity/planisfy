@@ -1,12 +1,55 @@
 ---
 title: Authentication
-description: API key and session access rules.
+description: Understand API key, session, public asset, and private-owner access rules.
 ---
 
 # Authentication
 
-Use `X-API-Key: pk_...` for service APIs. Browser Console calls can also use Better Auth session cookies.
+Planisfy supports two normal authentication paths:
 
-Published public map assets under `/tiles/*`, `/styles/v1/*`, and `/fonts/*` can load without a key. A valid key or session may still be used for private-owner access and metering.
+- `X-API-Key` for API integrations.
+- Authenticated Console sessions for browser Console requests.
 
-Invalid keys return `401 UNAUTHORIZED`; expired keys return `401 KEY_EXPIRED`; origin-restricted keys can return `403 DOMAIN_NOT_ALLOWED`; missing scopes return `403 SCOPE_DENIED`.
+Public published map assets under `/tiles/*`, `/styles/v1/*`, and `/fonts/*` can load without a key when the resource is public.
+
+## API keys
+
+Send API keys with:
+
+```bash
+curl "https://api.example.com/directions/v1/driving/9.18,48.77;9.2,48.78" \
+  -H "X-API-Key: pk_your_key_here"
+```
+
+Do not use Mapbox-style `access_token` as the primary auth mechanism. See [API key management](/docs/guides/api-keys) for scopes, domain restrictions, expiry, and rotation.
+
+## Public assets
+
+Published public styles, tiles, and glyphs can be used directly in MapLibre clients. A valid API key or session may still attach identity for private-owner reads and metering.
+
+## Service APIs
+
+These API groups require API key or session auth:
+
+- Geocoding
+- Directions, isochrones, matching, matrix, and optimized trips
+- Elevation
+- Static maps
+
+Review [API conventions](/docs/api/conventions) before integrating service APIs.
+
+## Common auth errors
+
+| Code | Meaning |
+| --- | --- |
+| `UNAUTHORIZED` | The key or session is missing or invalid. |
+| `KEY_EXPIRED` | The API key expiry date has passed. |
+| `DOMAIN_NOT_ALLOWED` | The key is restricted to different request origins. |
+| `SCOPE_DENIED` | The key does not include the required scope. |
+| `FORBIDDEN` | The authenticated owner cannot read the requested private resource. |
+
+## What to read next
+
+- [API key management](/docs/guides/api-keys)
+- [Error handling](/docs/guides/error-handling)
+- [Rate limits](/docs/guides/rate-limits)

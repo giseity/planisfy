@@ -1,6 +1,6 @@
 ---
-title: Geocoding
-description: Pelias-backed forward, reverse, and autocomplete routes.
+title: Geocoding API
+description: Forward, reverse, and autocomplete geocoding through a configured Pelias-compatible service.
 ---
 
 # Geocoding API
@@ -9,20 +9,59 @@ Geocoding requires `PELIAS_URL` to point at a Pelias-compatible service.
 
 ## Routes
 
-```text
-GET /geocoding/v1/forward?q={query}
-GET /geocoding/v1/reverse?lon={lon}&lat={lat}
-GET /geocoding/v1/autocomplete?text={text}
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/geocoding/v1/forward` | Search text to coordinates and places. |
+| `GET` | `/geocoding/v1/reverse` | Coordinates to nearby places. |
+| `GET` | `/geocoding/v1/autocomplete` | Typeahead place suggestions. |
+
+## Forward parameters
+
+| Parameter | Required | Notes |
+| --- | --- | --- |
+| `q` | Yes | Search text, maximum 500 characters. |
+| `limit` | No | Maximum 25 results. Defaults to `5`. |
+| `bbox` | No | Passed to Pelias as `boundary.rect`. |
+| `language` | No | Defaults to `en`. |
+| `country` | No | Passed to Pelias as `boundary.country`. |
+
+```bash
+curl "https://api.example.com/geocoding/v1/forward?q=Lagos&limit=3" \
+  -H "X-API-Key: pk_your_key_here"
 ```
 
-## Parameters
+## Reverse parameters
 
-Forward supports `q`, `limit` up to 25, `bbox`, `language`, and `country`.
+| Parameter | Required | Notes |
+| --- | --- | --- |
+| `lon` | Yes | Longitude, `-180..180`. |
+| `lat` | Yes | Latitude, `-90..90`. |
+| `limit` | No | Maximum 10 results. Defaults to `1`. |
+| `language` | No | Defaults to `en`. |
 
-Reverse supports `lon`, `lat`, `limit` up to 10, and `language`.
+```bash
+curl "https://api.example.com/geocoding/v1/reverse?lon=3.3792&lat=6.5244" \
+  -H "X-API-Key: pk_your_key_here"
+```
 
-Autocomplete supports `text`, `limit` up to 10, `language`, `focus.lon`, and `focus.lat`.
+## Autocomplete parameters
 
-## Auth And Errors
+| Parameter | Required | Notes |
+| --- | --- | --- |
+| `text` | Yes | Typeahead input, maximum 500 characters. |
+| `limit` | No | Maximum 10 results. Defaults to `5`. |
+| `language` | No | Defaults to `en`. |
+| `focus.lon` | No | Longitude bias. |
+| `focus.lat` | No | Latitude bias. |
 
-Requests require an API key or session. If Pelias is not configured, the API returns `503 GEOCODER_NOT_CONFIGURED`.
+## Auth, caching, and errors
+
+Requests require API key or session auth. Forward and reverse responses cache for one hour. Autocomplete responses cache for one minute.
+
+If Pelias is not configured, the API returns `503 GEOCODER_NOT_CONFIGURED`. Upstream Pelias failures return `502 UPSTREAM_ERROR` or `503 GEOCODER_UNAVAILABLE`.
+
+## Related
+
+- [Authentication](/docs/guides/authentication)
+- [Error handling](/docs/guides/error-handling)
+- [Self-host data sources](/docs/self-hosting/data-sources)

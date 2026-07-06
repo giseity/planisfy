@@ -1,6 +1,6 @@
 ---
-title: Directions
-description: Valhalla-backed route endpoint.
+title: Directions API
+description: Request Valhalla-backed point-to-point routes with GET coordinates or POST JSON bodies.
 ---
 
 # Directions API
@@ -9,13 +9,60 @@ Directions proxy to Valhalla's `route` action.
 
 ## Routes
 
-```text
-GET /directions/v1/{profile}/{lon,lat;lon,lat}
-POST /directions/v1/{profile}
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/directions/v1/{profile}/{lon,lat;lon,lat}` | Route from URL coordinates. |
+| `POST` | `/directions/v1/{profile}` | Route from a Valhalla-like JSON body. |
+
+GET supports 2 to 25 coordinates.
+
+## Profiles
+
+Profiles map to Valhalla costing:
+
+| Profiles | Valhalla costing |
+| --- | --- |
+| `driving`, `driving-traffic`, `car`, `auto` | `auto` |
+| `walking`, `pedestrian` | `pedestrian` |
+| `cycling`, `bicycle`, `bike` | `bicycle` |
+| `truck` | `truck` |
+| `bus` | `bus` |
+| `motor_scooter` | `motor_scooter` |
+| `motorcycle` | `motorcycle` |
+
+## GET parameters
+
+| Parameter | Notes |
+| --- | --- |
+| `alternatives` | Number of alternate routes, clamped to 3. |
+| `units` | Defaults to `kilometers`; `miles` is also supported. |
+| `language` | Defaults to `en`. |
+
+```bash
+curl "https://api.example.com/directions/v1/driving/9.1829,48.7758;9.2000,48.7800?units=kilometers" \
+  -H "X-API-Key: pk_your_key_here"
 ```
 
-GET query parameters include `alternatives`, `units`, and `language`. POST accepts a Valhalla-like JSON body with `locations`, optional `costing`, `units`, `language`, `alternates`, and `directions_options`.
+## POST body
 
-Profiles map to Valhalla costing: `driving`, `driving-traffic`, `car`, and `auto` use `auto`; `walking` and `pedestrian` use `pedestrian`; `cycling`, `bicycle`, and `bike` use `bicycle`; `truck`, `bus`, `motor_scooter`, and `motorcycle` pass through.
+```json
+{
+  "locations": [
+    { "lon": 9.1829, "lat": 48.7758 },
+    { "lon": 9.2, "lat": 48.78 }
+  ],
+  "units": "kilometers",
+  "language": "en",
+  "alternates": 0
+}
+```
 
-Requests require API key or session auth and a reachable Valhalla service with graph data for the requested region.
+## Auth, caching, and errors
+
+Requests require API key or session auth and a reachable Valhalla service with graph data for the requested region. Successful GET responses cache for five minutes. Unknown profiles and invalid coordinates return `400 BAD_REQUEST`.
+
+## Related
+
+- [Isochrone API](/docs/api/isochrone)
+- [Matrix API](/docs/api/matrix)
+- [Self-host data sources](/docs/self-hosting/data-sources)

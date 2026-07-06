@@ -1,22 +1,52 @@
 ---
-title: Rate Limits
-description: Current request and quota behavior.
+title: Rate Limits and Quotas
+description: Understand runtime rate-limit headers, monthly quota headers, and managed versus self-host behavior.
 ---
 
-# Rate Limits
+# Rate Limits and Quotas
 
-Authenticated service requests are checked against runtime rate limits and monthly usage quotas. The API emits:
+Authenticated service requests are checked against runtime rate limits and monthly usage quotas.
 
-- `X-RateLimit-Limit`
-- `X-RateLimit-Remaining`
-- `X-RateLimit-Reset`
-- `Retry-After` on rate-limit failures
-- `X-Quota-Limit`
-- `X-Quota-Used`
-- `X-Quota-Remaining`
+## Headers
 
-Rate-limit failures return `429 RATE_LIMITED`. Monthly quota failures return `429 QUOTA_EXCEEDED`.
+The API can emit:
 
-In managed Planisfy, hosted subscription plans also gate features such as audit logs, operations controls, routing builds, external root agents, and planet-scale builds.
+```text
+X-RateLimit-Limit
+X-RateLimit-Remaining
+X-RateLimit-Reset
+Retry-After
+X-Quota-Limit
+X-Quota-Used
+X-Quota-Remaining
+```
+
+Store these headers in client logs when diagnosing traffic spikes.
+
+## Failures
+
+Rate-limit failures return:
+
+```text
+429 RATE_LIMITED
+```
+
+Monthly quota failures return:
+
+```text
+429 QUOTA_EXCEEDED
+```
+
+Retry rate-limit failures only after `Retry-After` or `X-RateLimit-Reset`.
+
+## Managed and self-host behavior
+
+In managed Planisfy, hosted subscription plans can also gate features such as audit logs, operations controls, routing builds, external root agents, and planet-scale builds.
 
 In self-host mode, hosted checkout and managed subscription gates are disabled. Usage remains visible for operational monitoring, while hosted plan quotas use the platform allowance instead of blocking self-host operators. Apply custom limits outside the built-in hosted billing workflow if your deployment needs them.
+
+## What to read next
+
+- [API key management](/docs/guides/api-keys)
+- [Error handling](/docs/guides/error-handling)
+- [Deployment modes](/docs/concepts/deployment-modes)

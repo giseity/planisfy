@@ -1,0 +1,52 @@
+---
+title: Platform Overview
+description: Understand the Planisfy API, Console, workers, storage, and geospatial engines.
+---
+
+# Platform Overview
+
+Planisfy is split into user-facing apps, an API control plane, background workers, shared packages, object storage, and geospatial engines.
+
+## Main surfaces
+
+| Surface | Purpose |
+| --- | --- |
+| API | Serves public map APIs, authenticated service APIs, Console APIs, health, metrics, and internal webhooks. |
+| Console | Customer workspace for styles, tilesets, API keys, usage, operations, and self-host readiness. |
+| Docs | Public documentation site for platform usage and API behavior. |
+| Admin | Internal operator surface for tenants, jobs, storage, usage, health, and upgrades. |
+| Worker geodata | Processes uploads, imports, tiling jobs, outbox events, and artifact ledger updates. |
+| Root agent | Optional external compute agent for routing graph builds, basemap builds, DEM hydration, and serving activation. |
+
+## Runtime dependencies
+
+Planisfy relies on Postgres for control-plane data, Redis for queues and runtime coordination, and object storage for generated artifacts. The map engines are intentionally replaceable:
+
+- Martin serves PMTiles, MBTiles, directory tile sources, and glyphs in self-host setups.
+- Valhalla serves directions, isochrones, map matching, matrices, optimized trips, and routing graph data.
+- Pelias-compatible services serve forward, reverse, and autocomplete geocoding.
+- The elevation service serves SRTM HGT-based point and route elevation profiles.
+- The static renderer produces PNG map images from published styles.
+
+## Request flow
+
+Public map asset requests go directly to the API route namespace:
+
+```text
+Client -> Planisfy API -> storage or map engine -> response
+```
+
+Build workflows use asynchronous processing:
+
+```text
+Console -> API -> queue/outbox -> worker or root agent -> storage -> publication metadata
+```
+
+The API is the control plane. Large artifacts should live in S3-compatible storage or R2, not inside API request bodies. See [external compute](/docs/self-hosting/external-compute) for root-agent builds.
+
+## What to read next
+
+- [Resources and publications](/docs/concepts/resources)
+- [Deployment modes](/docs/concepts/deployment-modes)
+- [Upload a tileset](/docs/guides/upload-tileset)
+- [Publish a style](/docs/guides/publish-style)

@@ -2,7 +2,7 @@ import { RootProvider } from "fumadocs-ui/provider/next";
 import type { Metadata } from "next";
 import "./global.css";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3002";
+const appUrl = process.env.NEXT_PUBLIC_DOCS_URL ?? "http://localhost:3002";
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),

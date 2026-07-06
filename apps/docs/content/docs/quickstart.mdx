@@ -1,30 +1,56 @@
 ---
 title: Quickstart
-description: Render a published Planisfy style with MapLibre.
+description: Render a published Planisfy map with MapLibre, verify API access, and learn the first publishing workflow.
 ---
 
 # Quickstart
 
-## 1. Pick A Style URL
+This guide renders a published Planisfy style in MapLibre and shows how authenticated service APIs are called.
+
+## Choose an API origin
+
+Use the origin for your environment:
+
+| Environment | API origin |
+| --- | --- |
+| Managed production | `https://api.planisfy.com` |
+| Local Docker Compose | `http://localhost:4000` |
+| Portless local development | `https://api.planisfy.localhost` |
+| Self-hosted deployment | Your public API domain |
+
+The examples below use `http://localhost:4000`. Replace it with your API origin.
+
+## Pick a style URL
+
+Planisfy style URLs are MapLibre-compatible:
 
 ```text
-https://api.planisfy.com/styles/v1/{owner}/{style}
-https://api.planisfy.com/styles/v1/{owner}/{style}@{version}
+http://localhost:4000/styles/v1/{owner}/{style}
+http://localhost:4000/styles/v1/{owner}/{style}@{version}
 ```
 
-For local Docker Compose, replace the origin with `http://localhost:4000`.
+Use the stable URL while iterating. Use the versioned URL when a production client needs immutable content and predictable caching. See [caching](/docs/guides/caching) for the tradeoff.
 
-## 2. Render With MapLibre
+## Render with MapLibre
+
+Save this as a small HTML file and open it in a browser:
 
 ```html
 <!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
+    <title>Planisfy MapLibre Quickstart</title>
     <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
-      body { margin: 0; }
-      #map { width: 100vw; height: 100vh; }
+      body {
+        margin: 0;
+      }
+
+      #map {
+        width: 100vw;
+        height: 100vh;
+      }
     </style>
   </head>
   <body>
@@ -37,21 +63,52 @@ For local Docker Compose, replace the origin with `http://localhost:4000`.
         center: [9.1829, 48.7758],
         zoom: 12
       });
+
       map.addControl(new maplibregl.NavigationControl(), "top-right");
     </script>
   </body>
 </html>
 ```
 
-## 3. Check API Access
+If the map loads but labels are missing, check [glyphs and fonts](/docs/api/glyphs). If icons are missing, check [sprites](/docs/api/sprites). If tiles are missing, check [tiles](/docs/api/tiles) and the self-host [data sources](/docs/self-hosting/data-sources).
 
-Published public assets can load without a key. Service APIs require an API key or session:
+## Call an authenticated API
+
+Service APIs require an API key or Console session. Create a key in Console, then call a service endpoint:
 
 ```bash
-curl "http://localhost:4000/geocoding/v1/forward?q=Stuttgart" \
+curl "http://localhost:4000/geocoding/v1/forward?q=Stuttgart&limit=3" \
   -H "X-API-Key: pk_your_key_here"
 ```
 
-## 4. Publish Your Own Data
+For browser and server integrations, prefer `X-API-Key`. Do not use Mapbox-style `access_token` as the primary auth mechanism. Review [authentication](/docs/guides/authentication), [API key management](/docs/guides/api-keys), and [error handling](/docs/guides/error-handling).
 
-Use Console to upload or import data, build a tileset, add it to a style, publish the style, and copy the stable or versioned URLs.
+## Publish your first map
+
+The normal publishing path is:
+
+1. Open Console and create or select an organization.
+2. Create a tileset, then upload or import source data.
+3. Build the tileset and wait for a published TileJSON URL.
+4. Create a style and add the tileset as a source.
+5. Publish the style.
+6. Copy either the stable style URL or a versioned style URL.
+7. Render that URL from MapLibre, native SDKs, or a static map request.
+
+Detailed guides:
+
+- [Upload a tileset](/docs/guides/upload-tileset)
+- [Publish a style](/docs/guides/publish-style)
+- [Use MapLibre](/docs/guides/use-maplibre)
+
+## Verify a self-host stack
+
+For local Docker Compose, check the API and setup reports before debugging clients:
+
+```bash
+curl http://localhost:4000/health
+curl http://localhost:4000/health/detailed
+curl http://localhost:4000/setup/preflight
+```
+
+Missing PMTiles, fonts, Valhalla graph data, Pelias data, DEM files, or static renderer configuration can make a clean self-host stack partially degraded. That is expected until you provide compatible datasets. Continue with [self-hosting overview](/docs/self-hosting/overview).

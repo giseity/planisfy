@@ -1,0 +1,50 @@
+---
+title: Deployment Modes
+description: Compare managed and self-hosted Planisfy deployments and the responsibilities of each mode.
+---
+
+# Deployment Modes
+
+Planisfy supports two deployment modes with the same core API shapes and different operating boundaries.
+
+## Managed mode
+
+Managed Planisfy is a hosted environment where provider configuration and hosted policy are operated centrally. Billing, transactional email, managed object storage, public HTTPS ingress, and subscription feature gates are expected to be configured.
+
+Choose managed mode when you want Planisfy to operate the service and expose stable public APIs without managing the runtime stack yourself.
+
+## Self-host mode
+
+Self-host mode is for Docker Compose, VPS platforms, private infrastructure, and customer-managed environments. You operate:
+
+- Postgres and Redis.
+- Object storage, usually S3-compatible MinIO, S3, or R2.
+- Martin, Valhalla, Pelias, elevation, and static rendering services.
+- Backups, restores, upgrades, monitoring, and incident response.
+- External root agents if you run routing graph or basemap builds outside the API host.
+
+Self-host mode disables hosted checkout, hosted billing portal actions, managed subscription feature gates, and hosted plan quotas. Usage remains visible for operational awareness.
+
+## Environment variable
+
+Use:
+
+```bash
+DEPLOYMENT_MODE=self_host
+```
+
+for Docker Compose, Dokploy-style VPS installs, and other customer-managed environments.
+
+Use:
+
+```bash
+DEPLOYMENT_MODE=managed
+```
+
+only for a managed Planisfy deployment with production provider configuration.
+
+## What to read next
+
+- [Self-hosting overview](/docs/self-hosting/overview)
+- [Self-host configuration](/docs/self-hosting/configuration)
+- [Production best practices](/docs/guides/best-practices)

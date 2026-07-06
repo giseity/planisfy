@@ -1,25 +1,55 @@
 ---
 title: Self-Hosting Overview
-description: What the Docker self-host stack runs.
+description: Understand what the Planisfy self-host stack runs, what you operate, and where to start.
 ---
 
 # Self-Hosting Overview
 
-The Docker Compose stack runs the Planisfy apps, worker, database, Redis, object storage, and local geospatial engines. It is useful for development, demos, self-host trials, and small production deployments where you operate the infrastructure yourself.
+Self-hosting runs the same core Planisfy application code on infrastructure you operate. It is useful for development, demos, private deployments, and small production installs where you own the runtime services.
 
-Core services: API, Console, Admin, Docs, Marketing, worker-geodata, Postgres, Redis, Martin, Valhalla, Pelias, elevation, static-renderer, and MinIO when the `with-minio` profile is enabled.
+## What the stack runs
 
-Optional profiles: MinIO, Traefik, Pelias fixture import, and self-host supervisor.
+The Docker Compose stack includes:
 
-Binary map data is not committed. Place PMTiles, fonts, Valhalla graph data, DEM files, and Pelias fixture/import data under `infra/docker/data` or configure external providers.
+- API, Console, Admin, Docs, and Marketing apps.
+- `worker-geodata` for uploads, imports, tiling, and artifact processing.
+- Postgres and Redis.
+- Martin for tiles and glyphs.
+- Valhalla for routing.
+- Pelias API and Elasticsearch for geocoding.
+- Local elevation service.
+- Static renderer.
+- MinIO when the `with-minio` profile is enabled.
 
-## Managed vs self-host
+Optional profiles add Traefik, tile-worker, Pelias fixture import jobs, and the self-host supervisor.
 
-`DEPLOYMENT_MODE=self_host` keeps the same application code and public API shapes as managed Planisfy, but changes ownership boundaries:
+## What you operate
 
-- You operate Postgres, Redis, storage, geospatial engines, backups, upgrades, and observability.
-- Hosted checkout, billing portal, managed subscription feature gates, and hosted plan quotas are disabled. Billing screens show usage for visibility.
-- Self-host deployments should use S3-compatible object storage, usually the bundled MinIO profile. Local filesystem storage is only a development or small-artifact fallback.
-- External compute uses polling root agents. Root agents connect outbound to the API, receive jobs, upload artifacts directly to object storage when supported, then finalize metadata through the API.
+With `DEPLOYMENT_MODE=self_host`, you are responsible for:
 
-Managed Planisfy operates the provider configuration and enforces hosted subscription gates. Self-host operators can still apply their own policy outside Planisfy, but the built-in hosted checkout workflow is not part of self-host mode.
+- Database and Redis availability.
+- Object storage and artifact retention.
+- PMTiles, fonts, Valhalla graph data, Pelias data, DEM files, and static renderer readiness.
+- Backups, restores, upgrades, monitoring, and log retention.
+- External root agents if you run regional or planet-scale builds.
+
+Hosted checkout, hosted billing portal actions, managed subscription feature gates, and hosted plan quotas are disabled. Usage screens still show operational activity.
+
+## Recommended path
+
+1. Start with [Docker Compose](/docs/self-hosting/docker).
+2. Review [configuration](/docs/self-hosting/configuration), especially URLs, secrets, and storage.
+3. Add required [data sources](/docs/self-hosting/data-sources).
+4. Create the first Console account.
+5. Run health, preflight, and smoke checks.
+6. Add [external compute](/docs/self-hosting/external-compute) only after the base stack is healthy.
+
+## Dataset expectations
+
+Planisfy does not ship production map datasets. A clean stack can boot with degraded service checks until compatible files or external providers are configured. Missing data should not prevent Console/API startup, but it will affect maps, geocoding, routing, elevation, or static rendering.
+
+## Related
+
+- [Deployment modes](/docs/concepts/deployment-modes)
+- [Docker Compose](/docs/self-hosting/docker)
+- [Operations and performance](/docs/self-hosting/performance)

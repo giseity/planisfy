@@ -1,30 +1,40 @@
 ---
-title: Welcome
-description: Current Planisfy API and self-hosting documentation.
+title: Planisfy Documentation
+description: Learn how to publish MapLibre styles, vector tiles, geocoding, routing, elevation, and static map APIs with Planisfy.
 ---
 
-# Planisfy Docs
+# Planisfy Documentation
 
-Planisfy publishes MapLibre styles, vector tiles, and related map service APIs through a Hono gateway backed by PostgreSQL, Redis, storage, and open geospatial engines.
-
-## What Exists Today
-
-- Published styles at `/styles/v1/{owner}/{style}` and `/styles/v1/{owner}/{style}@{version}`.
-- Published tilesets and TileJSON at `/tiles/v1/*`.
-- Glyph proxy at `/fonts/v1/{fontstack}/{range}.pbf`.
-- Geocoding through a configured Pelias-compatible service.
-- Routing, isochrones, matching, matrices, and optimized trips through Valhalla.
-- Elevation through a configured elevation service.
-- Static PNG maps through the configured static renderer.
-- Self-host Docker Compose for the apps, database, Redis, Martin, Valhalla, Pelias, elevation, renderer, worker, and optional profiles.
-
-## Access Model
-
-Published map assets under `/tiles/*`, `/styles/v1/*`, and `/fonts/*` can load anonymously when public. Service APIs require `X-API-Key` or a valid session cookie.
+Planisfy is a geospatial API platform for publishing MapLibre styles, vector tiles, and map service APIs on open geospatial engines. Use it to serve public map assets, protect service APIs with API keys, and operate the same stack in managed or self-hosted environments.
 
 ## Start Here
 
-- [Quickstart](/docs/quickstart)
-- [Vector Tiles API](/docs/api/tiles)
-- [Directions API](/docs/api/directions)
-- [Self-Hosting Overview](/docs/self-hosting/overview)
+| Goal | Read |
+| --- | --- |
+| Render a published map in a browser | [Quickstart](/docs/quickstart) |
+| Understand the platform pieces | [Platform overview](/docs/concepts/platform-overview) |
+| Publish your own map | [Publish a style](/docs/guides/publish-style) |
+| Upload or import tiles | [Upload a tileset](/docs/guides/upload-tileset) |
+| Call service APIs | [API conventions](/docs/api/conventions) |
+| Run Planisfy yourself | [Self-hosting overview](/docs/self-hosting/overview) |
+
+## What Planisfy Serves
+
+- Published MapLibre style JSON at `/styles/v1/{owner}/{style}` and immutable style versions at `/styles/v1/{owner}/{style}@{version}`.
+- Published TileJSON and vector tiles under `/tiles/v1/*`, including dotted aliases such as `/tiles/v1/{owner}.{tileset}.json`.
+- MapLibre glyph PBFs under `/fonts/v1/{fontstack}/{range}.pbf`.
+- Optional style sprites under `/styles/v1/{owner}/{style}/sprite*`.
+- Pelias-backed geocoding, Valhalla-backed routing, elevation lookups, and static PNG map rendering.
+- Console workflows for styles, tilesets, API keys, usage, operations, and self-host checks.
+
+## Access Model
+
+Public published map assets can be loaded anonymously by browsers and native map clients. Authenticated requests can still be used for owner access and metering.
+
+Service APIs such as geocoding, directions, matrix, elevation, and static maps require `X-API-Key` or an authenticated Console session. Start with [authentication](/docs/guides/authentication), then review [rate limits](/docs/guides/rate-limits) and [error handling](/docs/guides/error-handling).
+
+## Deployment Choices
+
+Managed Planisfy operates the provider configuration, hosted billing, email, storage, and production runtime policy for you. Self-hosted Planisfy uses the same API shapes but makes you responsible for Postgres, Redis, object storage, geospatial engines, backups, upgrades, and observability.
+
+Read [deployment modes](/docs/concepts/deployment-modes) before choosing an environment, or go directly to [Docker Compose](/docs/self-hosting/docker) for local self-host setup.

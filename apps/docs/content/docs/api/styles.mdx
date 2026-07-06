@@ -1,25 +1,49 @@
 ---
-title: Styles
-description: Published MapLibre style JSON routes.
+title: Styles API
+description: Serve published MapLibre style JSON with stable and versioned Planisfy URLs.
 ---
 
 # Styles API
 
-Published styles return the stored published style snapshot.
+Published styles return MapLibre style JSON snapshots.
 
 ## Routes
 
-```text
-GET /styles/v1/{owner}/{style}
-GET /styles/v1/{owner}/{style}@{version}
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/styles/v1/{owner}/{style}` | Current published style for the stable alias. |
+| `GET` | `/styles/v1/{owner}/{style}@{version}` | A specific published style version. |
+
+`{version}` must be a positive integer. Stable URLs resolve the `latest` publication alias. Version URLs resolve the matching published snapshot.
+
+## Example
+
+```bash
+curl "https://api.example.com/styles/v1/acme/streets"
 ```
 
-`{version}` must be a positive integer. Stable URLs use the publication alias `latest`; version URLs resolve the matching `v{version}` publication.
+MapLibre can use the URL directly:
+
+```js
+const map = new maplibregl.Map({
+  container: "map",
+  style: "https://api.example.com/styles/v1/acme/streets",
+  center: [9.1829, 48.7758],
+  zoom: 12
+});
+```
 
 ## Auth
 
-Public styles can be read anonymously. Private styles require the style owner context from a valid API key or session.
+Public styles can be read anonymously. Private styles require owner context from a valid API key or session. Forbidden private reads return `403 FORBIDDEN`.
 
 ## Caching
 
 Public styles return `Cache-Control: public, max-age=300` and an `ETag`. Private styles return `private, no-cache`.
+
+## Related
+
+- [Publish a style](/docs/guides/publish-style)
+- [Use MapLibre](/docs/guides/use-maplibre)
+- [Sprites API](/docs/api/sprites)
+- [Caching](/docs/guides/caching)

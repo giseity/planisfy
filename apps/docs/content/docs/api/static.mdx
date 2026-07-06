@@ -1,14 +1,38 @@
 ---
-title: Static Maps
-description: PNG map rendering through the configured static renderer.
+title: Static Maps API
+description: Render PNG map images from published styles through the configured Planisfy static renderer.
 ---
 
 # Static Maps API
 
-```text
-GET /static/v1/{owner}/{style}/{lon},{lat},{zoom}/{width}x{height}.png
+Static maps render PNG images through the configured static renderer.
+
+## Route
+
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/static/v1/{owner}/{style}/{lon},{lat},{zoom}/{width}x{height}.png` | Render a PNG map image. |
+
+Width and height must be positive and no larger than 2048.
+
+```bash
+curl "https://api.example.com/static/v1/acme/streets/9.1829,48.7758,12/800x600.png" \
+  -H "X-API-Key: pk_your_key_here" \
+  --output map.png
 ```
 
-Width and height must be positive and no larger than 2048. The API forwards auth headers to the configured renderer.
+## Auth and upstream behavior
 
-If `STATIC_MAP_URL` is empty, the route returns `501 NOT_IMPLEMENTED`. Requests require API key or session auth.
+Requests require API key or session auth. The API forwards `x-api-key`, `authorization`, and `cookie` headers to the renderer so private styles and resources can be resolved.
+
+If `STATIC_MAP_URL` is empty, the route returns `501 NOT_IMPLEMENTED`.
+
+## Caching and errors
+
+Successful PNG responses use `Cache-Control: public, max-age=3600`. Invalid center or size values return `400 BAD_REQUEST`. Renderer failures return `502 UPSTREAM_ERROR` or `503 INTERNAL_ERROR`.
+
+## Related
+
+- [Styles API](/docs/api/styles)
+- [Use MapLibre](/docs/guides/use-maplibre)
+- [Self-host configuration](/docs/self-hosting/configuration)

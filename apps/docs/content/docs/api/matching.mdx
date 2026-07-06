@@ -1,12 +1,30 @@
 ---
-title: Map Matching
-description: Valhalla trace_route proxy.
+title: Map Matching API
+description: Snap coordinate traces to Valhalla routes with the trace_route action.
 ---
 
 # Map Matching API
 
-```text
-GET /matching/v1/{profile}/{lon,lat;lon,lat}
+Map matching sends a coordinate trace to Valhalla `trace_route` with `shape_match: "map_snap"`.
+
+## Route
+
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/matching/v1/{profile}/{lon,lat;lon,lat}` | Snap a trace to the route network. |
+
+At least two and at most 100 coordinates are required.
+
+```bash
+curl "https://api.example.com/matching/v1/driving/9.1829,48.7758;9.1900,48.7780;9.2000,48.7800" \
+  -H "X-API-Key: pk_your_key_here"
 ```
 
-The API sends the coordinate shape to Valhalla `trace_route` with `shape_match: "map_snap"`. At least two coordinates are required. Requests require API key or session auth.
+## Auth and errors
+
+Requests require API key or session auth and a reachable Valhalla service. Unknown profiles and invalid coordinates return `400 BAD_REQUEST`.
+
+## Related
+
+- [Directions API](/docs/api/directions)
+- [Error handling](/docs/guides/error-handling)

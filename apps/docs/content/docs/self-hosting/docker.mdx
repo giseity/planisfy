@@ -1,9 +1,13 @@
 ---
-title: Docker Compose
-description: Start and inspect the current Compose stack.
+title: Docker Compose Self-Hosting
+description: Start, inspect, and validate the current Planisfy Docker Compose stack.
 ---
 
-# Docker Compose
+# Docker Compose Self-Hosting
+
+Run these commands from the repository root.
+
+## Start the stack
 
 ```bash
 cp .env.example .env
@@ -12,15 +16,68 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with
 pnpm db:migrate
 ```
 
-Useful checks:
+The `with-minio` profile starts local S3-compatible storage and initializes the artifact bucket. It is the recommended self-host storage path because it matches production object-storage behavior and supports direct root-agent artifact uploads.
+
+## Default ports
+
+| Service | URL |
+| --- | --- |
+| Marketing | `http://localhost:3000` |
+| Console | `http://localhost:3001` |
+| Docs | `http://localhost:3002` |
+| Admin | `http://localhost:3003` |
+| API | `http://localhost:4000` |
+| Martin | `http://localhost:3005` |
+| Valhalla | `http://localhost:3007` |
+| Pelias | `http://localhost:3100` |
+| Elevation | `http://localhost:4011` |
+| Static renderer | `http://localhost:4300` |
+
+## Inspect the stack
 
 ```bash
 docker compose --env-file .env -f infra/docker/docker-compose.yml ps
+docker compose --env-file .env -f infra/docker/docker-compose.yml logs -f api
 curl http://localhost:4000/health
 curl http://localhost:4000/health/detailed
 curl http://localhost:4000/setup/preflight
 ```
 
-Default ports include API `4000`, Console `3001`, Admin `3003`, Docs `3002`, Marketing `3000`, Martin `3005`, Valhalla `3007`, Pelias `3100`, elevation `4011`, and static renderer `4300`.
+In production, detailed health and root preflight diagnostics require internal authorization. Console-mounted preflight remains available to authenticated Console sessions.
 
-The `with-minio` profile starts local S3-compatible storage and initializes the artifact bucket. This is the recommended self-host storage path because it matches production object-storage behavior and supports direct root-agent artifact uploads. `STORAGE_PROVIDER=local` is available for development-only loops, but it cannot issue signed object-storage upload sessions.
+## Create the first account
+
+After migrations complete, open:
+
+```text
+http://localhost:3001/sign-up
+```
+
+Create the first Console account, then verify you can open Styles, Tilesets, API Keys, Usage, and Operations.
+
+## Optional profiles
+
+```bash
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-proxy up -d traefik
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-supervisor up -d self-host-supervisor admin
+TILE_DELIVERY_MODE=worker docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-tile-worker up -d api tile-worker
+```
+
+## Smoke checks
+
+Use the repository scripts after the stack is running:
+
+```bash
+pnpm smoke:self-host-default-map
+pnpm e2e:product-loop
+pnpm smoke:self-host-backup-restore
+```
+
+For a new environment, start with health and preflight, then the default map smoke, then the full product loop.
+
+## Related
+
+- [Configuration](/docs/self-hosting/configuration)
+- [Data sources](/docs/self-hosting/data-sources)
+- [Operations and performance](/docs/self-hosting/performance)

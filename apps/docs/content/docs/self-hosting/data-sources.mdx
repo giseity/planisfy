@@ -1,19 +1,36 @@
 ---
-title: Data Sources
-description: Data required by local map engines.
+title: Self-Host Data Sources
+description: Provide PMTiles, fonts, Valhalla graph data, Pelias data, elevation DEM files, and basemap build inputs.
 ---
 
-# Data Sources
+# Self-Host Data Sources
 
-Planisfy does not ship production map datasets.
+Planisfy does not ship production map datasets. A clean self-host stack can boot before map data is ready, but service checks will be degraded until compatible data exists.
 
-- PMTiles: mount files under `infra/docker/data/pmtiles` for Martin or publish uploaded tilesets through Console.
-- Fonts: hydrate `infra/docker/data/fonts` for Martin glyph serving.
-- Valhalla: place graph/runtime data under `infra/docker/data/valhalla_data`.
-- Pelias: use the bundled API/Elasticsearch for smoke coverage or run the official Pelias project for real imports.
-- Elevation: place SRTM `.hgt` files under `infra/docker/data/elevation`.
+## Runtime data paths
 
-Routing graph builds can also produce Valhalla artifacts through an external root agent. For regional or planet-scale outputs, use S3-compatible storage so the agent can upload artifacts directly to object storage and the API can record them after finalize.
+| Data | Path or provider |
+| --- | --- |
+| PMTiles | `infra/docker/data/pmtiles` for Martin, or published uploads through Console |
+| Fonts | `infra/docker/data/fonts` for Martin glyph serving |
+| Valhalla graph data | `infra/docker/data/valhalla_data` |
+| Pelias import data | bundled fixture path for smoke tests or an external Pelias import workflow |
+| Elevation DEM files | `infra/docker/data/elevation` |
+| Planisfy artifacts | S3-compatible storage, R2, or local storage for small smoke tests |
+
+## Demo PMTiles fixture
+
+For local demos, use the setup helper with demo data:
+
+```bash
+scripts/self-host-setup.sh --demo-data
+```
+
+The setup script can use `PLANISFY_FIXTURE_BASE_URL`, `DEMO_PMTILES_URL`, `DEMO_PMTILES_FALLBACK_URL`, or `DEMO_PMTILES_FALLBACK_PATH` depending on how your environment retrieves fixtures.
+
+## Routing graph data
+
+Valhalla needs graph data for the requested region before directions, isochrones, matching, matrix, or optimized trips can return useful results. You can provide graph data manually or build it through a root agent. Start with small no-elevation routing builds before adding DEM/elevation workflows.
 
 ## Basemap builds
 
@@ -29,3 +46,17 @@ The normal flow is:
 6. An active release can be promoted to the primary basemap.
 
 Overture basemap builds are modeled separately from OSM builds. They require a stable layer profile before they should be used for regional or planet production builds.
+
+## Troubleshooting missing data
+
+- Blank geometry usually means TileJSON, tile URLs, or source artifacts are missing.
+- Missing labels usually means glyph data or `GLYPHS_URL` is wrong.
+- Routing `503` responses usually mean Valhalla is unavailable or lacks graph data.
+- Geocoding `503 GEOCODER_NOT_CONFIGURED` means `PELIAS_URL` is missing or disabled.
+- Elevation `404 NO_ELEVATION_DATA` means DEM coverage is missing for the route.
+
+## Related
+
+- [External compute](/docs/self-hosting/external-compute)
+- [Tiles API](/docs/api/tiles)
+- [Directions API](/docs/api/directions)

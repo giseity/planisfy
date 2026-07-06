@@ -2,11 +2,34 @@
   "docs": [
     {
       "title": "Getting Started",
-      "pages": ["index", "quickstart", "migration"]
+      "pages": ["index", "quickstart"]
+    },
+    {
+      "title": "Concepts",
+      "pages": [
+        "concepts/platform-overview",
+        "concepts/resources",
+        "concepts/deployment-modes"
+      ]
+    },
+    {
+      "title": "Guides",
+      "pages": [
+        "guides/use-maplibre",
+        "guides/upload-tileset",
+        "guides/publish-style",
+        "guides/api-keys",
+        "guides/authentication",
+        "guides/rate-limits",
+        "guides/caching",
+        "guides/error-handling",
+        "guides/best-practices"
+      ]
     },
     {
       "title": "API Reference",
       "pages": [
+        "api/conventions",
         "api/tiles",
         "api/styles",
         "api/glyphs",
@@ -22,16 +45,6 @@
       ]
     },
     {
-      "title": "Guides",
-      "pages": [
-        "guides/authentication",
-        "guides/rate-limits",
-        "guides/caching",
-        "guides/error-handling",
-        "guides/best-practices"
-      ]
-    },
-    {
       "title": "Self-Hosting",
       "pages": [
         "self-hosting/overview",
@@ -41,6 +54,10 @@
         "self-hosting/data-sources",
         "self-hosting/performance"
       ]
+    },
+    {
+      "title": "Migration",
+      "pages": ["migration"]
     }
   ]
 }

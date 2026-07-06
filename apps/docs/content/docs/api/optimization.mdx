@@ -1,12 +1,30 @@
 ---
-title: Optimized Trips
-description: Valhalla optimized_route proxy.
+title: Optimized Trips API
+description: Request Valhalla optimized_route trips for small waypoint sets.
 ---
 
 # Optimized Trips API
 
-```text
-GET /optimized-trips/v1/{profile}/{lon,lat;lon,lat;lon,lat}
+Optimized trips proxy locations to Valhalla `optimized_route`.
+
+## Route
+
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/optimized-trips/v1/{profile}/{lon,lat;lon,lat;lon,lat}` | Optimized waypoint order. |
+
+At least three and at most 12 coordinates are required.
+
+```bash
+curl "https://api.example.com/optimized-trips/v1/driving/9.18,48.77;9.20,48.78;9.25,48.80" \
+  -H "X-API-Key: pk_your_key_here"
 ```
 
-At least three coordinates are required. The API forwards locations and costing to Valhalla `optimized_route`. Requests require API key or session auth.
+## Auth and errors
+
+Requests require API key or session auth and a reachable Valhalla service. Unknown profiles and invalid coordinate counts return `400 BAD_REQUEST`.
+
+## Related
+
+- [Directions API](/docs/api/directions)
+- [Matrix API](/docs/api/matrix)

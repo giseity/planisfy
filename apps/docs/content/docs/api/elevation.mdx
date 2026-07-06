@@ -1,6 +1,6 @@
 ---
-title: Elevation
-description: Configured elevation lookup and profile routes.
+title: Elevation API
+description: Query point elevations and route elevation profiles through the configured elevation service.
 ---
 
 # Elevation API
@@ -9,12 +9,37 @@ Elevation proxies to `ELEVATION_URL`, which Docker Compose points at the local S
 
 ## Routes
 
-```text
-GET /elevation/v1/{lon,lat}
-GET /elevation/v1/{lon,lat;lon,lat}
-GET /elevation/v1/along/{lon,lat;lon,lat}?samples=100
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/elevation/v1/{lon,lat}` | Elevation for one point. |
+| `GET` | `/elevation/v1/{lon,lat;lon,lat}` | Elevation for up to 100 points. |
+| `GET` | `/elevation/v1/along/{lon,lat;lon,lat}` | Interpolated elevation profile along a route. |
+
+## Along-route parameters
+
+| Parameter | Notes |
+| --- | --- |
+| `samples` | Number of interpolated samples, capped at 500. Defaults to `100`. |
+
+```bash
+curl "https://api.example.com/elevation/v1/9.1829,48.7758" \
+  -H "X-API-Key: pk_your_key_here"
 ```
 
-Point lookups accept up to 100 points. Along-route profiles require at least two points and sample up to 500 interpolated locations.
+```bash
+curl "https://api.example.com/elevation/v1/along/9.1829,48.7758;9.2000,48.7800?samples=50" \
+  -H "X-API-Key: pk_your_key_here"
+```
 
-Requests require API key or session auth.
+## Response notes
+
+Point lookups return an `elevations` array and attribution. Along-route profiles return `profile`, `summary`, and attribution.
+
+## Auth, caching, and errors
+
+Requests require API key or session auth. Successful responses cache for one day. Missing DEM coverage for an along-route profile can return `404 NO_ELEVATION_DATA`.
+
+## Related
+
+- [Self-host data sources](/docs/self-hosting/data-sources)
+- [External compute](/docs/self-hosting/external-compute)

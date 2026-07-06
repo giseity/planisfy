@@ -1,0 +1,54 @@
+---
+title: Publish a Style
+description: Create, edit, publish, and integrate MapLibre style URLs from Planisfy Console.
+---
+
+# Publish a Style
+
+A Planisfy style is a MapLibre style JSON document with a stable public API URL after publication.
+
+## Workflow
+
+1. Open Console and go to Styles.
+2. Create a style or duplicate an existing one.
+3. Add sources, including Planisfy tilesets or external sources.
+4. Configure layers, labels, colors, icons, and visibility.
+5. Validate the preview.
+6. Publish the style.
+7. Copy the stable or versioned style URL.
+
+## Stable URL
+
+```text
+https://api.example.com/styles/v1/{owner}/{style}
+```
+
+The stable URL follows the `latest` publication alias. It is convenient during iteration because clients pick up newly published versions after short cache windows.
+
+## Versioned URL
+
+```text
+https://api.example.com/styles/v1/{owner}/{style}@{version}
+```
+
+Use versioned URLs for production apps that should not change until you deploy a client update or intentionally update the URL.
+
+## Sprites and glyphs
+
+If a style uses icons, publish the sprite assets referenced by the style. Published style JSON emits a `sprite` URL only when sprite metadata exists.
+
+Labels use glyph URLs. Self-hosted deployments need a configured glyph backend and hydrated font data. See [sprites](/docs/api/sprites) and [glyphs and fonts](/docs/api/glyphs).
+
+## Troubleshooting
+
+If the style URL returns `404`, confirm the style exists, is published, and the owner/style handles are correct.
+
+If it returns `403`, the style is private and the request does not carry owner access through a valid API key or session.
+
+If the map loads blank, open the style JSON directly, inspect source URLs, then check [tiles](/docs/api/tiles) and [error handling](/docs/guides/error-handling).
+
+## What to read next
+
+- [Use MapLibre](/docs/guides/use-maplibre)
+- [Styles API](/docs/api/styles)
+- [Caching](/docs/guides/caching)

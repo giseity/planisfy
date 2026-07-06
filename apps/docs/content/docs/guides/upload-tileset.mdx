@@ -1,0 +1,52 @@
+---
+title: Upload a Tileset
+description: Upload or import data, build a tileset, publish TileJSON, and use the result in styles.
+---
+
+# Upload a Tileset
+
+Tilesets are the data layer behind Planisfy maps. A published tileset exposes TileJSON and vector tile URLs that can be used by styles and clients.
+
+## Workflow
+
+1. Open Console and go to Tilesets.
+2. Create a tileset with a clear name and handle.
+3. Upload source data or start a supported import.
+4. Wait for the processing job to finish.
+5. Publish the generated tileset version.
+6. Copy the stable or versioned TileJSON URL.
+7. Add the tileset to a style source.
+
+## URL formats
+
+Stable TileJSON:
+
+```text
+https://api.example.com/tiles/v1/{owner}/{tileset}.json
+https://api.example.com/tiles/v1/{owner}.{tileset}.json
+```
+
+Versioned TileJSON:
+
+```text
+https://api.example.com/tiles/v1/{owner}/{tileset}/versions/{version}.json
+https://api.example.com/tiles/v1/{owner}.{tileset}@{version}.json
+```
+
+The TileJSON response lists vector layers and tile URL templates. See [tiles](/docs/api/tiles).
+
+## Storage expectations
+
+Self-hosted deployments should use S3-compatible storage for production-like artifacts. Local filesystem storage is useful for small smoke tests, but it cannot issue signed direct upload sessions and is not suitable for large regional or planet-scale artifacts. See [self-host configuration](/docs/self-hosting/configuration).
+
+## Troubleshooting
+
+If TileJSON returns `503 ARTIFACT_MISSING`, the database points to a published artifact that is not available in storage. Check object storage credentials, bucket configuration, and worker logs.
+
+If a tileset builds successfully but does not render, inspect the TileJSON vector layer names and confirm the style source/layer references match them.
+
+## What to read next
+
+- [Publish a style](/docs/guides/publish-style)
+- [Tiles API](/docs/api/tiles)
+- [Data sources](/docs/self-hosting/data-sources)

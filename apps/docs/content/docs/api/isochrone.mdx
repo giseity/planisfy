@@ -1,18 +1,39 @@
 ---
-title: Isochrone
-description: Valhalla-backed isochrone endpoint.
+title: Isochrone API
+description: Generate Valhalla-backed travel-time or travel-distance contours from a single coordinate.
 ---
 
 # Isochrone API
 
-```text
-GET /isochrone/v1/{profile}/{lon,lat}
+Isochrones proxy to Valhalla's `isochrone` action.
+
+## Route
+
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/isochrone/v1/{profile}/{lon,lat}` | Reachability contour from one coordinate. |
+
+## Query parameters
+
+| Parameter | Notes |
+| --- | --- |
+| `contours_minutes` | Comma-separated contour times. Each value must be `1..240`. |
+| `contours_meters` | Comma-separated contour distances; converted to kilometers for Valhalla. |
+| `polygons` | Defaults to `true`; pass `false` for non-polygon output. |
+
+At most four contours are allowed. If no contour is provided, the API requests a 15 minute contour.
+
+```bash
+curl "https://api.example.com/isochrone/v1/walking/9.1829,48.7758?contours_minutes=10,20&polygons=true" \
+  -H "X-API-Key: pk_your_key_here"
 ```
 
-Query parameters:
+## Auth, caching, and errors
 
-- `contours_minutes`: comma-separated contour times.
-- `contours_meters`: comma-separated contour distances converted to kilometers for Valhalla.
-- `polygons`: defaults to `true`; pass `false` for non-polygon output.
+Requests require API key or session auth and a reachable Valhalla service. Successful responses cache for five minutes. Unknown profiles, invalid coordinates, and out-of-range contours return `400 BAD_REQUEST`.
 
-If no contour is provided, the API requests a 15 minute contour. Requests require API key or session auth.
+## Related
+
+- [Directions API](/docs/api/directions)
+- [Matrix API](/docs/api/matrix)
+- [Error handling](/docs/guides/error-handling)

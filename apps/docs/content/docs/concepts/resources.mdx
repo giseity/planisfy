@@ -1,0 +1,60 @@
+---
+title: Resources and Publications
+description: Learn how Planisfy models styles, tilesets, versions, sprites, glyphs, and published URLs.
+---
+
+# Resources and Publications
+
+Planisfy separates editable resources from published URLs. Draft resources can change inside Console. Published URLs are the contract used by clients.
+
+## Styles
+
+A style is a MapLibre style JSON document owned by an account. It can reference Planisfy tilesets, external tile sources, glyphs, and sprite assets.
+
+Publishing a style creates a style version and moves the stable style alias to that version:
+
+```text
+/styles/v1/{owner}/{style}
+```
+
+Versioned style URLs resolve a specific published version:
+
+```text
+/styles/v1/{owner}/{style}@{version}
+```
+
+Use stable URLs for fast iteration and versioned URLs for production releases that need immutable client behavior.
+
+## Tilesets
+
+A tileset is a vector tile resource. It may come from uploaded artifacts, imports, PMTiles, MBTiles, or build outputs. Published TileJSON is available at:
+
+```text
+/tiles/v1/{owner}/{tileset}.json
+/tiles/v1/{owner}.{tileset}.json
+```
+
+Versioned TileJSON is available at:
+
+```text
+/tiles/v1/{owner}/{tileset}/versions/{version}.json
+/tiles/v1/{owner}.{tileset}@{version}.json
+```
+
+The TileJSON tells clients which vector tile URLs and vector layers are available. See [tiles](/docs/api/tiles).
+
+## Sprites and glyphs
+
+Sprites are optional style-specific icon atlases. A published style only emits a `sprite` URL when it references sprite assets. See [sprites](/docs/api/sprites).
+
+Glyphs are font PBF ranges used by MapLibre labels. They are served under `/fonts/v1/*` and normally come from the configured glyph backend. See [glyphs and fonts](/docs/api/glyphs).
+
+## Public and private access
+
+Public published styles, tiles, and glyphs can be loaded anonymously. Private styles and owner-scoped reads require a valid API key or session that belongs to the owner. Service APIs always require authentication. See [authentication](/docs/guides/authentication).
+
+## What to read next
+
+- [Publish a style](/docs/guides/publish-style)
+- [Upload a tileset](/docs/guides/upload-tileset)
+- [Caching](/docs/guides/caching)
