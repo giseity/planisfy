@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ChevronRight, Menu, Monitor, Moon, Sun, X } from 'lucide-react'
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'motion/react'
 import { useTheme } from 'next-themes'
+import { useSession } from '@planisfy/auth/client'
 
 import { PlanisfyLogo } from '@planisfy/ui/components/brand-mark'
 import { Button } from '@planisfy/ui/components/button'
@@ -20,11 +21,12 @@ import { useMedia } from '@/hooks/use-media'
 
 type HeroHeaderProps = {
   docsHref: string
+  consoleHref: string
   signInHref: string
   signUpHref: string
 }
 
-export const HeroHeader = ({ docsHref, signInHref, signUpHref }: HeroHeaderProps) => {
+export const HeroHeader = ({ consoleHref, docsHref, signInHref, signUpHref }: HeroHeaderProps) => {
   const [menuState, setMenuState] = React.useState(false)
   const [isScrolled, setIsScrolled] = React.useState(false)
   const { scrollY } = useScroll()
@@ -64,8 +66,10 @@ export const HeroHeader = ({ docsHref, signInHref, signUpHref }: HeroHeaderProps
 
             {isLarge && (
               <FloatingNavPill
+                consoleHref={consoleHref}
                 docsHref={docsHref}
                 isScrolled={isScrolled}
+                signInHref={signInHref}
                 signUpHref={signUpHref}
               />
             )}
@@ -81,16 +85,11 @@ export const HeroHeader = ({ docsHref, signInHref, signUpHref }: HeroHeaderProps
                 )}
               >
                 <ThemeToggle />
-                <Button asChild variant="ghost" size="marketing">
-                  <a href={signInHref}>
-                    <span>Sign in</span>
-                  </a>
-                </Button>
-                <Button asChild size="marketing">
-                  <a href={signUpHref}>
-                    <span>Get started</span>
-                  </a>
-                </Button>
+                <AuthActions
+                  consoleHref={consoleHref}
+                  signInHref={signInHref}
+                  signUpHref={signUpHref}
+                />
               </div>
             </div>
           </div>
@@ -129,12 +128,16 @@ const NavItems = ({ docsHref }: { docsHref: string }) => {
 }
 
 const FloatingNavPill = ({
+  consoleHref,
   docsHref,
   isScrolled,
+  signInHref,
   signUpHref,
 }: {
+  consoleHref: string
   docsHref: string
   isScrolled: boolean
+  signInHref: string
   signUpHref: string
 }) => {
   return (
@@ -184,18 +187,84 @@ const FloatingNavPill = ({
               <NavItems docsHref={docsHref} />
               <div className="ml-2 flex items-center gap-2 border-l pl-2">
                 <ThemeToggle />
-                <Button asChild size="marketing" className="mr-2 gap-1 pr-1">
-                  <a href={signUpHref}>
-                    <span>Get started</span>
-                    <ChevronRight className="opacity-50" />
-                  </a>
-                </Button>
+                <AuthActions
+                  compact
+                  consoleHref={consoleHref}
+                  signInHref={signInHref}
+                  signUpHref={signUpHref}
+                />
               </div>
             </>
           </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
+  )
+}
+
+function AuthActions({
+  compact = false,
+  consoleHref,
+  signInHref,
+  signUpHref,
+}: {
+  compact?: boolean
+  consoleHref: string
+  signInHref: string
+  signUpHref: string
+}) {
+  const { data: session, refetch } = useSession()
+  const isSignedIn = Boolean(session?.user)
+
+  React.useEffect(() => {
+    const refreshSession = () => {
+      void refetch?.()
+    }
+
+    window.addEventListener('focus', refreshSession)
+    document.addEventListener('visibilitychange', refreshSession)
+
+    return () => {
+      window.removeEventListener('focus', refreshSession)
+      document.removeEventListener('visibilitychange', refreshSession)
+    }
+  }, [refetch])
+
+  if (isSignedIn) {
+    return (
+      <Button asChild size="marketing" className={cn(compact && 'mr-2 gap-1 pr-1')}>
+        <a href={consoleHref}>
+          <span>Open console</span>
+          {compact && <ChevronRight className="opacity-50" />}
+        </a>
+      </Button>
+    )
+  }
+
+  if (compact) {
+    return (
+      <Button asChild size="marketing" className="mr-2 gap-1 pr-1">
+        <a href={signUpHref}>
+          <span>Get started</span>
+          <ChevronRight className="opacity-50" />
+        </a>
+      </Button>
+    )
+  }
+
+  return (
+    <>
+      <Button asChild variant="ghost" size="marketing">
+        <a href={signInHref}>
+          <span>Sign in</span>
+        </a>
+      </Button>
+      <Button asChild size="marketing">
+        <a href={signUpHref}>
+          <span>Get started</span>
+        </a>
+      </Button>
+    </>
   )
 }
 

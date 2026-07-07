@@ -35,6 +35,7 @@ export default function ContactPage() {
   return (
     <div className="min-h-svh bg-background">
       <HeroHeader
+        consoleHref={clientEnv.NEXT_PUBLIC_CONSOLE_URL}
         docsHref={clientEnv.NEXT_PUBLIC_DOCS_URL}
         signInHref={signInHref}
         signUpHref={signUpHref}

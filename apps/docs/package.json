@@ -14,11 +14,13 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
+    "@planisfy/ui": "workspace:*",
     "fumadocs-core": "16.5.4",
     "fumadocs-mdx": "14.2.7",
     "fumadocs-ui": "16.5.4",
     "lucide-react": "^0.563.0",
     "next": "16.2.9",
+    "next-themes": "^0.4.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tailwind-merge": "^3.4.0"

@@ -35,7 +35,12 @@ type HeroSectionProps = {
 export function HeroSection({ docsHref, signInHref, signUpHref, consoleHref }: HeroSectionProps) {
   return (
     <>
-      <HeroHeader docsHref={docsHref} signInHref={signInHref} signUpHref={signUpHref} />
+      <HeroHeader
+        consoleHref={consoleHref}
+        docsHref={docsHref}
+        signInHref={signInHref}
+        signUpHref={signUpHref}
+      />
       <main className="overflow-hidden">
         <section className="bg-background">
           <div className="relative pb-32 pt-32 lg:pt-44">

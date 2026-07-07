@@ -3,7 +3,9 @@
 import * as React from 'react'
 import { useTheme } from 'next-themes'
 
-const THEME_COOKIE = 'planisfy-theme'
+export const SHARED_THEME_STORAGE_KEY = 'planisfy-theme'
+
+const THEME_COOKIE = SHARED_THEME_STORAGE_KEY
 const VALID_THEMES = new Set(['light', 'dark', 'system'])
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
@@ -57,11 +59,12 @@ export function ThemeCookieSync() {
 }
 
 function readThemeCookie() {
-  const cookie = document.cookie
+  const cookies = document.cookie
     .split('; ')
-    .find((part) => part.startsWith(`${THEME_COOKIE}=`))
-    ?.split('=')[1]
+    .filter((part) => part.startsWith(`${THEME_COOKIE}=`))
+    .map((part) => part.split('=')[1])
 
+  const cookie = cookies.at(-1)
   const theme = cookie ? decodeURIComponent(cookie) : undefined
   return isTheme(theme) ? theme : undefined
 }
@@ -77,19 +80,21 @@ function writeThemeCookie(theme: string) {
     .filter(Boolean)
     .join('; ')
 
-  document.cookie = `${THEME_COOKIE}=${encoded}; ${attributes}`
-
   const domain = sharedCookieDomain(window.location.hostname)
   if (domain) {
+    document.cookie = `${THEME_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`
     document.cookie = `${THEME_COOKIE}=${encoded}; Domain=${domain}; ${attributes}`
+    return
   }
+
+  document.cookie = `${THEME_COOKIE}=${encoded}; ${attributes}`
 }
 
 function sharedCookieDomain(hostname: string) {
   if (!hostname.includes('.') || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return undefined
 
   const parts = hostname.split('.')
-  return parts.slice(-2).join('.')
+  return `.${parts.slice(-2).join('.')}`
 }
 
 function isTheme(theme: unknown): theme is 'light' | 'dark' | 'system' {
