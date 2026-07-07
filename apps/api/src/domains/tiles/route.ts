@@ -332,14 +332,11 @@ async function proxyMartinTile(c: ApiContext, path: string) {
     }
 
     const body = await res.arrayBuffer();
-    const contentType =
-      res.headers.get("content-type") || "application/x-protobuf";
-    const encoding = res.headers.get("content-encoding");
+    const headers = martinTileResponseHeaders(res.headers);
 
-    c.header("Content-Type", contentType);
-    if (encoding) c.header("Content-Encoding", encoding);
-    c.header("Cache-Control", "public, max-age=3600");
-    c.header("Access-Control-Allow-Origin", "*");
+    c.header("Content-Type", headers.contentType);
+    c.header("Cache-Control", headers.cacheControl);
+    c.header("Access-Control-Allow-Origin", headers.accessControlAllowOrigin);
 
     return c.body(body);
   } catch (err) {
@@ -349,6 +346,15 @@ async function proxyMartinTile(c: ApiContext, path: string) {
       503,
     );
   }
+}
+
+export function martinTileResponseHeaders(upstreamHeaders: Headers) {
+  return {
+    contentType:
+      upstreamHeaders.get("content-type") || "application/x-protobuf",
+    cacheControl: "public, max-age=3600",
+    accessControlAllowOrigin: "*",
+  };
 }
 
 async function serveResolvedTile(

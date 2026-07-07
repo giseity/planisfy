@@ -20,6 +20,7 @@ import {
 import {
   buildMartinSourceUrl,
   buildMartinTileUrl,
+  martinTileResponseHeaders,
   tileWorkerUrlForPath,
 } from "./route";
 
@@ -144,6 +145,18 @@ test("Martin tile URLs validate coordinates and encode path segments", () => {
   assert.equal(buildMartinTileUrl("http://martin:3000", "owner/3/8/0"), null);
   assert.equal(buildMartinTileUrl("http://martin:3000", "owner/3/0/0?x=1"), null);
   assert.equal(buildMartinTileUrl("http://martin:3000", "../owner/0/0/0"), null);
+});
+
+test("Martin tile proxy drops stale upstream content encoding", () => {
+  const headers = new Headers({
+    "content-type": "application/x-protobuf",
+    "content-encoding": "gzip",
+  });
+  assert.deepEqual(martinTileResponseHeaders(headers), {
+    contentType: "application/x-protobuf",
+    cacheControl: "public, max-age=3600",
+    accessControlAllowOrigin: "*",
+  });
 });
 
 test("tile worker proxy URLs preserve public tile paths only", () => {
