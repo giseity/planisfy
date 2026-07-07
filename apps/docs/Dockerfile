@@ -7,6 +7,8 @@ FROM base AS deps
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/docs/package.json apps/docs/
+COPY packages/assets/package.json packages/assets/
+COPY packages/ui/package.json packages/ui/
 COPY apps/docs/source.config.ts apps/docs/
 COPY apps/docs/content apps/docs/content
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \

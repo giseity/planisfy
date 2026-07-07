@@ -20,8 +20,9 @@ COPY --from=deps /app/packages ./packages
 COPY . .
 RUN pnpm --filter static-renderer build
 
-FROM base AS runner
+FROM mcr.microsoft.com/playwright:v1.60.0-noble AS runner
 WORKDIR /app/apps/static-renderer
+ENV PLAYWRIGHT_BROWSERS_PATH="/ms-playwright"
 ENV NODE_ENV=production
 
 COPY --from=build /app/node_modules /app/node_modules
@@ -29,12 +30,6 @@ COPY --from=build /app/packages /app/packages
 COPY --from=build /app/apps/static-renderer/node_modules ./node_modules
 COPY --from=build /app/apps/static-renderer/dist ./dist
 COPY --from=build /app/apps/static-renderer/package.json ./
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
-    npx playwright install --with-deps chromium && \
-    chmod -R 755 /ms-playwright && \
-    rm -rf /var/lib/apt/lists/*
 
 EXPOSE 4300
 CMD ["node", "dist/index.js"]
