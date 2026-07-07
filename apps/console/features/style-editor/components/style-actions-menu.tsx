@@ -1,7 +1,7 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { Button } from "@planisfy/ui/components/button";
+import { useState } from 'react'
+import { Button } from '@planisfy/ui/components/button'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,38 +11,30 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@planisfy/ui/components/alert-dialog";
+} from '@planisfy/ui/components/alert-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@planisfy/ui/components/dropdown-menu";
-import {
-  Copy,
-  Download,
-  Globe,
-  GlobeLock,
-  Link,
-  MoreHorizontal,
-  Trash2,
-} from "lucide-react";
+} from '@planisfy/ui/components/dropdown-menu'
+import { Copy, Download, Globe, GlobeLock, Link, MoreHorizontal, Trash2 } from 'lucide-react'
 import {
   deleteStyle,
   duplicateStyle,
   togglePublish,
-} from "@/features/style-editor/workflow/style-actions";
-import { api, type ApiEnvelope } from "@/lib/api";
+} from '@/features/style-editor/workflow/style-actions'
+import { api, type ApiEnvelope } from '@/lib/api'
 import {
   styleEditorHref,
   styleJsonFilename,
   stylePublicUrl,
   type StudioStyleSummary,
-} from "@/features/style-editor/workflow/style-workflow";
+} from '@/features/style-editor/workflow/style-workflow'
 
 interface StyleJsonResponse {
-  styleJson: unknown;
+  styleJson: unknown
 }
 
 export function StyleActionsMenu({
@@ -50,53 +42,51 @@ export function StyleActionsMenu({
   onMutate,
   triggerClassName,
 }: {
-  style: StudioStyleSummary;
-  onMutate?: () => void;
-  triggerClassName?: string;
+  style: StudioStyleSummary
+  onMutate?: () => void
+  triggerClassName?: string
 }) {
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const handleDuplicate = async () => {
-    await duplicateStyle(style.id);
-    onMutate?.();
-  };
+    await duplicateStyle(style.id)
+    onMutate?.()
+  }
 
   const handleTogglePublish = async () => {
-    await togglePublish(style);
-    onMutate?.();
-  };
+    await togglePublish(style)
+    onMutate?.()
+  }
 
   const handleDelete = async () => {
-    setDeleting(true);
+    setDeleting(true)
     try {
-      await deleteStyle(style.id);
-      setDeleteOpen(false);
-      onMutate?.();
+      await deleteStyle(style.id)
+      setDeleteOpen(false)
+      onMutate?.()
     } finally {
-      setDeleting(false);
+      setDeleting(false)
     }
-  };
+  }
 
   const handleCopyUrl = async () => {
-    const url = await resolveStyleCopyUrl(style);
-    await navigator.clipboard.writeText(url);
-  };
+    const url = await resolveStyleCopyUrl(style)
+    await navigator.clipboard.writeText(url)
+  }
 
   const handleDownloadJson = async () => {
-    const res = await api.get<ApiEnvelope<StyleJsonResponse>>(
-      `/styles/${style.id}`,
-    );
+    const res = await api.get<ApiEnvelope<StyleJsonResponse>>(`/styles/${style.id}`)
     const blob = new Blob([JSON.stringify(res.data.styleJson, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = styleJsonFilename(style);
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
+      type: 'application/json',
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = styleJsonFilename(style)
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <>
@@ -111,7 +101,11 @@ export function StyleActionsMenu({
             <MoreHorizontal className="h-3.5 w-3.5" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuContent
+          align="end"
+          className="[&_[data-slot=dropdown-menu-item]]:min-h-7"
+          onClick={(e) => e.stopPropagation()}
+        >
           <DropdownMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-3.5 w-3.5" />
             Duplicate
@@ -152,12 +146,9 @@ export function StyleActionsMenu({
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete &ldquo;{style.name}&rdquo;?
-            </AlertDialogTitle>
+            <AlertDialogTitle>Delete &ldquo;{style.name}&rdquo;?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. The style will be permanently
-              removed.
+              This action cannot be undone. The style will be permanently removed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -167,24 +158,24 @@ export function StyleActionsMenu({
               disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleting ? "Deleting..." : "Delete"}
+              {deleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
+  )
 }
 
 async function resolveStyleCopyUrl(style: StudioStyleSummary): Promise<string> {
   if (!style.isPublic) {
-    return `${window.location.origin}${styleEditorHref(style)}`;
+    return `${window.location.origin}${styleEditorHref(style)}`
   }
 
-  const { data: profile } = await api.getProfile();
+  const { data: profile } = await api.getProfile()
   return stylePublicUrl({
     origin: window.location.origin,
     ownerHandle: profile.handle,
     style,
-  });
+  })
 }

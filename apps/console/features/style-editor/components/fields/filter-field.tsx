@@ -1,43 +1,37 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { Label } from "@planisfy/ui/components/label";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@planisfy/ui/components/toggle-group";
-import { ExpressionField } from "./expression-field";
-import { VisualFilterBuilder, canParseFilter } from "./visual-filter-builder";
-import { Code2, SlidersHorizontal } from "lucide-react";
+import { useState } from 'react'
+import { Label } from '@planisfy/ui/components/label'
+import { ToggleGroup, ToggleGroupItem } from '@planisfy/ui/components/toggle-group'
+import { ExpressionField } from './expression-field'
+import { VisualFilterBuilder, canParseFilter } from './visual-filter-builder'
+import { Code2, SlidersHorizontal } from 'lucide-react'
 
 interface FilterFieldProps {
-  value: unknown;
-  onChange: (value: unknown) => void;
+  value: unknown
+  onChange: (value: unknown) => void
 }
 
 export function FilterField({ value, onChange }: FilterFieldProps) {
-  const canVisual = canParseFilter(value);
-  const [mode, setMode] = useState<"visual" | "json">(
-    canVisual ? "visual" : "json",
-  );
+  const canVisual = canParseFilter(value)
+  const [mode, setMode] = useState<'visual' | 'json'>(canVisual ? 'visual' : 'json')
 
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <Label className="text-xs font-medium text-muted-foreground">
-          Filter
-        </Label>
+        <Label className="text-xs font-medium text-muted-foreground">Filter</Label>
         <ToggleGroup
           type="single"
           value={mode}
           onValueChange={(value) => {
-            if (value) setMode(value as "visual" | "json");
+            if (value) setMode(value as 'visual' | 'json')
           }}
           className="rounded-md"
         >
           <ToggleGroupItem
             value="visual"
             size="icon-xs"
+            className="size-6 first:rounded-l-md last:rounded-r-md [&_svg]:size-3"
             disabled={!canVisual}
             aria-label="Visual editor"
             title="Visual editor"
@@ -47,6 +41,7 @@ export function FilterField({ value, onChange }: FilterFieldProps) {
           <ToggleGroupItem
             value="json"
             size="icon-xs"
+            className="size-6 first:rounded-l-md last:rounded-r-md [&_svg]:size-3"
             aria-label="JSON editor"
             title="JSON editor"
           >
@@ -55,7 +50,7 @@ export function FilterField({ value, onChange }: FilterFieldProps) {
         </ToggleGroup>
       </div>
 
-      {mode === "visual" && canVisual ? (
+      {mode === 'visual' && canVisual ? (
         <VisualFilterBuilder value={value} onChange={onChange} />
       ) : (
         <>
@@ -67,5 +62,5 @@ export function FilterField({ value, onChange }: FilterFieldProps) {
         </>
       )}
     </div>
-  );
+  )
 }

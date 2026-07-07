@@ -1,197 +1,167 @@
-"use client";
+'use client'
 
-import { Button } from "@planisfy/ui/components/button";
-import { Input } from "@planisfy/ui/components/input";
+import { Button } from '@planisfy/ui/components/button'
+import { Input } from '@planisfy/ui/components/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@planisfy/ui/components/select";
-import { Plus, X } from "lucide-react";
+} from '@planisfy/ui/components/select'
+import { Plus, X } from 'lucide-react'
 
-const OPERATORS = [
-  "==",
-  "!=",
-  ">",
-  ">=",
-  "<",
-  "<=",
-  "in",
-  "!in",
-  "has",
-  "!has",
-] as const;
-type Operator = (typeof OPERATORS)[number];
+const OPERATORS = ['==', '!=', '>', '>=', '<', '<=', 'in', '!in', 'has', '!has'] as const
+type Operator = (typeof OPERATORS)[number]
 
 interface Condition {
-  property: string;
-  operator: Operator;
-  value: string;
+  property: string
+  operator: Operator
+  value: string
 }
 
-type CombiningOp = "all" | "any" | "none";
+type CombiningOp = 'all' | 'any' | 'none'
 
 interface VisualFilterBuilderProps {
-  value: unknown;
-  onChange: (value: unknown) => void;
+  value: unknown
+  onChange: (value: unknown) => void
 }
 
 /** Try to parse a MapLibre filter into visual conditions. Returns null if unparseable. */
-function parseFilter(
-  filter: unknown,
-): { combining: CombiningOp; conditions: Condition[] } | null {
-  if (!Array.isArray(filter) || filter.length === 0) return null;
+function parseFilter(filter: unknown): { combining: CombiningOp; conditions: Condition[] } | null {
+  if (!Array.isArray(filter) || filter.length === 0) return null
 
-  const op = filter[0];
+  const op = filter[0]
 
   // Single condition: ["==", "prop", "val"]
   if (OPERATORS.includes(op)) {
-    const condition = parseCondition(filter);
-    if (!condition) return null;
+    const condition = parseCondition(filter)
+    if (!condition) return null
     return {
-      combining: "all",
+      combining: 'all',
       conditions: [condition],
-    };
+    }
   }
 
   // Combining: ["all", [...], [...]]
-  if (op === "all" || op === "any" || op === "none") {
-    const conditions = filter
-      .slice(1)
-      .map(parseCondition)
-      .filter(Boolean) as Condition[];
-    if (conditions.length !== filter.length - 1) return null; // some unparseable
-    return { combining: op as CombiningOp, conditions };
+  if (op === 'all' || op === 'any' || op === 'none') {
+    const conditions = filter.slice(1).map(parseCondition).filter(Boolean) as Condition[]
+    if (conditions.length !== filter.length - 1) return null // some unparseable
+    return { combining: op as CombiningOp, conditions }
   }
 
-  return null;
+  return null
 }
 
 function parseCondition(cond: unknown): Condition | null {
-  if (!Array.isArray(cond) || cond.length < 2) return null;
-  const op = cond[0] as Operator;
-  if (!OPERATORS.includes(op)) return null;
-  const property = cond[1];
-  if (typeof property !== "string") return null;
+  if (!Array.isArray(cond) || cond.length < 2) return null
+  const op = cond[0] as Operator
+  if (!OPERATORS.includes(op)) return null
+  const property = cond[1]
+  if (typeof property !== 'string') return null
 
-  if (op === "has" || op === "!has") {
-    if (cond.length !== 2) return null;
-    return { property, operator: op, value: "" };
+  if (op === 'has' || op === '!has') {
+    if (cond.length !== 2) return null
+    return { property, operator: op, value: '' }
   }
 
-  if (op === "in" || op === "!in") {
-    if (
-      cond.length < 3 ||
-      !cond.slice(2).every((value) => isVisualFilterScalar(value))
-    ) {
-      return null;
+  if (op === 'in' || op === '!in') {
+    if (cond.length < 3 || !cond.slice(2).every((value) => isVisualFilterScalar(value))) {
+      return null
     }
     return {
       property,
       operator: op,
-      value: cond.slice(2).map(String).join(", "),
-    };
+      value: cond.slice(2).map(String).join(', '),
+    }
   }
 
-  if (cond.length !== 3 || !isVisualFilterScalar(cond[2])) return null;
+  if (cond.length !== 3 || !isVisualFilterScalar(cond[2])) return null
 
   return {
     property,
     operator: op,
-    value: String(cond[2] ?? ""),
-  };
+    value: String(cond[2] ?? ''),
+  }
 }
 
 function isVisualFilterScalar(value: unknown) {
   return (
     value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  );
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  )
 }
 
 function buildFilter(combining: CombiningOp, conditions: Condition[]): unknown {
-  if (conditions.length === 0) return undefined;
+  if (conditions.length === 0) return undefined
 
   const filters = conditions.map((c) => {
-    if (c.operator === "has" || c.operator === "!has") {
-      return [c.operator, c.property];
+    if (c.operator === 'has' || c.operator === '!has') {
+      return [c.operator, c.property]
     }
-    if (c.operator === "in" || c.operator === "!in") {
-      const values = c.value.split(",").map((v) => {
-        const trimmed = v.trim();
-        const num = Number(trimmed);
-        return isNaN(num) ? trimmed : num;
-      });
-      return [c.operator, c.property, ...values];
+    if (c.operator === 'in' || c.operator === '!in') {
+      const values = c.value.split(',').map((v) => {
+        const trimmed = v.trim()
+        const num = Number(trimmed)
+        return isNaN(num) ? trimmed : num
+      })
+      return [c.operator, c.property, ...values]
     }
-    const numVal = Number(c.value);
-    const val = isNaN(numVal) ? c.value : numVal;
-    return [c.operator, c.property, val];
-  });
+    const numVal = Number(c.value)
+    const val = isNaN(numVal) ? c.value : numVal
+    return [c.operator, c.property, val]
+  })
 
-  if (filters.length === 1 && combining === "all") return filters[0];
-  return [combining, ...filters];
+  if (filters.length === 1 && combining === 'all') return filters[0]
+  return [combining, ...filters]
 }
 
-export function VisualFilterBuilder({
-  value,
-  onChange,
-}: VisualFilterBuilderProps) {
-  const parsed = parseFilter(value);
+export function VisualFilterBuilder({ value, onChange }: VisualFilterBuilderProps) {
+  const parsed = parseFilter(value)
 
   // If we can't parse it, caller should fall back to JSON
-  if (!parsed && value !== undefined) return null;
+  if (!parsed && value !== undefined) return null
 
   const { combining, conditions } = parsed ?? {
-    combining: "all" as CombiningOp,
+    combining: 'all' as CombiningOp,
     conditions: [],
-  };
+  }
 
   const update = (newCombining: CombiningOp, newConditions: Condition[]) => {
-    onChange(buildFilter(newCombining, newConditions));
-  };
+    onChange(buildFilter(newCombining, newConditions))
+  }
 
   const addCondition = () => {
-    update(combining, [
-      ...conditions,
-      { property: "", operator: "==", value: "" },
-    ]);
-  };
+    update(combining, [...conditions, { property: '', operator: '==', value: '' }])
+  }
 
   const removeCondition = (index: number) => {
-    const next = conditions.filter((_, i) => i !== index);
-    update(combining, next);
-  };
+    const next = conditions.filter((_, i) => i !== index)
+    update(combining, next)
+  }
 
   const updateCondition = (index: number, patch: Partial<Condition>) => {
-    const next = conditions.map((c, i) =>
-      i === index ? { ...c, ...patch } : c,
-    );
-    update(combining, next);
-  };
+    const next = conditions.map((c, i) => (i === index ? { ...c, ...patch } : c))
+    update(combining, next)
+  }
 
   return (
     <div className="flex flex-col gap-1.5">
       {conditions.length > 1 && (
-        <Select
-          value={combining}
-          onValueChange={(v) => update(v as CombiningOp, conditions)}
-        >
-          <SelectTrigger className="h-5 w-20 text-[10px]">
+        <Select value={combining} onValueChange={(v) => update(v as CombiningOp, conditions)}>
+          <SelectTrigger className="!h-6 w-20 rounded-md py-0 pl-2 pr-1 text-xs [&_svg]:size-3">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all" className="text-[10px]">
+            <SelectItem value="all" className="!min-h-6 py-0.5 text-xs">
               all
             </SelectItem>
-            <SelectItem value="any" className="text-[10px]">
+            <SelectItem value="any" className="!min-h-6 py-0.5 text-xs">
               any
             </SelectItem>
-            <SelectItem value="none" className="text-[10px]">
+            <SelectItem value="none" className="!min-h-6 py-0.5 text-xs">
               none
             </SelectItem>
           </SelectContent>
@@ -208,26 +178,20 @@ export function VisualFilterBuilder({
           />
           <Select
             value={cond.operator}
-            onValueChange={(v) =>
-              updateCondition(i, { operator: v as Operator })
-            }
+            onValueChange={(v) => updateCondition(i, { operator: v as Operator })}
           >
-            <SelectTrigger className="h-5 w-14 text-[10px] font-mono">
+            <SelectTrigger className="!h-6 w-14 rounded-md py-0 pl-2 pr-1 font-mono text-xs [&_svg]:size-3">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {OPERATORS.map((op) => (
-                <SelectItem
-                  key={op}
-                  value={op}
-                  className="text-[10px] font-mono"
-                >
+                <SelectItem key={op} value={op} className="!min-h-6 py-0.5 font-mono text-xs">
                   {op}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {cond.operator !== "has" && cond.operator !== "!has" && (
+          {cond.operator !== 'has' && cond.operator !== '!has' && (
             <Input
               value={cond.value}
               onChange={(e) => updateCondition(i, { value: e.target.value })}
@@ -246,20 +210,15 @@ export function VisualFilterBuilder({
         </div>
       ))}
 
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-5 text-[10px] gap-1"
-        onClick={addCondition}
-      >
+      <Button variant="outline" size="sm" className="h-5 text-[10px] gap-1" onClick={addCondition}>
         <Plus className="h-2.5 w-2.5" /> Add condition
       </Button>
     </div>
-  );
+  )
 }
 
 /** Returns true if the filter can be represented visually */
 export function canParseFilter(value: unknown): boolean {
-  if (value === undefined) return true;
-  return parseFilter(value) !== null;
+  if (value === undefined) return true
+  return parseFilter(value) !== null
 }

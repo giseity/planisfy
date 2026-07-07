@@ -57,7 +57,7 @@ type SessionUser = {
 }
 
 const sidebarTriggerClass =
-  'flex min-h-12 w-full items-center gap-2 overflow-hidden rounded-lg px-2 py-2 text-left text-[0.8125rem] transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]/sidebar:mx-auto group-data-[collapsible=icon]/sidebar:size-8 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:p-0'
+  'flex min-h-10 w-full items-center gap-2 overflow-hidden rounded-md px-2 py-1 text-left text-[0.8125rem] transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]/sidebar:mx-auto group-data-[collapsible=icon]/sidebar:size-8 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:p-0'
 
 function Avatar({
   name,
@@ -220,7 +220,7 @@ export function NavAccountSwitcher() {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="w-(--radix-dropdown-menu-trigger-width) min-w-72 rounded-lg"
+          className="w-(--radix-dropdown-menu-trigger-width) min-w-72 [&_[data-slot=dropdown-menu-item]]:min-h-7 [&_[data-slot=dropdown-menu-label]]:min-h-7"
           side="right"
           align="start"
           sideOffset={8}
@@ -334,7 +334,7 @@ export function NavUser() {
   const userAvatar = useProfileAvatarImage(user?.image)
 
   if (!mounted || !user) {
-    return <div aria-hidden="true" className="min-h-12 rounded-lg" />
+    return <div aria-hidden="true" className="min-h-10 rounded-md" />
   }
 
   const displayName = user.name || user.email || 'Account'
@@ -359,7 +359,7 @@ export function NavUser() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 [&_[data-slot=dropdown-menu-item]]:min-h-7 [&_[data-slot=dropdown-menu-label]]:min-h-7"
         side="right"
         align="end"
         sideOffset={8}
