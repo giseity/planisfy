@@ -23,28 +23,53 @@ const workflowItems = [
   {
     href: "/styles",
     label: "Create style",
-    hint: "Open styles",
+    description: "Open the style workspace to create or edit a map style.",
+    hint: "Styles",
+    keywords: ["new style", "map style", "editor"],
     icon: Palette,
   },
   {
     href: "/tilesets",
     label: "Upload tileset",
-    hint: "Open tilesets",
+    description: "Import source data and publish tileset artifacts.",
+    hint: "Tilesets",
+    keywords: ["source upload", "pmtiles", "data import"],
     icon: Upload,
   },
   {
     href: "/keys",
     label: "Create API key",
-    hint: "Open API keys",
+    description: "Manage credentials for public API access.",
+    hint: "API keys",
+    keywords: ["token", "credential", "developer key"],
     icon: KeyRound,
   },
   {
     href: "/tilesets",
     label: "Import Overture data",
-    hint: "Open tilesets",
+    description: "Start from Overture places, buildings, roads, or base data.",
+    hint: "Tilesets",
+    keywords: ["overture", "places", "buildings", "roads"],
     icon: Database,
   },
 ]
+
+const navDescriptions: Record<string, string> = {
+  "/": "Review account activity, usage, and resource status.",
+  "/styles": "Create, inspect, and publish MapLibre styles.",
+  "/tilesets": "Upload, import, process, and publish geospatial datasets.",
+  "/keys": "Create and rotate API keys for applications.",
+  "/usage": "Track request volume, quotas, and metered usage.",
+  "/integration": "Find endpoints, SDK guidance, and integration details.",
+  "/operations": "Monitor jobs, workers, notifications, routing, and delivery.",
+  "/platform": "Configure the self-hosted control plane.",
+  "/platform/environment": "Review runtime services and environment readiness.",
+  "/organization": "Manage organization profile and workspace settings.",
+  "/team": "Invite users and review team access.",
+  "/billing": "Review subscription, plan, and billing status.",
+  "/settings/profile": "Update your profile and personal preferences.",
+  "/settings/security": "Manage security settings and authentication.",
+}
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
@@ -116,7 +141,10 @@ export function CommandPaletteContent({
         ...group,
         items: group.items.map((item) => ({
           ...item,
-          keywords: `${group.label} ${item.label} ${item.href}`,
+          description: navDescriptions[item.href],
+          keywords: [group.label, item.label, item.href, navDescriptions[item.href]].filter(
+            (keyword): keyword is string => Boolean(keyword),
+          ),
         })),
       })),
     [deploymentMode],
@@ -133,32 +161,51 @@ export function CommandPaletteContent({
       <CommandList className="max-h-[520px]">
         <CommandEmpty>No command found.</CommandEmpty>
         {navGroups.map((group) => (
-          <CommandGroup key={group.label} heading={group.label}>
+          <CommandGroup
+            key={group.label}
+            heading={group.label}
+            className="[&_[cmdk-group-items]]:space-y-1"
+          >
             {group.items.map((item) => (
               <CommandItem
                 key={item.href}
-                keywords={[item.keywords]}
+                className="min-h-11 gap-3 px-3 py-2"
+                keywords={item.keywords}
                 onSelect={() => go(item.href)}
                 value={`${group.label} ${item.label}`}
               >
                 <item.icon className="size-4" />
-                <span>{item.label}</span>
-                <CommandShortcut>{item.href}</CommandShortcut>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{item.label}</span>
+                  {item.description ? (
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {item.description}
+                    </span>
+                  ) : null}
+                </span>
+                <CommandShortcut className="tracking-normal">{item.href}</CommandShortcut>
               </CommandItem>
             ))}
           </CommandGroup>
         ))}
-        <CommandSeparator />
-        <CommandGroup heading="Workflows">
+        <CommandSeparator className="my-1" />
+        <CommandGroup heading="Workflows" className="[&_[cmdk-group-items]]:space-y-1">
           {workflowItems.map((item) => (
             <CommandItem
               key={item.label}
+              className="min-h-11 gap-3 px-3 py-2"
+              keywords={item.keywords}
               onSelect={() => go(item.href)}
               value={item.label}
             >
               <item.icon className="size-4" />
-              <span>{item.label}</span>
-              <CommandShortcut>{item.hint}</CommandShortcut>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{item.label}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {item.description}
+                </span>
+              </span>
+              <CommandShortcut className="tracking-normal">{item.hint}</CommandShortcut>
             </CommandItem>
           ))}
         </CommandGroup>
