@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { and, count, desc, eq, sql } from "drizzle-orm";
-import { auth } from "@planisfy/auth/auth";
+import { auth } from "@planisfy/auth/server";
 import { accounts, apiKeys, db, users } from "@planisfy/database";
 import { logAudit } from "../../shared/audit";
 import {

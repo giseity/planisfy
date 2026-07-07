@@ -5,12 +5,13 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "exports": {
+    "./server": "./src/server/index.ts",
     "./ui": "./src/ui.tsx",
-    "./*": "./src/*.ts"
+    "./client": "./src/client/index.ts"
   },
   "scripts": {
     "lint": "node ../eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -32,6 +33,7 @@
     "@planisfy/eslint-config": "workspace:*",
     "@planisfy/typescript-config": "workspace:*",
     "@types/bcrypt": "^5.0.2",
+    "@types/node": "^24.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "typescript": "5.9.2"

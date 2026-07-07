@@ -2,18 +2,11 @@
   "extends": "@planisfy/typescript-config/nextjs.json",
   "compilerOptions": {
     "paths": {
-      "@/*": [
-        "./*"
-      ],
-      "@planisfy/ui/*": [
-        "../../packages/ui/src/*"
-      ],
-      "@planisfy/auth": [
-        "../../packages/auth/src/index.ts"
-      ],
-      "@planisfy/auth/*": [
-        "../../packages/auth/src/*"
-      ]
+      "@/*": ["./*"],
+      "@planisfy/ui/*": ["../../packages/ui/src/*"],
+      "@planisfy/auth/client": ["../../packages/auth/src/client/index.ts"],
+      "@planisfy/auth/server": ["../../packages/auth/src/server/index.ts"],
+      "@planisfy/auth/ui": ["../../packages/auth/src/ui.tsx"]
     },
     "plugins": [
       {
@@ -29,7 +22,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules"
-  ]
+  "exclude": ["node_modules"]
 }

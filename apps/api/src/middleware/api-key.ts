@@ -1,5 +1,5 @@
 import { createMiddleware } from "hono/factory";
-import { auth } from "@planisfy/auth/auth";
+import { auth } from "@planisfy/auth/server";
 import { accounts, db } from "@planisfy/database";
 import { and, eq, isNull } from "drizzle-orm";
 import {

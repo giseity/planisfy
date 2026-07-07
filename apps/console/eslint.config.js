@@ -21,7 +21,7 @@ export default [
                 "Console product code must use explicit auth UI/client subpaths instead of importing the auth package root.",
             },
             {
-              name: "@planisfy/auth/auth",
+              name: "@planisfy/auth/server",
               message:
                 "Console product code must use client auth helpers or API routes instead of importing the server auth instance.",
             },

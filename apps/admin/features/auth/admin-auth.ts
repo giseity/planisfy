@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth } from "@planisfy/auth/auth";
+import { auth } from "@planisfy/auth/server";
 import { db, users } from "@planisfy/database";
 import {
   canPlatform,

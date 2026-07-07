@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildTrustedOrigins, getAuthTrustedOrigins } from '../src/env'
+import { buildTrustedOrigins, getAuthTrustedOrigins } from '../src/server/env'
 
 const AUTH_ORIGIN_ENV_KEYS = [
   'NEXT_PUBLIC_AUTH_ORIGIN',

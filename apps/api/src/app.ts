@@ -31,7 +31,7 @@ import { billingWebhookRoute } from "./domains/billing/route";
 import { consoleRoute } from "./domains/console/route";
 import { rootAgentRoute } from "./domains/root-agent/route";
 import { setupRoute } from "./domains/setup/route";
-import { auth } from "@planisfy/auth/auth";
+import { auth } from "@planisfy/auth/server";
 import { apiCorsOrigins } from "./shared/http/cors-origins";
 import { buildPublicOpenApiDocument } from "./openapi/public";
 

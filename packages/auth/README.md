@@ -1,10 +1,19 @@
 # @planisfy/auth
 
-Better Auth configuration, shared auth UI helpers, and auth hooks.
+Better Auth server configuration, shared auth UI, and browser auth hooks.
 
 Important config: database URL, auth secrets, OAuth credentials, public auth origin, and optional email settings.
 
 Commands: `pnpm --filter @planisfy/auth check-types`, `lint`.
+
+## Entrypoints
+
+- `@planisfy/auth/server`: server-only Better Auth instance and server helpers.
+- `@planisfy/auth/client`: browser Better Auth client and React session hooks.
+- `@planisfy/auth/ui`: browser auth forms and UI helpers.
+
+Do not add a root barrel export. Keeping server and client entrypoints separate
+prevents Node-only auth code from being pulled into browser bundles.
 
 ## API Keys
 

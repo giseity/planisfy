@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@planisfy/typescript-config/react-library.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src/client/**/*.ts", "src/ui.tsx"],
+  "exclude": ["node_modules", "dist"]
+}

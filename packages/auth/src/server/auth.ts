@@ -16,20 +16,21 @@ import {
   apiKeys,
 } from '@planisfy/database'
 import { eq } from 'drizzle-orm'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import {
+  getApiURL,
   getAuthBaseURL,
+  getAuthCookieDomainOverride,
   getAuthSecret,
   getAuthTrustedOrigins,
+  getInternalApiSecret,
   getOAuthProxyURL,
   getSocialProviderCredentials,
+  isAuthEmailDeliveryConfigured,
+  isProductionEnvironment,
 } from './env'
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL
-if (!apiUrl) {
-  throw new Error('NEXT_PUBLIC_API_URL is required.')
-}
-
+const apiUrl = getApiURL()
 const authBaseURL = getAuthBaseURL()
 const oauthProxyURL = getOAuthProxyURL()
 const authCookieDomain = getAuthCookieDomain(authBaseURL)
@@ -105,12 +106,46 @@ function normalizeAccountHandle(value: string): string {
 }
 
 function internalHeaders(): HeadersInit {
+  const internalApiSecret = getInternalApiSecret()
   return {
     'Content-Type': 'application/json',
-    ...(process.env.INTERNAL_API_SECRET
-      ? { 'X-Internal-Secret': process.env.INTERNAL_API_SECRET }
-      : {}),
+    ...(internalApiSecret ? { 'X-Internal-Secret': internalApiSecret } : {}),
   }
+}
+
+async function sendWelcomeEmail(user: { email: string; name: string }) {
+  if (!isAuthEmailDeliveryConfigured()) return
+
+  try {
+    const response = await fetch(`${apiUrl}/internal/send-welcome-email`, {
+      method: 'POST',
+      headers: internalHeaders(),
+      body: JSON.stringify({
+        email: user.email,
+        name: user.name,
+      }),
+    })
+    if (!response.ok) {
+      console.error(`[welcome] Email failed for ${user.email}: ${response.status}`)
+    }
+  } catch (error) {
+    console.error('[welcome] Email delivery failed', error)
+  }
+}
+
+function isProviderEmailVerified(profile: {
+  email_verified?: boolean | string
+  emailVerified?: boolean | string
+  verified_email?: boolean | string
+}) {
+  return (
+    profile.email_verified === true ||
+    profile.email_verified === 'true' ||
+    profile.emailVerified === true ||
+    profile.emailVerified === 'true' ||
+    profile.verified_email === true ||
+    profile.verified_email === 'true'
+  )
 }
 
 function socialProviders() {
@@ -121,13 +156,12 @@ function socialProviders() {
       ? {
           google: {
             ...providers.google,
-            mapProfileToUser: (profile: { email_verified?: boolean | string }) => ({
-              ...(profile.email_verified === undefined
-                ? {}
-                : {
-                    emailVerified:
-                      profile.email_verified === true || profile.email_verified === 'true',
-                  }),
+            mapProfileToUser: (profile: {
+              email_verified?: boolean | string
+              emailVerified?: boolean | string
+              verified_email?: boolean | string
+            }) => ({
+              ...(isProviderEmailVerified(profile) ? { emailVerified: true } : {}),
             }),
           },
         }
@@ -136,12 +170,13 @@ function socialProviders() {
 }
 
 function getAuthCookieDomain(baseURL: string) {
-  if (process.env.AUTH_COOKIE_DOMAIN) {
-    return process.env.AUTH_COOKIE_DOMAIN
+  const cookieDomain = getAuthCookieDomainOverride()
+  if (cookieDomain) {
+    return cookieDomain
   }
 
   const hostname = new URL(baseURL).hostname
-  if (process.env.NODE_ENV === 'production' && hostname.endsWith('planisfy.com')) {
+  if (isProductionEnvironment() && hostname.endsWith('planisfy.com')) {
     return '.planisfy.com'
   }
 
@@ -200,7 +235,7 @@ export const auth = betterAuth({
         )
         // When ZeptoMail is configured, the API's email service sends the actual email
         // via a fire-and-forget fetch to the internal email endpoint
-        if (process.env.ZEPTOMAIL_SEND_MAIL_TOKEN) {
+        if (isAuthEmailDeliveryConfigured()) {
           try {
             await fetch(`${apiUrl}/internal/send-invitation-email`, {
               method: 'POST',
@@ -292,7 +327,7 @@ export const auth = betterAuth({
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
       console.log(`[password-reset] Sending reset link to ${user.email}`)
-      if (process.env.ZEPTOMAIL_SEND_MAIL_TOKEN) {
+      if (isAuthEmailDeliveryConfigured()) {
         try {
           const response = await fetch(`${apiUrl}/internal/send-password-reset-email`, {
             method: 'POST',
@@ -317,7 +352,7 @@ export const auth = betterAuth({
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
       console.log(`[email-verify] Sending verification to ${user.email}`)
-      if (process.env.ZEPTOMAIL_SEND_MAIL_TOKEN) {
+      if (isAuthEmailDeliveryConfigured()) {
         try {
           const response = await fetch(`${apiUrl}/internal/send-verification-email`, {
             method: 'POST',
@@ -387,6 +422,11 @@ export const auth = betterAuth({
               ...userFields,
               id,
             } as typeof userData,
+          }
+        },
+        after: async (userData) => {
+          if (userData.emailVerified) {
+            await sendWelcomeEmail(userData)
           }
         },
       },

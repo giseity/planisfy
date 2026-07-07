@@ -1,7 +1,13 @@
 'use client'
 
 import * as React from 'react'
-import { authClient, isSocialProviderEnabled, signIn, signUp, type SocialProvider } from './client'
+import {
+  authClient,
+  isSocialProviderEnabled,
+  signIn,
+  signUp,
+  type SocialProvider,
+} from './client/index'
 import { ArrowLeft, Github, Lock, Mail, Send } from 'lucide-react'
 import { Button } from '@planisfy/ui/components/button'
 import { PlanisfyLogo } from '@planisfy/ui/components/brand-mark'

@@ -5,6 +5,7 @@ import { useSession, authClient } from '@planisfy/auth/client'
 import { Button } from '@planisfy/ui/components/button'
 import { Mail, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { api } from '@/lib/api'
 
 export function EmailVerificationBanner() {
   const { data: session, refetch } = useSession()
@@ -14,36 +15,59 @@ export function EmailVerificationBanner() {
   const [dismissed, setDismissed] = useState(false)
   const [sending, setSending] = useState(false)
   const [requested, setRequested] = useState(false)
+  const [freshEmailVerified, setFreshEmailVerified] = useState(false)
+  const [freshEmail, setFreshEmail] = useState<string | null>(null)
+
+  const email = freshEmail ?? userEmail
+  const emailVerified = freshEmailVerified || Boolean(userEmailVerified)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
   useEffect(() => {
-    if (!mounted || !userEmail || userEmailVerified) return
+    if (!mounted || emailVerified) return
 
-    const timeout = window.setTimeout(() => {
-      void refetch?.()
-    }, 1500)
+    let active = true
 
-    return () => window.clearTimeout(timeout)
-  }, [mounted, refetch, userEmail, userEmailVerified])
+    async function refreshVerification() {
+      const [profileResult] = await Promise.allSettled([api.getProfile(), refetch?.()])
+      if (!active || profileResult.status !== 'fulfilled') return
+      setFreshEmail(profileResult.value.data.email)
+      setFreshEmailVerified(profileResult.value.data.emailVerified)
+    }
+
+    void refreshVerification()
+    const interval = window.setInterval(() => {
+      void refreshVerification()
+    }, 5_000)
+
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [emailVerified, mounted, refetch])
 
   if (!mounted) return null
-  if (dismissed || !userEmail) return null
-  if (userEmailVerified) return null
+  if (dismissed || !email) return null
+  if (emailVerified) return null
 
   const handleResend = async () => {
     setSending(true)
     try {
       const result = await authClient.sendVerificationEmail({
-        email: userEmail,
+        email,
         callbackURL: '/styles',
       })
       if (result.error) {
         throw new Error(result.error.message ?? 'Failed to send verification email')
       }
       await refetch?.()
+      const profile = await api.getProfile().catch(() => null)
+      if (profile) {
+        setFreshEmail(profile.data.email)
+        setFreshEmailVerified(profile.data.emailVerified)
+      }
       setRequested(true)
       toast.success('Verification email requested')
     } catch (err) {
