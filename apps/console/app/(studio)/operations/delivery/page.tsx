@@ -1,16 +1,12 @@
-"use client"
+import { consoleMetadata } from "../../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { DeliveryTab } from "@/features/operations/tabs"
-import { useOperations } from "@/features/operations/provider"
+export const metadata = consoleMetadata({
+  title: "Delivery Operations",
+  description: "Check delivery health for Planisfy map services.",
+  path: "/operations/delivery",
+});
 
-export default function OperationsDeliveryPage() {
-  const { overview, tilesets, load } = useOperations()
-  return (
-    <DeliveryTab
-      domains={overview.customDomains}
-      previews={overview.previewLinks}
-      tilesets={tilesets}
-      onChanged={load}
-    />
-  )
+export default function Page() {
+  return <ClientPage />
 }

@@ -1,16 +1,12 @@
-"use client"
+import { consoleMetadata } from "../../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { JobsTab } from "@/features/operations/tabs"
-import { useOperations } from "@/features/operations/provider"
+export const metadata = consoleMetadata({
+  title: "Processing Jobs",
+  description: "Monitor processing jobs across Planisfy resources.",
+  path: "/operations/jobs",
+});
 
-export default function OperationsJobsPage() {
-  const { overview, timeline, openTimeline } = useOperations()
-  return (
-    <JobsTab
-      jobs={overview.recentJobs}
-      staleJobReconciliation={overview.staleJobReconciliation}
-      timeline={timeline}
-      onTimeline={openTimeline}
-    />
-  )
+export default function Page() {
+  return <ClientPage />
 }

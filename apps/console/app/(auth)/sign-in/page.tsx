@@ -1,9 +1,12 @@
-"use client"
+import { consoleMetadata } from "../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { SignInForm } from "@planisfy/auth/ui"
+export const metadata = consoleMetadata({
+  title: "Sign In",
+  description: "Sign in to Planisfy Console to manage styles, tilesets, API keys, and usage.",
+  path: "/sign-in",
+});
 
-import { clientEnv } from "@/env.client"
-
-export default function SignInPage() {
-  return <SignInForm defaultCallbackUrl={clientEnv.NEXT_PUBLIC_APP_URL} />
+export default function Page() {
+  return <ClientPage />
 }

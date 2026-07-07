@@ -1,9 +1,12 @@
-"use client"
+import { consoleMetadata } from "../../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { NotificationsTab } from "@/features/operations/tabs"
-import { useOperations } from "@/features/operations/provider"
+export const metadata = consoleMetadata({
+  title: "Notifications",
+  description: "Configure operational notification channels and routing.",
+  path: "/operations/notifications",
+});
 
-export default function OperationsNotificationsPage() {
-  const { overview, load } = useOperations()
-  return <NotificationsTab channels={overview.notificationChannels} onChanged={load} />
+export default function Page() {
+  return <ClientPage />
 }

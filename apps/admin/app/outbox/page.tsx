@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Outbox",
+  description: "Monitor outbox delivery, retries, and stale work items.",
+  path: "/outbox",
+});
+
 import Link from "next/link"
 import {
   and,

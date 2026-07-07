@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "User Details",
+  description: "Inspect user identity, organizations, and administrative state.",
+  path: "/users",
+});
+
 import { notFound } from "next/navigation";
 import {
   db,

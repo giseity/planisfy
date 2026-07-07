@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Audit Log",
+  description: "Review platform audit events and administrative activity.",
+  path: "/audit",
+});
+
 import { db, auditEvents, accounts } from "@planisfy/database"
 import { eq, desc, count, ilike, sql } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"

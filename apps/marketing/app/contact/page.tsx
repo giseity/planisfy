@@ -1,3 +1,11 @@
+import { marketingMetadata } from '../../lib/metadata'
+
+export const metadata = marketingMetadata({
+  title: "Contact Planisfy",
+  description: "Talk with the Planisfy team about self-hosting, migration, support, and managed map infrastructure.",
+  path: "/contact",
+})
+
 import { ArrowRight, HardDriveUpload, LifeBuoy, Mail, ServerCog } from 'lucide-react'
 
 import { Button } from '@planisfy/ui/components/button'

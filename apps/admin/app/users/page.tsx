@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Users",
+  description: "Manage Planisfy users and account state.",
+  path: "/users",
+});
+
 import { db, users, accounts } from "@planisfy/database";
 import { eq, sql, desc, count, ilike, or } from "drizzle-orm";
 import { Badge } from "@planisfy/ui/components/badge";

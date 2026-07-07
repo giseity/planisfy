@@ -1,9 +1,12 @@
-"use client"
+import { consoleMetadata } from "../../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { WorkersTab } from "@/features/operations/tabs"
-import { useOperations } from "@/features/operations/provider"
+export const metadata = consoleMetadata({
+  title: "Workers",
+  description: "Inspect worker nodes and external compute capacity.",
+  path: "/operations/workers",
+});
 
-export default function OperationsWorkersPage() {
-  const { overview, load } = useOperations()
-  return <WorkersTab nodes={overview.workerNodes} onChanged={load} />
+export default function Page() {
+  return <ClientPage />
 }

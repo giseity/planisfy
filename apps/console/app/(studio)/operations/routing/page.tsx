@@ -1,16 +1,12 @@
-"use client"
+import { consoleMetadata } from "../../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { RoutingTab } from "@/features/operations/tabs"
-import { useOperations } from "@/features/operations/provider"
+export const metadata = consoleMetadata({
+  title: "Routing Operations",
+  description: "Monitor routing graph builds and runtime health.",
+  path: "/operations/routing",
+});
 
-export default function OperationsRoutingPage() {
-  const { overview, load } = useOperations()
-  return (
-    <RoutingTab
-      builds={overview.routingGraphBuilds}
-      runtimeInstallations={overview.runtimeInstallations}
-      nodes={overview.workerNodes}
-      onChanged={load}
-    />
-  )
+export default function Page() {
+  return <ClientPage />
 }

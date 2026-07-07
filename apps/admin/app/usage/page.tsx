@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Platform Usage",
+  description: "Review platform-wide usage trends and billing signals.",
+  path: "/usage",
+});
+
 import { db, usageLogs } from "@planisfy/database"
 import { count, sql, gte, and } from "drizzle-orm"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"

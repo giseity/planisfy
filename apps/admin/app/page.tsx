@@ -1,3 +1,11 @@
+import { adminMetadata } from "../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Dashboard",
+  description: "Review platform signals, recent signups, failures, and usage.",
+  path: "/",
+});
+
 import {
   apiKeys,
   db,

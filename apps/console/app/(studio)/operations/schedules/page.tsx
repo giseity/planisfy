@@ -1,15 +1,12 @@
-"use client"
+import { consoleMetadata } from "../../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { SchedulesTab } from "@/features/operations/tabs"
-import { useOperations } from "@/features/operations/provider"
+export const metadata = consoleMetadata({
+  title: "Schedules",
+  description: "Review scheduled operational commands and recurring jobs.",
+  path: "/operations/schedules",
+});
 
-export default function OperationsSchedulesPage() {
-  const { overview, tilesets, load } = useOperations()
-  return (
-    <SchedulesTab
-      schedules={overview.scheduledOperations}
-      tilesets={tilesets}
-      onChanged={load}
-    />
-  )
+export default function Page() {
+  return <ClientPage />
 }

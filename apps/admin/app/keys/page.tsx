@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "API Keys",
+  description: "Audit API key ownership, scopes, and platform access.",
+  path: "/keys",
+});
+
 import { db, apiKeys, accounts } from "@planisfy/database"
 import { eq, desc, count, ilike, sql } from "drizzle-orm"
 import { Badge } from "@planisfy/ui/components/badge"

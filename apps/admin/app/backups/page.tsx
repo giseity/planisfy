@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Artifact Backups",
+  description: "Monitor backup coverage for generated Planisfy artifacts.",
+  path: "/backups",
+});
+
 import { desc } from "drizzle-orm"
 import { artifactBackups, db } from "@planisfy/database"
 import { Badge } from "@planisfy/ui/components/badge"

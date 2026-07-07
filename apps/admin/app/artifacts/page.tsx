@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Artifacts",
+  description: "Inspect stored artifacts, lifecycle status, and storage usage.",
+  path: "/artifacts",
+});
+
 import Link from "next/link"
 import {
   and,

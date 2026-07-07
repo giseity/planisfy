@@ -1,23 +1,12 @@
-"use client"
+import { consoleMetadata } from "../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { BillingTab } from "@/features/settings/tabs"
-import {
-  PageDescription,
-  PageHeader,
-  PageHeaderText,
-  PageTitle,
-} from "@planisfy/ui/components/page-header"
+export const metadata = consoleMetadata({
+  title: "Billing",
+  description: "Manage Planisfy plan, invoices, and billing status.",
+  path: "/billing",
+});
 
-export default function BillingPage() {
-  return (
-    <div className="space-y-5">
-      <PageHeader>
-        <PageHeaderText>
-          <PageTitle>Billing</PageTitle>
-          <PageDescription>Review plan limits, usage, and billing portal access.</PageDescription>
-        </PageHeaderText>
-      </PageHeader>
-      <BillingTab />
-    </div>
-  )
+export default function Page() {
+  return <ClientPage />
 }

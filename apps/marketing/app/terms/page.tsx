@@ -1,3 +1,11 @@
+import { marketingMetadata } from '../../lib/metadata'
+
+export const metadata = marketingMetadata({
+  title: "Terms of Service | Planisfy",
+  description: "Review Planisfy terms for using the platform, APIs, and self-hostable software.",
+  path: "/terms",
+})
+
 import { Footer } from '@/components/footer'
 import { HeroHeader } from '@/components/header'
 import { clientEnv } from '@/env.client'

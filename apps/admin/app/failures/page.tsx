@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Failures",
+  description: "Review failed jobs, stale queues, and operational exceptions.",
+  path: "/failures",
+});
+
 import Link from "next/link"
 import { and, count, desc, eq, lte } from "drizzle-orm"
 import { db, eventOutbox, processingJobs } from "@planisfy/database"

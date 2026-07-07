@@ -1,3 +1,11 @@
+import { marketingMetadata } from '../lib/metadata'
+
+export const metadata = marketingMetadata({
+  title: "Planisfy",
+  description: "Open-source, self-hostable map infrastructure for MapLibre styles, vector tiles, geospatial APIs, and operations.",
+  path: "/",
+})
+
 import { CallToAction } from '@/components/call-to-action'
 import FAQs from '@/components/faqs'
 import { Features } from '@/components/features'

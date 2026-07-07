@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Configuration",
+  description: "Manage persisted platform configuration and runtime settings.",
+  path: "/configuration",
+});
+
 import { db, platformConfig } from '@planisfy/database'
 import { Badge } from '@planisfy/ui/components/badge'
 import { Button } from '@planisfy/ui/components/button'

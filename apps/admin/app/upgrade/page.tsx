@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Upgrade",
+  description: "Check upgrade readiness and platform release status.",
+  path: "/upgrade",
+});
+
 import { Badge } from "@planisfy/ui/components/badge";
 import { Button } from "@planisfy/ui/components/button";
 import {

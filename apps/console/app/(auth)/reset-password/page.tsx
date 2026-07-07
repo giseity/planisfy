@@ -1,7 +1,12 @@
-"use client"
+import { consoleMetadata } from "../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { ResetPasswordForm } from "@planisfy/auth/ui"
+export const metadata = consoleMetadata({
+  title: "Reset Password",
+  description: "Recover access to your Planisfy Console account.",
+  path: "/reset-password",
+});
 
-export default function ResetPasswordPage() {
-  return <ResetPasswordForm />
+export default function Page() {
+  return <ClientPage />
 }

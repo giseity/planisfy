@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Schedules",
+  description: "Manage custom command schedules for platform operations.",
+  path: "/schedules",
+});
+
 import { and, desc, eq, isNull } from "drizzle-orm"
 import { db, scheduledOperations } from "@planisfy/database"
 import { Badge } from "@planisfy/ui/components/badge"

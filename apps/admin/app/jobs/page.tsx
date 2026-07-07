@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Processing Jobs",
+  description: "Monitor processing jobs across the Planisfy platform.",
+  path: "/jobs",
+});
+
 import Link from "next/link"
 import {
   and,

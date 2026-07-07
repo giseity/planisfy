@@ -1,9 +1,12 @@
-'use client'
+import { marketingMetadata } from '../../lib/metadata'
+import ClientPage from './client-page'
 
-import { SignInForm } from '@planisfy/auth/ui'
+export const metadata = marketingMetadata({
+  title: "Sign In | Planisfy",
+  description: "Sign in to your Planisfy account.",
+  path: "/sign-in",
+})
 
-import { clientEnv } from '@/env.client'
-
-export default function SignInPage() {
-  return <SignInForm defaultCallbackUrl={clientEnv.NEXT_PUBLIC_CONSOLE_URL} />
+export default function Page() {
+  return <ClientPage />
 }

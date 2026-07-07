@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Job Details",
+  description: "Inspect a processing job, timeline, logs, and execution metadata.",
+  path: "/jobs",
+});
+
 import Link from "next/link"
 import { desc, eq, sql } from "drizzle-orm"
 import { notFound } from "next/navigation"

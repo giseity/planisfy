@@ -1,9 +1,12 @@
-"use client";
+import { consoleMetadata } from "../../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { BackupsTab } from "@/features/operations/tabs";
-import { useOperations } from "@/features/operations/provider";
+export const metadata = consoleMetadata({
+  title: "Backup Operations",
+  description: "Review artifact backup status for Planisfy operations.",
+  path: "/operations/backups",
+});
 
-export default function OperationsBackupsPage() {
-  const { overview, load } = useOperations();
-  return <BackupsTab backups={overview.artifactBackups} onChanged={load} />;
+export default function Page() {
+  return <ClientPage />
 }

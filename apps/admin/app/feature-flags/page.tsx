@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Feature Flags",
+  description: "Manage platform feature flags and rollout metadata.",
+  path: "/feature-flags",
+});
+
 import { isNull } from "drizzle-orm"
 import { db, featureFlags } from "@planisfy/database"
 import { Badge } from "@planisfy/ui/components/badge"

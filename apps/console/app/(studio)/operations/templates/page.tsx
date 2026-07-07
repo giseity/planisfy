@@ -1,9 +1,12 @@
-"use client"
+import { consoleMetadata } from "../../../../lib/metadata";
+import ClientPage from "./client-page";
 
-import { TemplatesTab } from "@/features/operations/tabs"
-import { useOperations } from "@/features/operations/provider"
+export const metadata = consoleMetadata({
+  title: "Workflow Templates",
+  description: "Manage reusable operational workflow templates.",
+  path: "/operations/templates",
+});
 
-export default function OperationsTemplatesPage() {
-  const { overview, load } = useOperations()
-  return <TemplatesTab templates={overview.workflowTemplates} onChanged={load} />
+export default function Page() {
+  return <ClientPage />
 }

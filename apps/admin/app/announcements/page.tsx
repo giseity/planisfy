@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Announcements",
+  description: "Create and manage platform announcements for Planisfy users.",
+  path: "/announcements",
+});
+
 import { desc, isNull } from "drizzle-orm"
 import { announcements, db } from "@planisfy/database"
 import { Badge } from "@planisfy/ui/components/badge"

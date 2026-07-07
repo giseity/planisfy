@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "System Health",
+  description: "Monitor Planisfy platform service health and dependencies.",
+  path: "/health",
+});
+
 import { db, users, apiKeys, sessions, usageLogs, styles } from "@planisfy/database"
 import { and, count, desc, eq, gte, isNotNull, isNull, lt, lte, sql } from "drizzle-orm"
 import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"

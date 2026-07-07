@@ -1,3 +1,11 @@
+import { marketingMetadata } from '../../lib/metadata'
+
+export const metadata = marketingMetadata({
+  title: "Planisfy Pricing",
+  description: "Compare Planisfy plans for open-source, managed, and self-hosted map infrastructure.",
+  path: "/pricing",
+})
+
 import { Comparator } from '@/components/comparator'
 import { Footer } from '@/components/footer'
 import { HeroHeader } from '@/components/header'

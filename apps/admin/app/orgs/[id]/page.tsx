@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Organization Details",
+  description: "Inspect organization membership, resources, and usage.",
+  path: "/orgs",
+});
+
 import { notFound } from "next/navigation"
 import { db, organizations, members, invitations, accounts, users, styles, apiKeys } from "@planisfy/database"
 import { eq, and, isNull, desc } from "drizzle-orm"

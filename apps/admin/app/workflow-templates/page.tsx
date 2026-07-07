@@ -1,3 +1,11 @@
+import { adminMetadata } from "../../lib/metadata";
+
+export const metadata = adminMetadata({
+  title: "Workflow Templates",
+  description: "Manage reusable workflow templates for platform jobs.",
+  path: "/workflow-templates",
+});
+
 import { desc, isNull } from "drizzle-orm"
 import { db, workflowTemplates } from "@planisfy/database"
 import { Badge } from "@planisfy/ui/components/badge"
