@@ -29,6 +29,13 @@ import { toast } from 'sonner'
 import { api, type ApiEnvelope } from '@/lib/api'
 import { createStyle } from '@/features/style-editor/workflow/style-actions'
 import type { StudioStyleSummary } from '@/features/style-editor/workflow/style-workflow'
+import { clientEnv } from '@/env.client'
+import {
+  STYLE_TEMPLATE_OPTIONS,
+  defaultStyleTemplateId,
+  isManagedDeploymentMode,
+  type StyleTemplateId,
+} from '@/lib/managed-defaults'
 
 type SortMode = 'updated' | 'name' | 'created'
 type ViewMode = 'grid' | 'list'
@@ -166,11 +173,18 @@ function CreateStyleButton() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const managed = isManagedDeploymentMode(clientEnv.NEXT_PUBLIC_DEPLOYMENT_MODE)
+  const [templateId, setTemplateId] = useState<StyleTemplateId>(
+    defaultStyleTemplateId(clientEnv.NEXT_PUBLIC_DEPLOYMENT_MODE),
+  )
 
   async function handleCreate(formData: FormData) {
     setCreating(true)
     try {
-      const created = await createStyle(String(formData.get('name') ?? ''))
+      const created = await createStyle(
+        String(formData.get('name') ?? ''),
+        managed ? templateId : 'blank',
+      )
       setOpen(false)
       router.push(`/styles/${created.id}`)
     } catch (err) {
@@ -193,10 +207,10 @@ function CreateStyleButton() {
           <DialogHeader>
             <DialogTitle>Create a new style</DialogTitle>
             <DialogDescription>
-              Start with a blank style. You can import an existing style from JSON later.
+              Start from a managed basemap template or a blank MapLibre style.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
+          <div className="space-y-4 py-4">
             <Input
               name="name"
               placeholder="Style name"
@@ -204,6 +218,31 @@ function CreateStyleButton() {
               autoFocus
               data-testid="create-style-name"
             />
+            {managed && (
+              <div className="space-y-2">
+                <Select
+                  value={templateId}
+                  onValueChange={(value) => setTemplateId(value as StyleTemplateId)}
+                >
+                  <SelectTrigger data-testid="create-style-template">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STYLE_TEMPLATE_OPTIONS.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {
+                    STYLE_TEMPLATE_OPTIONS.find((template) => template.id === templateId)
+                      ?.description
+                  }
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="submit" data-testid="create-style-submit" disabled={creating}>

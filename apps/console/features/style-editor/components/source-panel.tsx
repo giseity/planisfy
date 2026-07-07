@@ -21,9 +21,15 @@ import {
 import { Plus, Trash2, Database, Layers, RefreshCw } from "lucide-react";
 import { SOURCE_TYPES, type SourceType } from "@/features/style-editor/style-spec/source";
 import type { SourceSpecification } from "maplibre-gl";
+import { clientEnv } from "@/env.client";
+import {
+  isManagedDeploymentMode,
+  managedPlatformSources,
+} from "@/lib/managed-defaults";
 import {
   defaultLayerOptionsForTileset,
   defaultLayerType,
+  inferLayerType,
   layerTypesForSource,
   publishabilityMessage,
   styleSourceIdForTileset,
@@ -108,6 +114,14 @@ function SourceBrowser({
   const [selectedSourceLayers, setSelectedSourceLayers] = useState<
     Record<string, string>
   >({});
+  const [selectedPlatformLayers, setSelectedPlatformLayers] = useState<
+    Record<string, string>
+  >({});
+  const platformSources = isManagedDeploymentMode(
+    clientEnv.NEXT_PUBLIC_DEPLOYMENT_MODE,
+  )
+    ? managedPlatformSources(clientEnv.NEXT_PUBLIC_API_URL)
+    : [];
 
   useEffect(() => {
     let active = true;
@@ -135,14 +149,14 @@ function SourceBrowser({
   }, []);
 
   return (
-    <div className="rounded border bg-muted/20 p-2 space-y-2">
+    <div className="rounded border bg-muted/20 p-2 space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Tileset browser
+            Source browser
           </h3>
           <p className="text-[10px] text-muted-foreground">
-            Add ready tilesets to this draft style.
+            Add managed platform sources or ready tilesets to this draft style.
           </p>
         </div>
         {loading && (
@@ -150,14 +164,109 @@ function SourceBrowser({
         )}
       </div>
 
+      {platformSources.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Platform sources
+          </p>
+          {platformSources.map((source) => {
+            const inStyle = existingSourceIds.has(source.sourceId);
+            const selectedSourceLayer =
+              selectedPlatformLayers[source.id] ?? source.vectorLayers[0]?.id;
+            return (
+              <div
+                key={source.id}
+                className="rounded border bg-background p-2 space-y-1"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-medium">
+                      {source.name}
+                    </div>
+                    <div className="truncate font-mono text-[10px] text-muted-foreground">
+                      {source.sourceId}
+                    </div>
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {source.description}
+                    </div>
+                  </div>
+                  <Badge variant="success" className="text-[10px]">
+                    MANAGED
+                  </Badge>
+                </div>
+                {source.vectorLayers.length > 1 && (
+                  <Select
+                    value={selectedSourceLayer}
+                    onValueChange={(value) =>
+                      setSelectedPlatformLayers((current) => ({
+                        ...current,
+                        [source.id]: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-6 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {source.vectorLayers.map((layer) => (
+                        <SelectItem
+                          key={layer.id}
+                          value={layer.id}
+                          className="text-xs"
+                        >
+                          {layer.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 flex-1 gap-1 text-xs"
+                    disabled={inStyle}
+                    onClick={() => onAdd(source.sourceId, source.source)}
+                  >
+                    <Database className="h-3 w-3" />
+                    {inStyle ? "Added" : "Source"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-6 flex-1 gap-1 text-xs"
+                    onClick={() => {
+                      if (!inStyle) onAdd(source.sourceId, source.source);
+                      onAddLayer(source.sourceId, {
+                        layerType: inferLayerType(selectedSourceLayer),
+                        sourceLayer: selectedSourceLayer,
+                      });
+                    }}
+                  >
+                    <Layers className="h-3 w-3" /> Layer
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {error ? (
         <p className="text-[11px] text-destructive">{error}</p>
       ) : tilesets.length === 0 && !loading ? (
-        <p className="text-[11px] text-muted-foreground">
-          No uploaded tilesets yet.
-        </p>
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Uploaded tilesets
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            No uploaded tilesets yet.
+          </p>
+        </div>
       ) : (
         <div className="space-y-1">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Uploaded tilesets
+          </p>
           {tilesets.slice(0, 8).map((tileset) => {
             const sourceId = styleSourceIdForTileset(tileset);
             const inStyle = existingSourceIds.has(sourceId);

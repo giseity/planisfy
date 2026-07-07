@@ -6,6 +6,7 @@ const testEnv = {
   NEXT_PUBLIC_DOCS_URL: 'https://docs.planisfy.localhost',
   NEXT_PUBLIC_AUTH_ORIGIN: 'https://api.planisfy.localhost',
   NEXT_PUBLIC_CONSOLE_API_PATH: '/api/v1/console',
+  NEXT_PUBLIC_DEPLOYMENT_MODE: 'self_host',
 } as const
 
 for (const [key, value] of Object.entries(testEnv)) {

@@ -8,6 +8,7 @@ const schema = z.object({
   NEXT_PUBLIC_DOCS_URL: z.string().url(),
   NEXT_PUBLIC_AUTH_ORIGIN: z.string().url(),
   NEXT_PUBLIC_CONSOLE_API_PATH: z.string().min(1),
+  NEXT_PUBLIC_DEPLOYMENT_MODE: z.enum(["self_host", "managed"]).default("self_host"),
 });
 
 export const clientEnv = createEnv(
@@ -20,6 +21,7 @@ export const clientEnv = createEnv(
     NEXT_PUBLIC_DOCS_URL: process.env.NEXT_PUBLIC_DOCS_URL,
     NEXT_PUBLIC_AUTH_ORIGIN: process.env.NEXT_PUBLIC_AUTH_ORIGIN,
     NEXT_PUBLIC_CONSOLE_API_PATH: process.env.NEXT_PUBLIC_CONSOLE_API_PATH,
+    NEXT_PUBLIC_DEPLOYMENT_MODE: process.env.NEXT_PUBLIC_DEPLOYMENT_MODE,
   },
   { appName: "console client", onInvalid: "throw" }
 );

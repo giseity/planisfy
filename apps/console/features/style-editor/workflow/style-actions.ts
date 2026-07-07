@@ -1,22 +1,26 @@
 import { api, type ApiEnvelope } from "@/lib/api";
 import type { StudioStyleSummary } from "./style-workflow";
+import { clientEnv } from "@/env.client";
+import {
+  buildStyleTemplate,
+  defaultStyleTemplateId,
+  type StyleTemplateId,
+} from "@/lib/managed-defaults";
 
-function blankStyle(name: string): Record<string, unknown> {
-  return {
-    version: 8,
-    name,
-    sources: {},
-    layers: [],
-  };
-}
-
-export async function createStyle(name: string): Promise<StudioStyleSummary> {
+export async function createStyle(
+  name: string,
+  templateId = defaultStyleTemplateId(clientEnv.NEXT_PUBLIC_DEPLOYMENT_MODE),
+): Promise<StudioStyleSummary> {
   const trimmedName = name.trim();
   if (!trimmedName) throw new Error("Name is required");
 
   const res = await api.post<ApiEnvelope<StudioStyleSummary>>("/styles", {
     name: trimmedName,
-    styleJson: blankStyle(trimmedName),
+    styleJson: buildStyleTemplate({
+      name: trimmedName,
+      templateId: templateId as StyleTemplateId,
+      apiRoot: clientEnv.NEXT_PUBLIC_API_URL,
+    }),
   });
 
   return res.data;

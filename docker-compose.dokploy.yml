@@ -175,6 +175,7 @@ services:
         NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
         NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:?NEXT_PUBLIC_DOCS_URL must be set}
         NEXT_PUBLIC_CONSOLE_API_PATH: /api/v1/console
+        NEXT_PUBLIC_DEPLOYMENT_MODE: managed
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
@@ -189,6 +190,7 @@ services:
       NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
       NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:?NEXT_PUBLIC_DOCS_URL must be set}
       NEXT_PUBLIC_CONSOLE_API_PATH: /api/v1/console
+      NEXT_PUBLIC_DEPLOYMENT_MODE: managed
       ZEPTOMAIL_SEND_MAIL_TOKEN: ${ZEPTOMAIL_SEND_MAIL_TOKEN:?ZEPTOMAIL_SEND_MAIL_TOKEN must be set}
       ZEPTOMAIL_FROM_AUTH: ${ZEPTOMAIL_FROM_AUTH:?ZEPTOMAIL_FROM_AUTH must be set}
       ZEPTOMAIL_FROM_NOTIFICATIONS: ${ZEPTOMAIL_FROM_NOTIFICATIONS:?ZEPTOMAIL_FROM_NOTIFICATIONS must be set}

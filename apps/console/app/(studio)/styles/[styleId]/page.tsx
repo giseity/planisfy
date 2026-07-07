@@ -7,6 +7,11 @@ import { api } from "@/lib/api";
 import { clientEnv } from "@/env.client";
 import { useStyleStore } from "@/features/style-editor/store/style-store";
 import { sampleStyle } from "@/lib/sample-style";
+import {
+  buildStyleTemplate,
+  defaultStyleTemplateId,
+  isManagedDeploymentMode,
+} from "@/lib/managed-defaults";
 import { MapPreview } from "@/features/style-editor/components/map-preview";
 import { LayerList } from "@/features/style-editor/components/layer-list";
 import { PropertyPanel } from "@/features/style-editor/components/property-panel";
@@ -130,6 +135,18 @@ export default function StyleEditorPage() {
     }
 
     if (id === "new") {
+      if (isManagedDeploymentMode(clientEnv.NEXT_PUBLIC_DEPLOYMENT_MODE)) {
+        loadStyle(
+          buildStyleTemplate({
+            templateId: defaultStyleTemplateId(
+              clientEnv.NEXT_PUBLIC_DEPLOYMENT_MODE,
+            ),
+            name: "Planisfy Streets Light",
+            apiRoot: clientEnv.NEXT_PUBLIC_API_URL,
+          }),
+        );
+        return;
+      }
       loadStyle(sampleStyle);
       return;
     }
