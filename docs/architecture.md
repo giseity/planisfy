@@ -1,6 +1,6 @@
 # Architecture
 
-Planisfy wraps open geospatial engines with a TypeScript platform layer. The API gateway owns authentication, API keys, rate limits, usage, style and tileset publication, console APIs, internal webhooks, health, metrics, and setup preflight. Specialized engines and workers do heavy map work.
+Planisfy wraps MapLibre-based map workflows and open geospatial engines with a TypeScript platform layer. MapLibre handles rendering; Planisfy owns the surrounding control-plane concerns: authentication, API keys, rate limits, usage, style and tileset publication, console APIs, internal webhooks, health, metrics, and setup preflight. Specialized engines and workers do heavy map work.
 
 ## Apps
 

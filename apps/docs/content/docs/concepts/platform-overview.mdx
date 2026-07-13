@@ -1,22 +1,22 @@
 ---
 title: Platform Overview
-description: Understand the Planisfy API, Console, workers, storage, and geospatial engines.
+description: Understand how Planisfy adds a platform layer around MapLibre, vector tiles, map APIs, workers, storage, and geospatial engines.
 ---
 
 # Platform Overview
 
-Planisfy is split into user-facing apps, an API control plane, background workers, shared packages, object storage, and geospatial engines.
+Planisfy is the platform layer around MapLibre-based map infrastructure. MapLibre handles rendering; Planisfy coordinates the APIs, Console, workers, storage, publications, usage, health, and geospatial engines needed to operate a fuller map platform.
 
 ## Main surfaces
 
-| Surface | Purpose |
-| --- | --- |
-| API | Serves public map APIs, authenticated service APIs, Console APIs, health, metrics, and internal webhooks. |
-| Console | Customer workspace for styles, tilesets, API keys, usage, operations, and self-host readiness. |
-| Docs | Public documentation site for platform usage and API behavior. |
-| Admin | Internal operator surface for tenants, jobs, storage, usage, health, and upgrades. |
-| Worker geodata | Processes uploads, imports, tiling jobs, outbox events, and artifact ledger updates. |
-| Root agent | Optional external compute agent for routing graph builds, basemap builds, DEM hydration, and serving activation. |
+| Surface        | Purpose                                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------------------------- |
+| API            | Serves public map APIs, authenticated service APIs, Console APIs, health, metrics, and internal webhooks.        |
+| Console        | Customer workspace for styles, tilesets, API keys, usage, operations, and self-host readiness.                   |
+| Docs           | Public documentation site for platform usage and API behavior.                                                   |
+| Admin          | Internal operator surface for tenants, jobs, storage, usage, health, and upgrades.                               |
+| Worker geodata | Processes uploads, imports, tiling jobs, outbox events, and artifact ledger updates.                             |
+| Root agent     | Optional external compute agent for routing graph builds, basemap builds, DEM hydration, and serving activation. |
 
 ## Runtime dependencies
 

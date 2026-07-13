@@ -1,22 +1,24 @@
 ---
 title: Planisfy Documentation
-description: Learn how to publish MapLibre styles, vector tiles, geocoding, routing, elevation, and static map APIs with Planisfy.
+description: Learn how to operate the platform layer around MapLibre styles, vector tiles, geocoding, routing, elevation, and static map APIs with Planisfy.
 ---
 
 # Planisfy Documentation
 
-Planisfy is a geospatial API platform for publishing MapLibre styles, vector tiles, and map service APIs on open geospatial engines. Use it to serve public map assets, protect service APIs with API keys, and operate the same stack in managed or self-hosted environments.
+MapLibre is the open-source renderer. Planisfy is the platform/control-plane layer around it.
+
+Use Planisfy to publish MapLibre styles, serve vector tiles, protect map service APIs with API keys, track usage, run geospatial jobs, and operate the same map infrastructure in managed or self-hosted environments.
 
 ## Start Here
 
-| Goal | Read |
-| --- | --- |
-| Render a published map in a browser | [Quickstart](/docs/quickstart) |
-| Understand the platform pieces | [Platform overview](/docs/concepts/platform-overview) |
-| Publish your own map | [Publish a style](/docs/guides/publish-style) |
-| Upload or import tiles | [Upload a tileset](/docs/guides/upload-tileset) |
-| Call service APIs | [API conventions](/docs/api/conventions) |
-| Run Planisfy yourself | [Self-hosting overview](/docs/self-hosting/overview) |
+| Goal                                | Read                                                  |
+| ----------------------------------- | ----------------------------------------------------- |
+| Render a published map in a browser | [Quickstart](/docs/quickstart)                        |
+| Understand the platform pieces      | [Platform overview](/docs/concepts/platform-overview) |
+| Publish your own map                | [Publish a style](/docs/guides/publish-style)         |
+| Upload or import tiles              | [Upload a tileset](/docs/guides/upload-tileset)       |
+| Call service APIs                   | [API conventions](/docs/api/conventions)              |
+| Run Planisfy yourself               | [Self-hosting overview](/docs/self-hosting/overview)  |
 
 ## What Planisfy Serves
 
@@ -35,6 +37,6 @@ Service APIs such as geocoding, directions, matrix, elevation, and static maps r
 
 ## Deployment Choices
 
-Managed Planisfy operates the provider configuration, hosted billing, email, storage, and production runtime policy for you. Self-hosted Planisfy uses the same API shapes but makes you responsible for Postgres, Redis, object storage, geospatial engines, backups, upgrades, and observability.
+Managed Planisfy operates the hosted runtime policy and provider configuration for you. Self-hosted Planisfy uses the same API shapes but makes you responsible for Postgres, Redis, object storage, geospatial engines, backups, upgrades, and observability.
 
 Read [deployment modes](/docs/concepts/deployment-modes) before choosing an environment, or go directly to [Docker Compose](/docs/self-hosting/docker) for local self-host setup.

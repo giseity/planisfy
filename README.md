@@ -1,62 +1,75 @@
 # Planisfy
 
-Planisfy is a TypeScript geospatial API platform for publishing MapLibre styles, vector tiles, and related map services on open-source engines. The repository contains the API gateway, Console, Admin, Docs, local geodata worker, self-hosting stack, and shared packages.
+Planisfy is an open-source, self-hostable Mapbox Platform layer for teams building with MapLibre, vector tiles, routing, geocoding, API keys, usage tracking, jobs, and map operations.
 
-The product supports two configured deployment modes:
+MapLibre is the open-source renderer. Planisfy is the platform/control-plane layer around it.
 
-- `self_host`: local or customer-managed infrastructure. Billing, email, supervisor, and object storage are optional.
-- `managed`: hosted operation. Billing, email, and R2/S3-compatible object storage are required by policy.
+## Why Planisfy?
 
-This README describes what is implemented in this repository today. Known launch-readiness gates and future work live in [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md), and the operator checklist lives in [docs/v1-trust-checklist.md](./docs/v1-trust-checklist.md).
+Using MapLibre gives you an open renderer, but a production map platform usually needs more than rendering:
 
-## Repository Map
+- MapLibre-compatible style publishing
+- Vector tile and PMTiles-backed tileset delivery
+- API keys, scopes, usage tracking, and rate limits
+- Geocoding, reverse geocoding, routing, isochrones, matrices, optimized trips, elevation, and static maps
+- Background jobs for uploads, imports, tiling, and artifact management
+- Health checks, setup preflight, operational visibility, backup, restore, and upgrade paths
+- Managed and self-hosted deployment modes from the same codebase
 
-| Path | Purpose |
-| --- | --- |
-| `apps/api` | Hono API gateway for public map APIs, auth, console APIs, internal webhooks, health, and metrics. |
-| `apps/console` | Customer Console for styles, tilesets, keys, usage, operations, platform readiness, and account settings. |
-| `apps/admin` | Internal operations app for tenants, jobs, storage, usage, health, and upgrades. |
-| `apps/docs` | Fumadocs public documentation site. |
-| `apps/marketing` | Public site and managed-mode auth entry pages. |
-| `apps/worker-geodata` | BullMQ/outbox worker for uploads, tiling, imports, and artifact ledger updates. |
-| `apps/elevation` | Local SRTM HGT elevation lookup service used by the API in Docker Compose. |
-| `apps/static-renderer` | Local MapLibre PNG renderer used by the API static map route. |
-| `apps/self-host-supervisor` | Optional local-only supervisor for guarded backup, upgrade, and rollback actions. |
-| `apps/tile-worker` | Optional PMTiles delivery runtime that reuses the shared tile resolver; the API serves tiles directly by default. |
-| `packages/*` | Shared auth, database, env, event, storage, style, policy, UI, and tooling packages. |
-| `infra/docker` | Docker Compose stack, engine configs, and ignored runtime data mounts. |
-| `docs` | Durable contributor and operator references. |
+Planisfy focuses on that surrounding platform layer so teams do not have to stitch every map service, operational check, and control-plane concern together from scratch.
 
-## Application Boundaries
+## What This Repository Contains
 
-Planisfy keeps user-facing app surfaces behind explicit package and HTTP
-contracts. The Console should call the API through `@planisfy/api-contracts` and
-its local API client, and should not import API route internals, the database
-package, or Drizzle directly. The Console ESLint config enforces this boundary;
-the only allowed server-auth exception is the Next.js auth route adapter.
+This repository contains the open-source Planisfy platform implementation:
 
-Admin is an internal operator surface and may depend on server-side packages
-such as `@planisfy/database` when it needs direct control-plane access. Shared
-runtime behavior that crosses apps should live in a package under `packages/*`
-or behind an API route rather than as app-to-app imports.
+| Path                        | Purpose                                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `apps/api`                  | Hono API gateway for public map APIs, auth, console APIs, internal routes, health, and metrics.               |
+| `apps/console`              | Customer Console for styles, tilesets, API keys, usage, platform readiness, operations, and account settings. |
+| `apps/admin`                | Internal operations app for tenants, jobs, storage, usage, health, audits, and upgrades.                      |
+| `apps/docs`                 | Fumadocs public documentation site.                                                                           |
+| `apps/marketing`            | Public website and managed-mode auth entry pages.                                                             |
+| `apps/worker-geodata`       | BullMQ/outbox worker for uploads, imports, tiling, and artifact ledger updates.                               |
+| `apps/elevation`            | Local SRTM HGT elevation lookup service used by the API in Docker Compose.                                    |
+| `apps/static-renderer`      | Local MapLibre PNG renderer used by the static map API route.                                                 |
+| `apps/self-host-supervisor` | Optional local-only supervisor for guarded backup, upgrade, and rollback actions.                             |
+| `apps/tile-worker`          | Optional isolated PMTiles delivery runtime. The API serves tiles directly by default.                         |
+| `packages/*`                | Shared auth, database, env, event, storage, style, policy, UI, and tooling packages.                          |
+| `infra/docker`              | Docker Compose stack, engine configs, and ignored runtime data mounts.                                        |
+| `docs`                      | Durable contributor and operator references.                                                                  |
 
-## Implemented Public API Surface
+## Public API Surface
 
-The API gateway mounts these route groups:
+The API gateway includes:
 
-- Published assets: `/tiles/*`, `/styles/v1/*`, and `/fonts/*`. Missing auth is allowed for public published assets; valid API keys or sessions are still accepted for metering and private-owner access.
-- Service APIs: `/geocoding/*`, `/directions/*`, `/isochrone/*`, `/matching/*`, `/matrix/*`, `/optimized-trips/*`, `/elevation/*`, and `/static/*`. These require `X-API-Key` or a valid session.
-- Console APIs: `/console/*`. These require a session cookie.
-- Internal routes: `/internal/*` and `/webhooks/dodo`. Internal routes use `INTERNAL_API_SECRET`; the Dodo webhook verifies the configured webhook secret.
-- Health and support endpoints: `/health`, `/health/detailed`, `/metrics`, `/setup/preflight`, and public local storage reads under `/storage/*`. In production, `/health/detailed`, `/metrics`, and root `/setup/preflight` require internal authorization; the Console-mounted preflight route remains available to authenticated Console sessions.
+- Published assets: `/tiles/*`, `/styles/v1/*`, and `/fonts/*`
+- Service APIs: `/geocoding/*`, `/directions/*`, `/isochrone/*`, `/matching/*`, `/matrix/*`, `/optimized-trips/*`, `/elevation/*`, and `/static/*`
+- Console APIs: `/console/*`
+- Internal, health, support, and setup endpoints: `/internal/*`, `/health`, `/health/detailed`, `/metrics`, and `/setup/preflight`
 
-External geospatial engines are optional only in the sense that the process can start without useful data. Geocoding needs Pelias, routing needs Valhalla graph data, tiles need Martin or uploaded PMTiles artifacts, elevation needs DEM tiles, and static maps need the static renderer.
+External geospatial engines are configured separately. Geocoding needs Pelias, routing needs Valhalla graph data, tiles need Martin or uploaded PMTiles artifacts, elevation needs DEM tiles, and static maps need the static renderer.
 
-## Launch Readiness
+## Deployment Modes
 
-For self-hosted trials, the Compose stack is expected to boot with degraded health when datasets are missing. The local self-host smoke, local-storage full product loop, MinIO/S3 full product loop, and local/MinIO backup-restore smokes have passed in this workspace; before calling a deployment production-ready, repeat the checks in [docs/v1-trust-checklist.md](./docs/v1-trust-checklist.md) on the target release branch or tag and verify the current V1 gates in [PLANISFY_ROADMAP.md](./PLANISFY_ROADMAP.md).
+Planisfy supports two deployment modes:
 
-Managed-mode live smoke has passed against the hosted stack, including provider configuration, object storage, billing and email adapter availability, public HTTPS ingress/CORS, internal managed smoke, and browser product-loop coverage. With that proof archived through the managed launch runbook, the platform is ready for launch.
+- `self_host`: local or customer-managed infrastructure.
+- `managed`: hosted operation using the same API, Console, Admin, Docs, Marketing, worker, database schema, publication model, and public route shapes.
+
+The difference is policy and configuration, not separate codebases. See [docs/deployment-modes.md](./docs/deployment-modes.md) for provider and capability details.
+
+## Documentation
+
+- [Architecture](./docs/architecture.md)
+- [Deployment modes](./docs/deployment-modes.md)
+- [Self hosting](./docs/self-hosting.md)
+- [Operations](./docs/operations.md)
+- [Testing](./docs/testing.md)
+- [Security](./docs/security.md)
+- [V1 trust checklist](./docs/v1-trust-checklist.md)
+- [Roadmap](./PLANISFY_ROADMAP.md)
+
+Public user-facing docs live in `apps/docs/content/docs`.
 
 ## Local Development
 
@@ -80,13 +93,13 @@ pnpm dev
 
 Local dev uses `portless` hostnames for web apps:
 
-| Surface | URL |
-| --- | --- |
-| Marketing | `https://planisfy.localhost` |
-| Console | `https://console.planisfy.localhost` |
-| Docs | `https://docs.planisfy.localhost` |
-| Admin | `https://admin.planisfy.localhost` |
-| API | `https://api.planisfy.localhost` |
+| Surface   | URL                                  |
+| --------- | ------------------------------------ |
+| Marketing | `https://planisfy.localhost`         |
+| Console   | `https://console.planisfy.localhost` |
+| Docs      | `https://docs.planisfy.localhost`    |
+| Admin     | `https://admin.planisfy.localhost`   |
+| API       | `https://api.planisfy.localhost`     |
 
 Common verification commands are turbo-backed at the root:
 
@@ -106,27 +119,6 @@ pnpm --filter docs check-types
 pnpm db:migrate
 ```
 
-### TypeScript and module conventions
-
-Planisfy keeps workspace packages and apps on ESM by default with
-`"type": "module"`. Node services use TypeScript directly in development, but
-production starts compiled JavaScript from `dist/` after `tsup` builds. Next.js
-apps keep TypeScript source because Next owns compilation for client and server
-code. Next app `next-env.d.ts` files are generated by Next and intentionally
-ignored; each Next app's `check-types` script runs `next typegen` before `tsc`.
-
-Shared TypeScript presets live in `packages/typescript-config`:
-
-| Preset | Use |
-| --- | --- |
-| `source-package.json` | Internal source packages checked by `tsc --noEmit`. |
-| `react-library.json` | Reusable React packages. |
-| `nextjs.json` | Next.js apps. |
-| `node-service.json` | Hono APIs, workers, CLIs, and other Node services. |
-
-Only add package-specific compiler overrides when the runtime genuinely needs
-them, such as DOM types for the Playwright-backed static renderer.
-
 ## Self-Host Quick Path
 
 From the repository root:
@@ -140,16 +132,16 @@ pnpm db:migrate
 
 Default local ports:
 
-| Service | URL |
-| --- | --- |
-| Marketing | `http://localhost:3000` |
-| Console | `http://localhost:3001` |
-| Docs | `http://localhost:3002` |
-| Admin | `http://localhost:3003` |
-| API | `http://localhost:4000` |
-| Martin | `http://localhost:3005` |
-| Valhalla | `http://localhost:3007` |
-| Pelias | `http://localhost:3100` |
+| Service         | URL                     |
+| --------------- | ----------------------- |
+| Marketing       | `http://localhost:3000` |
+| Console         | `http://localhost:3001` |
+| Docs            | `http://localhost:3002` |
+| Admin           | `http://localhost:3003` |
+| API             | `http://localhost:4000` |
+| Martin          | `http://localhost:3005` |
+| Valhalla        | `http://localhost:3007` |
+| Pelias          | `http://localhost:3100` |
 | Local elevation | `http://localhost:4011` |
 | Static renderer | `http://localhost:4300` |
 
@@ -162,3 +154,15 @@ curl http://localhost:4000/setup/preflight
 ```
 
 Planisfy does not commit binary map, routing, geocoding, or DEM datasets. A clean stack can boot with degraded map service checks until compatible files are placed under `infra/docker/data/*` or provider URLs are configured.
+
+## Contributor Notes
+
+Planisfy keeps user-facing app surfaces behind explicit package and HTTP contracts. Console should call the API through `@planisfy/api-contracts` and its local API client; it should not import API route internals, the database package, or Drizzle directly.
+
+Admin is an internal operator surface and may depend on server-side packages such as `@planisfy/database` when it needs direct control-plane access. Shared runtime behavior that crosses apps should live in `packages/*` or behind an API route rather than as app-to-app imports.
+
+Planisfy keeps workspace packages and apps on ESM by default with `"type": "module"`. Node services use TypeScript directly in development, but production starts compiled JavaScript from `dist/` after `tsup` builds. Next.js apps keep TypeScript source because Next owns compilation for client and server code.
+
+## License
+
+Planisfy is licensed under [AGPL-3.0-only](./LICENSE).
