@@ -27,6 +27,7 @@
     "@planisfy/style-spec": "workspace:*",
     "@planisfy/ui": "workspace:*",
     "@planisfy/utils": "workspace:*",
+    "assets": "workspace:*",
     "@types/geojson": "^7946.0.16",
     "better-auth": "1.6.11",
     "immer": "^11.1.4",

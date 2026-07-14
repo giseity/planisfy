@@ -59,6 +59,9 @@ importers:
       '@planisfy/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      assets:
+        specifier: workspace:*
+        version: link:../../packages/assets
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(kysely@0.28.17)(postgres@3.4.8)
@@ -277,6 +280,9 @@ importers:
       '@types/geojson':
         specifier: ^7946.0.16
         version: 7946.0.16
+      assets:
+        specifier: workspace:*
+        version: link:../../packages/assets
       better-auth:
         specifier: 1.6.11
         version: 1.6.11(drizzle-kit@0.31.9)(drizzle-orm@0.45.2(kysely@0.28.17)(postgres@3.4.8))(next@16.2.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@24.13.2)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
@@ -344,6 +350,9 @@ importers:
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      assets:
+        specifier: workspace:*
+        version: link:../../packages/assets
       fumadocs-core:
         specifier: 16.5.4
         version: 16.5.4(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(lucide-react@0.563.0(react@19.2.4))(next@16.2.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)
@@ -457,6 +466,12 @@ importers:
       better-auth:
         specifier: 1.6.11
         version: 1.6.11(drizzle-kit@0.31.9)(drizzle-orm@0.45.2(kysely@0.28.17)(postgres@3.4.8))(next@16.2.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@types/node@24.13.2)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
+      fumadocs-core:
+        specifier: 16.5.4
+        version: 16.5.4(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(lucide-react@0.563.0(react@19.2.4))(next@16.2.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)
+      fumadocs-mdx:
+        specifier: 14.2.7
+        version: 14.2.7(@types/mdast@4.0.4)(@types/mdx@2.0.13)(@types/react@19.2.14)(fumadocs-core@16.5.4(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(lucide-react@0.563.0(react@19.2.4))(next@16.2.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6))(mdast-util-mdx-jsx@3.2.0)(next@16.2.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.3))(react@19.2.4)(vite@7.3.1(@types/node@24.13.2)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
       lucide-react:
         specifier: ^0.563.0
         version: 0.563.0(react@19.2.4)
@@ -485,6 +500,9 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.1.18
         version: 4.1.18
+      '@types/mdx':
+        specifier: ^2.0.13
+        version: 2.0.13
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.2
@@ -500,6 +518,9 @@ importers:
       typescript:
         specifier: 5.9.2
         version: 5.9.2
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
 
   apps/root-agent:
     dependencies:

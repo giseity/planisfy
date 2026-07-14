@@ -1,11 +1,15 @@
 import "@planisfy/ui/globals.css";
 import { Providers } from "@/components/providers";
 import { Toaster } from "@planisfy/ui/components/sonner";
+import logo192 from "assets/brand/logo-192.png";
+import logo512 from "assets/brand/logo-512.png";
 import type { Metadata, Viewport } from "next";
 
 const marketingUrl = process.env.NEXT_PUBLIC_MARKETING_URL ?? "https://planisfy.com";
 const description =
   "Open-source, self-hostable map infrastructure for MapLibre styles, vector tiles, geospatial APIs, and operations.";
+const iconUrl = logo512.src;
+const appleIconUrl = logo192.src;
 
 export const metadata: Metadata = {
   metadataBase: new URL(marketingUrl),
@@ -17,6 +21,11 @@ export const metadata: Metadata = {
   applicationName: "Planisfy",
   alternates: {
     canonical: "/",
+  },
+  icons: {
+    icon: iconUrl,
+    shortcut: iconUrl,
+    apple: appleIconUrl,
   },
   openGraph: {
     type: "website",

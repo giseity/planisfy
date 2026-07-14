@@ -21,6 +21,7 @@
     "@planisfy/storage": "workspace:*",
     "@planisfy/ui": "workspace:*",
     "@planisfy/utils": "workspace:*",
+    "assets": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.563.0",
     "next": "16.2.9",
