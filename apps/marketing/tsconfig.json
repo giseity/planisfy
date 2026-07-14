@@ -3,6 +3,7 @@
   "compilerOptions": {
     "paths": {
       "@/*": ["./*"],
+      "fumadocs-mdx:collections/*": ["./.source/*"],
       "@planisfy/ui/*": ["../../packages/ui/src/*"]
     },
     "plugins": [

@@ -103,6 +103,7 @@ const NavItems = ({ docsHref }: { docsHref: string }) => {
   const menuItems = [
     { name: 'Features', href: '/#features' },
     { name: 'Pricing', href: '/pricing' },
+    { name: 'Blog', href: '/blog' },
     { name: 'Docs', href: docsHref },
     { name: 'Contact', href: '/contact' },
   ]

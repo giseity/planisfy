@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
     "lint:fix": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --fix",
-    "check-types": "next typegen && tsc --noEmit"
+    "check-types": "fumadocs-mdx && next typegen && tsc --noEmit",
+    "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
     "@planisfy/auth": "workspace:*",
@@ -19,6 +20,8 @@
     "@planisfy/ui": "workspace:*",
     "assets": "workspace:*",
     "better-auth": "1.6.11",
+    "fumadocs-core": "16.5.4",
+    "fumadocs-mdx": "14.2.7",
     "lucide-react": "^0.563.0",
     "motion": "^12.40.0",
     "next": "16.2.9",
@@ -30,10 +33,12 @@
     "@planisfy/eslint-config": "workspace:*",
     "@planisfy/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "^4.1.18",
+    "@types/mdx": "^2.0.13",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.2",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "zod": "^4.3.6"
   }
 }

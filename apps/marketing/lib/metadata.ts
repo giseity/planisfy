@@ -4,14 +4,20 @@ const marketingUrl = process.env.NEXT_PUBLIC_MARKETING_URL ?? 'https://planisfy.
 const siteName = 'Planisfy'
 const image = '/opengraph-image'
 
+export function getMarketingUrl() {
+  return marketingUrl
+}
+
 export function marketingMetadata({
   title,
   description,
   path,
+  type = 'website',
 }: {
   title: string
   description: string
   path: string
+  type?: 'website' | 'article'
 }): Metadata {
   return {
     metadataBase: new URL(marketingUrl),
@@ -21,7 +27,7 @@ export function marketingMetadata({
       canonical: path,
     },
     openGraph: {
-      type: 'website',
+      type,
       siteName,
       title,
       description,

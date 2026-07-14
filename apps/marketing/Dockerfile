@@ -15,6 +15,8 @@ COPY packages/database/package.json packages/database/
 COPY packages/types/package.json packages/types/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/typescript-config/package.json packages/typescript-config/
+COPY apps/marketing/source.config.ts apps/marketing/
+COPY apps/marketing/content apps/marketing/content
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter marketing...
 

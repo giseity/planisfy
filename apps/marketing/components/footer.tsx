@@ -32,6 +32,7 @@ export function Footer({ docsHref }: FooterProps) {
     {
       label: 'Company',
       links: [
+        { label: 'Blog', href: '/blog' },
         { label: 'Contact', href: '/contact' },
         { label: 'Docs', href: docsHref },
         { label: 'Terms', href: '/terms' },

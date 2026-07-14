@@ -1,6 +1,9 @@
 import { loadWorkspaceEnvForNextConfig } from "../../packages/env/next-config.mjs"
+import { createMDX } from "fumadocs-mdx/next"
 
 loadWorkspaceEnvForNextConfig()
+
+const withMDX = createMDX()
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -9,4 +12,4 @@ const nextConfig = {
   transpilePackages: ["@planisfy/ui", "@planisfy/auth"],
 }
 
-export default nextConfig
+export default withMDX(nextConfig)

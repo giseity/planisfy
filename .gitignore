@@ -40,6 +40,7 @@ infra/docker/data/fonts/*
 
 # Build Outputs
 .next/
+apps/*/.source/
 apps/*/next-env.d.ts
 out/
 build
