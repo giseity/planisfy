@@ -1,55 +1,165 @@
 ---
 title: Self-Hosting Overview
-description: Understand what the Planisfy self-host stack runs, what you operate, and where to start.
+description: Decide whether self-hosting fits your deployment, understand the services and datasets you operate, and follow the path to a working map.
 ---
 
 # Self-Hosting Overview
 
-Self-hosting runs the same core Planisfy application code on infrastructure you operate. It is useful for development, demos, private deployments, and small production installs where you own the runtime services.
+Self-hosted Planisfy runs the same core resource model, API shapes, Console workflows, and publication behavior on infrastructure you operate. It is intended for teams that need infrastructure control and are prepared to manage the databases, storage, geospatial services, datasets, backups, upgrades, and operational response behind the platform.
 
-## What the stack runs
+Self-hosting is not only a container-deployment choice. It transfers the operating boundary to you.
 
-The Docker Compose stack includes:
+## Is self-hosting the right mode?
 
-- API, Console, Admin, Docs, and Marketing apps.
-- `worker-geodata` for uploads, imports, tiling, and artifact processing.
-- Postgres and Redis.
-- Martin for tiles and glyphs.
-- Valhalla for routing.
-- Pelias API and Elasticsearch for geocoding.
-- Local elevation service.
-- Static renderer.
-- MinIO when the `with-minio` profile is enabled.
+Choose self-hosting when you need one or more of the following:
 
-Optional profiles add Traefik, tile-worker, Pelias fixture import jobs, and the self-host supervisor.
+- private or customer-controlled infrastructure,
+- control over data residency and network boundaries,
+- your own object storage and geospatial datasets,
+- the ability to run regional or planet-scale builds on your own compute,
+- direct control over upgrades, capacity, and service topology, or
+- integration with an existing operational environment.
+
+Choose managed Planisfy when you want the hosted provider configuration, ingress, storage policy, billing integrations, and routine platform operations handled for you.
+
+Read [Deployment modes](/docs/concepts/deployment-modes) for the formal boundary between the two modes.
+
+## What runs in a self-hosted deployment
+
+The maintained Docker Compose stack can run the core application services and their local dependencies.
+
+### Core platform services
+
+- API
+- Console
+- Admin
+- Documentation and marketing applications
+- Geodata worker
+- Postgres
+- Redis
+- Object storage through the recommended MinIO profile or another S3-compatible provider
+
+### Map services
+
+- Martin for tiles and glyphs
+- Valhalla for routing APIs
+- Pelias API and Elasticsearch for geocoding
+- Local elevation service
+- Static map renderer
+
+### Optional operational services
+
+- Traefik for local or VPS ingress
+- Dedicated tile worker
+- Runtime supervisor
+- Pelias fixture import jobs
+- External root agents for basemap builds, routing graph builds, DEM hydration, and serving activation
+
+Not every installation needs every optional profile. Start with the smallest topology that produces the map or service you need, then add external compute and additional delivery paths after the base platform is healthy.
+
+## What works before production datasets are installed
+
+A clean stack can start even when map datasets are incomplete. This is intentional: Console, the API, configuration, and operational diagnostics should remain available while services report degraded readiness.
+
+The following capabilities depend on compatible data or provider configuration:
+
+| Capability | Required data or dependency |
+| --- | --- |
+| Vector basemap rendering | PMTiles, MBTiles, or another Martin-compatible tile source, plus a matching style |
+| Labels | Compatible glyph PBFs and a correct style `glyphs` URL |
+| Routing | An active Valhalla routing graph for the requested region |
+| Geocoding | A configured Pelias-compatible service with imported data |
+| Elevation | DEM coverage for the requested coordinates or route |
+| Static maps | A reachable static renderer that can load the published style and all dependent resources |
+
+A running container does not prove that its dataset is present or that the service can answer useful requests. Use health and preflight to distinguish process availability from product readiness.
+
+## Fastest path to a working local map
+
+For a new local installation, follow this order:
+
+1. Clone the repository and create `.env` from `.env.example`.
+2. Run the setup helper with demo data:
+
+   ```bash
+   scripts/self-host-setup.sh --demo-data
+   ```
+
+3. Start the stack with the MinIO profile and run database migrations.
+4. Inspect `/health`, `/health/detailed`, and `/setup/preflight`.
+5. Create the first Console account.
+6. Run the default-map smoke check or load the published demo style through the [quickstart](/docs/quickstart).
+7. Run the full product-loop smoke before treating the environment as ready for your own data.
+
+The exact commands and default ports are in [Docker Compose self-hosting](/docs/self-hosting/docker).
 
 ## What you operate
 
-With `DEPLOYMENT_MODE=self_host`, you are responsible for:
+With `DEPLOYMENT_MODE=self_host`, your team owns the following responsibilities:
 
-- Database and Redis availability.
-- Object storage and artifact retention.
-- PMTiles, fonts, Valhalla graph data, Pelias data, DEM files, and static renderer readiness.
-- Backups, restores, upgrades, monitoring, and log retention.
-- External root agents if you run regional or planet-scale builds.
+| Area | Your responsibility |
+| --- | --- |
+| Database and queues | Postgres availability, migrations, Redis availability, queue health, and retention |
+| Artifact storage | S3-compatible storage, credentials, bucket policy, capacity, lifecycle rules, and object retention |
+| Map data | PMTiles, fonts, routing graphs, geocoding data, DEM files, checksums, provenance, and update cadence |
+| Runtime services | Martin, Valhalla, Pelias, elevation, static rendering, workers, and optional supervisors |
+| Security | Secrets, API origins, TLS, internal diagnostics authorization, key policy, and network boundaries |
+| Reliability | Monitoring, alerting, backups, restore tests, restart persistence, support bundles, and incident response |
+| Releases | Application upgrades, schema migrations, compatibility checks, rollback, and release evidence |
+| Capacity | CPU, memory, disk, swap, bandwidth, object-storage throughput, and build-host sizing |
 
-Hosted checkout, hosted billing portal actions, managed subscription feature gates, and hosted plan quotas are disabled. Usage screens still show operational activity.
+Hosted checkout, hosted billing-portal actions, managed subscription gates, and hosted plan quotas are disabled in self-host mode. Usage remains visible for operational awareness.
 
-## Recommended path
+## Storage and large artifacts
 
-1. Start with [Docker Compose](/docs/self-hosting/docker).
-2. Review [configuration](/docs/self-hosting/configuration), especially URLs, secrets, and storage.
-3. Add required [data sources](/docs/self-hosting/data-sources).
-4. Create the first Console account.
-5. Run health, preflight, and smoke checks.
-6. Add [external compute](/docs/self-hosting/external-compute) only after the base stack is healthy.
+Use S3-compatible MinIO, S3, or R2 for production-like artifact workflows. Local filesystem storage is useful for small smoke tests, but it cannot provide the signed direct-upload sessions used by external root agents for large regional and planet-scale artifacts.
 
-## Dataset expectations
+Keep the database storage ledger and object store consistent. The presence of a file alone should not be treated as proof that a resource is published or safe to serve.
 
-Planisfy does not ship production map datasets. A clean stack can boot with degraded service checks until compatible files or external providers are configured. Missing data should not prevent Console/API startup, but it will affect maps, geocoding, routing, elevation, or static rendering.
+Continue with [Self-host data sources](/docs/self-hosting/data-sources) and [Configuration](/docs/self-hosting/configuration).
 
-## Related
+## External build and serving workers
 
-- [Deployment modes](/docs/concepts/deployment-modes)
-- [Docker Compose](/docs/self-hosting/docker)
-- [Operations and performance](/docs/self-hosting/performance)
+Large map-data jobs should not be forced through the public API process. Planisfy root agents poll outbound for work, run Planetiler or Valhalla on suitable compute, upload immutable artifacts directly to object storage, and finalize their metadata through the API.
+
+Build and serving roles remain separate even when one machine performs both:
+
+- A build worker creates and uploads an artifact.
+- A release identifies the artifact that should be deployed.
+- A serving worker installs it onto local runtime disk.
+- The runtime supervisor restarts and probes Martin or Valhalla.
+- The release becomes active or primary only after serving validation.
+
+Planisfy has validated this workflow with planet-scale OSM basemap and Valhalla routing graph builds. Read [External compute](/docs/self-hosting/external-compute) for agent installation and [Planet-scale builds](/docs/self-hosting/planet-scale-builds) for the large-build lifecycle and boundaries.
+
+## Before using a self-hosted installation in production
+
+At minimum, verify:
+
+- the public API and Console use trusted HTTPS origins,
+- secrets and internal diagnostic tokens are not using development defaults,
+- object storage is durable and access policies are tested,
+- required datasets are installed and their provenance is recorded,
+- worker heartbeats, queue lag, and failed jobs are monitored,
+- backups include Postgres, object storage, runtime data directories, and root-agent state,
+- a restore has been performed successfully,
+- restart persistence and publication URLs have been tested,
+- upgrade and rollback procedures are documented, and
+- representative browser and service requests succeed after deployment.
+
+Use the repository smoke scripts where appropriate, but retain deployment-specific evidence as well. A passing local smoke test does not prove that production ingress, storage credentials, datasets, or machine capacity are correct.
+
+## What Planisfy does not ship automatically
+
+Planisfy does not currently ship production map datasets or downloadable planet data packs. Operators provide or build compatible tiles, routing graphs, geocoding data, fonts, and elevation coverage.
+
+Production Overture basemap builds also remain separate from the validated OSM Planetiler workflow. See [Capabilities and validation status](/docs/concepts/capabilities) for the current support boundary.
+
+## Recommended reading order
+
+1. [Docker Compose self-hosting](/docs/self-hosting/docker)
+2. [Configuration](/docs/self-hosting/configuration)
+3. [Self-host data sources](/docs/self-hosting/data-sources)
+4. [Quickstart](/docs/quickstart)
+5. [Self-host operations and performance](/docs/self-hosting/performance)
+6. [External compute](/docs/self-hosting/external-compute), when larger builds are needed
