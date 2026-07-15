@@ -1,52 +1,175 @@
 ---
 title: Platform Overview
-description: Understand how Planisfy adds a platform layer around MapLibre, vector tiles, map APIs, workers, storage, and geospatial engines.
+description: Understand Planisfy's resource model, request paths, background workflows, and relationship with MapLibre and open geospatial engines.
 ---
 
 # Platform Overview
 
-Planisfy is the platform layer around MapLibre-based map infrastructure. MapLibre handles rendering; Planisfy coordinates the APIs, Console, workers, storage, publications, usage, health, and geospatial engines needed to operate a fuller map platform.
+Planisfy is the platform layer around MapLibre-based map applications and open geospatial services. MapLibre renders styles and geographic data in the client, while Planisfy manages how the resources behind that map are created, versioned, published, secured, served, observed, and operated.
 
-## Main surfaces
+The platform is built around a simple boundary:
 
-| Surface        | Purpose                                                                                                          |
-| -------------- | ---------------------------------------------------------------------------------------------------------------- |
-| API            | Serves public map APIs, authenticated service APIs, Console APIs, health, metrics, and internal webhooks.        |
-| Console        | Customer workspace for styles, tilesets, API keys, usage, operations, and self-host readiness.                   |
-| Docs           | Public documentation site for platform usage and API behavior.                                                   |
-| Admin          | Internal operator surface for tenants, jobs, storage, usage, health, and upgrades.                               |
-| Worker geodata | Processes uploads, imports, tiling jobs, outbox events, and artifact ledger updates.                             |
-| Root agent     | Optional external compute agent for routing graph builds, basemap builds, DEM hydration, and serving activation. |
+- MapLibre and other clients consume published resources and service APIs.
+- Specialized engines provide tiles, routing, geocoding, elevation, and rendering capabilities.
+- Planisfy coordinates the product and operational workflows around those engines.
 
-## Runtime dependencies
+## The core resource model
 
-Planisfy relies on Postgres for control-plane data, Redis for queues and runtime coordination, and object storage for generated artifacts. The map engines are intentionally replaceable:
+The main resources developers work with are styles, tilesets, artifacts, versions, and publications.
 
-- Martin serves PMTiles, MBTiles, directory tile sources, and glyphs in self-host setups.
-- Valhalla serves directions, isochrones, map matching, matrices, optimized trips, and routing graph data.
-- Pelias-compatible services serve forward, reverse, and autocomplete geocoding.
-- The elevation service serves SRTM HGT-based point and route elevation profiles.
-- The static renderer produces PNG map images from published styles.
-
-## Request flow
-
-Public map asset requests go directly to the API route namespace:
+A resource can be edited without immediately changing the URL used by an application. When a version is ready, it can be published and exposed through either a stable alias or an immutable version-pinned URL.
 
 ```text
-Client -> Planisfy API -> storage or map engine -> response
+editable resource
+  -> version
+  -> validation or processing
+  -> publication
+  -> stable and versioned public URLs
 ```
 
-Build workflows use asynchronous processing:
+For example, a tileset upload may produce a PMTiles artifact and a tileset version. Publishing that version makes TileJSON and tile URLs available. A style can then reference the published tileset, add layers and visual rules, and be published through a MapLibre-compatible style URL.
+
+Read [Resources and publications](/docs/concepts/resources) for the URL and versioning model.
+
+## Three connected layers
+
+Planisfy deployments can be understood as three connected layers, even though some services span more than one.
+
+### Rendering layer
+
+The rendering layer runs closest to the user. MapLibre GL JS, MapLibre Native, or a static renderer loads a style and turns its sources and layers into a visible map.
+
+The client is responsible for presentation and interaction, but it still needs reliable style, tile, glyph, sprite, and service URLs.
+
+### Runtime data plane
+
+The runtime data plane answers application requests. It includes:
+
+- published style JSON, sprites, and glyphs,
+- TileJSON and vector tile delivery,
+- geocoding and reverse geocoding,
+- directions, matrices, matching, isochrones, and optimization,
+- elevation services, and
+- static map rendering.
+
+Planisfy exposes consistent public routes while delegating specialized work to storage backends and geospatial engines.
+
+### Control and operations plane
+
+The control and operations plane manages resources and system state. It includes:
+
+- accounts, organizations, and ownership,
+- resource drafts, versions, publication, promotion, and rollback,
+- API keys, scopes, origin restrictions, limits, and usage,
+- uploads, imports, queues, builds, releases, and activations,
+- health, preflight, metrics, backups, restores, and support bundles, and
+- operator workflows for managed and self-hosted environments.
+
+The Planisfy API spans both the public runtime routes and the authenticated control-plane routes. The distinction is about responsibility, not necessarily a separate process boundary.
+
+## Request paths
+
+### Loading a map
+
+A browser normally starts with a published style URL:
 
 ```text
-Console -> API -> queue/outbox -> worker or root agent -> storage -> publication metadata
+MapLibre client
+  -> Planisfy style route
+  -> style JSON
+  -> TileJSON, tile, glyph, and sprite requests
+  -> object storage or serving engine
+  -> rendered map
 ```
 
-The API is the control plane. Large artifacts should live in S3-compatible storage or R2, not inside API request bodies. See [external compute](/docs/self-hosting/external-compute) for root-agent builds.
+The first style request is only the beginning. If a map is blank or incomplete, inspect the dependent requests rather than assuming the style route is the only relevant service.
+
+### Calling a geographic API
+
+Service requests follow a different path:
+
+```text
+application
+  -> Planisfy API key or Console session
+  -> policy, limits, and usage recording
+  -> Valhalla, Pelias, elevation, or static renderer
+  -> normalized response or actionable error
+```
+
+The Planisfy route can be available while the backing engine or dataset is unavailable. That is why the API distinguishes authentication and request errors from dependency and dataset readiness failures.
+
+## Background workflows
+
+Uploads, conversions, tiling, basemap builds, and routing graph builds are asynchronous because they may take longer than a normal HTTP request and may produce large artifacts.
+
+A typical upload path is:
+
+```text
+Console
+  -> API transaction
+  -> storage ledger, processing job, and outbox event
+  -> Redis and geodata worker
+  -> processed artifact in object storage
+  -> version and publication state
+```
+
+Large OSM basemap and Valhalla routing graph builds can run through external root agents:
+
+```text
+Console or API
+  -> build assignment
+  -> polling root agent
+  -> Planetiler or Valhalla build
+  -> direct object-storage upload
+  -> named release
+  -> serving agent activation
+  -> runtime readiness validation
+```
+
+This separates expensive compute from the public API host and keeps large artifacts out of ordinary API request bodies. Continue with [External compute](/docs/self-hosting/external-compute) and [Planet-scale builds](/docs/self-hosting/planet-scale-builds).
+
+## Main product surfaces
+
+| Surface | Purpose |
+| --- | --- |
+| API | Public map assets, authenticated service APIs, Console routes, health, metrics, and internal integration routes. |
+| Console | Customer workspace for styles, tilesets, API keys, usage, operations, and self-host readiness. |
+| Admin | Operator surface for tenants, jobs, storage, usage, health, and upgrade operations. |
+| Geodata worker | Upload validation, format conversion, tiling, outbox processing, artifact writes, and job-state updates. |
+| Root agent | Optional external build and serving agent for basemaps, routing graphs, DEM hydration, and runtime activation. |
+| Runtime supervisor | Narrow local service used by serving agents to restart and probe allowlisted map services. |
+
+## State and specialized engines
+
+Planisfy uses:
+
+- **Postgres** for accounts, resources, versions, publications, jobs, usage, audit records, and operational state.
+- **Redis** for queues and runtime coordination.
+- **Object storage** for uploads, generated artifacts, backups, and large build outputs.
+
+Specialized engines remain intentionally separate:
+
+- **Martin** serves PMTiles, MBTiles, directory tile sources, and glyphs in self-hosted environments.
+- **Valhalla** provides routing, matrices, isochrones, matching, and optimization.
+- **Pelias-compatible services** provide forward, reverse, and autocomplete geocoding.
+- **The elevation service** reads compatible DEM coverage for point and route profiles.
+- **The static renderer** produces PNG images from published styles and resources.
+
+Planisfy provides a coherent resource, API, policy, and operations model around these components rather than reimplementing their specialized algorithms.
+
+## Deployment boundary
+
+Managed and self-hosted deployments share the core API shapes, resource model, publication workflows, and Console concepts. They differ in who operates providers, datasets, credentials, backups, upgrades, and incident response.
+
+- Choose managed mode when you want Planisfy to operate the hosted platform configuration.
+- Choose self-hosted mode when you need infrastructure control and are prepared to operate the runtime dependencies and map datasets.
+
+Read [Deployment modes](/docs/concepts/deployment-modes) and [Capabilities and validation status](/docs/concepts/capabilities) before choosing a topology.
 
 ## What to read next
 
+- [Quickstart](/docs/quickstart)
 - [Resources and publications](/docs/concepts/resources)
-- [Deployment modes](/docs/concepts/deployment-modes)
 - [Upload a tileset](/docs/guides/upload-tileset)
 - [Publish a style](/docs/guides/publish-style)
+- [Self-hosting overview](/docs/self-hosting/overview)
