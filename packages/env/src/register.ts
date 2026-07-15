@@ -1,3 +1,5 @@
 import { loadWorkspaceEnv } from "./node";
 
-loadWorkspaceEnv();
+if (!loadWorkspaceEnv()) {
+  loadWorkspaceEnv({ filename: ".env.example" });
+}
