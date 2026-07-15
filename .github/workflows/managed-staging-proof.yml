@@ -61,8 +61,11 @@ env:
   DODO_PAYMENTS_API_KEY: ${{ secrets.MANAGED_STAGING_DODO_PAYMENTS_API_KEY }}
   DODO_PAYMENTS_WEBHOOK_SECRET: ${{ secrets.MANAGED_STAGING_DODO_PAYMENTS_WEBHOOK_SECRET }}
 
-  RESEND_API_KEY: ${{ secrets.MANAGED_STAGING_RESEND_API_KEY }}
-  FROM_EMAIL: ${{ vars.MANAGED_STAGING_FROM_EMAIL }}
+  ZEPTOMAIL_SEND_MAIL_TOKEN: ${{ secrets.MANAGED_STAGING_ZEPTOMAIL_SEND_MAIL_TOKEN }}
+  ZEPTOMAIL_FROM_AUTH: ${{ vars.MANAGED_STAGING_ZEPTOMAIL_FROM_AUTH }}
+  ZEPTOMAIL_FROM_NOTIFICATIONS: ${{ vars.MANAGED_STAGING_ZEPTOMAIL_FROM_NOTIFICATIONS }}
+  MANAGED_STAGING_E2E_EMAIL: ${{ secrets.MANAGED_STAGING_E2E_EMAIL }}
+  MANAGED_STAGING_E2E_PASSWORD: ${{ secrets.MANAGED_STAGING_E2E_PASSWORD }}
 
 jobs:
   prove-managed-staging:
@@ -72,38 +75,84 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check managed staging configuration
+        id: staging-config
+        shell: bash
+        run: |
+          missing=()
+          required=(
+            MANAGED_STAGING_API_URL
+            MANAGED_STAGING_CONSOLE_URL
+            DATABASE_URL
+            REDIS_URL
+            REDIS_HOST
+            BETTER_AUTH_SECRET
+            INTERNAL_API_SECRET
+            MARTIN_URL
+            VALHALLA_URL
+            PELIAS_URL
+            GLYPHS_URL
+            ELEVATION_URL
+            ZEPTOMAIL_SEND_MAIL_TOKEN
+            ZEPTOMAIL_FROM_AUTH
+            ZEPTOMAIL_FROM_NOTIFICATIONS
+            MANAGED_STAGING_E2E_EMAIL
+            MANAGED_STAGING_E2E_PASSWORD
+          )
+
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            printf 'Managed staging proof skipped. Missing configuration: %s\n' "${missing[*]}"
+            exit 0
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
       - uses: pnpm/action-setup@v4
+        if: steps.staging-config.outputs.configured == 'true'
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v4
+        if: steps.staging-config.outputs.configured == 'true'
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+        if: steps.staging-config.outputs.configured == 'true'
 
       - name: Install browser runtime
+        if: steps.staging-config.outputs.configured == 'true'
         run: pnpm --filter static-renderer exec playwright install --with-deps chromium
 
       - name: Validate managed startup configuration
+        if: steps.staging-config.outputs.configured == 'true'
         run: pnpm --filter api exec tsx -e "import('./src/env.ts').then(() => console.log('managed startup validation passed'))"
 
       - name: Run managed staging adapter smoke
+        if: steps.staging-config.outputs.configured == 'true'
         run: pnpm smoke:managed-staging
 
       - name: Run full browser product loop against managed staging
+        if: steps.staging-config.outputs.configured == 'true'
         env:
           PLANISFY_E2E_API_URL: ${{ vars.MANAGED_STAGING_API_URL }}
           PLANISFY_E2E_CONSOLE_URL: ${{ vars.MANAGED_STAGING_CONSOLE_URL }}
           PLANISFY_E2E_SKIP_SEED: "true"
           PLANISFY_E2E_RESOURCE_SUFFIX: managed-${{ github.run_id }}
-          PLANISFY_SEED_EMAIL: ${{ secrets.MANAGED_STAGING_E2E_EMAIL }}
-          PLANISFY_SEED_PASSWORD: ${{ secrets.MANAGED_STAGING_E2E_PASSWORD }}
+          PLANISFY_SEED_EMAIL: ${{ env.MANAGED_STAGING_E2E_EMAIL }}
+          PLANISFY_SEED_PASSWORD: ${{ env.MANAGED_STAGING_E2E_PASSWORD }}
         run: pnpm e2e:product-loop:full
 
       - name: Upload managed staging screenshots
-        if: always()
+        if: always() && steps.staging-config.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: managed-staging-product-loop-screenshots

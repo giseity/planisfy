@@ -32,7 +32,7 @@
     "smoke:self-host-support-bundle": "scripts/self-host-support-bundle-smoke.sh",
     "smoke:self-host-upgrade": "node scripts/self-host-upgrade-smoke.mjs",
     "check-types": "turbo run check-types",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=4",
     "verify": "turbo run lint check-types test build"
   },
   "devDependencies": {
