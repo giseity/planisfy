@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { loadWorkspaceEnv } from "@planisfy/env/node";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { HgtTileSet, type ElevationPoint } from "./hgt";
 
@@ -22,14 +22,18 @@ const lookupSchema = z.object({
   locations: z.array(locationSchema).min(1).max(500),
 });
 
-app.get("/health", async (c) => {
+async function healthResponse(c: Context) {
   const tileSet = await loadTiles();
   return c.json({
-    ok: tileSet.count > 0,
+    ok: true,
+    ready: tileSet.count > 0,
     tiles: tileSet.count,
     demDir,
-  }, tileSet.count > 0 ? 200 : 503);
-});
+  });
+}
+
+app.get("/health", healthResponse);
+app.get("/api/v1/health", healthResponse);
 
 app.post("/api/v1/lookup", async (c) => {
   const parsed = lookupSchema.safeParse(await c.req.json().catch(() => null));

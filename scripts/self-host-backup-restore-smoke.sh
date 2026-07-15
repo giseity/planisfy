@@ -62,7 +62,7 @@ cleanup() {
   local status=$?
   if [[ "$status" -ne 0 ]]; then
     mkdir -p "$LOG_DIR"
-    compose logs --no-color postgres redis minio minio-init api console worker-geodata >"$LOG_DIR/compose.log" 2>&1 || true
+    compose logs --no-color postgres redis martin minio minio-init pelias pelias-elasticsearch elevation api console worker-geodata >"$LOG_DIR/compose.log" 2>&1 || true
   fi
   compose down -v --remove-orphans >/dev/null 2>&1 || true
 }

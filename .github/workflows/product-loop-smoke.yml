@@ -48,7 +48,7 @@ jobs:
         if: failure()
         run: |
           mkdir -p dogfood-output/compose
-          docker compose --env-file .env -f infra/docker/docker-compose.yml logs --no-color postgres redis api console worker-geodata > dogfood-output/compose/product-loop-smoke.log
+          docker compose --env-file .env -f infra/docker/docker-compose.yml logs --no-color postgres redis martin pelias pelias-elasticsearch elevation api console worker-geodata > dogfood-output/compose/product-loop-smoke.log
 
       - name: Upload smoke screenshots
         if: always()
