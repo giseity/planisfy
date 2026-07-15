@@ -4,6 +4,7 @@ import { z } from 'zod'
 export const blog = defineCollections({
   type: 'doc',
   dir: 'content/blog',
+  files: ['**/*.mdx'],
   schema: z.object({
     title: z.string(),
     description: z.string(),
