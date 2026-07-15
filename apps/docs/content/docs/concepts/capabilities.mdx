@@ -1,0 +1,66 @@
+---
+title: Capabilities and Validation Status
+description: See which Planisfy capabilities are implemented, validated, dataset-dependent, or still planned.
+---
+
+# Capabilities and Validation Status
+
+Planisfy combines product workflows, public APIs, background processing, object storage, and specialized geospatial engines. Some capabilities are available immediately, while others depend on datasets, external compute, or deployment-specific provider configuration.
+
+This page makes those boundaries explicit so that you can distinguish an implemented feature from a validated workflow, a dataset-dependent service, or planned work.
+
+## Status vocabulary
+
+| Status | Meaning |
+| --- | --- |
+| Implemented | The capability exists in the current platform and is represented in the product, API, or operational tooling. |
+| Validated | The complete workflow has been exercised in a representative managed or self-hosted environment. |
+| Dataset-dependent | The platform integration exists, but useful responses require compatible third-party or operator-provided data. |
+| Deployment-dependent | The capability requires provider credentials, infrastructure, or policy supplied by the deployment operator. |
+| Planned | The capability is not part of the current supported workflow. |
+
+Validation describes the workflow and tested scale; it is not a guarantee that every machine size, source dataset, provider, or traffic pattern will have the same performance characteristics.
+
+## Platform capabilities
+
+| Capability | Status | Scope and boundary |
+| --- | --- | --- |
+| MapLibre style management | Validated | Create, version, publish, promote, and serve stable or version-pinned style URLs. |
+| Sprite assets and generated sprite sheets | Validated | Account-level PNG/SVG assets can be reused by styles and published as MapLibre sprite sheets. |
+| Tileset upload and processing | Validated | GeoJSON and supported source formats can be processed into published PMTiles-backed vector tilesets when the required worker toolchain is installed. |
+| PMTiles and TileJSON delivery | Validated | Published vector tilesets can be served through the API or the optional tile-worker path. |
+| API keys, scopes, origins, rate limits, and usage | Validated | Available in managed and self-hosted modes; hosted subscription policy applies only to managed mode. |
+| Geocoding | Dataset-dependent | Public APIs proxy a configured Pelias-compatible service. Coverage and freshness depend on the installed Pelias data. |
+| Routing, matrix, matching, isochrones, and optimization | Dataset-dependent | Public APIs proxy Valhalla. Useful responses require a compatible active routing graph. |
+| Elevation | Dataset-dependent | Point and route elevation require compatible DEM coverage. |
+| Static maps | Deployment-dependent | The static renderer must be configured and able to load the published style and its dependent resources. |
+| Health, preflight, metrics, support bundles, backup, and restore | Validated | Covered in self-hosted operational and smoke workflows, with managed checks where provider configuration is required. |
+| External build and serving agents | Validated | Polling root agents can build artifacts, upload them directly to object storage, publish releases, and activate them on serving machines. |
+| OSM basemap builds with Planetiler | Validated at planet scale | Planet-scale OSM PBF to PMTiles builds, direct upload, release creation, serving activation, and Martin validation have been exercised. |
+| Valhalla routing graph builds | Validated at planet scale | Planet-scale graph builds, direct upload, release creation, serving activation, and runtime readiness validation have been exercised. |
+| Overture extraction | Implemented with boundaries | Configured DuckDB-backed extraction is available, but production Overture basemap builds remain disabled until the layer profile and larger-import workflow are complete. |
+| Managed basemap release automation | Planned | This is separate from the working OSM build, release, and activation workflow. |
+| Downloadable self-host data packs | Planned | Operators currently provide or build compatible datasets and artifacts. |
+| Raster tile value sampling | Outside current scope | Vector tilequery is supported for PMTiles-backed vector tilesets; raster value sampling is not currently required. |
+
+## Managed and self-hosted validation
+
+The two deployment modes share the main API shapes, resource model, Console workflows, and publication behavior, but their operational responsibilities differ.
+
+Managed validation covers hosted provider configuration, object storage, billing and email adapters, public HTTPS ingress, CORS, and the browser product loop. Self-hosted validation covers clean-volume startup, degraded missing-dataset states, local and S3-compatible storage, worker processing, publication, rendering, restart persistence, backup, restore, and support bundles.
+
+Large map-data builds can use external compute in either topology. Build agents create and upload versioned artifacts, while serving agents install selected releases onto the machines running Martin or Valhalla.
+
+## What planet-scale validation means
+
+Planisfy has been used to complete planet-scale OSM basemap and Valhalla routing graph workflows through the root-agent architecture. That validates the orchestration path from source data through build, upload, release, activation, and runtime checks.
+
+It does not mean that Planisfy ships the planet datasets, that elevation is included automatically, or that production Overture basemaps and managed global release distribution are already part of the product. Those are separate concerns with separate status.
+
+For architecture and operating guidance, continue with:
+
+- [Platform overview](/docs/concepts/platform-overview)
+- [Deployment modes](/docs/concepts/deployment-modes)
+- [External compute](/docs/self-hosting/external-compute)
+- [Planet-scale builds](/docs/self-hosting/planet-scale-builds)
+- [Self-host data sources](/docs/self-hosting/data-sources)
