@@ -6,7 +6,7 @@ import { canParseFilter } from '@/features/style-editor/components/fields/visual
 
 describe('console product correctness regressions', () => {
   it('uses Better Auth member IDs when removing team members', () => {
-    const source = readFileSync(resolve(__dirname, '../app/(studio)/team/page.tsx'), 'utf8')
+    const source = readFileSync(resolve(__dirname, '../app/(studio)/team/client-page.tsx'), 'utf8')
 
     expect(source).toContain('setRemoveId(member.id)')
     expect(source).not.toContain('setRemoveId(member.userId)')
@@ -25,7 +25,7 @@ describe('console product correctness regressions', () => {
 
   it('syncs email verification status from the profile API', () => {
     const verifyPage = readFileSync(
-      resolve(__dirname, '../app/(auth)/verify-email/page.tsx'),
+      resolve(__dirname, '../app/(auth)/verify-email/client-page.tsx'),
       'utf8'
     )
     const banner = readFileSync(

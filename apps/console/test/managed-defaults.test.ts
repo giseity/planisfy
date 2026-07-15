@@ -69,7 +69,7 @@ describe("managed defaults", () => {
 
   it("wires the template picker and platform source section in Console UI", () => {
     const stylesPage = readFileSync(
-      resolve(__dirname, "../app/(studio)/styles/page.tsx"),
+      resolve(__dirname, "../app/(studio)/styles/client-page.tsx"),
       "utf8",
     );
     const sourcePanel = readFileSync(

@@ -53,11 +53,11 @@ describe("settings placeholder removal", () => {
 
   it("style editor only loads sample style for the new draft route", () => {
     const source = readFileSync(
-      resolve(__dirname, "../app/(studio)/styles/[styleId]/page.tsx"),
+      resolve(__dirname, "../app/(studio)/styles/[styleId]/client-page.tsx"),
       "utf8",
     );
 
-    expect(source).toContain('if (id === "new")');
+    expect(source).toContain("if (id === 'new')");
     expect(source).toContain("loadStyle(sampleStyle)");
     expect(source).toContain("Style not found.");
   });
