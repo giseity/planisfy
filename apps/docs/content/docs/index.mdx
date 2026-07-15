@@ -1,42 +1,83 @@
 ---
 title: Planisfy Documentation
-description: Learn how to operate the platform layer around MapLibre styles, vector tiles, geocoding, routing, elevation, and static map APIs with Planisfy.
+description: Build, publish, secure, and operate MapLibre maps and open geospatial services with Planisfy.
 ---
 
 # Planisfy Documentation
 
-MapLibre is the open-source renderer. Planisfy is the platform/control-plane layer around it.
+Planisfy is the platform layer around MapLibre and open geospatial engines. MapLibre renders the map in the client, while Planisfy manages the styles, tilesets, service APIs, credentials, jobs, usage, storage, and operational state behind it.
 
-Use Planisfy to publish MapLibre styles, serve vector tiles, protect map service APIs with API keys, track usage, run geospatial jobs, and operate the same map infrastructure in managed or self-hosted environments.
+You can use the hosted platform or run the same core application model on infrastructure you operate.
 
-## Start Here
+## Choose your path
 
-| Goal                                | Read                                                  |
-| ----------------------------------- | ----------------------------------------------------- |
-| Render a published map in a browser | [Quickstart](/docs/quickstart)                        |
-| Understand the platform pieces      | [Platform overview](/docs/concepts/platform-overview) |
-| Publish your own map                | [Publish a style](/docs/guides/publish-style)         |
-| Upload or import tiles              | [Upload a tileset](/docs/guides/upload-tileset)       |
-| Call service APIs                   | [API conventions](/docs/api/conventions)              |
-| Run Planisfy yourself               | [Self-hosting overview](/docs/self-hosting/overview)  |
+| Goal | Start here |
+| --- | --- |
+| Render a Planisfy style in MapLibre | [Quickstart](/docs/quickstart) |
+| Upload data and publish your own map | [Upload a tileset](/docs/guides/upload-tileset), then [publish a style](/docs/guides/publish-style) |
+| Integrate geocoding, routing, elevation, or static maps | [API conventions](/docs/api/conventions) and [authentication](/docs/guides/authentication) |
+| Understand the platform architecture | [Platform overview](/docs/concepts/platform-overview) |
+| See what is implemented and validated | [Capabilities and validation status](/docs/concepts/capabilities) |
+| Run Planisfy on your own infrastructure | [Self-hosting overview](/docs/self-hosting/overview) |
 
-## What Planisfy Serves
+## The main workflow
 
-- Published MapLibre style JSON at `/styles/v1/{owner}/{style}` and immutable style versions at `/styles/v1/{owner}/{style}@{version}`.
-- Published TileJSON and vector tiles under `/tiles/v1/*`, including dotted aliases such as `/tiles/v1/{owner}.{tileset}.json`.
-- MapLibre glyph PBFs under `/fonts/v1/{fontstack}/{range}.pbf`.
-- Optional style sprites under `/styles/v1/{owner}/{style}/sprite*`.
-- Pelias-backed geocoding, Valhalla-backed routing, elevation lookups, and static PNG map rendering.
-- Console workflows for styles, tilesets, API keys, usage, operations, and self-host checks.
+Most map projects move through the same resource lifecycle:
 
-## Access Model
+```text
+source data
+  -> tileset processing or import
+  -> published TileJSON and vector tiles
+  -> MapLibre style
+  -> published style URL
+  -> browser, native client, or static renderer
+```
 
-Public published map assets can be loaded anonymously by browsers and native map clients. Authenticated requests can still be used for owner access and metering.
+Planisfy keeps editable resources separate from the URLs consumed by applications. You can continue changing a draft while existing clients use a published version, then move the stable URL to a new version when it is ready.
 
-Service APIs such as geocoding, directions, matrix, elevation, and static maps require `X-API-Key` or an authenticated Console session. Start with [authentication](/docs/guides/authentication), then review [rate limits](/docs/guides/rate-limits) and [error handling](/docs/guides/error-handling).
+Start with [resources and publications](/docs/concepts/resources) for the resource model, or follow the [quickstart](/docs/quickstart) to render a map first.
 
-## Deployment Choices
+## What you manage in Planisfy
 
-Managed Planisfy operates the hosted runtime policy and provider configuration for you. Self-hosted Planisfy uses the same API shapes but makes you responsible for Postgres, Redis, object storage, geospatial engines, backups, upgrades, and observability.
+### Map resources
 
-Read [deployment modes](/docs/concepts/deployment-modes) before choosing an environment, or go directly to [Docker Compose](/docs/self-hosting/docker) for local self-host setup.
+- MapLibre style JSON, versions, stable aliases, sprites, and glyph references.
+- Uploaded or imported tilesets, processing jobs, PMTiles artifacts, TileJSON, and tile delivery.
+- Public map assets that browsers and native clients can load directly.
+
+### Geographic service APIs
+
+- Pelias-compatible forward, reverse, and autocomplete geocoding.
+- Valhalla-backed directions, matrices, isochrones, matching, and optimization.
+- Elevation lookups and route elevation profiles.
+- Static PNG maps rendered from published styles.
+
+These services depend on the configured engines and datasets. A route can exist even when its backing dataset is unavailable, so applications should handle the documented degraded and unavailable responses.
+
+### Platform operations
+
+- API keys, scopes, browser-origin restrictions, rate limits, usage, and audit records.
+- Upload, import, build, release, and activation workflows.
+- Health, preflight, metrics, worker state, backups, restores, and support bundles.
+- External build and serving agents for regional and planet-scale map-data workflows.
+
+## Public assets and authenticated APIs
+
+Published styles, TileJSON, tiles, glyphs, and sprites can be made available as browser-loadable map assets. Service APIs such as geocoding, routing, elevation, and static maps require an API key or an authenticated Console session.
+
+For credentials and failure behavior, read:
+
+- [API key management](/docs/guides/api-keys)
+- [Authentication](/docs/guides/authentication)
+- [Rate limits](/docs/guides/rate-limits)
+- [Error handling](/docs/guides/error-handling)
+
+## Managed and self-hosted deployments
+
+Managed Planisfy operates the hosted provider configuration and runtime policy. Self-hosted Planisfy uses the same core API shapes and resource model, but you operate Postgres, Redis, object storage, geospatial engines, datasets, backups, upgrades, and observability.
+
+Read [deployment modes](/docs/concepts/deployment-modes) for the boundary between the two, or continue directly to [Docker Compose self-hosting](/docs/self-hosting/docker).
+
+## Platform status
+
+Not every capability has the same operating requirements. Some work immediately, some depend on installed datasets or provider credentials, and some remain planned. The [capabilities and validation status](/docs/concepts/capabilities) page records those distinctions, including the validated planet-scale OSM basemap and Valhalla routing graph workflows.
