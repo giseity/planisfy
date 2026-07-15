@@ -1,0 +1,145 @@
+---
+title: "Planisfy: Architecture, Capabilities, and Current Boundaries"
+description: "A technical overview of what Planisfy manages today, which workflows have been validated, and where its current product boundaries remain."
+date: "2026-07-15"
+author: "Planisfy"
+tags: ["Architecture", "Map Platform", "Self-hosting"]
+published: true
+---
+
+Planisfy is built around a simple observation: open geospatial software already contains excellent specialized components, but those components do not automatically become a coherent product when they are placed in the same deployment.
+
+MapLibre renders maps. Martin serves tiles. Valhalla computes routes. Pelias provides geocoding. Planetiler builds basemap artifacts. Object storage holds the large files that those workflows produce.
+
+Each component has a clear role, and Planisfy does not try to erase those boundaries. Instead, it provides the resource model, APIs, credentials, background jobs, publication state, operational checks, and deployment workflows that allow them to behave as one platform.
+
+This article describes that architecture, the capabilities currently represented in the platform, the workflows that have been exercised end to end, and the boundaries that remain deliberately explicit.
+
+## The Platform Model
+
+A useful way to understand Planisfy is to separate three connected layers.
+
+The first is the rendering layer. MapLibre GL JS, MapLibre Native, or a static renderer loads a style and turns its sources and layers into a visible map.
+
+The second is the runtime data plane. It serves published styles, TileJSON, vector tiles, glyphs, sprites, geocoding results, routes, matrices, elevation responses, and static images.
+
+The third is the control and operations plane. It manages accounts, organizations, resources, versions, publications, credentials, usage, jobs, artifacts, releases, health, backups, restores, and external workers.
+
+Those layers are conceptual rather than strictly separate processes. The public API includes runtime routes as well as authenticated control-plane routes, while workers and root agents perform operations that should not be forced into an ordinary request-response cycle.
+
+## Resources Before Services
+
+The core Planisfy workflow begins with resources rather than containers.
+
+A tileset is not merely a file in a bucket. It has ownership, source data, processing state, versions, artifacts, publication state, and stable client-facing URLs. A style is not merely a JSON document. It references sources, layers, glyphs, sprites, and sometimes several separately published resources.
+
+That distinction is important because editable state and published state have different purposes.
+
+```text
+editable resource
+  -> version
+  -> validation or processing
+  -> publication
+  -> stable and version-pinned URLs
+```
+
+Applications consume published contracts. Operators and users continue working with drafts and candidate versions. Publication connects the two without requiring every application to understand the internal storage layout or job system.
+
+## Capabilities Represented Today
+
+Planisfy currently includes workflows for:
+
+- creating, versioning, publishing, promoting, and serving MapLibre styles;
+- managing reusable PNG and SVG sprite assets and generating MapLibre sprite sheets;
+- uploading supported geodata sources and processing them into PMTiles-backed vector tilesets;
+- serving published TileJSON and vector tiles through the API or an optional dedicated tile worker;
+- issuing API keys with scopes, expiration, browser-origin restrictions, rate limits, usage records, and audit history;
+- proxying configured Pelias-compatible geocoding services;
+- proxying Valhalla directions, matrices, isochrones, matching, and optimization APIs;
+- serving elevation responses from compatible DEM coverage;
+- rendering static PNG maps from published styles;
+- exposing health, detailed health, setup preflight, metrics, support bundles, backup, and restore workflows;
+- coordinating external build and serving agents for large basemap and routing artifacts.
+
+Not every capability becomes useful from application code alone. Geocoding still requires imported Pelias data. Routing still requires an active Valhalla graph. Elevation still requires DEM coverage. Static rendering still depends on a renderer that can load the style and every resource referenced by it.
+
+The integration may be implemented while the dataset remains the operator's responsibility.
+
+## Validated Product Loops
+
+The most important tests are not isolated endpoint checks. They are complete product loops that cross storage, jobs, publication, APIs, and clients.
+
+The self-hosted product loop has been exercised through clean Docker volumes, local and S3-compatible storage, GeoJSON upload, worker processing, tileset publication, style publication, public URL retrieval, and MapLibre rendering.
+
+Backup and restore workflows cover database state and artifacts, while restart-persistence checks verify that a working installation remains coherent after services are restarted.
+
+Managed deployment checks cover provider configuration, object storage, public HTTPS ingress, CORS, billing and email adapters, and the browser product loop under hosted policy.
+
+These validations do not mean that every hardware profile, dataset, provider, or traffic pattern behaves identically. They mean that the intended workflows have been executed as connected systems rather than inferred from individual components.
+
+## Planet-Scale Map Data Workflows
+
+Planisfy's external-compute model separates expensive builds from the public API host.
+
+A root agent registers with the platform, polls outbound for assigned work, runs Planetiler or Valhalla on appropriate compute, uploads the resulting artifact directly to S3-compatible object storage, and finalizes the artifact metadata through the API.
+
+A separate serving role can then install a selected release onto local runtime disk, restart Martin or Valhalla through a narrow supervisor, and report whether the runtime is actually ready.
+
+That path has been exercised with planet-scale OSM basemap builds through Planetiler and planet-scale Valhalla routing graph builds.
+
+The important claim is not that all planet-scale workloads are cheap or automatic. It is that the orchestration path from source data through build, direct upload, release, activation, and runtime validation has worked at that scale.
+
+Capacity still depends on the source extract, engine configuration, image version, disk, RAM, swap, network, object storage, and whether elevation is included.
+
+## Managed and Self-Hosted Modes
+
+Managed and self-hosted deployments share the main resource model, API shapes, publication behavior, Console concepts, and worker architecture.
+
+They differ in who owns the operational boundary.
+
+In managed mode, Planisfy operates hosted provider configuration, object storage policy, ingress, billing integrations, email integrations, and the surrounding production environment.
+
+In self-hosted mode, the operator owns Postgres, Redis, object storage, map engines, datasets, TLS, secrets, backups, restores, upgrades, observability, and incident response.
+
+The same API can therefore represent a very different operating responsibility. That difference is expressed through deployment policy and configuration rather than a separate fork of the product.
+
+## Current Boundaries
+
+Clear boundaries are more useful than a long feature list because they tell developers where additional engineering or operational responsibility still exists.
+
+### Production Overture Basemaps
+
+Configured DuckDB-backed Overture extraction exists for supported import workflows, but production Overture basemap builds remain separate from the validated OSM Planetiler path. A stable production layer profile and larger-import workflow are still required before those builds should be treated as equivalent.
+
+### Managed Basemap Release Automation
+
+The underlying build, artifact, release, activation, and serving lifecycle works, including with large OSM and Valhalla artifacts. Fully managed basemap release scheduling and distribution remain a separate product workflow.
+
+### Downloadable Data Packs
+
+Planisfy does not currently ship complete downloadable self-host data packs. Operators provide or build the PMTiles, routing graphs, geocoding data, glyphs, and elevation coverage required by their deployment.
+
+### Provider and Dataset Coverage
+
+A configured service route does not imply universal data coverage. The quality and geographic scope of geocoding, routing, tiles, and elevation still depend on the datasets and engines behind the route.
+
+### Deployment Templates
+
+Docker Compose and the current hosted topology provide maintained paths, but every possible orchestrator, cloud, and private infrastructure environment does not yet have a first-party production template.
+
+## Why the Boundaries Matter
+
+Open infrastructure gives teams flexibility, but flexibility is easier to use when the platform states which concerns it coordinates and which concerns remain deployment-specific.
+
+Planisfy coordinates the product lifecycle around map resources and engines: publication, access, jobs, artifacts, usage, readiness, recovery, and deployment mode.
+
+It does not pretend that a single API removes the need for datasets, compute capacity, storage, engine compatibility, or operational judgment.
+
+That separation is intentional. It keeps the specialized components replaceable while giving developers and operators a consistent system around them.
+
+## Further Reading
+
+- [Planisfy platform documentation](https://docs.planisfy.com/docs/concepts/platform-overview)
+- [Capabilities and validation status](https://docs.planisfy.com/docs/concepts/capabilities)
+- [External compute](https://docs.planisfy.com/docs/self-hosting/external-compute)
+- [Planisfy repository](https://github.com/giseity/planisfy)
