@@ -87,7 +87,7 @@ jobs:
         run: pnpm --filter static-renderer exec playwright install --with-deps chromium
 
       - name: Validate managed startup configuration
-        run: pnpm --filter api exec tsx -e "await import('./src/env.ts'); console.log('managed startup validation passed')"
+        run: pnpm --filter api exec tsx -e "import('./src/env.ts').then(() => console.log('managed startup validation passed'))"
 
       - name: Run managed staging adapter smoke
         run: pnpm smoke:managed-staging
