@@ -1,0 +1,124 @@
+---
+title: Planet-Scale Builds
+description: Build, upload, release, activate, and validate planet-scale OSM basemaps and Valhalla routing graphs with Planisfy root agents.
+---
+
+# Planet-Scale Builds
+
+Planisfy supports planet-scale OSM basemap and Valhalla routing graph workflows through external root agents. The same lifecycle is used for smaller regional builds, but planet-scale work requires substantially more disk, memory, build time, and object-storage capacity.
+
+The validated workflow is:
+
+```text
+OSM source
+  -> build root agent
+  -> Planetiler PMTiles or Valhalla graph artifact
+  -> direct multipart upload to object storage
+  -> named release
+  -> serving root agent
+  -> local runtime disk
+  -> Martin or Valhalla restart
+  -> readiness validation
+```
+
+Planet-scale validation confirms this orchestration path. It does not mean that Planisfy ships planet datasets, that every machine profile will have the same performance, or that elevation, Overture basemaps, and managed global distribution are automatically included.
+
+## Before you begin
+
+Use separate build and serving machines for large workloads unless you have intentionally sized one host for both roles. Before starting a build, verify:
+
+- S3-compatible MinIO, S3, or R2 storage is configured.
+- The build host can reach the Planisfy API and object storage.
+- Docker is available for Valhalla graph builds.
+- Disk covers the source extract, intermediate files, final artifacts, and upload parts.
+- RAM and swap match the selected build target.
+- The serving host has enough local disk for the active and rollback artifacts.
+- The runtime supervisor can restart and probe Martin or Valhalla.
+
+Local filesystem storage is appropriate for small smoke tests, but it cannot provide the signed direct-upload path required for large artifacts.
+
+## Build workers and serving workers
+
+Build workers perform expensive computation and upload immutable artifacts. Serving workers install selected releases onto the machines that answer production traffic.
+
+Keeping these roles separate makes the lifecycle explicit:
+
+- **Built** means computation completed.
+- **Available** means the artifact exists in object storage.
+- **Published** means the artifact has a named release.
+- **Active** means a serving runtime has installed and validated it.
+- **Primary** means it is the default release used by that service.
+
+A successful build is therefore not the same as a successful deployment.
+
+## Planet-scale OSM basemaps
+
+OSM basemap builds use Planetiler to convert an OSM PBF source into a PMTiles artifact. Martin is the serving runtime; it does not perform the build.
+
+The normal flow is:
+
+1. Register a root agent with the `basemap_build` capability.
+2. Create a build using an OSM PBF source and `planetiler_osm` engine.
+3. Let the agent download required Planetiler support data and run the build.
+4. Upload the PMTiles artifact directly to object storage.
+5. Create or publish a named basemap release.
+6. Assign the release to a serving worker.
+7. Install it into the Martin source directory.
+8. Restart or reload Martin through the runtime supervisor.
+9. Validate Martin readiness and the expected TileJSON or tile response.
+10. Promote the active release to primary when validation succeeds.
+
+Keep the previous release available until the new release has passed runtime checks. Planet-scale PMTiles artifacts are large enough that duplicate copies can have meaningful storage cost, so use the supported stable-alias strategy rather than copying the same artifact unnecessarily.
+
+## Planet-scale Valhalla graphs
+
+Routing graph builds use a Valhalla container on the build worker and produce a versioned graph archive.
+
+The normal flow is:
+
+1. Register a root agent with the `valhalla_graph_build` capability.
+2. Start with a no-elevation planet build unless DEM workflows have already been validated separately.
+3. Build the graph from the selected OSM source.
+4. Upload the graph artifact directly to object storage.
+5. Publish a named routing release.
+6. Assign the release to a serving worker.
+7. Extract it into the configured Valhalla data directory.
+8. Restart Valhalla through the runtime supervisor.
+9. Validate runtime readiness and execute a representative routing request.
+10. Keep the previous release available for rollback until the new graph is proven healthy.
+
+Elevation and DEM generation should be treated as separate capacity-planning targets. A working no-elevation graph does not prove that the same host has sufficient disk and memory for elevation-enhanced builds.
+
+## Evidence to retain
+
+For each large build, retain enough information to reproduce and diagnose it:
+
+- Planisfy commit or release version.
+- Planetiler or Valhalla image version.
+- OSM source name, date, and checksum.
+- Build arguments and environment.
+- Build-host CPU, RAM, swap, and disk.
+- Start time, completion time, and peak resource use.
+- Artifact size and checksum.
+- Object-storage location and upload result.
+- Release identifier.
+- Serving activation result.
+- Runtime health and representative request result.
+
+This evidence is more useful than a generic statement that a build succeeded, because it separates product support from the capacity characteristics of one specific machine.
+
+## Current boundaries
+
+The working planet-scale paths are OSM basemaps through Planetiler and routing graphs through Valhalla. The following are separate concerns:
+
+- Production Overture basemap builds remain disabled until the layer profile and larger-import workflow are complete.
+- Planisfy does not currently ship downloadable planet data packs.
+- Managed basemap release automation is separate from the validated build, release, and activation lifecycle.
+- Performance and cost depend on the source extract, build options, storage provider, network, and machine profile.
+
+## Related
+
+- [Capabilities and validation status](/docs/concepts/capabilities)
+- [External compute](/docs/self-hosting/external-compute)
+- [Self-host data sources](/docs/self-hosting/data-sources)
+- [Self-host operations and performance](/docs/self-hosting/performance)

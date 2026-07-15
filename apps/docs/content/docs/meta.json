@@ -8,6 +8,7 @@
       "title": "Concepts",
       "pages": [
         "concepts/platform-overview",
+        "concepts/capabilities",
         "concepts/resources",
         "concepts/deployment-modes"
       ]
@@ -51,6 +52,7 @@
         "self-hosting/docker",
         "self-hosting/configuration",
         "self-hosting/external-compute",
+        "self-hosting/planet-scale-builds",
         "self-hosting/data-sources",
         "self-hosting/performance"
       ]
