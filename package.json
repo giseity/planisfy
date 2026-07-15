@@ -7,7 +7,7 @@
     "db:generate": "pnpm --filter @planisfy/database db:generate",
     "db:migrate": "pnpm --filter @planisfy/database db:migrate",
     "db:push": "pnpm --filter @planisfy/database db:push",
-    "db:seed": "pnpm --filter @planisfy/auth exec tsx ../../scripts/dev-seed.ts",
+    "db:seed": "pnpm exec tsx scripts/dev-seed.ts",
     "db:studio": "pnpm --filter @planisfy/database db:studio",
     "dev": "turbo run dev",
     "dev:seed": "pnpm db:seed",
