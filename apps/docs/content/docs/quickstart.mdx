@@ -1,13 +1,28 @@
 ---
 title: Quickstart
-description: Render a published Planisfy map with MapLibre, verify API access, and learn the first publishing workflow.
+description: Verify a Planisfy environment, render a published style with MapLibre, and follow the path to publishing your own map.
 ---
 
 # Quickstart
 
-This guide renders a published Planisfy style in MapLibre and shows how authenticated service APIs are called.
+This guide takes you from a reachable Planisfy API to a map rendered in the browser. By the end, you will have:
 
-## Choose an API origin
+- verified the API origin,
+- obtained and inspected a published style URL,
+- rendered that style with MapLibre GL JS, and
+- identified the next steps for publishing your own data or calling authenticated service APIs.
+
+## Before you begin
+
+You need access to a Planisfy environment and at least one published style.
+
+- In managed Planisfy, open Console and copy the stable or versioned URL from a published style.
+- In an existing self-hosted installation, use any style already published through Console.
+- For a new local self-hosted installation, start with the demo-data path in [Docker Compose self-hosting](/docs/self-hosting/docker).
+
+If you do not have a published style yet, continue to [publish your first map](#publish-your-first-map) after verifying the environment.
+
+## 1. Choose the API origin
 
 Use the origin for your environment:
 
@@ -20,36 +35,72 @@ Use the origin for your environment:
 
 The examples below use `http://localhost:4000`. Replace it with your API origin.
 
-## Pick a style URL
+Verify that the API is reachable:
 
-Planisfy style URLs are MapLibre-compatible:
+```bash
+curl -i http://localhost:4000/health
+```
+
+A self-hosted environment can report degraded optional services while the API and Console remain available. Use detailed health and preflight before debugging a client:
+
+```bash
+curl http://localhost:4000/health/detailed
+curl http://localhost:4000/setup/preflight
+```
+
+## 2. Get a published style URL
+
+Planisfy exposes MapLibre-compatible stable and version-pinned style URLs:
 
 ```text
 http://localhost:4000/styles/v1/{owner}/{style}
 http://localhost:4000/styles/v1/{owner}/{style}@{version}
 ```
 
-Use the stable URL while iterating. Use the versioned URL when a production client needs immutable content and predictable caching. See [caching](/docs/guides/caching) for the tradeoff.
+Use the stable URL when you want clients to follow the currently published version. Use a versioned URL when a client must remain pinned to immutable content.
 
-## Render with MapLibre
+For the local demo-data workflow, the default style is normally available at:
 
-Save this as a small HTML file and open it in a browser:
+```text
+http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1
+```
+
+If that URL is not available, confirm that demo data was installed and the default-map smoke path completed, or publish a style through Console.
+
+## 3. Inspect the style before rendering it
+
+Fetch the style directly:
+
+```bash
+curl -i http://localhost:4000/styles/v1/planisfy/planisfy-streets-light-v1
+```
+
+A successful response should contain MapLibre style JSON with a `version`, `sources`, and `layers`. Depending on the style, it may also contain `glyphs` and `sprite` URLs.
+
+Those dependent URLs matter because MapLibre loads them after it loads the style. A style request can succeed while tiles, glyphs, or sprites still fail, so the browser network panel is part of the verification process.
+
+## 4. Render the style with MapLibre
+
+Save the following as `index.html`, replacing the style URL when needed:
 
 ```html
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Planisfy MapLibre Quickstart</title>
-    <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
+    <link
+      href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
     <style>
-      body {
-        margin: 0;
-      }
-
+      html,
+      body,
       #map {
-        width: 100vw;
-        height: 100vh;
+        width: 100%;
+        height: 100%;
+        margin: 0;
       }
     </style>
   </head>
@@ -65,50 +116,81 @@ Save this as a small HTML file and open it in a browser:
       });
 
       map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+      map.on("error", (event) => {
+        console.error("MapLibre resource error", event.error ?? event);
+      });
     </script>
   </body>
 </html>
 ```
 
-If the map loads but labels are missing, check [glyphs and fonts](/docs/api/glyphs). If icons are missing, check [sprites](/docs/api/sprites). If tiles are missing, check [tiles](/docs/api/tiles) and the self-host [data sources](/docs/self-hosting/data-sources).
+Serve the directory through a local HTTP server rather than opening the file directly. For example:
 
-## Call an authenticated API
+```bash
+python3 -m http.server 8080
+```
 
-Service APIs require an API key or Console session. Create a key in Console, then call a service endpoint:
+Then open `http://localhost:8080`.
+
+## 5. Verify the complete request chain
+
+When the map loads, the browser should request more than the style document:
+
+```text
+style JSON
+  -> TileJSON or source metadata
+  -> vector tiles
+  -> glyph ranges
+  -> sprite metadata and image, when configured
+  -> rendered map
+```
+
+Use the browser network panel to identify the first failing request.
+
+| Symptom | Check first |
+| --- | --- |
+| The style URL returns 404 | Confirm the owner, style slug, and publication state. |
+| The map is blank | Inspect TileJSON, tile URLs, and the underlying artifact. |
+| Geometry renders but labels do not | Check the style `glyphs` URL and [glyph service](/docs/api/glyphs). |
+| Symbol layers render without icons | Check sprite publication and [sprite routes](/docs/api/sprites). |
+| The browser reports CORS errors | Verify the public API origin and allowed Console/client origins. |
+| The self-host stack is degraded | Inspect `/health/detailed` and `/setup/preflight` before changing the client. |
+
+For a deeper MapLibre integration guide, continue with [Use MapLibre](/docs/guides/use-maplibre).
+
+## 6. Call an authenticated service API
+
+Geocoding, routing, elevation, and static map APIs require an API key or an authenticated Console session. Create a narrowly scoped key in Console, then send it through `X-API-Key`.
+
+For example, when a Pelias-compatible service and dataset are configured:
 
 ```bash
 curl "http://localhost:4000/geocoding/v1/forward?q=Stuttgart&limit=3" \
   -H "X-API-Key: pk_your_key_here"
 ```
 
-For browser and server integrations, prefer `X-API-Key`. Do not use Mapbox-style `access_token` as the primary auth mechanism. Review [authentication](/docs/guides/authentication), [API key management](/docs/guides/api-keys), and [error handling](/docs/guides/error-handling).
+If the request reports that geocoding is unavailable, verify the Pelias configuration and dataset rather than changing the API key. The Planisfy route can exist while its backing geographic dataset is not installed.
 
-## Publish your first map
+Review [API key management](/docs/guides/api-keys), [authentication](/docs/guides/authentication), and [error handling](/docs/guides/error-handling) before integrating service APIs into an application.
 
-The normal publishing path is:
+## 7. Publish your first map
+
+Once the environment and renderer are working, use this workflow to publish your own data:
 
 1. Open Console and create or select an organization.
-2. Create a tileset, then upload or import source data.
-3. Build the tileset and wait for a published TileJSON URL.
-4. Create a style and add the tileset as a source.
-5. Publish the style.
-6. Copy either the stable style URL or a versioned style URL.
-7. Render that URL from MapLibre, native SDKs, or a static map request.
+2. Create a tileset and upload or import source data.
+3. Wait for processing to produce a publishable tileset version.
+4. Publish the tileset and verify its TileJSON URL.
+5. Create a style and add the tileset as a source.
+6. Publish the style.
+7. Copy its stable or versioned style URL into your MapLibre client.
 
-Detailed guides:
+Continue with:
 
 - [Upload a tileset](/docs/guides/upload-tileset)
 - [Publish a style](/docs/guides/publish-style)
-- [Use MapLibre](/docs/guides/use-maplibre)
+- [Resources and publications](/docs/concepts/resources)
+- [Caching](/docs/guides/caching)
 
-## Verify a self-host stack
-
-For local Docker Compose, check the API and setup reports before debugging clients:
-
-```bash
-curl http://localhost:4000/health
-curl http://localhost:4000/health/detailed
-curl http://localhost:4000/setup/preflight
-```
-
-Missing PMTiles, fonts, Valhalla graph data, Pelias data, DEM files, or static renderer configuration can make a clean self-host stack partially degraded. That is expected until you provide compatible datasets. Continue with [self-hosting overview](/docs/self-hosting/overview).
+For a self-hosted environment, also read [Self-hosting overview](/docs/self-hosting/overview) so you understand which datasets and runtime services you are responsible for.
