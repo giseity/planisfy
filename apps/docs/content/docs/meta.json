@@ -8,6 +8,7 @@
       "title": "Concepts",
       "pages": [
         "concepts/platform-overview",
+        "concepts/capabilities",
         "concepts/resources",
         "concepts/deployment-modes"
       ]
@@ -18,46 +19,3 @@
         "guides/use-maplibre",
         "guides/upload-tileset",
         "guides/publish-style",
-        "guides/api-keys",
-        "guides/authentication",
-        "guides/rate-limits",
-        "guides/caching",
-        "guides/error-handling",
-        "guides/best-practices"
-      ]
-    },
-    {
-      "title": "API Reference",
-      "pages": [
-        "api/conventions",
-        "api/tiles",
-        "api/styles",
-        "api/glyphs",
-        "api/sprites",
-        "api/geocoding",
-        "api/directions",
-        "api/isochrone",
-        "api/matching",
-        "api/matrix",
-        "api/optimization",
-        "api/elevation",
-        "api/static"
-      ]
-    },
-    {
-      "title": "Self-Hosting",
-      "pages": [
-        "self-hosting/overview",
-        "self-hosting/docker",
-        "self-hosting/configuration",
-        "self-hosting/external-compute",
-        "self-hosting/data-sources",
-        "self-hosting/performance"
-      ]
-    },
-    {
-      "title": "Migration",
-      "pages": ["migration"]
-    }
-  ]
-}
