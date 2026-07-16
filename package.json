@@ -40,6 +40,7 @@
     "@planisfy/typescript-config": "workspace:*",
     "portless": "^0.13.0",
     "prettier": "^3.7.4",
+    "tsx": "^4.19.4",
     "turbo": "^2.8.3",
     "typescript": "5.9.2",
     "vitest": "4.0.18"
