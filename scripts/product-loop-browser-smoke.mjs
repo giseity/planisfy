@@ -53,7 +53,10 @@ page.on("console", (message) => {
 try {
   await signIn(page, { consoleUrl, email, password });
 
-  await expectText(page, "Dashboard");
+  await page.getByRole("heading", { name: "Dashboard" }).waitFor({
+    state: "visible",
+    timeout: 20_000,
+  });
   await expectText(page, "Planisfy Demo");
   await expectText(page, "Stuttgart Demo Style");
   await expectText(page, "Stuttgart Base");

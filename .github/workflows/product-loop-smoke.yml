@@ -36,7 +36,7 @@ jobs:
         run: pnpm self-host:setup
 
       - name: Start product-loop services
-        run: docker compose --env-file .env -f infra/docker/docker-compose.yml up -d postgres redis martin api console worker-geodata
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d postgres redis martin minio minio-init api console worker-geodata
 
       - name: Run migrations
         run: pnpm db:migrate
@@ -48,7 +48,7 @@ jobs:
         if: failure()
         run: |
           mkdir -p dogfood-output/compose
-          docker compose --env-file .env -f infra/docker/docker-compose.yml logs --no-color postgres redis martin pelias pelias-elasticsearch elevation api console worker-geodata > dogfood-output/compose/product-loop-smoke.log
+          docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio logs --no-color postgres redis martin minio minio-init pelias pelias-elasticsearch elevation api console worker-geodata > dogfood-output/compose/product-loop-smoke.log
 
       - name: Upload smoke screenshots
         if: always()

@@ -162,7 +162,20 @@ async function uploadTilesetThroughUi(page) {
     async () => ((await uploadSubmit.isEnabled().catch(() => false)) ? true : null),
     { timeoutMs: 20_000, intervalMs: 500 },
   );
-  await uploadSubmit.click();
+  const [uploadResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/v1/console/tilesets/${createdTileset.id}/uploads`) &&
+        response.request().method() === "POST",
+      { timeout: 30_000 },
+    ),
+    uploadSubmit.click(),
+  ]);
+  if (!uploadResponse.ok()) {
+    throw new Error(
+      `Upload tileset failed with ${uploadResponse.status()}: ${await uploadResponse.text()}`,
+    );
+  }
   await poll(
     `tileset upload ${tilesetHandle} to be queued`,
     async () => {
@@ -175,6 +188,7 @@ async function uploadTilesetThroughUi(page) {
 
 async function publishTilesetThroughUi(page, tileset) {
   await gotoProtectedPage(page, "/tilesets");
+  await page.getByRole("button", { name: `${tileset.name} actions` }).click();
   const publishButton = page.getByTestId(
     `publish-tileset-version-${tileset.handle}`,
   );
