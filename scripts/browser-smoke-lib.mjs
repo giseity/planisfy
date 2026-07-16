@@ -178,13 +178,22 @@ async function waitForBrowserSession(page) {
 }
 
 export async function expectText(page, text, options = {}) {
-  await page
-    .getByText(text, { exact: false })
-    .first()
-    .waitFor({
-      state: "visible",
-      timeout: options.timeout ?? 20_000,
-    });
+  const timeout = options.timeout ?? 20_000;
+  const deadline = Date.now() + timeout;
+  const locator = page.getByText(text, { exact: false });
+  let matchCount = 0;
+
+  while (Date.now() < deadline) {
+    matchCount = await locator.count().catch(() => 0);
+    for (let index = 0; index < matchCount; index += 1) {
+      if (await locator.nth(index).isVisible().catch(() => false)) return;
+    }
+    await delay(250);
+  }
+
+  throw new Error(
+    `Timed out waiting for visible text "${text}" (${matchCount} matching element${matchCount === 1 ? "" : "s"})`,
+  );
 }
 
 export async function expectBrowserFetch(page, url, label) {
