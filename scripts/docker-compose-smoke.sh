@@ -150,16 +150,17 @@ if [[ -z "$internal_secret" ]]; then
   exit 1
 fi
 preflight="$(curl -fsS -H "x-internal-secret: $internal_secret" http://localhost:4000/setup/preflight)"
-PREFLIGHT_JSON="$preflight" node <<'NODE'
+PREFLIGHT_JSON="$preflight" PREFLIGHT_STORAGE_PROVIDER="$(env_value STORAGE_PROVIDER)" node <<'NODE'
 const body = JSON.parse(process.env.PREFLIGHT_JSON ?? "{}");
 const checks = new Map((body.data?.checks ?? []).map((check) => [check.id, check]));
-const required = [
-  "storage",
+const storageProvider = process.env.PREFLIGHT_STORAGE_PROVIDER || "local";
+const localStorageChecks = [
   "upload-storage",
   "demo-style-fixtures",
   "martin-source-aliases",
   "demo-pmtiles",
 ];
+const required = storageProvider === "local" ? ["storage", ...localStorageChecks] : ["storage"];
 for (const id of required) {
   if (!checks.has(id)) {
     console.error(`Setup preflight is missing '${id}'`);
@@ -168,13 +169,16 @@ for (const id of required) {
 }
 for (const id of ["storage", "upload-storage", "demo-style-fixtures", "martin-source-aliases"]) {
   const check = checks.get(id);
+  if (!check) continue;
   if (check.status !== "pass") {
     console.error(`Setup preflight check '${id}' did not pass: ${check.message}`);
     process.exit(1);
   }
 }
 const demoPmtiles = checks.get("demo-pmtiles");
-if (demoPmtiles.status === "warn") {
+if (!demoPmtiles) {
+  // S3/MinIO smoke runs do not expose local product-loop filesystem preflight checks.
+} else if (demoPmtiles.status === "warn") {
   console.warn(demoPmtiles.message);
 } else if (demoPmtiles.status !== "pass") {
   console.error(`Setup preflight check 'demo-pmtiles' failed: ${demoPmtiles.message}`);

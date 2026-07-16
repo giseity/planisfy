@@ -59,7 +59,10 @@ page.on("console", (message) => {
 try {
   await signIn(page, { consoleUrl, email, password });
   await cleanupSmokeResources(page);
-  await expectText(page, "Dashboard");
+  await page.getByRole("heading", { name: "Dashboard" }).waitFor({
+    state: "visible",
+    timeout: 20_000,
+  });
 
   await uploadTilesetThroughUi(page);
   const readyTileset = await waitForTilesetReady(page, tilesetHandle);
