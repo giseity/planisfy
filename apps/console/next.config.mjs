@@ -16,6 +16,10 @@ const nextConfig = {
     if (!api) throw new Error("NEXT_PUBLIC_API_URL is required.");
     return [
       {
+        source: "/api/auth/:path*",
+        destination: `${api}/api/auth/:path*`,
+      },
+      {
         // Proxy API calls to the Hono API server in development.
         // This keeps browser calls same-origin while allowing containers to
         // target the API service over the internal Docker network.

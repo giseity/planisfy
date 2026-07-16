@@ -37,6 +37,26 @@ env_value() {
   ' "${SMOKE_ENV_FILE:-$ENV_FILE}" | tail -n 1
 }
 
+resolve_compose_path() {
+  local path="$1"
+  local compose_dir
+  compose_dir="$(cd "$(dirname "$COMPOSE_FILE")" && pwd)"
+
+  case "$path" in
+    /*) printf '%s\n' "$path" ;;
+    */*)
+      local parent="${path%/*}"
+      local base="${path##*/}"
+      if [[ -d "$compose_dir/$parent" ]]; then
+        printf '%s/%s\n' "$(cd "$compose_dir/$parent" && pwd)" "$base"
+      else
+        printf '%s/%s\n' "$compose_dir" "$path"
+      fi
+      ;;
+    *) printf '%s/%s\n' "$compose_dir" "$path" ;;
+  esac
+}
+
 cleanup() {
   if [[ -n "$SMOKE_ENV_FILE" ]]; then
     compose down -v --remove-orphans
@@ -81,12 +101,13 @@ echo "Preparing clean smoke-test stack"
 compose down -v --remove-orphans >/dev/null 2>&1 || true
 
 echo "Checking seeded style fixtures"
+style_fixture_dir="$(resolve_compose_path "$(env_value LOCAL_STORAGE_HOST_PATH)")/styles"
 for style in \
   planisfy-streets-v1.json \
   planisfy-streets-light-v1.json \
   planisfy-streets-dark-v1.json
 do
-  if [[ ! -f "$ROOT_DIR/infra/docker/data/storage/styles/$style" ]]; then
+  if [[ ! -f "$style_fixture_dir/$style" ]]; then
     echo "Missing seeded style fixture: $style" >&2
     exit 1
   fi
