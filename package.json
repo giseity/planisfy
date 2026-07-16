@@ -36,6 +36,9 @@
     "verify": "turbo run lint check-types test build"
   },
   "devDependencies": {
+    "@planisfy/auth": "workspace:^",
+    "@planisfy/database": "workspace:^",
+    "@planisfy/env": "workspace:^",
     "@planisfy/eslint-config": "workspace:*",
     "@planisfy/typescript-config": "workspace:*",
     "portless": "^0.13.0",

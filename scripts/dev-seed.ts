@@ -8,25 +8,22 @@ import { loadWorkspaceEnv } from "@planisfy/env/node";
 
 loadWorkspaceEnv();
 
-const [{ auth }, database] = await Promise.all([
-  import("@planisfy/auth/auth"),
-  import("@planisfy/database"),
-]);
+type AuthModule = typeof import("@planisfy/auth/server");
+type DatabaseModule = typeof import("@planisfy/database");
 
-const {
-  accounts,
-  apiKeys,
-  db,
-  members,
-  organizations,
-  storageObjects,
-  stylePublications,
-  styles,
-  styleVersions,
-  tilesets,
-  tilesetVersions,
-  users,
-} = database;
+let auth: AuthModule["auth"];
+let accounts: DatabaseModule["accounts"];
+let apiKeys: DatabaseModule["apiKeys"];
+let db: DatabaseModule["db"];
+let members: DatabaseModule["members"];
+let organizations: DatabaseModule["organizations"];
+let storageObjects: DatabaseModule["storageObjects"];
+let stylePublications: DatabaseModule["stylePublications"];
+let styles: DatabaseModule["styles"];
+let styleVersions: DatabaseModule["styleVersions"];
+let tilesets: DatabaseModule["tilesets"];
+let tilesetVersions: DatabaseModule["tilesetVersions"];
+let users: DatabaseModule["users"];
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -52,6 +49,27 @@ main()
   });
 
 async function main() {
+  const [authModule, database] = await Promise.all([
+    import("@planisfy/auth/server"),
+    import("@planisfy/database"),
+  ]);
+
+  auth = authModule.auth;
+  ({
+    accounts,
+    apiKeys,
+    db,
+    members,
+    organizations,
+    storageObjects,
+    stylePublications,
+    styles,
+    styleVersions,
+    tilesets,
+    tilesetVersions,
+    users,
+  } = database);
+
   const user = await ensureUser();
   const organization = await ensureOrganization(user.id);
   await ensureApiKey(user.id);

@@ -11,6 +11,15 @@ importers:
 
   .:
     devDependencies:
+      '@planisfy/auth':
+        specifier: workspace:^
+        version: link:packages/auth
+      '@planisfy/database':
+        specifier: workspace:^
+        version: link:packages/database
+      '@planisfy/env':
+        specifier: workspace:^
+        version: link:packages/env
       '@planisfy/eslint-config':
         specifier: workspace:*
         version: link:packages/eslint-config
