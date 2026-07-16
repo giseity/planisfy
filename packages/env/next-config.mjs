@@ -6,7 +6,10 @@ import { parseEnv } from "node:util"
 
 export function loadWorkspaceEnvForNextConfig(options = {}) {
   const filename = options.filename ?? ".env"
-  const envPath = findEnvFile(resolve(options.cwd ?? process.cwd()), filename)
+  let envPath = findEnvFile(resolve(options.cwd ?? process.cwd()), filename)
+  if (!envPath && filename === ".env") {
+    envPath = findEnvFile(resolve(options.cwd ?? process.cwd()), ".env.example")
+  }
   if (!envPath) return undefined
 
   const parsed = parseEnv(readFileSync(envPath, "utf8"))
