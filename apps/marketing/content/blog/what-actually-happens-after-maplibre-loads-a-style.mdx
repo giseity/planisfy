@@ -1,0 +1,198 @@
+---
+title: "What Actually Happens After MapLibre Loads a Style?"
+description: "A published MapLibre style starts a chain of dependent requests for sources, TileJSON, tiles, glyphs, sprites, credentials, and cacheable resources."
+date: "2026-07-16"
+author: "Planisfy"
+tags: ["MapLibre", "Styles", "Architecture"]
+published: true
+---
+
+A MapLibre application often begins with one line that looks almost too simple:
+
+```js
+const map = new maplibregl.Map({
+  container: "map",
+  style: "https://api.example.com/styles/v1/acme/streets"
+});
+```
+
+The browser loads one style URL, and a map appears.
+
+That is the developer experience MapLibre is designed to provide, but it can hide how much work happens after the first request. The style document is not the map. It is the entry point to a dependency graph containing sources, tiles, glyphs, sprites, images, and sometimes external services.
+
+Understanding that graph is useful when designing a platform, but it is even more useful when the map is blank, labels are missing, icons fail to appear, or a deployment works locally and fails behind production ingress.
+
+## The First Request: Style JSON
+
+A MapLibre style is a JSON document that describes sources, layers, camera defaults, fonts, sprites, and rendering rules.
+
+A published Planisfy style can be loaded through a stable URL:
+
+```text
+/styles/v1/{owner}/{style}
+```
+
+or through a version-pinned URL:
+
+```text
+/styles/v1/{owner}/{style}@{version}
+```
+
+The stable URL follows the currently published version. It is useful when a team wants to promote a new release without changing every client configuration.
+
+The version-pinned URL identifies one immutable publication. It is useful for reproducible deployments, cache stability, and applications that should not change until they are explicitly upgraded.
+
+When the style response arrives, MapLibre parses it and begins resolving everything the document references.
+
+## Source Resolution
+
+A style source may embed data directly, point at GeoJSON, or reference TileJSON and vector tiles.
+
+For a published Planisfy tileset, a style will normally reference a TileJSON endpoint rather than hard-coding the complete tile template and metadata into every style.
+
+TileJSON gives the client information such as:
+
+- tile URL templates;
+- zoom bounds;
+- geographic bounds;
+- vector-layer metadata;
+- attribution and other source properties.
+
+The request chain therefore begins to expand:
+
+```text
+style JSON
+  -> source URL
+  -> TileJSON
+  -> vector tile requests
+```
+
+If the style request succeeds but the TileJSON request fails, the map can still initialize while rendering no geometry. That is why a successful `200` for the style is not proof that the map is healthy.
+
+## Vector Tile Requests
+
+Once MapLibre knows the tile template, it requests tiles for the current viewport and zoom level.
+
+These requests are numerous, parallel, and sensitive to latency. Panning or zooming causes new requests, while the browser and any intermediate cache may reuse earlier responses.
+
+The backend now has to answer questions that the style document cannot answer by itself:
+
+- Which published tileset version should the stable URL resolve to?
+- Does the requested tile exist inside the PMTiles artifact?
+- Should the request be served by the API process or a dedicated tile worker?
+- Is the artifact available in object storage or on local serving disk?
+- Which cache headers are safe for a stable alias and which are safe for an immutable version?
+- Should the request be metered, authenticated, or publicly cacheable?
+
+A renderer makes the requests. A platform makes those requests reliable and consistent across versions and deployments.
+
+## Glyph Requests
+
+Text labels do not arrive inside vector tiles as rasterized text. The style references font stacks, while MapLibre requests glyph ranges as needed.
+
+A style can render roads, boundaries, and buildings correctly while showing no labels because the glyph URL is missing, unreachable, or incompatible with the requested font stack.
+
+That failure is visually confusing because it looks like a styling problem even though the geometry and style layers may be correct.
+
+When labels disappear, the useful debugging order is:
+
+1. Confirm that the style contains the expected symbol layers.
+2. Inspect the style `glyphs` template.
+3. Look for failed PBF requests in the browser network panel.
+4. Confirm that the requested font stack and range exist in the configured glyph backend.
+5. Verify CORS and public routing for the glyph endpoint.
+
+## Sprite Requests
+
+Sprites provide icons and patterns used by symbol, fill, and line layers.
+
+When a published style references sprite assets, MapLibre usually requests both sprite metadata and a sprite image, potentially at normal and high-DPI resolutions.
+
+The metadata maps image names to coordinates inside the atlas. The image contains the packed icons themselves.
+
+If the metadata loads but the image does not, or if the style references a name that was not included in the generated atlas, symbol layers may render without their icons.
+
+A reliable publication workflow therefore has to keep the style version and sprite output aligned. Publishing style JSON that points at a missing or stale sprite sheet creates a valid document that cannot render as intended.
+
+## Public Assets and Authenticated Services
+
+Map applications frequently combine public browser-loadable assets with authenticated service APIs.
+
+Styles, TileJSON, tiles, glyphs, and sprites may need to load directly from browsers and native clients. Directions, matrices, geocoding, elevation, and static map endpoints may require an API key or authenticated Console session.
+
+Those two access patterns should not be confused.
+
+Placing a private server credential inside every tile URL can make a browser map difficult to cache and unsafe to distribute. Making every geographic service anonymous can remove useful policy, limits, and usage controls.
+
+The platform has to decide which resources are public, which are owner-only, which require API credentials, and how browser-origin restrictions apply to exposed keys.
+
+## CORS and Origin Boundaries
+
+A style may work when served from the same host as the API and fail when embedded in another application because the browser enforces cross-origin rules on the dependent requests.
+
+The important point is that CORS must work for the complete chain, not only for the first style request.
+
+A production check should cover:
+
+- style JSON;
+- TileJSON;
+- vector tiles;
+- glyph PBFs;
+- sprite JSON and PNG files;
+- authenticated service calls made from approved origins.
+
+One missing header on a secondary asset can leave the application partially rendered.
+
+## Stable URLs, Immutable URLs, and Caches
+
+Stable and versioned resources have different cache semantics.
+
+A version-pinned URL can usually be cached aggressively because its content should not change. A stable alias must eventually reflect a newly promoted version, so its caching policy needs to preserve responsiveness to publication changes.
+
+The same distinction applies to styles and tilesets.
+
+If the style is pinned but its sources use stable tileset URLs, the visual result can still change when the tileset alias moves. Reproducibility therefore depends on the entire dependency graph, not only the top-level style URL.
+
+For strict release pinning, styles should reference versioned resources where the application requires immutable behavior.
+
+## A Practical Debugging Sequence
+
+When a map fails, begin at the first dependency and move outward:
+
+```text
+1. style response
+2. source and TileJSON response
+3. tile response
+4. glyph response
+5. sprite response
+6. renderer console errors
+7. health and preflight state
+```
+
+This order is more effective than editing style layers at random because it separates document validity from resource availability.
+
+A few common symptoms are especially useful:
+
+| Symptom | Likely first check |
+| --- | --- |
+| Style URL returns 404 | Owner, slug, version, and publication state |
+| Map initializes but is blank | TileJSON, tile URLs, and artifact availability |
+| Geometry appears without labels | Glyph template, font stack, and PBF responses |
+| Symbols appear without icons | Sprite publication and referenced image names |
+| Only production fails | CORS, ingress routing, public origins, and cache behavior |
+| Service APIs return unavailable | Backing engine and dataset readiness |
+
+## The Style Is the Beginning of the Runtime
+
+A style URL gives application developers a clean integration point, which is exactly what it should do.
+
+But behind that URL sits a distributed runtime contract. The style, its referenced resources, publication state, access policy, caching behavior, and backing services all have to agree.
+
+MapLibre handles the rendering lifecycle in the client. Planisfy focuses on making the resources in that lifecycle versioned, publishable, addressable, and operable.
+
+## Further Reading
+
+- [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/)
+- [Planisfy quickstart](https://docs.planisfy.com/docs/quickstart)
+- [Planisfy style API](https://docs.planisfy.com/docs/api/styles)
+- [Planisfy tile API](https://docs.planisfy.com/docs/api/tiles)
