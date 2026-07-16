@@ -11,7 +11,7 @@ const nextConfig = {
   transpilePackages: ["@planisfy/ui", "@planisfy/auth"],
   async rewrites() {
     const api =
-      process.env.CONSOLE_API_INTERNAL_ORIGIN ??
+      process.env.CONSOLE_API_INTERNAL_ORIGIN ||
       process.env.NEXT_PUBLIC_API_URL;
     if (!api) throw new Error("NEXT_PUBLIC_API_URL is required.");
     return [
