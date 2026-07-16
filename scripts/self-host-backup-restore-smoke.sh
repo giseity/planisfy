@@ -82,6 +82,19 @@ wait_for_http() {
   done
 }
 
+wait_for_postgres() {
+  for attempt in {1..60}; do
+    if compose exec -T postgres pg_isready -U planisfy -d planisfy >/dev/null 2>&1; then
+      return 0
+    fi
+    if [[ "$attempt" -eq 60 ]]; then
+      echo "Postgres did not become ready" >&2
+      return 1
+    fi
+    sleep 2
+  done
+}
+
 require_cmd curl
 require_cmd docker
 require_cmd node
@@ -108,6 +121,7 @@ else
 fi
 
 echo "Running database migrations"
+wait_for_postgres
 (cd "$ROOT_DIR" && pnpm db:migrate)
 
 compose up -d api console worker-geodata
