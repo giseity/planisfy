@@ -1,0 +1,192 @@
+---
+title: "From GeoJSON Upload to a Published PMTiles Map"
+description: "Following the complete lifecycle from uploaded source data through background processing, PMTiles storage, publication, style creation, and MapLibre rendering."
+date: "2026-07-17"
+author: "Planisfy"
+tags: ["PMTiles", "GeoJSON", "Data Pipelines"]
+published: true
+---
+
+Uploading a GeoJSON file looks like a single action in a user interface, but a production map platform cannot treat it as a single file-copy operation.
+
+The input has to be accepted safely, associated with the correct account, recorded durably, processed outside the request path, converted into a serving format, stored as an artifact, attached to a version, published, and finally referenced by a style that MapLibre can load.
+
+Each transition creates state that can fail independently. That is why the path from source data to a visible map is best understood as a lifecycle rather than an upload endpoint.
+
+## Why the Upload Request Should Stay Small
+
+The browser begins by sending source data and metadata to the API. The API validates ownership, file type, request size, and the intended resource before accepting the operation.
+
+What the API should not do is run the complete tiling process synchronously while the HTTP request remains open.
+
+Geodata processing can consume CPU, memory, disk, and time in ways that are difficult to predict from the upload size alone. It may also need native tools, temporary files, and retries.
+
+Instead, the request records enough durable state for the work to continue asynchronously.
+
+A simplified control flow looks like this:
+
+```text
+Console
+  -> API transaction
+  -> tileset and version state
+  -> storage ledger entry
+  -> processing job
+  -> outbox event
+  -> response to the client
+```
+
+The client receives a resource and job state that it can monitor, while the expensive work moves to a worker.
+
+## Durable State Before Queue Delivery
+
+A queue is useful for execution, but it should not be the only record that an operation exists.
+
+If the database transaction succeeds and queue publication fails, the system needs a way to recover. If the queue receives work before the corresponding database state is committed, a worker may begin processing a resource that does not yet exist durably.
+
+An outbox pattern reduces that gap.
+
+The API transaction records the intended event alongside the resource and job state. A dispatcher can then deliver the event to Redis and BullMQ, retrying when necessary without asking the original browser request to remain alive.
+
+This gives the platform a durable answer to the question: what work was accepted, even if the queue or worker was temporarily unavailable?
+
+## The Geodata Worker Claims the Job
+
+The worker reads the queued event, verifies that the job is still eligible to run, and moves it into a processing state.
+
+That state transition should be conditional. A retry, duplicate delivery, cancellation, or stale worker must not overwrite a terminal state blindly.
+
+The worker then prepares an isolated working directory and validates the input in more detail.
+
+Depending on the supported source format, this may include:
+
+- checking that the archive can be opened;
+- validating GeoJSON structure;
+- converting CSV or shapefile data into an intermediate representation;
+- identifying geometry types and attributes;
+- applying configured limits;
+- rejecting unsafe paths or malformed archives;
+- recording enough metadata to explain a failure.
+
+The goal is not merely to prevent crashes. It is to produce an error that a user or operator can act on.
+
+## Turning Features Into Tiles
+
+GeoJSON is convenient for exchange and small client-side datasets, but it is not an efficient serving format for large interactive maps.
+
+The worker can run a tiling tool such as Tippecanoe to partition features by zoom and location, simplify geometry where appropriate, and produce a vector tile archive.
+
+Planisfy uses PMTiles as a publication artifact for these workflows. PMTiles packages a tile pyramid and its directory information into a single archive that supports ranged reads.
+
+The processing path becomes:
+
+```text
+GeoJSON or supported source
+  -> validation and normalization
+  -> vector tile generation
+  -> PMTiles artifact
+```
+
+The exact output depends on geometry complexity, zoom settings, attribute choices, simplification, and tiling arguments. A small input can still be expensive if it contains extremely detailed geometry, while a large input may compress effectively when its structure is simple.
+
+That is why processing limits should consider workload shape, not only upload bytes.
+
+## The Artifact Is Not Yet a Published Tileset
+
+When the PMTiles file is produced, the worker writes it to the configured artifact storage and records its storage metadata.
+
+In a small local smoke environment, that storage may be the local filesystem. In production-like and large-build workflows, it is normally S3-compatible storage such as MinIO, S3, or R2.
+
+The database storage ledger matters because the presence of an object in a bucket is not enough to make it a valid public resource.
+
+The system still needs to know:
+
+- which account owns it;
+- which tileset version it belongs to;
+- its size, checksum, media type, and storage key;
+- whether processing completed successfully;
+- whether it is eligible for publication;
+- whether it is still referenced or can be removed later.
+
+Only after the artifact and version state agree should the job be finalized.
+
+## Publication Creates the Client Contract
+
+A processed tileset version is an internal resource. Publishing it creates the contract used by applications.
+
+Planisfy exposes stable TileJSON aliases and version-pinned TileJSON URLs. The TileJSON response points MapLibre toward the actual vector tile route and describes the vector layers contained in the artifact.
+
+A stable URL follows the active publication. A versioned URL identifies one immutable release.
+
+Publication therefore does more than set a boolean. It changes which version a public alias resolves to, while preserving older versions for pinned clients and rollback.
+
+The transition should be atomic from the point of view of readers. A client should see the old publication or the new publication, not an alias that points at an incomplete intermediate state.
+
+## Creating a Style Around the Tileset
+
+Publishing a tileset makes data available, but it does not decide how the data should look.
+
+A MapLibre style references the TileJSON source, then defines layers that select source layers, filter features, and apply visual rules.
+
+The user can create a style, attach the published tileset as a source, define paint and layout properties, configure glyphs and sprites, and publish a style version.
+
+The browser request chain then becomes:
+
+```text
+MapLibre
+  -> published style JSON
+  -> published TileJSON
+  -> PMTiles-backed vector tiles
+  -> glyph and sprite resources
+  -> rendered map
+```
+
+The complete product loop succeeds only when every step works together.
+
+## What Happens When Processing Fails?
+
+A reliable system should preserve enough state to distinguish where the failure occurred.
+
+An upload can fail before acceptance. A queue dispatch can be delayed. A worker can reject invalid data. The tiling tool can exceed resources. An artifact write can fail. Finalization can fail after the file was written. Publication can be blocked because a version is not ready.
+
+Those cases should not collapse into one generic "upload failed" message.
+
+The job record, worker logs, request identifiers, artifact ledger, and resource state should tell an operator whether the system needs a retry, cleanup, user correction, or infrastructure repair.
+
+Retries also need idempotency. Re-running finalization should not create several published versions for one artifact or move a newer resource backward into a processing state.
+
+## Stale Work Is a Platform Concern
+
+Workers can stop unexpectedly after claiming jobs. A queue may retain a job whose database state was never finalized. An artifact may exist even though the job still appears to be processing.
+
+That is why worker heartbeat and stale-job reconciliation matter.
+
+A platform should be able to identify work that has remained in a non-terminal state beyond its expected window, expose it through operations, and reconcile or fail it without requiring direct database edits.
+
+This is one of the differences between a tiling script and a production publication workflow. The script can exit. The platform has to explain and recover the state it leaves behind.
+
+## The Value of the Complete Loop
+
+Each component in this pipeline is understandable on its own:
+
+- an upload route;
+- a database record;
+- a queue;
+- a worker;
+- Tippecanoe;
+- a PMTiles file;
+- object storage;
+- TileJSON;
+- a MapLibre style.
+
+The engineering challenge is preserving one coherent lifecycle across all of them.
+
+A user should be able to begin with source data and end with a stable style URL, while an operator can see every intermediate job, artifact, dependency, and failure state.
+
+That is the platform work around geodata processing: not simply producing tiles, but making the production and publication of those tiles durable, inspectable, and recoverable.
+
+## Further Reading
+
+- [PMTiles documentation](https://docs.protomaps.com/pmtiles/)
+- [Tippecanoe repository](https://github.com/felt/tippecanoe)
+- [Planisfy tileset upload guide](https://docs.planisfy.com/docs/guides/upload-tileset)
+- [Planisfy architecture](https://github.com/giseity/planisfy/blob/main/ARCHITECTURE.md)
