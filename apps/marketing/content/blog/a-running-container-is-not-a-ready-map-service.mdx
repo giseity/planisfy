@@ -1,0 +1,220 @@
+---
+title: "A Running Container Is Not a Ready Map Service"
+description: "Why liveness, dependency health, dataset readiness, and product readiness need different signals in a self-hosted map platform."
+date: "2026-07-18"
+author: "Planisfy"
+tags: ["Operations", "Self-hosting", "Reliability"]
+published: true
+---
+
+Container orchestration makes one question easy to answer: is the process running?
+
+For a map platform, that is often the least interesting health question.
+
+A Valhalla process can be alive without a usable routing graph. Pelias can accept connections while its import is incomplete. Martin can respond to a health probe while the expected PMTiles release is not installed. A worker can send heartbeats while its queue is stalled. Object storage can serve reads while rejecting publication writes.
+
+All of those systems are technically running, but the product may still be unable to answer the request a user cares about.
+
+That difference is why Planisfy separates basic health, detailed dependency state, setup preflight, job state, and dataset-aware readiness.
+
+## Liveness Answers a Narrow Question
+
+Liveness asks whether a process should be restarted.
+
+A useful liveness check is deliberately small. It should not depend on every downstream service, because a temporary database or storage failure should not necessarily cause the orchestrator to restart a healthy API process repeatedly.
+
+Examples include:
+
+- Is the process event loop responsive?
+- Can the HTTP server answer a minimal request?
+- Has the worker process stopped entirely?
+
+Liveness is important, but it should not be interpreted as proof that the service can complete real work.
+
+## Readiness Is About Receiving Traffic
+
+Readiness asks whether the process should currently receive traffic for a particular responsibility.
+
+An API may be alive but unready because it cannot connect to Postgres. A tile worker may be running but unable to reach object storage. A static renderer may answer its own health endpoint but be unable to retrieve the style or tile resources needed for an image.
+
+Readiness is therefore closer to the user experience, but even a dependency-aware readiness check can remain incomplete if it does not understand datasets.
+
+## Dataset Readiness Is Different Again
+
+Geospatial services often separate software from data more sharply than ordinary application services.
+
+The service binary or container may be installed correctly while the useful dataset is absent, stale, incompatible, or only partially activated.
+
+### Valhalla
+
+Valhalla needs a compatible routing graph for the requested region. A status endpoint can show that the service process is available, but directions, matrices, isochrones, matching, and optimized trips still depend on the active graph.
+
+A routing readiness check should answer questions such as:
+
+- Is graph data installed?
+- Does it match the expected runtime format?
+- Was the selected release activated successfully?
+- Can the service answer a representative route within the intended coverage?
+
+### Pelias
+
+Pelias depends on Elasticsearch and imported geocoding data. The API can be reachable while an import is incomplete, an index alias points at the wrong generation, or the target geography is not covered.
+
+A useful readiness model should distinguish the API process, Elasticsearch availability, import state, and the actual dataset expected by the deployment.
+
+### Martin and PMTiles
+
+Martin can run without the basemap release the application expects. A PMTiles file can exist on disk without being represented by the platform's publication state, or a publication can point at an artifact that was not activated on the serving machine.
+
+The useful check is not only whether Martin responds. It is whether the selected release is installed and its TileJSON or a representative tile can be served.
+
+### Elevation
+
+An elevation service can be healthy while DEM coverage is missing for a requested coordinate. That condition should normally produce a clear data-coverage response rather than an undifferentiated platform outage.
+
+## Product Readiness Crosses Several Services
+
+A map visible in the browser often depends on more than one backend.
+
+```text
+style JSON
+  -> TileJSON
+  -> vector tiles
+  -> glyph ranges
+  -> sprite assets
+  -> rendered map
+```
+
+Each request can succeed independently. The top-level style can return `200` while the map remains blank because the tile artifact is missing. Geometry can render while labels disappear because glyphs are unavailable.
+
+Product readiness therefore asks whether the whole user journey works, not merely whether each process has a green indicator.
+
+This is why a browser product-loop smoke test provides evidence that service-local probes cannot provide.
+
+## Partial Failure Is Normal
+
+A multi-service platform should expect degraded states.
+
+For example:
+
+- Map rendering may work while geocoding is unavailable.
+- Routing may work without elevation profiles.
+- Existing artifacts may be readable while new publication writes fail.
+- The Console may be available while a background worker is stalled.
+- A stable style may continue serving while a candidate tileset build fails.
+
+Treating every partial failure as a total outage can make operations noisy and can hide which capabilities remain usable.
+
+A better model reports health by capability and dependency, while giving the overall installation an understandable state such as healthy, degraded, or unavailable.
+
+## The Three Diagnostic Surfaces
+
+A self-hosted Planisfy installation exposes three useful levels of diagnosis.
+
+### Basic health
+
+```bash
+curl http://localhost:4000/health
+```
+
+This is the fast top-level signal that the API is reachable.
+
+### Detailed health
+
+```bash
+curl http://localhost:4000/health/detailed
+```
+
+Detailed health can report dependencies and operational components such as Postgres, Redis, storage, workers, Martin, Valhalla, Pelias, tile delivery, and the static renderer.
+
+In production, detailed diagnostics should be protected because they can reveal internal topology and failure details.
+
+### Setup preflight
+
+```bash
+curl http://localhost:4000/setup/preflight
+```
+
+Preflight is closer to an installation assessment. It answers whether the configured environment has the providers, secrets, storage, service endpoints, and datasets needed for its intended mode.
+
+A new self-host deployment can therefore start successfully while preflight explains which optional capabilities are not ready yet.
+
+## Workers Need More Than Heartbeats
+
+A worker heartbeat says that the process recently reported itself. It does not prove that jobs are moving.
+
+An operational view should also consider:
+
+- queue depth;
+- oldest waiting job;
+- processing duration;
+- failed job rate;
+- outbox lag;
+- stale processing records;
+- repeated retries;
+- artifact finalization failures.
+
+A worker can remain alive while a particular job is stuck on disk, blocked by storage credentials, or repeatedly failing native tooling.
+
+That is why Planisfy exposes job state and reconciles stale processing work rather than relying on a single process signal.
+
+## Storage Can Fail Asymmetrically
+
+Object storage introduces its own partial failures.
+
+Reads and writes may use different credentials or policies. Multipart upload can fail while ordinary downloads continue. The bucket can exist while lifecycle rules remove artifacts too early. A database record can outlive its object, or an object can remain after the database state is removed.
+
+A useful storage check should distinguish:
+
+- provider reachability;
+- bucket availability;
+- read permission;
+- write permission;
+- signed upload generation;
+- artifact existence;
+- ledger consistency.
+
+This is another reason that "the S3 endpoint responded" is not equivalent to platform readiness.
+
+## Readiness Should Produce Actionable Reasons
+
+A boolean is easy for machines to consume, but operators need the reason behind it.
+
+Compare these messages:
+
+```text
+routing: unhealthy
+```
+
+and:
+
+```text
+routing: degraded
+reason: no active Valhalla graph release is installed on the serving worker
+```
+
+The second tells the operator what to inspect next. Good health reporting should identify the capability, dependency, observed condition, and likely remediation without exposing secrets.
+
+## Test the User Journey
+
+Health endpoints are necessary, but they are not a substitute for a representative request.
+
+For a published map, fetch the style, follow its TileJSON, request a tile, verify glyphs and sprites, and render the result in MapLibre.
+
+For routing, execute a route inside the expected graph coverage. For geocoding, query a location that should exist in the installed dataset. For backup and restore, restore into a clean environment and verify the published URLs again.
+
+Those checks confirm product readiness rather than process availability.
+
+## Operational Readiness Is a Model, Not an Endpoint
+
+No single endpoint can replace an accurate understanding of the system.
+
+Liveness protects process supervision. Readiness controls traffic. Dataset checks confirm that geospatial engines have useful data. Job and storage checks expose background and artifact health. Product-loop tests prove that the pieces work together.
+
+A reliable map platform needs all of them because a running container is only the beginning of the answer.
+
+## Further Reading
+
+- [Self-host operations and performance](https://docs.planisfy.com/docs/self-hosting/performance)
+- [Self-host data sources](https://docs.planisfy.com/docs/self-hosting/data-sources)
+- [Planisfy testing guide](https://github.com/giseity/planisfy/blob/main/docs/testing.md)
