@@ -1,0 +1,218 @@
+---
+title: "Build, Release, Activate, Serve: The Lifecycle of a Self-Hosted Basemap"
+description: "A successful Planetiler build is only one stage in the lifecycle from OSM source data to a validated basemap running in Martin."
+date: "2026-07-19"
+author: "Planisfy"
+tags: ["Basemaps", "Planetiler", "Self-hosting"]
+published: true
+---
+
+A Planetiler command can finish successfully and produce a PMTiles file, but that does not yet mean a production application has a basemap.
+
+The artifact still has to be stored, identified, published, transferred to the machine that serves traffic, activated without destroying the previous release, and validated through Martin and a real client request.
+
+Those stages are easy to collapse when one developer builds and serves a regional map on the same machine. They become much more important when artifacts are large, build hosts are temporary, serving machines are separate, and rollback has to work without rebuilding the planet.
+
+Planisfy models that process as a lifecycle:
+
+```text
+build
+  -> artifact
+  -> release
+  -> activation
+  -> primary
+  -> serving validation
+```
+
+Each word represents a different fact about the system.
+
+## Build: Computation Finished
+
+The build stage transforms source data into a candidate artifact.
+
+For an OSM basemap, a root agent downloads or receives an OSM PBF source, prepares the Planetiler environment, retrieves required support data, and runs the configured build.
+
+A build record can contain the source, engine, arguments, assigned worker, timestamps, logs, progress, and terminal result.
+
+When the process exits successfully, it proves that computation completed. It does not prove that the output was uploaded, recorded, activated, or served.
+
+That distinction matters because large jobs can fail after the expensive computation has finished. An upload credential can expire. Object storage can reject a part. Finalization can fail. A serving machine can lack enough disk for activation.
+
+Calling all of those states "the build" makes failures difficult to diagnose.
+
+## Artifact: The Output Exists Durably
+
+The PMTiles output becomes an artifact when it is stored durably and represented in platform metadata.
+
+For regional and planet-scale workflows, the root agent should upload directly to S3-compatible storage rather than proxying the artifact through the public API.
+
+The control flow is:
+
+```text
+root agent
+  -> request signed upload instructions
+  -> multipart upload to object storage
+  -> finalize size, checksum, manifest, and storage metadata
+  -> artifact record
+```
+
+The API remains the control plane, but it does not become the data path for a very large file.
+
+An artifact record should answer:
+
+- Which build produced this file?
+- Where is it stored?
+- What is its size and checksum?
+- Which source and engine version produced it?
+- Is the upload complete?
+- Can it be used to create a release?
+
+The object and the database record need to agree. A file in a bucket without metadata is not automatically a supported release.
+
+## Release: Give the Artifact an Operational Identity
+
+An immutable artifact is useful for storage, but operators need a named object that can be selected, promoted, compared, and rolled back.
+
+A release associates a version or name with the artifact and its manifest.
+
+The release may record:
+
+- source extract and date;
+- Planetiler image or version;
+- build arguments;
+- schema or layer profile;
+- artifact checksum and size;
+- creation time;
+- compatibility notes;
+- previous and next operational relationships.
+
+This gives the platform a stable identity for the candidate without changing the runtime immediately.
+
+A release can be available without being active. That allows operators to prepare and inspect it before it receives production traffic.
+
+## Activation: Install the Release on a Serving Machine
+
+Martin serves local sources efficiently, while the durable artifact may live in remote object storage.
+
+A serving root agent bridges those two concerns.
+
+It receives an activation assignment, downloads the selected release to the serving machine, verifies the artifact, installs it into the configured Martin source directory, and asks a narrow runtime supervisor to restart or probe the allowlisted service.
+
+The serving machine now has operational state that is separate from object storage:
+
+- which artifact is installed;
+- which stable alias points to it;
+- whether the download and checksum succeeded;
+- whether Martin reloaded successfully;
+- whether the previous release is still available for rollback.
+
+A successful activation means the artifact was installed. It should not become primary until the runtime proves that it can serve it.
+
+## Serving Validation: Ask the Runtime
+
+After activation, the platform should check the same path a client will use.
+
+At minimum:
+
+1. Confirm that Martin is reachable.
+2. Fetch the expected source or TileJSON metadata.
+3. Request a representative tile.
+4. Confirm that the response belongs to the selected release.
+5. Render a style that depends on the basemap when possible.
+
+A service-local health endpoint is useful, but it can miss a bad source path, incomplete download, permission error, or incompatible artifact.
+
+Serving validation converts "we copied the file" into "the runtime can answer with it."
+
+## Primary: Select the Default Release
+
+A release becomes primary when stable platform routes should resolve to it by default.
+
+That transition should be explicit and reversible.
+
+Stable aliases are useful because applications do not need to change their configuration for every basemap update. The platform can move the alias after the candidate release has passed activation and validation.
+
+Version-pinned routes remain useful for reproducibility and rollback checks.
+
+The primary transition should preserve a clear answer to:
+
+- What was primary before?
+- What is primary now?
+- Which serving machines activated the new release?
+- Did validation pass everywhere required?
+- Can the previous release be restored without rebuilding?
+
+## Why Build and Serving Workers Are Separate Roles
+
+A large build host and a production serving host have different resource profiles and trust boundaries.
+
+The build host needs CPU, RAM, temporary disk, source access, and the ability to run Planetiler. It may be short-lived and may not receive public traffic.
+
+The serving host needs predictable local disk, runtime availability, careful restarts, and rollback capacity. It should not have to perform an expensive build while serving requests.
+
+Planisfy root agents can represent both roles even when one small installation uses the same machine for each. Keeping the roles explicit preserves the lifecycle and makes it possible to separate them later.
+
+## Planet-Scale Changes the Cost of Mistakes
+
+The same lifecycle works for a city, region, country, or planet, but large artifacts make operational shortcuts more expensive.
+
+At planet scale:
+
+- temporary build data can consume substantial disk;
+- multipart uploads and retries matter;
+- copying an artifact several times can create significant storage cost;
+- activation needs enough local disk for the candidate and rollback release;
+- a failed restart can affect a large share of traffic;
+- rebuilding is not an acceptable rollback strategy.
+
+Planisfy has exercised the root-agent workflow with planet-scale OSM basemap builds. That validates the orchestration path, but capacity planning remains specific to the chosen source, profile, engine version, storage, network, and machine.
+
+The platform can coordinate the lifecycle. It cannot make compute and storage requirements disappear.
+
+## Rollback Is an Activation Operation
+
+A useful rollback does not rerun Planetiler. It selects a previously known release and activates it again.
+
+That requires retaining:
+
+- the previous immutable artifact;
+- its checksum and manifest;
+- enough serving disk or download capacity;
+- the ability to restore the stable alias;
+- a runtime supervisor that can restart and validate Martin;
+- clear records of which release is active.
+
+Rollback should follow the same validation path as forward activation. The fact that a release worked last week does not prove that the current serving environment can still load it.
+
+## The Same Lifecycle Applies to Routing Graphs
+
+Valhalla graph builds follow a closely related model:
+
+```text
+OSM source
+  -> Valhalla build
+  -> graph archive artifact
+  -> routing release
+  -> serving activation
+  -> Valhalla restart
+  -> representative route validation
+```
+
+The file formats and runtime checks differ, but the control-plane reasoning is the same. Computation, durable storage, release identity, runtime installation, and traffic selection are separate stages.
+
+Planisfy has also exercised this path with planet-scale Valhalla routing graphs.
+
+## From a File to an Operable Basemap
+
+PMTiles makes a basemap easy to package, and Planetiler makes it possible to build high-quality vector tiles from OSM. Neither removes the need for release operations.
+
+A production basemap needs provenance, durable storage, version identity, controlled activation, stable and immutable routes, health checks, and rollback.
+
+Build, artifact, release, activation, primary, and validation are not extra terminology around the file. They are the states that let an operator know what the platform is actually serving.
+
+## Further Reading
+
+- [Planetiler repository](https://github.com/onthegomap/planetiler)
+- [PMTiles documentation](https://docs.protomaps.com/pmtiles/)
+- [Planisfy external compute](https://docs.planisfy.com/docs/self-hosting/external-compute)
+- [Planisfy planet-scale builds](https://docs.planisfy.com/docs/self-hosting/planet-scale-builds)
