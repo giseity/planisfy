@@ -1,0 +1,209 @@
+---
+title: "Stable URLs, Immutable Versions, and Safe Map Rollbacks"
+description: "Why map platforms need both movable publication aliases and immutable resource URLs, and how that model supports caching, promotion, and rollback."
+date: "2026-07-20"
+author: "Planisfy"
+tags: ["Versioning", "Caching", "Reliability"]
+published: true
+---
+
+Applications prefer stable URLs. Operations prefer immutable versions.
+
+A map platform needs both.
+
+Without a stable URL, every style or tileset release requires a client configuration change. Without an immutable URL, a deployment cannot reproduce an earlier map reliably, caches become difficult to reason about, and rollback may simply point at content that has already been overwritten.
+
+Planisfy separates editable resources, immutable published versions, and movable stable aliases so that each concern has a clear role.
+
+## The Two Kinds of URL
+
+A published style can have a stable URL:
+
+```text
+/styles/v1/{owner}/{style}
+```
+
+and a version-pinned URL:
+
+```text
+/styles/v1/{owner}/{style}@{version}
+```
+
+A tileset follows the same idea through stable and versioned TileJSON routes, including forms such as:
+
+```text
+/tiles/v1/{owner}/{tileset}.json
+/tiles/v1/{owner}/{tileset}/versions/{version}.json
+```
+
+The exact route syntax is less important than the contract.
+
+- A stable alias resolves to the currently published version.
+- A versioned URL resolves to one immutable publication.
+
+Those contracts support different application behaviors.
+
+## Stable URLs Are Operational Indirection
+
+A stable URL allows the platform to change the active publication without requiring every client to deploy new configuration.
+
+A team can prepare a candidate style version, review it, publish it, and then move the stable alias after validation.
+
+The application continues requesting the same URL:
+
+```text
+https://api.example.com/styles/v1/acme/streets
+```
+
+but the platform resolves it to a new immutable version.
+
+That indirection is useful for:
+
+- ordinary product releases;
+- staged promotion;
+- emergency rollback;
+- keeping client configuration simple;
+- allowing Console workflows to control publication state.
+
+The stable alias is therefore not the resource itself. It is a pointer in the publication model.
+
+## Immutable Versions Preserve Evidence
+
+A versioned URL should never silently change its content.
+
+That guarantee allows a developer to:
+
+- reproduce a rendering issue;
+- compare two releases;
+- pin a production application;
+- test a candidate before promotion;
+- retain a rollback target;
+- cache content aggressively;
+- associate logs and incidents with a precise resource version.
+
+If version `7` can later contain different JSON or point at a different artifact, the number is only a label. It cannot support reliable operations.
+
+Immutability should apply to the stored resource, its publication metadata, and any version-specific artifact references.
+
+## Publication Should Be Atomic
+
+Moving a stable alias is a small database operation with a large external effect.
+
+Clients may request the URL at any moment, so the transition should expose either the previous version or the new version. It should not expose a partially updated state where the style alias has moved but the referenced tileset or sprite publication is unavailable.
+
+A safe publication workflow prepares the candidate first:
+
+1. Create or process the new version.
+2. Verify all dependent resources.
+3. Make versioned routes available.
+4. Test the candidate through those immutable routes.
+5. Move the stable alias in one controlled transition.
+6. Observe the new publication while retaining the previous version.
+
+The alias change is the last step, not the first.
+
+## Styles Have Transitive Dependencies
+
+Pinning a style does not automatically pin the whole map.
+
+A style can reference:
+
+- one or more TileJSON sources;
+- glyph templates;
+- sprite sheets;
+- external GeoJSON or raster sources;
+- service-generated URLs.
+
+If a version-pinned style references stable tileset aliases, the style JSON remains unchanged while the underlying tile data can move to a new release.
+
+That may be exactly what the product wants, but it is not a fully immutable visual release.
+
+For strict reproducibility, the complete dependency graph needs compatible versioning. A release process should decide which dependencies follow stable aliases and which are pinned.
+
+This is similar to application dependencies: a lockfile is useful because pinning only the top-level package does not freeze the transitive graph.
+
+## Caching Depends on the Contract
+
+Immutable and stable URLs should not use identical cache behavior.
+
+A versioned URL can use long-lived cache headers because its content is not expected to change. Browser, CDN, and intermediary caches can retain it without checking frequently.
+
+A stable alias has to reflect a future promotion. It may still be cached, but its freshness policy needs to balance performance with the time required for a publication change to reach clients.
+
+The common pattern is:
+
+- long, immutable caching for version-pinned resources;
+- shorter or revalidated caching for stable aliases;
+- content-addressed or versioned artifact paths behind the public routes.
+
+Changing the bytes behind a long-cached stable URL without a clear invalidation strategy can leave users on several different releases at once.
+
+## Rollback Is Moving the Alias Back
+
+A rollback should be a publication operation, not an emergency file-editing session.
+
+When the previous version remains immutable and available, rollback can:
+
+1. Select the last known-good version.
+2. Verify that its dependencies and artifacts still exist.
+3. Move the stable alias back.
+4. Revalidate client-facing routes.
+5. Preserve the failed candidate for investigation.
+
+This is much safer than overwriting the current object with old content because overwriting destroys evidence and can interact badly with caches.
+
+For basemaps and routing graphs, rollback may also require serving activation. The previous release must be installed on Martin or Valhalla, the runtime must restart successfully, and a representative request must pass before the alias or primary selection is considered restored.
+
+## Storage Restore Must Preserve Publication Meaning
+
+Backup and restore testing is particularly important for versioned platforms.
+
+A database backup without the corresponding artifacts can restore publication records that point at missing objects. An object-storage backup without database state can restore files that the platform no longer knows how to address.
+
+A useful restore check verifies:
+
+- resource and version records;
+- stable publication aliases;
+- storage ledger entries;
+- artifact bytes and checksums;
+- public style and TileJSON routes;
+- dependent tile, glyph, and sprite requests;
+- active basemap and routing releases where applicable.
+
+The goal is not simply to restore files. It is to restore the meaning of the published system.
+
+## Concurrent Publication Needs Serialization
+
+Two users or jobs can attempt to promote different versions at nearly the same time.
+
+Without appropriate transactions or serialization, the platform can lose an update, write contradictory audit history, or expose a version that was not the last successfully validated candidate.
+
+Publication logic should protect the invariant that one stable alias has one active target at a time, while preserving a durable record of the transition.
+
+Similar protection is needed when a build finishes while another version is being promoted or when a stale worker retries finalization.
+
+The public URL may be simple. The state transition behind it still deserves database-level correctness.
+
+## A Release Model for Clients and Operators
+
+Developers need URLs that are easy to integrate. Operators need versions that can be inspected, tested, promoted, and restored.
+
+Stable aliases serve the first need. Immutable versions serve the second.
+
+Together they create a release model where:
+
+- drafts can change without affecting applications;
+- candidates can be tested through versioned routes;
+- promotion does not require client redeployment;
+- caches have a clear content contract;
+- rollback preserves history;
+- backup and restore can be verified against known versions.
+
+The result is a map platform that treats published resources as releases rather than mutable files.
+
+## Further Reading
+
+- [Planisfy resources and publications](https://docs.planisfy.com/docs/concepts/resources)
+- [Planisfy caching guide](https://docs.planisfy.com/docs/guides/caching)
+- [Planisfy style API](https://docs.planisfy.com/docs/api/styles)
+- [Planisfy tile API](https://docs.planisfy.com/docs/api/tiles)
