@@ -1,0 +1,266 @@
+---
+title: "How Do You Test a Self-Hosted Map Platform?"
+description: "A self-hosted map platform needs more than unit tests: it needs product loops, real storage, browser rendering, dataset activation, restart persistence, and restore evidence."
+date: "2026-07-21"
+author: "Planisfy"
+tags: ["Testing", "Self-hosting", "Reliability"]
+published: true
+---
+
+A self-hosted map platform can have a passing test suite and still fail the first time someone tries to publish a map.
+
+The individual components may all be healthy in isolation:
+
+- the API starts;
+- Postgres accepts queries;
+- Redis responds;
+- the worker process is alive;
+- Martin serves its health endpoint;
+- MapLibre loads in a browser.
+
+But the product depends on the transitions between those components. A source upload has to become a job, the job has to become an artifact, the artifact has to become a published tileset, the tileset has to become a style dependency, and the browser has to retrieve every resource referenced by that style.
+
+Testing the platform therefore means testing layers of evidence, from fast code checks to full recovery workflows.
+
+## Start With Fast Repository Checks
+
+The first layer should remain inexpensive enough to run constantly.
+
+It includes:
+
+- type checking;
+- linting and formatting;
+- unit tests;
+- schema and contract tests;
+- route-level authorization tests;
+- deterministic tests for publication, limits, and state transitions.
+
+These checks catch local errors quickly. They are especially useful for invariants that are difficult to verify through a browser, such as atomic quota reservation, conditional job transitions, stable alias selection, API-key scope enforcement, and serialization of concurrent updates.
+
+Fast tests should answer whether a piece of logic is correct. They should not be asked to prove that the deployed platform works.
+
+## Test API Contracts and Failure Shapes
+
+A developer integrates more than successful JSON. They also integrate authentication behavior, error codes, headers, limits, and dependency failures.
+
+Route tests should cover:
+
+- missing and invalid API keys;
+- scope and origin restrictions;
+- owner access versus public access;
+- rate-limit and quota behavior;
+- invalid resource identifiers;
+- unavailable backing engines;
+- missing datasets;
+- artifact and publication not-found states;
+- stable and versioned URL behavior.
+
+A routing route that exists but has no active graph should not look identical to an invalid credential. A missing sprite should not masquerade as a generic server error.
+
+Consistent failure shapes are part of the API contract.
+
+## Run the Complete Upload-to-Render Loop
+
+The most valuable product test begins with user input and ends in a real renderer.
+
+A representative loop is:
+
+```text
+upload GeoJSON
+  -> create processing state
+  -> dispatch work
+  -> run geodata worker
+  -> create PMTiles artifact
+  -> publish tileset
+  -> publish style
+  -> fetch public style URL
+  -> fetch TileJSON and tiles
+  -> render with MapLibre
+```
+
+This crosses the API, database, queue, worker, native geodata tooling, object storage, publication model, public routes, and browser.
+
+If any boundary is wrong, the test fails in the same way a user's workflow would fail.
+
+Planisfy uses a full product-loop path for this reason. It is not merely an end-to-end label attached to several API calls; it verifies that the resulting style can be loaded and rendered.
+
+## Use Real Storage Semantics
+
+Local filesystem storage is useful for fast smoke tests, but it does not reproduce every production behavior.
+
+S3-compatible storage introduces:
+
+- signed uploads;
+- multipart behavior;
+- bucket policies;
+- separate read and write permissions;
+- object metadata;
+- network failures;
+- eventual operational concerns such as lifecycle rules.
+
+A production-like test should exercise MinIO, S3, or R2 behavior rather than assuming a successful local file write proves the artifact path.
+
+It should verify that:
+
+1. The API creates the intended storage record.
+2. The worker or root agent writes the object.
+3. Finalization records the correct size, checksum, and key.
+4. Published routes can read the artifact.
+5. Backup and restore preserve the object and its database meaning.
+
+## Test Browser Behavior, Not Only HTTP Status
+
+A style response can return `200` while the map remains incomplete.
+
+The browser still needs to load TileJSON, vector tiles, glyph ranges, sprite metadata, and sprite images. CORS and caching behavior can differ across those routes.
+
+A browser smoke should check:
+
+- Console sign-in and organization context;
+- resource creation or seeded state;
+- published style retrieval;
+- dependent resource requests;
+- MapLibre rendering;
+- visible geometry and labels where expected;
+- actionable client errors when a dependency is unavailable.
+
+A screenshot can be useful evidence, but the important part is the programmatic assertion that the map reached the expected state.
+
+## Restart the Stack
+
+Many self-hosting failures appear only after restart.
+
+An installation can work initially because state remains in a temporary container, local process memory, or an untracked directory. After Compose restarts, publications may point at missing artifacts, root-agent tokens may disappear, or a service may start before its data volume is available.
+
+A restart-persistence smoke should verify:
+
+- database migrations and records remain present;
+- object storage and local runtime data are mounted durably;
+- published styles and TileJSON routes still resolve;
+- worker and outbox processing resume;
+- root-agent state remains registered where expected;
+- active Martin and Valhalla releases remain installed or can be reconciled;
+- health and preflight recover to the expected state.
+
+Planisfy includes a restart-persistence smoke path because a successful first boot is not enough for an operator.
+
+## Back Up, Restore, and Test Again
+
+A backup command that exits successfully proves only that a file was produced.
+
+A meaningful backup test restores into a clean target and then repeats the product checks.
+
+For Planisfy, the protected state includes more than Postgres:
+
+- database records and publication aliases;
+- object-storage artifacts;
+- local PMTiles and font data where used;
+- Valhalla graph data;
+- Pelias data or documented reconstruction procedures;
+- elevation data;
+- root-agent state;
+- serving activation state and runtime configuration.
+
+After restore, verify the public style, TileJSON, tile, and service routes. The objective is to restore a functioning map platform, not merely a collection of archives.
+
+Repository smoke commands include paths such as:
+
+```bash
+pnpm smoke:self-host-default-map
+pnpm e2e:product-loop
+pnpm smoke:self-host-restart-persistence
+pnpm smoke:self-host-backup-restore
+pnpm smoke:self-host-support-bundle
+```
+
+The exact set used for a release should match the deployment mode and the capabilities being shipped.
+
+## Test Degraded States Deliberately
+
+A good test suite does not only prove the happy path. It proves that partial failure remains understandable.
+
+Useful scenarios include:
+
+- Valhalla running without graph data;
+- Pelias unavailable or missing its dataset;
+- object storage readable but not writable;
+- a worker alive with stale processing jobs;
+- a published style referencing a missing glyph or sprite resource;
+- a tile worker unavailable while API delivery remains possible;
+- a root agent losing access during multipart upload;
+- a candidate activation failing while the primary release remains available.
+
+The expected result may be degraded health rather than a total failure. Tests should confirm both the system behavior and the diagnostic message.
+
+## Test Large Build and Activation Lifecycles
+
+Regional and planet-scale basemap and routing workflows introduce a separate test surface.
+
+The platform should verify:
+
+```text
+assignment
+  -> root-agent polling
+  -> build execution
+  -> direct object-storage upload
+  -> artifact finalization
+  -> release creation
+  -> serving activation
+  -> runtime restart
+  -> representative request
+```
+
+Planisfy has exercised that lifecycle with planet-scale OSM basemap and Valhalla routing graph builds.
+
+The retained evidence should include source identity, engine version, build arguments, machine profile, duration, resource use, artifact checksum and size, upload result, release identifier, activation result, and runtime validation.
+
+That evidence distinguishes a supported orchestration path from an undocumented one-off command.
+
+## Managed Mode Needs Provider and Ingress Proof
+
+Managed deployments share much of the product loop, but they add hosted concerns:
+
+- production object-storage credentials;
+- billing and email adapter availability;
+- public HTTPS ingress;
+- CORS for the Console and approved applications;
+- secret management;
+- provider-specific limits;
+- protected staging and live environment configuration.
+
+A local test cannot prove those concerns. Managed staging and live smoke checks need to run against the real providers and origins intended for release.
+
+## Produce Release Evidence
+
+The final step is turning test output into something that can be reviewed later.
+
+A release-evidence report can record:
+
+- commit or tag;
+- image digests;
+- migration version;
+- deployment mode;
+- test commands and results;
+- browser product-loop result;
+- storage provider;
+- backup and restore result;
+- restart-persistence result;
+- active map-data releases;
+- known degraded capabilities;
+- timestamps and environment identity.
+
+The report does not need to be elaborate. Its value is that it connects a release claim to specific, reproducible checks.
+
+## Test the Platform as a Platform
+
+Unit tests protect logic. Route tests protect contracts. Product loops protect integration. Browser tests protect rendering. Restart and restore tests protect operations. Dataset activation tests protect the serving lifecycle.
+
+A self-hosted map platform needs all of them because its value exists in the coordination between specialized systems.
+
+The strongest release claim is not that every container is green. It is that a clean environment can accept data, produce and publish a map, serve it to a real client, survive restart, recover from backup, and explain what is wrong when a dependency or dataset is missing.
+
+## Further Reading
+
+- [Planisfy testing documentation](https://github.com/giseity/planisfy/blob/main/docs/testing.md)
+- [Self-host operations and performance](https://docs.planisfy.com/docs/self-hosting/performance)
+- [Planisfy architecture](https://github.com/giseity/planisfy/blob/main/ARCHITECTURE.md)
