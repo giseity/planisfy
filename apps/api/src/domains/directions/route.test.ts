@@ -1,52 +1,81 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import assert from 'node:assert/strict'
+import test from 'node:test'
 import {
+  directionsRoute,
   parseCoords,
   selectIndexedCoordinates,
   validateCoordinateList,
   validateMatrixWorkload,
-} from "./route";
+} from './route'
 
-test("parseCoords and validateCoordinateList reject malformed or excessive routes", () => {
-  assert.deepEqual(parseCoords("0,1;2,3"), [
+test('parseCoords and validateCoordinateList reject malformed or excessive routes', () => {
+  assert.deepEqual(parseCoords('0,1;2,3'), [
     { lon: 0, lat: 1 },
     { lon: 2, lat: 3 },
-  ]);
+  ])
 
   assert.equal(
-    validateCoordinateList(parseCoords("0,1"), { min: 2, max: 25 }),
-    "At least 2 coordinates required",
-  );
+    validateCoordinateList(parseCoords('0,1'), { min: 2, max: 25 }),
+    'At least 2 coordinates required'
+  )
   assert.equal(
-    validateCoordinateList(parseCoords("bad,1;2,3"), { min: 2, max: 25 }),
-    "Coordinates must be valid longitude,latitude pairs",
-  );
+    validateCoordinateList(parseCoords('bad,1;2,3'), { min: 2, max: 25 }),
+    'Coordinates must be valid longitude,latitude pairs'
+  )
   assert.equal(
     validateCoordinateList(
       Array.from({ length: 26 }, (_, index) => ({
         lon: index,
         lat: index,
       })),
-      { min: 2, max: 25 },
+      { min: 2, max: 25 }
     ),
-    "At most 25 coordinates allowed",
-  );
-});
+    'At most 25 coordinates allowed'
+  )
+})
 
-test("matrix workload validation bounds indexed coordinate selections", () => {
-  const points = parseCoords("0,0;1,1;2,2;3,3");
+test('matrix workload validation bounds indexed coordinate selections', () => {
+  const points = parseCoords('0,0;1,1;2,2;3,3')
 
-  assert.deepEqual(selectIndexedCoordinates(points, "0;2"), [
+  assert.deepEqual(selectIndexedCoordinates(points, '0;2'), [
     { lon: 0, lat: 0 },
     { lon: 2, lat: 2 },
-  ]);
-  assert.equal(selectIndexedCoordinates(points, "0;9"), null);
+  ])
+  assert.equal(selectIndexedCoordinates(points, '0;9'), null)
 
   assert.equal(
     validateMatrixWorkload(
       Array.from({ length: 10 }, () => ({ lon: 0, lat: 0 })),
-      Array.from({ length: 11 }, () => ({ lon: 1, lat: 1 })),
+      Array.from({ length: 11 }, () => ({ lon: 1, lat: 1 }))
     ),
-    "At most 100 matrix cells allowed",
-  );
-});
+    'At most 100 matrix cells allowed'
+  )
+})
+
+test('POST matrix rejects workloads above the shared cell limit', async () => {
+  const response = await directionsRoute.request('/matrix/v1/driving', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      sources: Array.from({ length: 10 }, () => ({ lon: 0, lat: 0 })),
+      targets: Array.from({ length: 11 }, () => ({ lon: 1, lat: 1 })),
+    }),
+  })
+
+  assert.equal(response.status, 400)
+  assert.equal((await response.json()).error.code, 'BAD_REQUEST')
+})
+
+test('POST isochrone rejects more than four contours', async () => {
+  const response = await directionsRoute.request('/isochrone/v1/walking', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      locations: [{ lon: 0, lat: 0 }],
+      contours: [5, 10, 15, 20, 25].map((time) => ({ time })),
+    }),
+  })
+
+  assert.equal(response.status, 400)
+  assert.equal((await response.json()).error.code, 'BAD_REQUEST')
+})
