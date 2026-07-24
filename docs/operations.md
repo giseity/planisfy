@@ -11,6 +11,13 @@ The API exposes:
 
 In production, `/health/detailed`, `/metrics`, and the root `/setup/preflight` route require internal authorization. Console uses the authenticated `/console/setup/preflight` mount for operator-facing checks.
 
+Routing service requests time out after 15 seconds and return `503` when
+Valhalla is unavailable or does not return valid JSON. Structured requests are
+bounded to 25 route coordinates, one isochrone origin with at most four
+contours, 100 matrix cells, and 100 map-matching trace coordinates. Treat graph
+build and activation as a separate operation: the API is ready only after the
+serving Valhalla instance reports healthy with the intended graph dataset.
+
 ## Worker Operations
 
 `apps/worker-geodata` writes a Redis heartbeat used by detailed health. It claims outbox events, dispatches BullMQ jobs, updates processing jobs, and stores logs. Run locally with:

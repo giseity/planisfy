@@ -27,6 +27,12 @@ Important packages include `@planisfy/auth`, `@planisfy/database`, `@planisfy/en
 4. Published style and tileset routes read publication state from PostgreSQL and artifacts from the configured storage backend. When `TILE_DELIVERY_MODE=worker`, API tile and tilequery routes proxy published PMTiles reads to `apps/tile-worker` while keeping TileJSON URLs stable.
 5. External APIs proxy to Martin, Valhalla, Pelias, local elevation, or static renderer.
 
+Directions, isochrones, matrices, and map matching are generic service
+boundaries over Valhalla. Structured POST requests are validated and bounded
+before proxying; Planisfy does not embed product-specific orchestration,
+provenance, billing, or derived-data semantics into those routes. Downstream
+platforms should keep those concerns in their own adapter layer.
+
 ## Boundaries
 
 - Pure contract packages should not import database, Redis, HTTP, filesystem, or provider SDK code.

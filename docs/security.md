@@ -8,6 +8,10 @@ Planisfy uses Better Auth sessions and API keys. API keys must start with `pk_`,
 
 - Published assets under `/tiles/*`, `/styles/v1/*`, and `/fonts/*` allow anonymous public reads and optional identity attachment.
 - Service APIs require API key or session auth.
+- Routing POST bodies are coordinate- and workload-bounded before reaching
+  Valhalla. Keep Valhalla on the private deployment network; external callers
+  authenticate to Planisfy rather than receiving provider origins or
+  credentials.
 - `/console/*` requires a session.
 - `/internal/*` requires `INTERNAL_API_SECRET`.
 - Production diagnostics under `/health/detailed`, `/metrics`, and root `/setup/preflight` require internal authorization.

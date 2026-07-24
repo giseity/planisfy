@@ -49,6 +49,13 @@ The API gateway includes:
 
 External geospatial engines are configured separately. Geocoding needs Pelias, routing needs Valhalla graph data, tiles need Martin or uploaded PMTiles artifacts, elevation needs DEM tiles, and static maps need the static renderer.
 
+Routing integrations may use structured `POST` contracts at
+`/directions/v1/:profile`, `/isochrone/v1/:profile`,
+`/matrix/v1/:profile`, and `/matching/v1/:profile`. These remain generic
+Planisfy service APIs: callers provide Valhalla-compatible coordinates and
+profiles, while Planisfy owns authentication, usage tracking, validation,
+timeouts, and provider proxying.
+
 ## Deployment Modes
 
 Planisfy supports two deployment modes:
