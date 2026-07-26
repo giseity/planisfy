@@ -38,6 +38,9 @@ const envSchema = z.object({
   ROOT_AGENT_MARTIN_SOURCES_DIR: z
     .string()
     .default('/opt/planisfy/infra/docker/data/martin-sources'),
+  ROOT_AGENT_PELIAS_SNAPSHOT_DIR: z.string().default('/opt/planisfy/pelias-snapshots'),
+  ROOT_AGENT_PELIAS_ELASTICSEARCH_URL: z.string().url().default('http://pelias-elasticsearch:9200'),
+  ROOT_AGENT_PELIAS_API_URL: z.string().url().default('http://pelias:4000'),
   ROOT_AGENT_DEM_BASE_URL: z
     .string()
     .url()
@@ -127,6 +130,25 @@ type BasemapRuntimeTarget = {
   extension: 'pmtiles' | 'mbtiles'
 }
 
+type GeocodingBuild = {
+  id: string
+  name: string
+  indexName: string
+}
+
+type GeocodingRelease = {
+  id: string
+  version: string
+}
+
+type GeocodingArtifact = {
+  id: string
+  fileName: string
+  size: number | null
+  checksumSha256: string | null
+  snapshotName: string
+}
+
 type BuildArtifactTarget = {
   id: string
 }
@@ -155,6 +177,12 @@ type AgentJob =
       build: BasemapBuild
       artifacts: BasemapArtifact[]
       runtimeTarget?: BasemapRuntimeTarget | null
+    }
+  | {
+      kind: 'geocoding_activation'
+      build: GeocodingBuild
+      release: GeocodingRelease
+      artifact: GeocodingArtifact
     }
 
 type ArtifactUploadSession =
@@ -280,7 +308,11 @@ async function handleJob(token: string, job: AgentJob) {
     await buildBasemap(token, job.build)
     return
   }
-  await activateBasemap(token, job.build, job.artifacts, job.runtimeTarget ?? null)
+  if (job.kind === 'basemap_activation') {
+    await activateBasemap(token, job.build, job.artifacts, job.runtimeTarget ?? null)
+    return
+  }
+  await activateGeocoding(token, job.build, job.release, job.artifact)
 }
 
 async function buildRoutingGraph(token: string, build: RoutingGraphBuild) {
@@ -669,6 +701,175 @@ async function activateBasemap(
       errorMessage: err instanceof Error ? err.message : String(err),
     })
   }
+}
+
+async function activateGeocoding(
+  token: string,
+  build: GeocodingBuild,
+  release: GeocodingRelease,
+  artifact: GeocodingArtifact
+) {
+  const activationDir = join(config.ROOT_AGENT_WORK_DIR, 'activation', build.id, 'geocoding')
+  const artifactPath = join(activationDir, artifact.fileName)
+  const snapshotPath = join(config.ROOT_AGENT_PELIAS_SNAPSHOT_DIR, 'releases', build.id)
+  const compactBuildId = build.id.replace(/-/g, '').toLowerCase()
+  const repositoryName = `planisfy_${compactBuildId}`
+  const candidateIndex = `pelias_${compactBuildId}`
+  const liveAlias = 'pelias_live'
+
+  try {
+    await rm(activationDir, { recursive: true, force: true })
+    await rm(snapshotPath, { recursive: true, force: true })
+    await mkdir(activationDir, { recursive: true })
+    await mkdir(snapshotPath, { recursive: true })
+    await downloadArtifact(token, artifact.id, artifactPath, artifact.size ?? undefined)
+    if (artifact.checksumSha256) {
+      const actual = await sha256File(artifactPath)
+      if (actual !== artifact.checksumSha256) {
+        await rm(artifactPath, { force: true })
+        throw new Error('Pelias snapshot artifact checksum mismatch')
+      }
+    }
+
+    await runQuietCommand('tar', ['-xf', artifactPath, '-C', snapshotPath])
+    if (!(await directoryContainsSnapshotMetadata(snapshotPath))) {
+      throw new Error('Pelias snapshot archive does not contain repository metadata')
+    }
+
+    await elasticsearchRequest('PUT', `/_snapshot/${repositoryName}`, {
+      type: 'fs',
+      settings: {
+        location: `/snapshots/releases/${build.id}`,
+        readonly: true,
+      },
+    })
+    await elasticsearchRequest('DELETE', `/${candidateIndex}`, undefined, true)
+    await elasticsearchRequest(
+      'POST',
+      `/_snapshot/${repositoryName}/${encodeURIComponent(artifact.snapshotName)}/_restore?wait_for_completion=true`,
+      {
+        indices: build.indexName,
+        ignore_unavailable: false,
+        include_global_state: false,
+        rename_pattern: '(.+)',
+        rename_replacement: candidateIndex,
+      }
+    )
+    await waitForElasticsearchIndex(candidateIndex)
+
+    const currentAliases = await elasticsearchRequest(
+      'GET',
+      `/_alias/${liveAlias}`,
+      undefined,
+      true
+    )
+    const actions: Array<Record<string, unknown>> = Object.keys(asRecord(currentAliases)).map(
+      (index) => ({
+        remove: { index, alias: liveAlias },
+      })
+    )
+    actions.push({ add: { index: candidateIndex, alias: liveAlias } })
+    await elasticsearchRequest('POST', '/_aliases', { actions })
+    await waitForPeliasApi()
+
+    await post(token, `/root-agent/geocoding-activations/${build.id}/state`, {
+      activationStatus: 'active',
+      message: 'Pelias snapshot restored and live alias switched',
+      output: {
+        releaseId: release.id,
+        snapshotName: artifact.snapshotName,
+        snapshotPath,
+        repositoryName,
+        indexName: candidateIndex,
+        liveAlias,
+      },
+    })
+    await cleanupActivationWork(token, build.id, activationDir)
+  } catch (err) {
+    await post(token, `/root-agent/geocoding-activations/${build.id}/state`, {
+      activationStatus: 'failed',
+      message: 'Pelias snapshot activation failed',
+      errorMessage: err instanceof Error ? err.message : String(err),
+      output: { snapshotPath, repositoryName, candidateIndex, liveAlias },
+    })
+  }
+}
+
+async function elasticsearchRequest(
+  method: string,
+  path: string,
+  body?: unknown,
+  allowNotFound = false
+) {
+  const response = await fetch(
+    `${config.ROOT_AGENT_PELIAS_ELASTICSEARCH_URL.replace(/\/$/, '')}${path}`,
+    {
+      method,
+      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }
+  )
+  if (allowNotFound && response.status === 404) return {}
+  const value = (await response.json().catch(() => ({}))) as unknown
+  if (!response.ok) {
+    throw new Error(`Elasticsearch ${method} ${path} failed: ${response.status}`)
+  }
+  return value
+}
+
+async function waitForElasticsearchIndex(indexName: string) {
+  await withRetry(
+    async () => {
+      const health = asRecord(
+        await elasticsearchRequest(
+          'GET',
+          `/_cluster/health/${encodeURIComponent(indexName)}?wait_for_status=yellow&timeout=10s`
+        )
+      )
+      if (health.timed_out === true || !['yellow', 'green'].includes(String(health.status))) {
+        throw new Error(`Elasticsearch index ${indexName} is not ready`)
+      }
+    },
+    `wait for Elasticsearch index ${indexName}`,
+    runtimeServiceAttempts
+  )
+}
+
+async function waitForPeliasApi() {
+  await withRetry(
+    async () => {
+      const response = await fetch(
+        `${config.ROOT_AGENT_PELIAS_API_URL.replace(/\/$/, '')}/v1/search?text=Lagos&size=1`
+      )
+      if (!response.ok) throw new Error(`Pelias health query returned ${response.status}`)
+    },
+    'wait for Pelias API',
+    runtimeServiceAttempts
+  )
+}
+
+async function directoryContainsSnapshotMetadata(path: string) {
+  const entries = await readdir(path)
+  return entries.some((entry) => entry === 'index.latest' || /^index-\d+$/.test(entry))
+}
+
+async function runQuietCommand(command: string, args: string[]) {
+  await new Promise<void>((resolve, reject) => {
+    activeChild = spawn(command, args, {
+      cwd: config.ROOT_AGENT_COMPOSE_CWD,
+      stdio: 'pipe',
+    })
+    let stderr = ''
+    activeChild.stderr.on('data', (chunk) => {
+      stderr = `${stderr}${String(chunk)}`.slice(-8_000)
+    })
+    activeChild.on('error', reject)
+    activeChild.on('exit', (code) => {
+      activeChild = null
+      if (code === 0) resolve()
+      else reject(new Error(`${command} exited with ${code}: ${stderr.trim()}`))
+    })
+  })
 }
 
 async function activateDemCompanion(
@@ -1378,6 +1579,10 @@ function shellQuote(value: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {}
 }
 
 function shutdown(signal: string) {

@@ -406,9 +406,11 @@ services:
       discovery.type: single-node
       xpack.security.enabled: 'false'
       xpack.ml.enabled: 'false'
+      path.repo: /snapshots
       ES_JAVA_OPTS: ${PELIAS_ES_JAVA_OPTS:--Xms8g -Xmx8g}
     volumes:
       - pelias-elasticsearch-data:/usr/share/elasticsearch/data
+      - pelias-snapshots:/snapshots:ro
     healthcheck:
       test:
         [
@@ -492,12 +494,15 @@ services:
       ROOT_AGENT_REGISTRATION_TOKEN: ${RUNTIME_ROOT_AGENT_REGISTRATION_TOKEN:-}
       ROOT_AGENT_NAME: ${RUNTIME_ROOT_AGENT_NAME:-managed-runtime-main}
       ROOT_AGENT_KIND: cloud
-      ROOT_AGENT_CAPABILITIES: managed_runtime_activation
+      ROOT_AGENT_CAPABILITIES: managed_runtime_activation,pelias_activation
       ROOT_AGENT_STATE_DIR: /data/state
       ROOT_AGENT_WORK_DIR: /data/work
       ROOT_AGENT_VALHALLA_DATA_DIR: /runtime/valhalla/active
       ROOT_AGENT_ELEVATION_DATA_DIR: /runtime/elevation/active
       ROOT_AGENT_MARTIN_SOURCES_DIR: /runtime/martin-sources
+      ROOT_AGENT_PELIAS_SNAPSHOT_DIR: /snapshots
+      ROOT_AGENT_PELIAS_ELASTICSEARCH_URL: http://pelias-elasticsearch:9200
+      ROOT_AGENT_PELIAS_API_URL: http://pelias:4000
       ROOT_AGENT_RUNTIME_SUPERVISOR_URL: http://runtime-supervisor:4012
       ROOT_AGENT_RUNTIME_SUPERVISOR_TOKEN: ${RUNTIME_SUPERVISOR_TOKEN:?RUNTIME_SUPERVISOR_TOKEN must be set}
       ROOT_AGENT_POLL_INTERVAL_MS: 5000
@@ -509,6 +514,7 @@ services:
       - martin-sources:/runtime/martin-sources
       - valhalla-data:/runtime/valhalla
       - elevation-data:/runtime/elevation
+      - pelias-snapshots:/snapshots
     depends_on:
       api:
         condition: service_healthy
@@ -527,6 +533,8 @@ volumes:
   pelias-elasticsearch-data:
     external: true
     name: ${PLANISFY_PELIAS_VOLUME_NAME:?PLANISFY_PELIAS_VOLUME_NAME must be set}
+  pelias-snapshots:
+    name: planisfy-pelias-snapshots
   root-agent-runtime-state:
     name: planisfy-root-agent-runtime-state
   root-agent-runtime-work:

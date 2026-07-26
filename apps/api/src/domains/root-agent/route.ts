@@ -9,6 +9,10 @@ import {
   basemapBuildLogs,
   basemapBuilds,
   basemapReleases,
+  geocodingArtifacts,
+  geocodingBuildLogs,
+  geocodingBuilds,
+  geocodingReleases,
   rootAgentNodeTokens,
   rootAgentRegistrationTokens,
   runtimeInstallations,
@@ -356,7 +360,140 @@ rootAgentRoute.get('/root-agent/jobs/next', async (c) => {
     })
   }
 
+  const [geocodingActivation] = await db
+    .select({
+      build: geocodingBuilds,
+      release: geocodingReleases,
+      artifact: geocodingArtifacts,
+      storageObject: storageObjects,
+    })
+    .from(geocodingReleases)
+    .innerJoin(geocodingBuilds, eq(geocodingReleases.buildId, geocodingBuilds.id))
+    .innerJoin(geocodingArtifacts, eq(geocodingReleases.artifactId, geocodingArtifacts.id))
+    .innerJoin(storageObjects, eq(geocodingArtifacts.storageObjectId, storageObjects.id))
+    .where(
+      and(
+        eq(geocodingReleases.accountId, accountId),
+        eq(geocodingBuilds.activationWorkerNodeId, workerNodeId),
+        eq(geocodingReleases.status, 'ready'),
+        eq(geocodingReleases.activationStatus, 'activation_requested'),
+        eq(geocodingArtifacts.status, 'available'),
+        isNull(geocodingBuilds.deletedAt),
+        isNull(storageObjects.deletedAt)
+      )
+    )
+    .orderBy(geocodingReleases.updatedAt)
+    .limit(1)
+  if (geocodingActivation) {
+    const [claimed] = await db
+      .update(geocodingReleases)
+      .set({ activationStatus: 'activating', updatedAt: now })
+      .where(
+        and(
+          eq(geocodingReleases.id, geocodingActivation.release.id),
+          eq(geocodingReleases.activationStatus, 'activation_requested')
+        )
+      )
+      .returning()
+    if (claimed) {
+      await db
+        .update(geocodingBuilds)
+        .set({ activationStatus: 'activating', updatedAt: now })
+        .where(eq(geocodingBuilds.id, geocodingActivation.build.id))
+      await db.insert(geocodingBuildLogs).values({
+        buildId: geocodingActivation.build.id,
+        message: 'Geocoding activation claimed by root agent',
+        metadata: { workerNodeId, releaseId: claimed.id },
+      })
+      return c.json({
+        data: {
+          kind: 'geocoding_activation',
+          build: geocodingActivation.build,
+          release: claimed,
+          artifact: geocodingActivation.artifact,
+        },
+      })
+    }
+  }
+
   return c.json({ data: null })
+})
+
+rootAgentRoute.post('/root-agent/geocoding-activations/:id/state', async (c) => {
+  const buildId = c.req.param('id')
+  const parsed = activationStateSchema.safeParse(await c.req.json())
+  if (!parsed.success) return validationError(c, parsed.error)
+  const [row] = await db
+    .select({
+      build: geocodingBuilds,
+      release: geocodingReleases,
+      artifact: geocodingArtifacts,
+    })
+    .from(geocodingBuilds)
+    .innerJoin(geocodingReleases, eq(geocodingReleases.buildId, geocodingBuilds.id))
+    .innerJoin(geocodingArtifacts, eq(geocodingReleases.artifactId, geocodingArtifacts.id))
+    .where(
+      and(
+        eq(geocodingBuilds.id, buildId),
+        eq(geocodingBuilds.accountId, c.get('accountId')),
+        eq(geocodingBuilds.activationWorkerNodeId, c.get('workerNodeId')),
+        eq(geocodingReleases.activationStatus, 'activating'),
+        isNull(geocodingBuilds.deletedAt)
+      )
+    )
+    .limit(1)
+  if (!row) return notFound(c, 'Geocoding activation not found')
+
+  const now = new Date()
+  await db.transaction(async (tx) => {
+    await tx
+      .update(geocodingBuilds)
+      .set({
+        activationStatus: parsed.data.activationStatus,
+        activatedAt: parsed.data.activationStatus === 'active' ? now : row.build.activatedAt,
+        errorMessage:
+          parsed.data.activationStatus === 'failed'
+            ? (parsed.data.errorMessage ?? 'Activation failed')
+            : null,
+        updatedAt: now,
+      })
+      .where(eq(geocodingBuilds.id, row.build.id))
+    await tx
+      .update(geocodingReleases)
+      .set({
+        status: parsed.data.activationStatus === 'active' ? 'active' : row.release.status,
+        activationStatus: parsed.data.activationStatus,
+        activationMetadata: parsed.data.output ?? {},
+        activatedAt: parsed.data.activationStatus === 'active' ? now : row.release.activatedAt,
+        updatedAt: now,
+      })
+      .where(eq(geocodingReleases.id, row.release.id))
+    await tx.insert(geocodingBuildLogs).values({
+      buildId,
+      level: parsed.data.activationStatus === 'active' ? 'info' : 'error',
+      message: parsed.data.message ?? `Geocoding activation ${parsed.data.activationStatus}`,
+      metadata: parsed.data.output ?? null,
+    })
+    await tx.insert(runtimeInstallations).values({
+      accountId: row.build.accountId,
+      workerNodeId: c.get('workerNodeId'),
+      resourceType: 'geocoding',
+      buildId: row.build.id,
+      artifactId: row.artifact.id,
+      releaseId: row.release.id,
+      status: parsed.data.activationStatus,
+      runtimePath:
+        typeof parsed.data.output?.snapshotPath === 'string'
+          ? parsed.data.output.snapshotPath
+          : null,
+      metadata: parsed.data.output ?? {},
+      errorMessage: parsed.data.errorMessage ?? null,
+      installedAt: parsed.data.activationStatus === 'active' ? now : null,
+      activatedAt: parsed.data.activationStatus === 'active' ? now : null,
+      updatedAt: now,
+    })
+  })
+  return c.json({ data: { activationStatus: parsed.data.activationStatus } })
 })
 
 rootAgentRoute.get('/root-agent/jobs/:id/cancel', async (c) => {
@@ -706,12 +843,15 @@ rootAgentRoute.get('/root-agent/artifacts/:id/download', async (c) => {
     .limit(1)
   const artifact = routingArtifact
     ? { kind: 'routing' as const, artifact: routingArtifact }
-    : await findBasemapArtifactForDownload(artifactId)
+    : ((await findBasemapArtifactForDownload(artifactId)) ??
+      (await findGeocodingArtifactForDownload(artifactId)))
   if (!artifact?.artifact.storageObjectId) return notFound(c, 'Artifact not found')
   const build =
     artifact.kind === 'routing'
       ? await findRoutingBuildForArtifact(c, artifact.artifact.buildId)
-      : await findBasemapBuildForArtifact(c, artifact.artifact.buildId)
+      : artifact.kind === 'basemap'
+        ? await findBasemapBuildForArtifact(c, artifact.artifact.buildId)
+        : await findGeocodingBuildForArtifact(c, artifact.artifact.buildId)
   if (!build) return notFound(c, 'Artifact not found')
   const [object] = await db
     .select()
@@ -1242,6 +1382,15 @@ async function findBasemapArtifactForDownload(artifactId: string) {
   return artifact ? { kind: 'basemap' as const, artifact } : null
 }
 
+async function findGeocodingArtifactForDownload(artifactId: string) {
+  const [artifact] = await db
+    .select()
+    .from(geocodingArtifacts)
+    .where(eq(geocodingArtifacts.id, artifactId))
+    .limit(1)
+  return artifact ? { kind: 'geocoding' as const, artifact } : null
+}
+
 async function findRoutingBuildForArtifact(c: Context<AgentEnv>, buildId: string) {
   const [build] = await db
     .select()
@@ -1284,6 +1433,22 @@ async function findBasemapBuildForArtifact(c: Context<AgentEnv>, buildId: string
     return null
   }
   return build
+}
+
+async function findGeocodingBuildForArtifact(c: Context<AgentEnv>, buildId: string) {
+  const [build] = await db
+    .select()
+    .from(geocodingBuilds)
+    .where(
+      and(
+        eq(geocodingBuilds.id, buildId),
+        eq(geocodingBuilds.accountId, c.get('accountId')),
+        eq(geocodingBuilds.activationWorkerNodeId, c.get('workerNodeId')),
+        isNull(geocodingBuilds.deletedAt)
+      )
+    )
+    .limit(1)
+  return build ?? null
 }
 
 function readNumber(value: unknown, fallback: number) {

@@ -19,7 +19,7 @@
     "indexPrefix": "pelias"
   },
   "api": {
-    "indexName": "pelias",
+    "indexName": "pelias_live",
     "basePath": "/v1"
   },
   "apis": {

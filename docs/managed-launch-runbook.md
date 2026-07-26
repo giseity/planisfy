@@ -43,6 +43,21 @@ Before sign-off:
 - API origin must match `NEXT_PUBLIC_API_URL`.
 - Product-loop browser smoke must render through public ingress, not private service URLs.
 
+## Pelias Release
+
+Before advertising managed geocoding:
+
+- Follow `docs/pelias-lifecycle.md` to snapshot and package the planet-address
+  build.
+- Verify the source PBF SHA-256, Pelias Docker commit, archive SHA-256, and
+  archive byte size against the release manifest.
+- Register the build, artifact, and release, but do not request activation
+  until the database migration and runtime root agent are deployed.
+- Confirm the serving Elasticsearch snapshot volume has enough room for the
+  archive plus a restored candidate index.
+- Keep the previous live index until search and reverse-geocoding smoke tests
+  pass.
+
 ## Operator Sign-Off
 
 Record for each launch candidate:
