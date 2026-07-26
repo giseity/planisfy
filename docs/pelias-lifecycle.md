@@ -22,7 +22,17 @@ of the first managed release.
 ## Create the Snapshot
 
 Configure Elasticsearch with a filesystem snapshot repository mounted outside
-its data volume, then register and create a snapshot:
+its data volume. The official Pelias Docker project can use the committed
+override:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f /path/to/planisfy/infra/docker/pelias-snapshot.override.yml \
+  up -d elasticsearch
+```
+
+Then register and create a snapshot:
 
 ```bash
 curl -fsS -X PUT "$ELASTICSEARCH_URL/_snapshot/planisfy" \
@@ -39,13 +49,17 @@ Confirm that the snapshot state is `SUCCESS`, then package the repository
 contents at the archive root:
 
 ```bash
+PELIAS_SNAPSHOT_NAME=pelias-planet-address-YYYY-MM-DD \
+  scripts/create-pelias-snapshot.sh
+
 scripts/package-pelias-snapshot.sh \
   /path/to/snapshots/repository \
-  /path/to/artifacts/pelias-planet-address.tar.gz
+  /path/to/artifacts/pelias-planet-address.tar
 ```
 
 The archive must contain `index.latest` or `index-N` at its root. Keep the
-generated `.sha256` file beside it.
+generated `.sha256` file beside it. A plain `.tar` avoids wasting CPU trying to
+recompress Lucene segments; `.tar.gz` and `.tgz` are also supported.
 
 ## Register a Release
 

@@ -27,7 +27,22 @@ mkdir -p "$output_dir"
 temporary_path="${output_path}.partial"
 trap 'rm -f "$temporary_path"' EXIT
 
-tar -C "$repository_dir" -czf "$temporary_path" .
+case "$output_name" in
+  *.tar.gz | *.tgz)
+    if command -v pigz >/dev/null 2>&1; then
+      tar -C "$repository_dir" -cf - . | pigz -1 >"$temporary_path"
+    else
+      tar -C "$repository_dir" -czf "$temporary_path" .
+    fi
+    ;;
+  *.tar)
+    tar -C "$repository_dir" -cf "$temporary_path" .
+    ;;
+  *)
+    echo "output must end in .tar, .tar.gz, or .tgz: $output_name" >&2
+    exit 64
+    ;;
+esac
 mv "$temporary_path" "$output_path"
 trap - EXIT
 

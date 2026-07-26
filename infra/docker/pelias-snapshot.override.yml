@@ -1,0 +1,6 @@
+services:
+  elasticsearch:
+    environment:
+      path.repo: /snapshots
+    volumes:
+      - ${DATA_DIR}/snapshots:/snapshots
