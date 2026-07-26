@@ -80,14 +80,14 @@ scripts/pelias-metro.sh restart
 When the Planisfy API runs on the host:
 
 ```bash
-PELIAS_URL=http://localhost:34100
+PELIAS_INTERNAL_URL=http://localhost:34100
 ```
 
 When the Planisfy API runs in the Planisfy Compose network while this metro
 stack runs as a separate Compose project:
 
 ```bash
-CONTAINER_PELIAS_URL=http://host.docker.internal:34100
+PELIAS_INTERNAL_URL=http://host.docker.internal:34100
 ```
 
 On Linux/WSL, Docker Desktop usually provides `host.docker.internal`. If it does

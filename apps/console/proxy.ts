@@ -12,7 +12,7 @@ export function getConsoleAuthOrigin(requestOrigin: string) {
 }
 
 export function getConsoleAuthFetchOrigin(requestOrigin: string) {
-  return env.AUTH_INTERNAL_ORIGIN || getConsoleAuthOrigin(requestOrigin)
+  return env.API_INTERNAL_URL || getConsoleAuthOrigin(requestOrigin)
 }
 
 export function getSessionBaseURL(requestOrigin: string) {

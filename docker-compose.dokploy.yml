@@ -7,8 +7,6 @@ x-api-env: &api-env
   PORT: 4000
   DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
   REDIS_URL: redis://redis:6379
-  REDIS_HOST: redis
-  REDIS_PORT: 6379
   BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
   INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
   NEXT_PUBLIC_API_URL: https://api.planisfy.com
@@ -53,13 +51,13 @@ x-api-env: &api-env
   SOURCE_IMPORT_TIMEOUT_MS: ${SOURCE_IMPORT_TIMEOUT_MS:-900000}
   DEMO_PMTILES_PATH: ${DEMO_PMTILES_PATH:-}
   TILE_DELIVERY_MODE: api
-  TILE_WORKER_URL: ''
-  MARTIN_URL: http://martin:3000
-  VALHALLA_URL: http://valhalla:8002
-  PELIAS_URL: http://127.0.0.1:3100
-  GLYPHS_URL: https://api.planisfy.com/fonts
-  STATIC_MAP_URL: http://static-renderer:4300
-  ELEVATION_URL: http://elevation:8080/api/v1
+  TILE_WORKER_INTERNAL_URL: ''
+  MARTIN_INTERNAL_URL: http://martin:3000
+  VALHALLA_INTERNAL_URL: http://valhalla:8002
+  PELIAS_INTERNAL_URL: http://127.0.0.1:3100
+  GLYPHS_INTERNAL_URL: https://api.planisfy.com/fonts
+  STATIC_RENDERER_INTERNAL_URL: http://static-renderer:4300
+  ELEVATION_INTERNAL_URL: http://elevation:8080/api/v1
   GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-replace-me-github-client-id}
   GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-replace-me-github-client-secret}
   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-replace-me-google-client-id}
@@ -167,7 +165,7 @@ services:
       dockerfile: apps/console/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: https://api.planisfy.com
-        CONSOLE_API_INTERNAL_ORIGIN: http://api:4000
+        API_INTERNAL_URL: http://api:4000
         NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
         NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
         NEXT_PUBLIC_APP_URL: https://console.planisfy.com
@@ -182,7 +180,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       NEXT_PUBLIC_API_URL: https://api.planisfy.com
-      CONSOLE_API_INTERNAL_ORIGIN: http://api:4000
+      API_INTERNAL_URL: http://api:4000
       NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
       NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
       NEXT_PUBLIC_APP_URL: https://console.planisfy.com

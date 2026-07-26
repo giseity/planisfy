@@ -26,7 +26,7 @@
 #
 # Note: The bundled Pelias services are for dev smoke coverage with a small
 # prepared index. For real imports and larger regions, use the official Pelias
-# Docker project and point PELIAS_URL/CONTAINER_PELIAS_URL at it.
+# Docker project and point PELIAS_INTERNAL_URL at it.
 
 name: planisfy
 
@@ -47,8 +47,6 @@ services:
       - APP_VERSION=${APP_VERSION:-self-host}
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - REDIS_URL=redis://redis:6379
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
       - GEODATA_STALE_JOB_THRESHOLD_MS=${GEODATA_STALE_JOB_THRESHOLD_MS:-3600000}
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
@@ -70,14 +68,14 @@ services:
       - SOURCE_IMPORT_MAX_FEATURES=${SOURCE_IMPORT_MAX_FEATURES:-50000}
       - SOURCE_IMPORT_TIMEOUT_MS=${SOURCE_IMPORT_TIMEOUT_MS:-900000}
       - DEMO_PMTILES_PATH=${DEMO_PMTILES_PATH:-/data/pmtiles/stuttgart.pmtiles}
-      - MARTIN_URL=http://martin:3000
+      - MARTIN_INTERNAL_URL=http://martin:3000
       - TILE_DELIVERY_MODE=${TILE_DELIVERY_MODE:-api}
-      - TILE_WORKER_URL=${TILE_WORKER_URL:-http://tile-worker:4020}
-      - PELIAS_URL=${CONTAINER_PELIAS_URL:-http://pelias:4000}
-      - GLYPHS_URL=${GLYPHS_URL:-http://martin:3000/font}
-      - STATIC_MAP_URL=${STATIC_MAP_URL:-http://static-renderer:4300}
-      - ELEVATION_URL=${ELEVATION_URL:-http://elevation:8080/api/v1}
-      - VALHALLA_URL=http://valhalla:8002
+      - TILE_WORKER_INTERNAL_URL=${TILE_WORKER_INTERNAL_URL:-http://tile-worker:4020}
+      - PELIAS_INTERNAL_URL=${PELIAS_INTERNAL_URL:-http://pelias:4000}
+      - GLYPHS_INTERNAL_URL=${GLYPHS_INTERNAL_URL:-http://martin:3000/font}
+      - STATIC_RENDERER_INTERNAL_URL=${STATIC_RENDERER_INTERNAL_URL:-http://static-renderer:4300}
+      - ELEVATION_INTERNAL_URL=${ELEVATION_INTERNAL_URL:-http://elevation:8080/api/v1}
+      - VALHALLA_INTERNAL_URL=http://valhalla:8002
       - VALHALLA_READINESS_ROUTE=${VALHALLA_READINESS_ROUTE:-}
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-s3}
       - LOCAL_STORAGE_PATH=/data/storage
@@ -195,8 +193,6 @@ services:
     environment:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - REDIS_URL=redis://redis:6379
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - SOURCE_CREDENTIAL_ENCRYPTION_KEY=${SOURCE_CREDENTIAL_ENCRYPTION_KEY:-}
@@ -257,12 +253,11 @@ services:
       - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      - AUTH_INTERNAL_ORIGIN=http://api:4000
       - NEXT_PUBLIC_APP_URL=http://localhost:3001
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
       - NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
-      - CONSOLE_API_INTERNAL_ORIGIN=http://api:4000
+      - API_INTERNAL_URL=http://api:4000
       - NEXT_PUBLIC_ADMIN_URL=http://localhost:3003
       - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
       - NEXT_PUBLIC_CONSOLE_API_PATH=/api/v1/console

@@ -142,21 +142,21 @@ const envGroups = [
     icon: Server,
     vars: [
       {
-        key: 'MARTIN_URL',
+        key: 'MARTIN_INTERNAL_URL',
         requirement: 'Required',
         desc: 'Martin tile server internal URL.',
       },
       {
-        key: 'PELIAS_URL',
+        key: 'PELIAS_INTERNAL_URL',
         requirement: 'Required',
         desc: 'Pelias-compatible geocoding service URL.',
       },
       {
-        key: 'VALHALLA_URL',
+        key: 'VALHALLA_INTERNAL_URL',
         requirement: 'Optional',
         desc: 'Valhalla routing engine URL.',
       },
-      { key: 'ELEVATION_URL', requirement: 'Optional', desc: 'Elevation service URL.' },
+      { key: 'ELEVATION_INTERNAL_URL', requirement: 'Optional', desc: 'Elevation service URL.' },
     ],
   },
 ]

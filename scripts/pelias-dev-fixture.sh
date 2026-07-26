@@ -6,7 +6,7 @@ COMPOSE_FILE="$ROOT_DIR/infra/docker/docker-compose.yml"
 ENV_FILE="$ROOT_DIR/.env"
 INDEX_NAME="${PELIAS_INDEX_NAME:-pelias}"
 ES_URL="${PELIAS_ELASTICSEARCH_URL:-http://localhost:9200}"
-PELIAS_URL="${PELIAS_FIXTURE_API_URL:-http://localhost:3100}"
+PELIAS_INTERNAL_URL="${PELIAS_FIXTURE_API_URL:-http://localhost:3100}"
 
 usage() {
   cat <<'USAGE'
@@ -59,13 +59,13 @@ wait_for_elasticsearch() {
 
 wait_for_pelias() {
   for _ in {1..60}; do
-    if curl -fsS "$PELIAS_URL/v1" >/dev/null; then
+    if curl -fsS "$PELIAS_INTERNAL_URL/v1" >/dev/null; then
       return 0
     fi
     sleep 2
   done
 
-  echo "Timed out waiting for Pelias API at $PELIAS_URL." >&2
+  echo "Timed out waiting for Pelias API at $PELIAS_INTERNAL_URL." >&2
   return 1
 }
 
@@ -102,6 +102,6 @@ compose up -d pelias
 wait_for_pelias
 
 echo "Pelias fixture search check"
-curl -fsS "$PELIAS_URL/v1/search?text=Schlossplatz&sources=planisfy_fixture" >/dev/null
+curl -fsS "$PELIAS_INTERNAL_URL/v1/search?text=Schlossplatz&sources=planisfy_fixture" >/dev/null
 
 echo "Seeded Pelias fixture data into '$INDEX_NAME'."

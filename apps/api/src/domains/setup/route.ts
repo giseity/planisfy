@@ -187,10 +187,10 @@ async function buildPreflightChecks(
       group: 'Geospatial engines',
       label: 'Martin tile server',
       severity: 'required',
-      ok: Boolean(env.MARTIN_URL),
-      message: `Martin URL is ${env.MARTIN_URL}.`,
-      action: 'Configure MARTIN_URL and publish matching source aliases.',
-      value: env.MARTIN_URL,
+      ok: Boolean(env.MARTIN_INTERNAL_URL),
+      message: `Martin URL is ${env.MARTIN_INTERNAL_URL}.`,
+      action: 'Configure MARTIN_INTERNAL_URL and publish matching source aliases.',
+      value: env.MARTIN_INTERNAL_URL,
     }),
     await tileDeliveryModeCheck(),
     valhalla,
@@ -199,26 +199,26 @@ async function buildPreflightChecks(
       group: 'Geospatial engines',
       label: 'Pelias geocoder',
       severity: 'required',
-      ok: isPeliasConfigured(env.PELIAS_URL),
+      ok: isPeliasConfigured(env.PELIAS_INTERNAL_URL),
       warnWhenMissing: true,
-      message: isPeliasConfigured(env.PELIAS_URL)
-        ? `Pelias-compatible geocoder is ${env.PELIAS_URL}.`
+      message: isPeliasConfigured(env.PELIAS_INTERNAL_URL)
+        ? `Pelias-compatible geocoder is ${env.PELIAS_INTERNAL_URL}.`
         : 'Pelias-compatible geocoder is not configured.',
-      action: 'Set PELIAS_URL to a Pelias-compatible geocoding service.',
-      value: env.PELIAS_URL,
+      action: 'Set PELIAS_INTERNAL_URL to a Pelias-compatible geocoding service.',
+      value: env.PELIAS_INTERNAL_URL,
     }),
     check({
       id: 'static-maps',
       group: 'Geospatial engines',
       label: 'Static map renderer',
       severity: 'optional',
-      ok: Boolean(env.STATIC_MAP_URL),
+      ok: Boolean(env.STATIC_RENDERER_INTERNAL_URL),
       warnWhenMissing: true,
-      message: env.STATIC_MAP_URL
-        ? `Static maps renderer is ${env.STATIC_MAP_URL}.`
+      message: env.STATIC_RENDERER_INTERNAL_URL
+        ? `Static maps renderer is ${env.STATIC_RENDERER_INTERNAL_URL}.`
         : 'Static maps are unavailable until a renderer is configured.',
-      action: 'Set STATIC_MAP_URL to enable real static image rendering.',
-      value: env.STATIC_MAP_URL ?? null,
+      action: 'Set STATIC_RENDERER_INTERNAL_URL to enable real static image rendering.',
+      value: env.STATIC_RENDERER_INTERNAL_URL ?? null,
     }),
     check({
       id: 'overture',
@@ -401,19 +401,19 @@ async function buildUpgradeReadinessChecks(storage: PreflightCheck): Promise<Pre
       group: 'Upgrade readiness',
       label: 'Martin URL',
       severity: 'required',
-      ok: Boolean(env.MARTIN_URL),
-      message: env.MARTIN_URL
-        ? `Martin URL is configured: ${env.MARTIN_URL}.`
-        : 'MARTIN_URL is missing.',
-      action: 'Configure MARTIN_URL before upgrading map delivery services.',
-      value: env.MARTIN_URL,
+      ok: Boolean(env.MARTIN_INTERNAL_URL),
+      message: env.MARTIN_INTERNAL_URL
+        ? `Martin URL is configured: ${env.MARTIN_INTERNAL_URL}.`
+        : 'MARTIN_INTERNAL_URL is missing.',
+      action: 'Configure MARTIN_INTERNAL_URL before upgrading map delivery services.',
+      value: env.MARTIN_INTERNAL_URL,
     }),
     await freeDiskCheck(),
   ]
 }
 
 async function valhallaReadinessCheck(): Promise<PreflightCheck> {
-  if (!env.VALHALLA_URL) {
+  if (!env.VALHALLA_INTERNAL_URL) {
     return check({
       id: 'valhalla',
       group: 'Geospatial engines',
@@ -422,12 +422,12 @@ async function valhallaReadinessCheck(): Promise<PreflightCheck> {
       ok: false,
       warnWhenMissing: true,
       message: 'Valhalla URL is not configured.',
-      action: 'Configure VALHALLA_URL when routing APIs should be available.',
+      action: 'Configure VALHALLA_INTERNAL_URL when routing APIs should be available.',
       value: null,
     })
   }
 
-  const readiness = await probeValhallaReadiness(env.VALHALLA_URL)
+  const readiness = await probeValhallaReadiness(env.VALHALLA_INTERNAL_URL)
   return check({
     id: 'valhalla',
     group: 'Geospatial engines',
@@ -443,7 +443,7 @@ async function valhallaReadinessCheck(): Promise<PreflightCheck> {
       readiness.status === 'ok'
         ? undefined
         : 'Build or mount a Valhalla routing graph for the configured readiness route, or set VALHALLA_READINESS_ROUTE to coordinates covered by the graph.',
-    value: env.VALHALLA_URL,
+    value: env.VALHALLA_INTERNAL_URL,
   })
 }
 
@@ -650,16 +650,16 @@ async function tileDeliveryModeCheck(): Promise<PreflightCheck> {
     })
   }
 
-  if (!env.TILE_WORKER_URL) {
+  if (!env.TILE_WORKER_INTERNAL_URL) {
     return check({
       id: 'tile-delivery-mode',
       group: 'Geospatial engines',
       label: 'Tile delivery mode',
       severity: 'required',
       ok: false,
-      message: 'Tile worker mode is enabled but TILE_WORKER_URL is missing.',
+      message: 'Tile worker mode is enabled but TILE_WORKER_INTERNAL_URL is missing.',
       action:
-        'Set TILE_WORKER_URL to the internal tile-worker origin or switch TILE_DELIVERY_MODE back to api.',
+        'Set TILE_WORKER_INTERNAL_URL to the internal tile-worker origin or switch TILE_DELIVERY_MODE back to api.',
       value: 'worker',
     })
   }
@@ -667,7 +667,7 @@ async function tileDeliveryModeCheck(): Promise<PreflightCheck> {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 3000)
-    const response = await fetch(`${env.TILE_WORKER_URL.replace(/\/$/, '')}/health`, {
+    const response = await fetch(`${env.TILE_WORKER_INTERNAL_URL.replace(/\/$/, '')}/health`, {
       signal: controller.signal,
     })
     clearTimeout(timeout)
@@ -679,10 +679,10 @@ async function tileDeliveryModeCheck(): Promise<PreflightCheck> {
       severity: 'required',
       ok: response.ok,
       message: response.ok
-        ? `Tile worker is reachable at ${env.TILE_WORKER_URL}.`
+        ? `Tile worker is reachable at ${env.TILE_WORKER_INTERNAL_URL}.`
         : `Tile worker health returned HTTP ${response.status}.`,
       action:
-        'Start the with-tile-worker Compose profile or point TILE_WORKER_URL at a healthy worker.',
+        'Start the with-tile-worker Compose profile or point TILE_WORKER_INTERNAL_URL at a healthy worker.',
       value: 'worker',
     })
   } catch (err) {
@@ -694,7 +694,7 @@ async function tileDeliveryModeCheck(): Promise<PreflightCheck> {
       ok: false,
       message: `Tile worker is unreachable: ${err instanceof Error ? err.message : String(err)}.`,
       action:
-        'Start the with-tile-worker Compose profile or point TILE_WORKER_URL at a healthy worker.',
+        'Start the with-tile-worker Compose profile or point TILE_WORKER_INTERNAL_URL at a healthy worker.',
       value: 'worker',
     })
   }

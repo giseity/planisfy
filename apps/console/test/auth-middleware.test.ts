@@ -4,7 +4,7 @@ const AUTH_ENV_KEYS = [
   'NEXT_PUBLIC_AUTH_ORIGIN',
   'NEXT_PUBLIC_APP_URL',
   'NEXT_PUBLIC_API_URL',
-  'AUTH_INTERNAL_ORIGIN',
+  'API_INTERNAL_URL',
 ] as const
 
 const originalEnv = Object.fromEntries(AUTH_ENV_KEYS.map((key) => [key, process.env[key]]))
@@ -14,7 +14,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_AUTH_ORIGIN = 'https://api.planisfy.localhost'
   process.env.NEXT_PUBLIC_APP_URL = 'https://console.planisfy.localhost'
   process.env.NEXT_PUBLIC_API_URL = 'https://api.planisfy.localhost'
-  delete process.env.AUTH_INTERNAL_ORIGIN
+  delete process.env.API_INTERNAL_URL
 })
 
 afterEach(() => {
@@ -71,7 +71,7 @@ describe('Console auth middleware helpers', () => {
   })
 
   it('uses an internal auth origin for server-side session checks', async () => {
-    process.env.AUTH_INTERNAL_ORIGIN = 'http://localhost:3000'
+    process.env.API_INTERNAL_URL = 'http://localhost:3000'
 
     const {
       buildSignInRedirectURL,

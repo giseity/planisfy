@@ -9,9 +9,9 @@ Static maps render PNG images through the configured static renderer.
 
 ## Route
 
-| Method | Route | Description |
-| --- | --- | --- |
-| `GET` | `/static/v1/{owner}/{style}/{lon},{lat},{zoom}/{width}x{height}.png` | Render a PNG map image. |
+| Method | Route                                                                | Description             |
+| ------ | -------------------------------------------------------------------- | ----------------------- |
+| `GET`  | `/static/v1/{owner}/{style}/{lon},{lat},{zoom}/{width}x{height}.png` | Render a PNG map image. |
 
 Width and height must be positive and no larger than 2048.
 
@@ -25,7 +25,7 @@ curl "https://api.example.com/static/v1/acme/streets/9.1829,48.7758,12/800x600.p
 
 Requests require API key or session auth. The API forwards `x-api-key`, `authorization`, and `cookie` headers to the renderer so private styles and resources can be resolved.
 
-If `STATIC_MAP_URL` is empty, the route returns `501 NOT_IMPLEMENTED`.
+If `STATIC_RENDERER_INTERNAL_URL` is empty, the route returns `501 NOT_IMPLEMENTED`.
 
 ## Caching and errors
 

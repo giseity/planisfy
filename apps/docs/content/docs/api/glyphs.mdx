@@ -5,13 +5,13 @@ description: Serve MapLibre glyph PBF ranges from the configured Planisfy glyph 
 
 # Glyphs and Fonts API
 
-Planisfy proxies glyph PBF files from `GLYPHS_URL`.
+Planisfy proxies glyph PBF files from `GLYPHS_INTERNAL_URL`.
 
 ## Route
 
-| Method | Route | Description |
-| --- | --- | --- |
-| `GET` | `/fonts/v1/{fontstack}/{range}.pbf` | MapLibre glyph PBF range. |
+| Method | Route                               | Description               |
+| ------ | ----------------------------------- | ------------------------- |
+| `GET`  | `/fonts/v1/{fontstack}/{range}.pbf` | MapLibre glyph PBF range. |
 
 `{range}` must be a valid glyph range such as `0-255.pbf`. The API strips the `.pbf` suffix before requesting the configured glyph backend.
 
@@ -30,11 +30,11 @@ Glyphs can load anonymously when used by public styles. Responses use `Content-T
 
 ## Common errors
 
-| Code | Meaning |
-| --- | --- |
-| `VALIDATION_ERROR` | Invalid glyph range or unsafe fontstack. |
-| `NOT_FOUND` | The configured font backend does not have the requested range. |
-| `INTERNAL_ERROR` | The font backend is unavailable. |
+| Code               | Meaning                                                        |
+| ------------------ | -------------------------------------------------------------- |
+| `VALIDATION_ERROR` | Invalid glyph range or unsafe fontstack.                       |
+| `NOT_FOUND`        | The configured font backend does not have the requested range. |
+| `INTERNAL_ERROR`   | The font backend is unavailable.                               |
 
 ## Related
 

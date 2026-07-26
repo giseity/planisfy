@@ -9,14 +9,14 @@ Start from `.env.example` and keep production secrets out of source control.
 
 ## Important groups
 
-| Group | Examples |
-| --- | --- |
-| Identity and security | `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, OAuth credentials, `SOURCE_CREDENTIAL_ENCRYPTION_KEY` |
-| Deployment | `DEPLOYMENT_MODE`, `APP_VERSION`, public `NEXT_PUBLIC_*` URLs |
-| Geospatial services | `MARTIN_URL`, `VALHALLA_URL`, `PELIAS_URL`, `GLYPHS_URL`, `ELEVATION_URL`, `STATIC_MAP_URL` |
-| Storage | `STORAGE_PROVIDER`, local storage paths, S3 settings, R2 settings |
-| Worker processing | concurrency, outbox polling, DuckDB, Tippecanoe, ogr2ogr, Overture release settings |
-| Managed providers | Dodo Payments and ZeptoMail settings |
+| Group                 | Examples                                                                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Identity and security | `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, OAuth credentials, `SOURCE_CREDENTIAL_ENCRYPTION_KEY`                                                     |
+| Deployment            | `DEPLOYMENT_MODE`, `APP_VERSION`, public `NEXT_PUBLIC_*` URLs                                                                                          |
+| Geospatial services   | `MARTIN_INTERNAL_URL`, `VALHALLA_INTERNAL_URL`, `PELIAS_INTERNAL_URL`, `GLYPHS_INTERNAL_URL`, `ELEVATION_INTERNAL_URL`, `STATIC_RENDERER_INTERNAL_URL` |
+| Storage               | `STORAGE_PROVIDER`, local storage paths, S3 settings, R2 settings                                                                                      |
+| Worker processing     | concurrency, outbox polling, DuckDB, Tippecanoe, ogr2ogr, Overture release settings                                                                    |
+| Managed providers     | Dodo Payments and ZeptoMail settings                                                                                                                   |
 
 ## Deployment mode
 
@@ -71,11 +71,11 @@ AWS_SECRET_ACCESS_KEY=planisfy-local-minio-password
 
 The API can start when map engines are degraded, but service APIs need configured backends:
 
-- Geocoding needs `PELIAS_URL`.
-- Routing needs `VALHALLA_URL` and compatible graph data.
+- Geocoding needs `PELIAS_INTERNAL_URL`.
+- Routing needs `VALHALLA_INTERNAL_URL` and compatible graph data.
 - Tiles and glyphs need Martin sources and fonts.
-- Elevation needs `ELEVATION_URL` and DEM files.
-- Static maps need `STATIC_MAP_URL`.
+- Elevation needs `ELEVATION_INTERNAL_URL` and DEM files.
+- Static maps need `STATIC_RENDERER_INTERNAL_URL`.
 
 Review [data sources](/docs/self-hosting/data-sources) before testing clients.
 

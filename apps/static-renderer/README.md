@@ -2,7 +2,7 @@
 
 Hono service that renders MapLibre styles to PNG through Playwright/MapLibre and exposes `GET /render` plus `GET /health`.
 
-Runs in Compose on container/local port `4300`; the API calls it through `STATIC_MAP_URL`.
+Runs in Compose on container/local port `4300`; the API calls it through `STATIC_RENDERER_INTERNAL_URL`.
 
 Important config: `PORT`, `HOST`, `PLANISFY_API_URL`.
 

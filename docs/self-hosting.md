@@ -25,7 +25,7 @@ managed mode:
   data live on persistent volumes.
 - Database and Redis ports are private to the deployment network.
 - Public routing exposes API and Console origins expected by `NEXT_PUBLIC_*`
-  and `CONSOLE_API_INTERNAL_ORIGIN`.
+  and `API_INTERNAL_URL`.
 
 Use the generic self-host smokes against that environment once a stable public
 URL exists. There is no Dokploy-specific smoke command until there is an actual
@@ -81,7 +81,7 @@ bucket initializer. `.env.example` defaults to `STORAGE_PROVIDER=s3`,
 
 `TILE_DELIVERY_MODE=api` is the default. In that mode, `apps/api` reads published PMTiles artifacts directly and only falls back to Martin for legacy/non-PMTiles sources.
 
-Set `TILE_DELIVERY_MODE=worker` and run the `with-tile-worker` profile when you want public tile and tilequery reads isolated from the API process. Keep `TILE_WORKER_URL` pointed at the internal worker origin (`http://tile-worker:4020` inside Compose). TileJSON URLs remain API URLs, so clients do not need to change.
+Set `TILE_DELIVERY_MODE=worker` and run the `with-tile-worker` profile when you want public tile and tilequery reads isolated from the API process. Keep `TILE_WORKER_INTERNAL_URL` pointed at the internal worker origin (`http://tile-worker:4020` inside Compose). TileJSON URLs remain API URLs, so clients do not need to change.
 
 ## First Account
 

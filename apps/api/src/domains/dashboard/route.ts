@@ -415,9 +415,20 @@ async function fetchDashboardHealth(now: Date): Promise<DashboardHealthEntry[]> 
     probePostgres(checkedAt),
     probeRedis(checkedAt),
     probeWorker(checkedAt),
-    probeUrl('martin', 'Martin', `${env.MARTIN_URL}/health`, Boolean(env.MARTIN_URL), checkedAt),
+    probeUrl(
+      'martin',
+      'Martin',
+      `${env.MARTIN_INTERNAL_URL}/health`,
+      Boolean(env.MARTIN_INTERNAL_URL),
+      checkedAt
+    ),
     probeValhalla(checkedAt),
-    probeConfiguredOnly('geocoding', 'Geocoding', isPeliasConfigured(env.PELIAS_URL), checkedAt),
+    probeConfiguredOnly(
+      'geocoding',
+      'Geocoding',
+      isPeliasConfigured(env.PELIAS_INTERNAL_URL),
+      checkedAt
+    ),
     probeStorage(checkedAt),
   ])
 
@@ -433,8 +444,8 @@ async function fetchDashboardHealth(now: Date): Promise<DashboardHealthEntry[]> 
     makeHealthEntry({
       id: 'static-maps',
       label: 'Static maps',
-      status: normalizeHealthStatus('healthy', Boolean(env.STATIC_MAP_URL)),
-      message: env.STATIC_MAP_URL ? 'Renderer URL configured' : 'No renderer URL',
+      status: normalizeHealthStatus('healthy', Boolean(env.STATIC_RENDERER_INTERNAL_URL)),
+      message: env.STATIC_RENDERER_INTERNAL_URL ? 'Renderer URL configured' : 'No renderer URL',
       checkedAt,
     }),
     makeHealthEntry({
@@ -467,7 +478,7 @@ async function fetchDashboardHealth(now: Date): Promise<DashboardHealthEntry[]> 
 }
 
 async function probeValhalla(checkedAt: string) {
-  const result = await probeValhallaReadiness(env.VALHALLA_URL)
+  const result = await probeValhallaReadiness(env.VALHALLA_INTERNAL_URL)
   return makeHealthEntry({
     id: 'valhalla',
     label: 'Valhalla',

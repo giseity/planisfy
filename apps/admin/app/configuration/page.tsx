@@ -1,10 +1,10 @@
-import { adminMetadata } from "../../lib/metadata";
+import { adminMetadata } from '../../lib/metadata'
 
 export const metadata = adminMetadata({
-  title: "Configuration",
-  description: "Manage persisted platform configuration and runtime settings.",
-  path: "/configuration",
-});
+  title: 'Configuration',
+  description: 'Manage persisted platform configuration and runtime settings.',
+  path: '/configuration',
+})
 
 import { db, platformConfig } from '@planisfy/database'
 import { Badge } from '@planisfy/ui/components/badge'
@@ -65,9 +65,9 @@ const runtimeKeys: Array<{
   { key: 'MINIO_ROOT_PASSWORD', modes: ['self_host'] },
   { key: 'SUPERVISOR_URL', modes: ['self_host'] },
   { key: 'SUPERVISOR_TOKEN', modes: ['self_host'] },
-  { key: 'MARTIN_URL' },
-  { key: 'PELIAS_URL' },
-  { key: 'VALHALLA_URL' },
+  { key: 'MARTIN_INTERNAL_URL' },
+  { key: 'PELIAS_INTERNAL_URL' },
+  { key: 'VALHALLA_INTERNAL_URL' },
   { key: 'ZEPTOMAIL_SEND_MAIL_TOKEN', modes: ['managed'] },
   { key: 'ZEPTOMAIL_FROM_AUTH', modes: ['managed'] },
   { key: 'ZEPTOMAIL_FROM_NOTIFICATIONS', modes: ['managed'] },

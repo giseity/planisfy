@@ -14,8 +14,6 @@ const schema = z.object({
   DEPLOYMENT_MODE: z.enum(['self_host', 'managed']),
 
   REDIS_URL: z.string().url(),
-  REDIS_HOST: z.string().min(1),
-  REDIS_PORT: portSchema,
   GEODATA_STALE_JOB_THRESHOLD_MS: z.coerce
     .number()
     .int()
@@ -30,14 +28,14 @@ const schema = z.object({
   INTERNAL_API_SECRET: z.string().min(1),
   BETTER_AUTH_SECRET: z.string().min(1),
 
-  MARTIN_URL: z.string().url(),
+  MARTIN_INTERNAL_URL: z.string().url(),
   TILE_DELIVERY_MODE: z.enum(['api', 'worker']).default('api'),
-  TILE_WORKER_URL: emptyableUrl.default(''),
-  VALHALLA_URL: z.string().url(),
-  PELIAS_URL: z.string().url(),
-  GLYPHS_URL: z.string().url(),
-  STATIC_MAP_URL: emptyableUrl,
-  ELEVATION_URL: z.string().url(),
+  TILE_WORKER_INTERNAL_URL: emptyableUrl.default(''),
+  VALHALLA_INTERNAL_URL: z.string().url(),
+  PELIAS_INTERNAL_URL: z.string().url(),
+  GLYPHS_INTERNAL_URL: z.string().url(),
+  STATIC_RENDERER_INTERNAL_URL: emptyableUrl,
+  ELEVATION_INTERNAL_URL: z.string().url(),
 
   ZEPTOMAIL_SEND_MAIL_TOKEN: emptyableString,
   ZEPTOMAIL_FROM_AUTH: emptyableString,
