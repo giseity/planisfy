@@ -133,9 +133,11 @@ services:
       traefik.http.routers.planisfy-api.tls.certresolver: letsencrypt
       traefik.http.services.planisfy-api.loadbalancer.server.port: 4000
     networks:
-      - planisfy-internal
-      - dokploy-network
-      - geobble-planisfy
+      planisfy-internal:
+      dokploy-network:
+      geobble-planisfy:
+        aliases:
+          - planisfy-api
 
   worker-geodata:
     build:
