@@ -61,6 +61,12 @@ The archive must contain `index.latest` or `index-N` at its root. Keep the
 generated `.sha256` file beside it. A plain `.tar` avoids wasting CPU trying to
 recompress Lucene segments; `.tar.gz` and `.tgz` are also supported.
 
+For the dedicated build host, `scripts/finalize-pelias-build.sh` performs the
+repository restart, snapshot verification, archive packaging, checksum, and
+manifest generation after the build log contains `BUILD_COMPLETED`. It records
+the actual Docker image IDs/digests in the manifest even when the upstream
+Pelias project uses moving image labels.
+
 ## Register a Release
 
 The operator workflow is:
