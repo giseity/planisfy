@@ -13,6 +13,10 @@ import {
   basemapReleases,
   customDomains,
   db,
+  geocodingArtifacts,
+  geocodingBuildLogs,
+  geocodingBuilds,
+  geocodingReleases,
   notificationChannels,
   platformConfig,
   previewLinks,
@@ -48,11 +52,7 @@ import {
   type ConsoleAreaOfInterest,
 } from '@planisfy/api-contracts'
 import type { PlanFeature } from '@planisfy/types'
-import {
-  requireAnyOrgPermission,
-  requireOrgPermission,
-  type AuthEnv,
-} from '../../middleware/auth'
+import { requireAnyOrgPermission, requireOrgPermission, type AuthEnv } from '../../middleware/auth'
 import { env, redisConnection } from '../../env'
 import { enqueueOutboxEvent } from '../../shared/outbox/outbox'
 import {
@@ -92,7 +92,10 @@ operationsRoute.use(
 )
 operationsRoute.use('/operations/schedules', requireOrgPermission('operations.schedules.manage'))
 operationsRoute.use('/operations/schedules/*', requireOrgPermission('operations.schedules.manage'))
-operationsRoute.use('/operations/artifact-backups', requireOrgPermission('operations.backups.manage'))
+operationsRoute.use(
+  '/operations/artifact-backups',
+  requireOrgPermission('operations.backups.manage')
+)
 operationsRoute.use(
   '/operations/artifact-backups/*',
   requireOrgPermission('operations.backups.manage')
@@ -104,15 +107,48 @@ operationsRoute.use(
   requireOrgPermission('operations.workers.manage')
 )
 operationsRoute.use('/operations/routing-graphs', requireOrgPermission('operations.routing.manage'))
-operationsRoute.use('/operations/routing-graphs/*', requireOrgPermission('operations.routing.manage'))
+operationsRoute.use(
+  '/operations/routing-graphs/*',
+  requireOrgPermission('operations.routing.manage')
+)
 operationsRoute.use('/operations/basemap-builds', requireOrgPermission('operations.routing.manage'))
-operationsRoute.use('/operations/basemap-builds/*', requireOrgPermission('operations.routing.manage'))
-operationsRoute.use('/operations/basemap-releases', requireOrgPermission('operations.routing.manage'))
-operationsRoute.use('/operations/basemap-releases/*', requireOrgPermission('operations.routing.manage'))
+operationsRoute.use(
+  '/operations/basemap-builds/*',
+  requireOrgPermission('operations.routing.manage')
+)
+operationsRoute.use(
+  '/operations/basemap-releases',
+  requireOrgPermission('operations.routing.manage')
+)
+operationsRoute.use(
+  '/operations/basemap-releases/*',
+  requireOrgPermission('operations.routing.manage')
+)
+operationsRoute.use(
+  '/operations/geocoding-builds',
+  requireOrgPermission('operations.routing.manage')
+)
+operationsRoute.use(
+  '/operations/geocoding-builds/*',
+  requireOrgPermission('operations.routing.manage')
+)
+operationsRoute.use(
+  '/operations/geocoding-releases/*',
+  requireOrgPermission('operations.routing.manage')
+)
 operationsRoute.use('/operations/preview-links', requireOrgPermission('operations.delivery.manage'))
-operationsRoute.use('/operations/preview-links/*', requireOrgPermission('operations.delivery.manage'))
-operationsRoute.use('/operations/custom-domains', requireOrgPermission('operations.delivery.manage'))
-operationsRoute.use('/operations/custom-domains/*', requireOrgPermission('operations.delivery.manage'))
+operationsRoute.use(
+  '/operations/preview-links/*',
+  requireOrgPermission('operations.delivery.manage')
+)
+operationsRoute.use(
+  '/operations/custom-domains',
+  requireOrgPermission('operations.delivery.manage')
+)
+operationsRoute.use(
+  '/operations/custom-domains/*',
+  requireOrgPermission('operations.delivery.manage')
+)
 operationsRoute.use(
   '/operations/workflow-templates',
   requireOrgPermission('operations.templates.manage')
@@ -295,6 +331,54 @@ const basemapBuildSchema = z.object({
 
 const basemapActivateSchema = z.object({
   activationWorkerNodeId: z.string().uuid().optional(),
+})
+
+const geocodingBuildSchema = z.object({
+  name: z.string().min(1).max(128),
+  sourceUrl: z.string().url().max(4096),
+  sourceDate: z.string().datetime().optional(),
+  sourceChecksumSha256: z
+    .string()
+    .length(64)
+    .regex(/^[a-f0-9]+$/i),
+  peliasDockerCommit: z.string().min(7).max(64),
+  profile: z.literal('planet_address').default('planet_address'),
+  indexName: z.string().min(1).max(128).default('pelias'),
+  activationWorkerNodeId: z.string().uuid().optional(),
+  config: z.record(z.string(), z.unknown()).default({}),
+})
+
+const geocodingArtifactSchema = z
+  .object({
+    storageObjectId: z.string().uuid().optional(),
+    storage: z
+      .object({
+        provider: z.enum(['s3', 'r2']),
+        bucket: z.string().min(1).max(256),
+        key: z.string().min(1).max(4096),
+        contentType: z.string().min(1).max(128).default('application/gzip'),
+      })
+      .optional(),
+    fileName: z.string().min(1).max(256),
+    size: z.number().int().positive(),
+    checksumSha256: z
+      .string()
+      .length(64)
+      .regex(/^[a-f0-9]+$/i),
+    snapshotName: z.string().min(1).max(128),
+    snapshotRepository: z.string().min(1).max(128).default('planisfy'),
+    manifest: z.record(z.string(), z.unknown()),
+  })
+  .refine((value) => Boolean(value.storageObjectId || value.storage), {
+    message: 'storageObjectId or storage is required',
+  })
+
+const geocodingReleaseSchema = z.object({
+  artifactId: z.string().uuid(),
+  name: z.string().min(1).max(128).default('pelias-planet'),
+  version: z.string().min(1).max(64),
+  sourceDataVersions: z.record(z.string(), z.unknown()).default({}),
+  manifest: z.record(z.string(), z.unknown()).default({}),
 })
 
 const previewLinkSchema = z.object({
@@ -591,21 +675,15 @@ function managedConsoleOperatorResponse(
     {
       error: {
         code: 'MANAGED_CONSOLE_OPERATOR_ACTION',
-        message:
-          `The ${operation.replace(/_/g, ' ')} operation is available from the admin console only.`,
+        message: `The ${operation.replace(/_/g, ' ')} operation is available from the admin console only.`,
       },
     },
     403
   )
 }
 
-function isPlanetScaleRoutingBuild(
-  build: z.infer<typeof routingGraphBuildSchema>
-) {
-  return (
-    build.sourcePreset?.toLowerCase() === 'planet' ||
-    build.areaOfInterest?.kind === 'world'
-  )
+function isPlanetScaleRoutingBuild(build: z.infer<typeof routingGraphBuildSchema>) {
+  return build.sourcePreset?.toLowerCase() === 'planet' || build.areaOfInterest?.kind === 'world'
 }
 
 export function operationsOverviewSignature(overview: OperationsOverview) {
@@ -1064,13 +1142,16 @@ operationsRoute.post('/operations/root-agent-registration-tokens', async (c) => 
     tokenHash: hashToken(token),
     expiresAt,
   })
-  return c.json({
-    data: {
-      token,
-      expiresAt: expiresAt.toISOString(),
-      nodeName: parsed.data.name,
+  return c.json(
+    {
+      data: {
+        token,
+        expiresAt: expiresAt.toISOString(),
+        nodeName: parsed.data.name,
+      },
     },
-  }, 201)
+    201
+  )
 })
 
 operationsRoute.get('/operations/routing-graphs', async (c) => {
@@ -1193,12 +1274,15 @@ operationsRoute.post('/operations/routing-graphs/:id/activate', async (c) => {
   const activationWorkerNodeId = activationWorkerResult.node.id
   const artifact = detail.artifacts.find((item) => item.status === 'available')
   if (!artifact) {
-    return c.json({
-      error: {
-        code: 'ARTIFACT_REQUIRED',
-        message: 'A successful routing graph artifact is required before activation.',
+    return c.json(
+      {
+        error: {
+          code: 'ARTIFACT_REQUIRED',
+          message: 'A successful routing graph artifact is required before activation.',
+        },
       },
-    }, 409)
+      409
+    )
   }
   const [updated] = await db
     .update(routingGraphBuilds)
@@ -1231,13 +1315,16 @@ operationsRoute.post('/operations/basemap-builds', async (c) => {
   const routingDenial = await managedPlanGateResponse(c, 'routingBuilds')
   if (routingDenial) return routingDenial
   if (parsed.data.engine === 'planetiler_overture') {
-    return c.json({
-      error: {
-        code: 'OVERTURE_BASEMAP_NOT_IMPLEMENTED',
-        message:
-          'Overture basemap builds are modeled but not enabled until the Overture layer profile is implemented.',
+    return c.json(
+      {
+        error: {
+          code: 'OVERTURE_BASEMAP_NOT_IMPLEMENTED',
+          message:
+            'Overture basemap builds are modeled but not enabled until the Overture layer profile is implemented.',
+        },
       },
-    }, 409)
+      409
+    )
   }
   const worker = await findWorkerNode(accountId, parsed.data.workerNodeId)
   if (!worker) return notFound(c, 'Build worker node not found')
@@ -1337,12 +1424,15 @@ operationsRoute.post('/operations/basemap-builds/:id/activate', async (c) => {
   }
   const artifact = detail.artifacts.find((item) => item.status === 'available')
   if (!artifact) {
-    return c.json({
-      error: {
-        code: 'ARTIFACT_REQUIRED',
-        message: 'A successful basemap artifact is required before activation.',
+    return c.json(
+      {
+        error: {
+          code: 'ARTIFACT_REQUIRED',
+          message: 'A successful basemap artifact is required before activation.',
+        },
       },
-    }, 409)
+      409
+    )
   }
   const [updated] = await db
     .update(basemapBuilds)
@@ -1369,12 +1459,15 @@ operationsRoute.post('/operations/basemap-releases/:id/promote-primary', async (
     .limit(1)
   if (!release) return notFound(c, 'Basemap release not found')
   if (release.activationStatus !== 'active') {
-    return c.json({
-      error: {
-        code: 'BASEMAP_RELEASE_NOT_ACTIVE',
-        message: 'Only an active basemap release can be promoted to primary.',
+    return c.json(
+      {
+        error: {
+          code: 'BASEMAP_RELEASE_NOT_ACTIVE',
+          message: 'Only an active basemap release can be promoted to primary.',
+        },
       },
-    }, 409)
+      409
+    )
   }
   const [updated] = await db.transaction(async (tx) => {
     await tx
@@ -1388,6 +1481,341 @@ operationsRoute.post('/operations/basemap-releases/:id/promote-primary', async (
       .returning()
   })
   return c.json({ data: updated! })
+})
+
+operationsRoute.get('/operations/geocoding-builds', async (c) => {
+  const accountId = c.get('ownerId')
+  const builds = await db
+    .select()
+    .from(geocodingBuilds)
+    .where(and(eq(geocodingBuilds.accountId, accountId), isNull(geocodingBuilds.deletedAt)))
+    .orderBy(desc(geocodingBuilds.updatedAt))
+    .limit(100)
+  return c.json({ data: builds })
+})
+
+operationsRoute.post('/operations/geocoding-builds', async (c) => {
+  const accountId = c.get('ownerId')
+  const parsed = geocodingBuildSchema.safeParse(await c.req.json())
+  if (!parsed.success) return validationError(c, parsed.error)
+
+  if (parsed.data.activationWorkerNodeId) {
+    const worker = await findWorkerNode(accountId, parsed.data.activationWorkerNodeId)
+    if (!worker) return notFound(c, 'Activation worker node not found')
+    const capabilityError = validateWorkerCapability(worker, 'pelias_activation', 'serving')
+    if (capabilityError) return c.json({ error: capabilityError }, 409)
+  }
+
+  const [created] = await db
+    .insert(geocodingBuilds)
+    .values({
+      accountId,
+      name: parsed.data.name,
+      sourceUrl: parsed.data.sourceUrl,
+      sourceDate: parsed.data.sourceDate ? new Date(parsed.data.sourceDate) : null,
+      sourceChecksumSha256: parsed.data.sourceChecksumSha256.toLowerCase(),
+      peliasDockerCommit: parsed.data.peliasDockerCommit,
+      profile: parsed.data.profile,
+      indexName: parsed.data.indexName,
+      activationWorkerNodeId: parsed.data.activationWorkerNodeId ?? null,
+      status: 'external_build',
+      config: parsed.data.config,
+    })
+    .returning()
+  await db.insert(geocodingBuildLogs).values({
+    buildId: created!.id,
+    message: 'External Pelias build registered',
+    metadata: {
+      profile: parsed.data.profile,
+      sourceChecksumSha256: parsed.data.sourceChecksumSha256.toLowerCase(),
+      peliasDockerCommit: parsed.data.peliasDockerCommit,
+    },
+  })
+  return c.json({ data: created }, 201)
+})
+
+operationsRoute.get('/operations/geocoding-builds/:id', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const [build] = await db
+    .select()
+    .from(geocodingBuilds)
+    .where(
+      and(
+        eq(geocodingBuilds.id, id),
+        eq(geocodingBuilds.accountId, accountId),
+        isNull(geocodingBuilds.deletedAt)
+      )
+    )
+    .limit(1)
+  if (!build) return notFound(c, 'Geocoding build not found')
+  const [artifacts, releases, logs] = await Promise.all([
+    db
+      .select()
+      .from(geocodingArtifacts)
+      .where(eq(geocodingArtifacts.buildId, id))
+      .orderBy(desc(geocodingArtifacts.createdAt)),
+    db
+      .select()
+      .from(geocodingReleases)
+      .where(eq(geocodingReleases.buildId, id))
+      .orderBy(desc(geocodingReleases.createdAt)),
+    db
+      .select()
+      .from(geocodingBuildLogs)
+      .where(eq(geocodingBuildLogs.buildId, id))
+      .orderBy(desc(geocodingBuildLogs.createdAt))
+      .limit(200),
+  ])
+  return c.json({ data: { build, artifacts, releases, logs } })
+})
+
+operationsRoute.post('/operations/geocoding-builds/:id/artifacts', async (c) => {
+  const accountId = c.get('ownerId')
+  const buildId = c.req.param('id')
+  const parsed = geocodingArtifactSchema.safeParse(await c.req.json())
+  if (!parsed.success) return validationError(c, parsed.error)
+  const [build] = await db
+    .select({ id: geocodingBuilds.id })
+    .from(geocodingBuilds)
+    .where(
+      and(
+        eq(geocodingBuilds.id, buildId),
+        eq(geocodingBuilds.accountId, accountId),
+        isNull(geocodingBuilds.deletedAt)
+      )
+    )
+    .limit(1)
+  if (!build) return notFound(c, 'Geocoding build not found')
+
+  let storageObjectId = parsed.data.storageObjectId ?? null
+  if (storageObjectId) {
+    const [object] = await db
+      .select({ id: storageObjects.id, accountId: storageObjects.accountId })
+      .from(storageObjects)
+      .where(and(eq(storageObjects.id, storageObjectId), isNull(storageObjects.deletedAt)))
+      .limit(1)
+    if (!object || object.accountId !== accountId) {
+      return c.json(
+        { error: { code: 'INVALID_STORAGE_OBJECT', message: 'Storage object not found.' } },
+        409
+      )
+    }
+  } else if (parsed.data.storage) {
+    const provider = getStorage()
+    const providerInfo = provider.getInfo()
+    if (
+      providerInfo.provider !== parsed.data.storage.provider ||
+      providerInfo.bucket !== parsed.data.storage.bucket
+    ) {
+      return c.json(
+        {
+          error: {
+            code: 'STORAGE_PROVIDER_MISMATCH',
+            message: 'Artifact storage must match the configured provider and bucket.',
+          },
+        },
+        409
+      )
+    }
+    const metadata = await provider.getMetadata(parsed.data.storage.key)
+    if (!metadata || metadata.size !== parsed.data.size) {
+      return c.json(
+        {
+          error: {
+            code: 'ARTIFACT_NOT_VERIFIED',
+            message: 'Uploaded snapshot size does not match the artifact contract.',
+          },
+        },
+        409
+      )
+    }
+    const [object] = await db
+      .insert(storageObjects)
+      .values({
+        accountId,
+        provider: parsed.data.storage.provider,
+        bucket: parsed.data.storage.bucket,
+        storageKey: parsed.data.storage.key,
+        fileName: parsed.data.fileName,
+        contentType: parsed.data.storage.contentType,
+        size: parsed.data.size,
+        contentHash: parsed.data.checksumSha256.toLowerCase(),
+        resourceType: 'geocoding_build',
+        resourceId: buildId,
+        artifactKind: 'elasticsearch_snapshot',
+      })
+      .onConflictDoUpdate({
+        target: [storageObjects.provider, storageObjects.bucket, storageObjects.storageKey],
+        targetWhere: sql`${storageObjects.deletedAt} IS NULL`,
+        set: {
+          size: parsed.data.size,
+          contentHash: parsed.data.checksumSha256.toLowerCase(),
+          updatedAt: new Date(),
+        },
+      })
+      .returning({ id: storageObjects.id })
+    storageObjectId = object!.id
+  }
+
+  const [artifact] = await db.transaction(async (tx) => {
+    const created = await tx
+      .insert(geocodingArtifacts)
+      .values({
+        accountId,
+        buildId,
+        storageObjectId,
+        status: 'available',
+        fileName: parsed.data.fileName,
+        size: parsed.data.size,
+        checksumSha256: parsed.data.checksumSha256.toLowerCase(),
+        snapshotName: parsed.data.snapshotName,
+        snapshotRepository: parsed.data.snapshotRepository,
+        manifest: parsed.data.manifest,
+      })
+      .returning()
+    await tx
+      .update(geocodingBuilds)
+      .set({
+        status: 'succeeded',
+        progress: 100,
+        completedAt: new Date(),
+        output: {
+          artifactId: created[0]?.id,
+          snapshotName: parsed.data.snapshotName,
+          checksumSha256: parsed.data.checksumSha256.toLowerCase(),
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(geocodingBuilds.id, buildId))
+    await tx.insert(geocodingBuildLogs).values({
+      buildId,
+      message: 'Elasticsearch snapshot artifact verified',
+      metadata: {
+        artifactId: created[0]?.id,
+        size: parsed.data.size,
+        checksumSha256: parsed.data.checksumSha256.toLowerCase(),
+      },
+    })
+    return created
+  })
+  return c.json({ data: artifact }, 201)
+})
+
+operationsRoute.post('/operations/geocoding-builds/:id/releases', async (c) => {
+  const accountId = c.get('ownerId')
+  const buildId = c.req.param('id')
+  const parsed = geocodingReleaseSchema.safeParse(await c.req.json())
+  if (!parsed.success) return validationError(c, parsed.error)
+  const [artifact] = await db
+    .select()
+    .from(geocodingArtifacts)
+    .where(
+      and(
+        eq(geocodingArtifacts.id, parsed.data.artifactId),
+        eq(geocodingArtifacts.buildId, buildId),
+        eq(geocodingArtifacts.accountId, accountId),
+        eq(geocodingArtifacts.status, 'available')
+      )
+    )
+    .limit(1)
+  if (!artifact) return notFound(c, 'Available geocoding artifact not found')
+
+  const [release] = await db
+    .insert(geocodingReleases)
+    .values({
+      accountId,
+      buildId,
+      artifactId: artifact.id,
+      name: parsed.data.name,
+      version: parsed.data.version,
+      status: 'ready',
+      sourceDataVersions: parsed.data.sourceDataVersions,
+      manifest: {
+        ...parsed.data.manifest,
+        snapshotName: artifact.snapshotName,
+        checksumSha256: artifact.checksumSha256,
+      },
+      publishedAt: new Date(),
+    })
+    .returning()
+  return c.json({ data: release }, 201)
+})
+
+operationsRoute.post('/operations/geocoding-releases/:id/activate', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const [release] = await db
+    .select()
+    .from(geocodingReleases)
+    .where(and(eq(geocodingReleases.id, id), eq(geocodingReleases.accountId, accountId)))
+    .limit(1)
+  if (!release?.buildId || release.status !== 'ready') {
+    return c.json(
+      { error: { code: 'RELEASE_NOT_READY', message: 'A ready release is required.' } },
+      409
+    )
+  }
+  const [build] = await db
+    .select()
+    .from(geocodingBuilds)
+    .where(eq(geocodingBuilds.id, release.buildId))
+    .limit(1)
+  if (!build?.activationWorkerNodeId) {
+    return c.json(
+      {
+        error: {
+          code: 'ACTIVATION_WORKER_REQUIRED',
+          message: 'Assign a Pelias activation worker before requesting activation.',
+        },
+      },
+      409
+    )
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(geocodingReleases)
+      .set({ activationStatus: 'activation_requested', updatedAt: new Date() })
+      .where(eq(geocodingReleases.id, id))
+    await tx
+      .update(geocodingBuilds)
+      .set({ activationStatus: 'activation_requested', updatedAt: new Date() })
+      .where(eq(geocodingBuilds.id, release.buildId!))
+  })
+  return c.json({ data: { ...release, activationStatus: 'activation_requested' } })
+})
+
+operationsRoute.post('/operations/geocoding-releases/:id/promote-primary', async (c) => {
+  const accountId = c.get('ownerId')
+  const id = c.req.param('id')
+  const [release] = await db
+    .select()
+    .from(geocodingReleases)
+    .where(and(eq(geocodingReleases.id, id), eq(geocodingReleases.accountId, accountId)))
+    .limit(1)
+  if (!release || release.activationStatus !== 'active') {
+    return c.json(
+      {
+        error: {
+          code: 'GEOCODING_RELEASE_NOT_ACTIVE',
+          message: 'Only an active geocoding release can be promoted.',
+        },
+      },
+      409
+    )
+  }
+  const [updated] = await db.transaction(async (tx) => {
+    await tx
+      .update(geocodingReleases)
+      .set({ isPrimary: false, updatedAt: new Date() })
+      .where(eq(geocodingReleases.accountId, accountId))
+    return tx
+      .update(geocodingReleases)
+      .set({ isPrimary: true, updatedAt: new Date() })
+      .where(eq(geocodingReleases.id, id))
+      .returning()
+  })
+  return c.json({ data: updated })
 })
 
 operationsRoute.post('/operations/preview-links', async (c) => {
@@ -2113,12 +2541,7 @@ async function softDeleteWorkerNode(c: Context) {
     db
       .update(rootAgentNodeTokens)
       .set({ revokedAt: now })
-      .where(
-        and(
-          eq(rootAgentNodeTokens.workerNodeId, id),
-          isNull(rootAgentNodeTokens.revokedAt)
-        )
-      ),
+      .where(and(eq(rootAgentNodeTokens.workerNodeId, id), isNull(rootAgentNodeTokens.revokedAt))),
   ])
   return c.json({ data: { id, deleted: true } })
 }
@@ -2564,8 +2987,7 @@ export function validateServingWorker(node: Awaited<ReturnType<typeof findWorker
   if (metadata.activation.runtimeSupervisorConfigured !== true) {
     return {
       code: 'SERVING_WORKER_SUPERVISOR_REQUIRED',
-      message:
-        'Serving worker must report a configured runtime supervisor before deployment.',
+      message: 'Serving worker must report a configured runtime supervisor before deployment.',
     }
   }
   return null

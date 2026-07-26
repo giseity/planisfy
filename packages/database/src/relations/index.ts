@@ -40,6 +40,9 @@ import {
   basemapBuilds,
   basemapArtifacts,
   basemapReleases,
+  geocodingBuilds,
+  geocodingArtifacts,
+  geocodingReleases,
   usageLogs,
   usageRollups,
   auditEvents,
@@ -91,6 +94,8 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   routingGraphReleases: many(routingGraphReleases),
   basemapBuilds: many(basemapBuilds),
   basemapReleases: many(basemapReleases),
+  geocodingBuilds: many(geocodingBuilds),
+  geocodingReleases: many(geocodingReleases),
   spriteAssets: many(spriteAssets),
   usageLogs: many(usageLogs),
   usageRollups: many(usageRollups),
@@ -542,6 +547,49 @@ export const basemapReleasesRelations = relations(basemapReleases, ({ one }) => 
   buildJob: one(processingJobs, {
     fields: [basemapReleases.buildJobId],
     references: [processingJobs.id],
+  }),
+}))
+
+export const geocodingBuildsRelations = relations(geocodingBuilds, ({ one, many }) => ({
+  account: one(accounts, {
+    fields: [geocodingBuilds.accountId],
+    references: [accounts.id],
+  }),
+  worker: one(workerNodes, {
+    fields: [geocodingBuilds.workerNodeId],
+    references: [workerNodes.id],
+  }),
+  artifacts: many(geocodingArtifacts),
+  releases: many(geocodingReleases),
+}))
+
+export const geocodingArtifactsRelations = relations(geocodingArtifacts, ({ one }) => ({
+  account: one(accounts, {
+    fields: [geocodingArtifacts.accountId],
+    references: [accounts.id],
+  }),
+  build: one(geocodingBuilds, {
+    fields: [geocodingArtifacts.buildId],
+    references: [geocodingBuilds.id],
+  }),
+  storageObject: one(storageObjects, {
+    fields: [geocodingArtifacts.storageObjectId],
+    references: [storageObjects.id],
+  }),
+}))
+
+export const geocodingReleasesRelations = relations(geocodingReleases, ({ one }) => ({
+  account: one(accounts, {
+    fields: [geocodingReleases.accountId],
+    references: [accounts.id],
+  }),
+  build: one(geocodingBuilds, {
+    fields: [geocodingReleases.buildId],
+    references: [geocodingBuilds.id],
+  }),
+  artifact: one(geocodingArtifacts, {
+    fields: [geocodingReleases.artifactId],
+    references: [geocodingArtifacts.id],
   }),
 }))
 
