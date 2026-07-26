@@ -359,7 +359,11 @@ const geocodingArtifactSchema = z
         contentType: z.string().min(1).max(128).default('application/gzip'),
       })
       .optional(),
-    fileName: z.string().min(1).max(256),
+    fileName: z
+      .string()
+      .min(1)
+      .max(256)
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, 'fileName must be a safe base name'),
     size: z.number().int().positive(),
     checksumSha256: z
       .string()

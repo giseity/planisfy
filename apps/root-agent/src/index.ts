@@ -13,7 +13,7 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { hostname } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { pipeline } from 'node:stream/promises'
@@ -710,7 +710,6 @@ async function activateGeocoding(
   artifact: GeocodingArtifact
 ) {
   const activationDir = join(config.ROOT_AGENT_WORK_DIR, 'activation', build.id, 'geocoding')
-  const artifactPath = join(activationDir, artifact.fileName)
   const snapshotPath = join(config.ROOT_AGENT_PELIAS_SNAPSHOT_DIR, 'releases', build.id)
   const compactBuildId = build.id.replace(/-/g, '').toLowerCase()
   const repositoryName = `planisfy_${compactBuildId}`
@@ -718,6 +717,16 @@ async function activateGeocoding(
   const liveAlias = 'pelias_live'
 
   try {
+    const safeFileName = basename(artifact.fileName)
+    if (
+      safeFileName !== artifact.fileName ||
+      safeFileName === '.' ||
+      safeFileName === '..' ||
+      !safeFileName
+    ) {
+      throw new Error('Pelias snapshot artifact file name is unsafe')
+    }
+    const artifactPath = join(activationDir, safeFileName)
     await rm(activationDir, { recursive: true, force: true })
     await rm(snapshotPath, { recursive: true, force: true })
     await mkdir(activationDir, { recursive: true })
