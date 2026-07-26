@@ -5,7 +5,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 compose_file="$repo_root/docker-compose.dokploy.yml"
 env_file="$repo_root/infra/docker/managed.env.example"
 
-docker compose --env-file "$env_file" -f "$compose_file" config >/dev/null
+cd "$repo_root"
+
+docker compose --env-file "$env_file" -f "$compose_file" config --format json \
+  | node scripts/validate-managed-next-public.mjs
 
 if rg -q '^[[:space:]]+ports:' "$compose_file"; then
   echo "Managed services must not publish host ports; ingress belongs to Dokploy." >&2

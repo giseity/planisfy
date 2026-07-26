@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 
-const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'https://admin.planisfy.com'
+const adminUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://admin.planisfy.com'
 const siteName = 'Planisfy Admin'
 
 export function adminMetadata({
