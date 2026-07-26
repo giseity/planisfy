@@ -1,0 +1,30 @@
+{
+  "logger": {
+    "level": "info",
+    "timestamp": true
+  },
+  "esclient": {
+    "apiVersion": "7.x",
+    "hosts": [
+      {
+        "host": "pelias-elasticsearch",
+        "port": 9200
+      }
+    ],
+    "connection": {
+      "url": "http://pelias-elasticsearch:9200"
+    }
+  },
+  "elasticsearch": {
+    "indexPrefix": "pelias"
+  },
+  "api": {
+    "indexName": "pelias",
+    "basePath": "/v1"
+  },
+  "apis": {
+    "autocomplete": {},
+    "reverse": {},
+    "search": {}
+  }
+}

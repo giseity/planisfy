@@ -9,16 +9,16 @@ x-api-env: &api-env
   REDIS_URL: redis://redis:6379
   BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
   INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-  NEXT_PUBLIC_API_URL: https://api.planisfy.com
-  NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
-  NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
-  NEXT_PUBLIC_ADMIN_URL: https://admin.planisfy.com
-  NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
+  NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+  NEXT_PUBLIC_CONSOLE_URL: ${NEXT_PUBLIC_CONSOLE_URL:?NEXT_PUBLIC_CONSOLE_URL must be set}
+  NEXT_PUBLIC_AUTH_ORIGIN: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+  NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:?NEXT_PUBLIC_ADMIN_URL must be set}
+  NEXT_PUBLIC_MARKETING_URL: ${NEXT_PUBLIC_MARKETING_URL:?NEXT_PUBLIC_MARKETING_URL must be set}
   NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:?NEXT_PUBLIC_DOCS_URL must be set}
   STORAGE_PROVIDER: r2
   LOCAL_STORAGE_PATH: /data/storage
   LOCAL_STORAGE_BUCKET: planisfy-local
-  LOCAL_STORAGE_URL: https://api.planisfy.com/storage
+  LOCAL_STORAGE_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}/storage
   S3_BUCKET: ${S3_BUCKET:-}
   S3_REGION: ${S3_REGION:-auto}
   S3_ENDPOINT: ${S3_ENDPOINT:-}
@@ -54,8 +54,8 @@ x-api-env: &api-env
   TILE_WORKER_INTERNAL_URL: ''
   MARTIN_INTERNAL_URL: http://martin:3000
   VALHALLA_INTERNAL_URL: http://valhalla:8002
-  PELIAS_INTERNAL_URL: http://127.0.0.1:3100
-  GLYPHS_INTERNAL_URL: https://api.planisfy.com/fonts
+  PELIAS_INTERNAL_URL: http://pelias:4000
+  GLYPHS_INTERNAL_URL: http://api:4000/fonts
   STATIC_RENDERER_INTERNAL_URL: http://static-renderer:4300
   ELEVATION_INTERNAL_URL: http://elevation:8080/api/v1
   GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-replace-me-github-client-id}
@@ -110,6 +110,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      pelias:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -122,16 +124,17 @@ services:
       start_period: 20s
     labels:
       <<: *traefik-websecure
-      traefik.http.routers.planisfy-api-web.rule: Host(`api.planisfy.com`)
+      traefik.http.routers.planisfy-api-web.rule: Host(`${PLANISFY_API_HOST:?PLANISFY_API_HOST must be set}`)
       traefik.http.routers.planisfy-api-web.entrypoints: web
       traefik.http.routers.planisfy-api-web.middlewares: redirect-to-https@file
-      traefik.http.routers.planisfy-api.rule: Host(`api.planisfy.com`)
+      traefik.http.routers.planisfy-api.rule: Host(`${PLANISFY_API_HOST:?PLANISFY_API_HOST must be set}`)
       traefik.http.routers.planisfy-api.entrypoints: websecure
       traefik.http.routers.planisfy-api.tls.certresolver: letsencrypt
       traefik.http.services.planisfy-api.loadbalancer.server.port: 4000
     networks:
       - planisfy-internal
       - dokploy-network
+      - geobble-planisfy
 
   worker-geodata:
     build:
@@ -164,13 +167,13 @@ services:
       context: .
       dockerfile: apps/console/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://api.planisfy.com
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
         API_INTERNAL_URL: http://api:4000
-        NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
+        NEXT_PUBLIC_AUTH_ORIGIN: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
         NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
-        NEXT_PUBLIC_APP_URL: https://console.planisfy.com
-        NEXT_PUBLIC_ADMIN_URL: https://admin.planisfy.com
-        NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_CONSOLE_URL:?NEXT_PUBLIC_CONSOLE_URL must be set}
+        NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:?NEXT_PUBLIC_ADMIN_URL must be set}
+        NEXT_PUBLIC_MARKETING_URL: ${NEXT_PUBLIC_MARKETING_URL:?NEXT_PUBLIC_MARKETING_URL must be set}
         NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:?NEXT_PUBLIC_DOCS_URL must be set}
         NEXT_PUBLIC_CONSOLE_API_PATH: /api/v1/console
         NEXT_PUBLIC_DEPLOYMENT_MODE: managed
@@ -179,13 +182,13 @@ services:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      NEXT_PUBLIC_API_URL: https://api.planisfy.com
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
       API_INTERNAL_URL: http://api:4000
-      NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
+      NEXT_PUBLIC_AUTH_ORIGIN: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
       NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
-      NEXT_PUBLIC_APP_URL: https://console.planisfy.com
-      NEXT_PUBLIC_ADMIN_URL: https://admin.planisfy.com
-      NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_CONSOLE_URL:?NEXT_PUBLIC_CONSOLE_URL must be set}
+      NEXT_PUBLIC_ADMIN_URL: ${NEXT_PUBLIC_ADMIN_URL:?NEXT_PUBLIC_ADMIN_URL must be set}
+      NEXT_PUBLIC_MARKETING_URL: ${NEXT_PUBLIC_MARKETING_URL:?NEXT_PUBLIC_MARKETING_URL must be set}
       NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:?NEXT_PUBLIC_DOCS_URL must be set}
       NEXT_PUBLIC_CONSOLE_API_PATH: /api/v1/console
       NEXT_PUBLIC_DEPLOYMENT_MODE: managed
@@ -199,10 +202,10 @@ services:
         condition: service_healthy
     labels:
       <<: *traefik-websecure
-      traefik.http.routers.planisfy-console-web.rule: Host(`console.planisfy.com`)
+      traefik.http.routers.planisfy-console-web.rule: Host(`${PLANISFY_CONSOLE_HOST:?PLANISFY_CONSOLE_HOST must be set}`)
       traefik.http.routers.planisfy-console-web.entrypoints: web
       traefik.http.routers.planisfy-console-web.middlewares: redirect-to-https@file
-      traefik.http.routers.planisfy-console.rule: Host(`console.planisfy.com`)
+      traefik.http.routers.planisfy-console.rule: Host(`${PLANISFY_CONSOLE_HOST:?PLANISFY_CONSOLE_HOST must be set}`)
       traefik.http.routers.planisfy-console.entrypoints: websecure
       traefik.http.routers.planisfy-console.tls.certresolver: letsencrypt
       traefik.http.services.planisfy-console.loadbalancer.server.port: 3000
@@ -215,11 +218,11 @@ services:
       context: .
       dockerfile: apps/marketing/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://api.planisfy.com
-        NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+        NEXT_PUBLIC_AUTH_ORIGIN: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
         NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
-        NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
-        NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
+        NEXT_PUBLIC_CONSOLE_URL: ${NEXT_PUBLIC_CONSOLE_URL:?NEXT_PUBLIC_CONSOLE_URL must be set}
+        NEXT_PUBLIC_MARKETING_URL: ${NEXT_PUBLIC_MARKETING_URL:?NEXT_PUBLIC_MARKETING_URL must be set}
         NEXT_PUBLIC_DOCS_URL: ${NEXT_PUBLIC_DOCS_URL:?NEXT_PUBLIC_DOCS_URL must be set}
         NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
     restart: unless-stopped
@@ -227,10 +230,10 @@ services:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      NEXT_PUBLIC_API_URL: https://api.planisfy.com
-      NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+      NEXT_PUBLIC_AUTH_ORIGIN: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
       NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
-      NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
+      NEXT_PUBLIC_CONSOLE_URL: ${NEXT_PUBLIC_CONSOLE_URL:?NEXT_PUBLIC_CONSOLE_URL must be set}
       NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
       NODE_ENV: production
     depends_on:
@@ -238,10 +241,10 @@ services:
         condition: service_healthy
     labels:
       <<: *traefik-websecure
-      traefik.http.routers.planisfy-marketing-web.rule: Host(`planisfy.com`) || Host(`www.planisfy.com`)
+      traefik.http.routers.planisfy-marketing-web.rule: Host(`${PLANISFY_MARKETING_HOST:?PLANISFY_MARKETING_HOST must be set}`) || Host(`${PLANISFY_MARKETING_WWW_HOST:?PLANISFY_MARKETING_WWW_HOST must be set}`)
       traefik.http.routers.planisfy-marketing-web.entrypoints: web
       traefik.http.routers.planisfy-marketing-web.middlewares: redirect-to-https@file
-      traefik.http.routers.planisfy-marketing.rule: Host(`planisfy.com`) || Host(`www.planisfy.com`)
+      traefik.http.routers.planisfy-marketing.rule: Host(`${PLANISFY_MARKETING_HOST:?PLANISFY_MARKETING_HOST must be set}`) || Host(`${PLANISFY_MARKETING_WWW_HOST:?PLANISFY_MARKETING_WWW_HOST must be set}`)
       traefik.http.routers.planisfy-marketing.entrypoints: websecure
       traefik.http.routers.planisfy-marketing.tls.certresolver: letsencrypt
       traefik.http.services.planisfy-marketing.loadbalancer.server.port: 3000
@@ -254,27 +257,27 @@ services:
       context: .
       dockerfile: apps/docs/Dockerfile
       args:
-        NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
-        NEXT_PUBLIC_API_URL: https://api.planisfy.com
-        NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
+        NEXT_PUBLIC_AUTH_ORIGIN: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+        NEXT_PUBLIC_CONSOLE_URL: ${NEXT_PUBLIC_CONSOLE_URL:?NEXT_PUBLIC_CONSOLE_URL must be set}
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
-      NEXT_PUBLIC_API_URL: https://api.planisfy.com
-      NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
+      NEXT_PUBLIC_AUTH_ORIGIN: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+      NEXT_PUBLIC_CONSOLE_URL: ${NEXT_PUBLIC_CONSOLE_URL:?NEXT_PUBLIC_CONSOLE_URL must be set}
       NODE_ENV: production
     depends_on:
       postgres:
         condition: service_healthy
     labels:
       <<: *traefik-websecure
-      traefik.http.routers.planisfy-docs-web.rule: Host(`docs.planisfy.com`)
+      traefik.http.routers.planisfy-docs-web.rule: Host(`${PLANISFY_DOCS_HOST:?PLANISFY_DOCS_HOST must be set}`)
       traefik.http.routers.planisfy-docs-web.entrypoints: web
       traefik.http.routers.planisfy-docs-web.middlewares: redirect-to-https@file
-      traefik.http.routers.planisfy-docs.rule: Host(`docs.planisfy.com`)
+      traefik.http.routers.planisfy-docs.rule: Host(`${PLANISFY_DOCS_HOST:?PLANISFY_DOCS_HOST must be set}`)
       traefik.http.routers.planisfy-docs.entrypoints: websecure
       traefik.http.routers.planisfy-docs.tls.certresolver: letsencrypt
       traefik.http.services.planisfy-docs.loadbalancer.server.port: 3000
@@ -287,30 +290,30 @@ services:
       context: .
       dockerfile: apps/admin/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://api.planisfy.com
-        NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
-        NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
-        NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+        NEXT_PUBLIC_AUTH_ORIGIN: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+        NEXT_PUBLIC_CONSOLE_URL: ${NEXT_PUBLIC_CONSOLE_URL:?NEXT_PUBLIC_CONSOLE_URL must be set}
+        NEXT_PUBLIC_MARKETING_URL: ${NEXT_PUBLIC_MARKETING_URL:?NEXT_PUBLIC_MARKETING_URL must be set}
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-      NEXT_PUBLIC_APP_URL: https://admin.planisfy.com
-      NEXT_PUBLIC_AUTH_ORIGIN: https://api.planisfy.com
-      NEXT_PUBLIC_API_URL: https://api.planisfy.com
-      NEXT_PUBLIC_CONSOLE_URL: https://console.planisfy.com
-      NEXT_PUBLIC_MARKETING_URL: https://planisfy.com
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_ADMIN_URL:?NEXT_PUBLIC_ADMIN_URL must be set}
+      NEXT_PUBLIC_AUTH_ORIGIN: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL must be set}
+      NEXT_PUBLIC_CONSOLE_URL: ${NEXT_PUBLIC_CONSOLE_URL:?NEXT_PUBLIC_CONSOLE_URL must be set}
+      NEXT_PUBLIC_MARKETING_URL: ${NEXT_PUBLIC_MARKETING_URL:?NEXT_PUBLIC_MARKETING_URL must be set}
       NODE_ENV: production
     depends_on:
       postgres:
         condition: service_healthy
     labels:
       <<: *traefik-websecure
-      traefik.http.routers.planisfy-admin-web.rule: Host(`admin.planisfy.com`)
+      traefik.http.routers.planisfy-admin-web.rule: Host(`${PLANISFY_ADMIN_HOST:?PLANISFY_ADMIN_HOST must be set}`)
       traefik.http.routers.planisfy-admin-web.entrypoints: web
       traefik.http.routers.planisfy-admin-web.middlewares: redirect-to-https@file
-      traefik.http.routers.planisfy-admin.rule: Host(`admin.planisfy.com`)
+      traefik.http.routers.planisfy-admin.rule: Host(`${PLANISFY_ADMIN_HOST:?PLANISFY_ADMIN_HOST must be set}`)
       traefik.http.routers.planisfy-admin.entrypoints: websecure
       traefik.http.routers.planisfy-admin.tls.certresolver: letsencrypt
       traefik.http.services.planisfy-admin.loadbalancer.server.port: 3000
@@ -330,6 +333,16 @@ services:
       NODE_ENV: production
     volumes:
       - elevation-data:/data/elevation:ro
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(''http://127.0.0.1:8080/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     networks:
       - planisfy-internal
 
@@ -346,6 +359,16 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(''http://127.0.0.1:4300/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     networks:
       - planisfy-internal
 
@@ -375,6 +398,53 @@ services:
     networks:
       - planisfy-internal
 
+  pelias-elasticsearch:
+    image: ${PELIAS_ELASTICSEARCH_IMAGE:?PELIAS_ELASTICSEARCH_IMAGE must be set}
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: 'false'
+      xpack.ml.enabled: 'false'
+      ES_JAVA_OPTS: ${PELIAS_ES_JAVA_OPTS:--Xms8g -Xmx8g}
+    volumes:
+      - pelias-elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "curl -fsS 'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=1s' >/dev/null || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+    networks:
+      - planisfy-internal
+
+  pelias:
+    image: ${PELIAS_API_IMAGE:?PELIAS_API_IMAGE must be set}
+    restart: unless-stopped
+    environment:
+      PELIAS_CONFIG: /config/pelias.json
+      PORT: 4000
+    volumes:
+      - ./infra/docker/configs/pelias-runtime.json:/config/pelias.json:ro
+    depends_on:
+      pelias-elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://127.0.0.1:4000/v1'',r=>process.exit(r.statusCode<500?0:1)).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+    networks:
+      - planisfy-internal
+
   runtime-supervisor:
     build:
       context: .
@@ -391,9 +461,22 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - martin
-      - valhalla
-      - elevation
+      elevation:
+        condition: service_healthy
+      martin:
+        condition: service_started
+      valhalla:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(''http://127.0.0.1:4012/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     networks:
       - planisfy-internal
 
@@ -429,25 +512,37 @@ services:
       api:
         condition: service_healthy
       runtime-supervisor:
-        condition: service_started
+        condition: service_healthy
     networks:
       - planisfy-internal
 
 volumes:
   postgres-data:
     external: true
-    name: deploy_postgres-data
+    name: ${PLANISFY_POSTGRES_VOLUME_NAME:?PLANISFY_POSTGRES_VOLUME_NAME must be set}
   redis-data:
     external: true
-    name: deploy_redis-data
+    name: ${PLANISFY_REDIS_VOLUME_NAME:?PLANISFY_REDIS_VOLUME_NAME must be set}
+  pelias-elasticsearch-data:
+    external: true
+    name: ${PLANISFY_PELIAS_VOLUME_NAME:?PLANISFY_PELIAS_VOLUME_NAME must be set}
   root-agent-runtime-state:
+    name: planisfy-root-agent-runtime-state
   root-agent-runtime-work:
+    name: planisfy-root-agent-runtime-work
   martin-sources:
+    name: planisfy-martin-sources
   valhalla-data:
+    name: planisfy-valhalla-data
   elevation-data:
+    name: planisfy-elevation-data
 
 networks:
   planisfy-internal:
+    name: planisfy-internal
     driver: bridge
   dokploy-network:
     external: true
+  geobble-planisfy:
+    external: true
+    name: geobble-planisfy
