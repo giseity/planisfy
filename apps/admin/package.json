@@ -19,6 +19,7 @@
     "@planisfy/events": "workspace:*",
     "@planisfy/geodata-contracts": "workspace:*",
     "@planisfy/storage": "workspace:*",
+    "@planisfy/types": "workspace:*",
     "@planisfy/ui": "workspace:*",
     "@planisfy/utils": "workspace:*",
     "assets": "workspace:*",

@@ -1,4 +1,4 @@
-import type { ComponentType } from "react"
+import type { ComponentType } from 'react'
 import {
   Activity,
   ArchiveRestore,
@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarClock,
   ClipboardList,
+  CreditCard,
   Flag,
   Inbox,
   Key,
@@ -18,9 +19,9 @@ import {
   SlidersHorizontal,
   TriangleAlert,
   Users,
-} from "lucide-react"
+} from 'lucide-react'
 
-export type AdminDeploymentMode = "self_host" | "managed"
+export type AdminDeploymentMode = 'self_host' | 'managed'
 
 export interface AdminNavItem {
   href: string
@@ -36,45 +37,51 @@ export interface AdminNavGroup {
 
 export const adminNavGroups: AdminNavGroup[] = [
   {
-    label: "Overview",
-    items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }],
+    label: 'Overview',
+    items: [{ href: '/', label: 'Dashboard', icon: LayoutDashboard }],
   },
   {
-    label: "Accounts",
+    label: 'Accounts',
     items: [
-      { href: "/users", label: "Users", icon: Users },
-      { href: "/orgs", label: "Organizations", icon: Building2 },
-      { href: "/keys", label: "API Keys", icon: Key },
+      { href: '/users', label: 'Users', icon: Users },
+      { href: '/orgs', label: 'Organizations', icon: Building2 },
+      { href: '/keys', label: 'API Keys', icon: Key },
     ],
   },
   {
-    label: "Operations",
+    label: 'Operations',
     items: [
-      { href: "/usage", label: "Usage", icon: BarChart3 },
-      { href: "/outbox", label: "Outbox", icon: Inbox },
-      { href: "/jobs", label: "Jobs", icon: BriefcaseBusiness },
-      { href: "/schedules", label: "Schedules", icon: CalendarClock },
-      { href: "/artifacts", label: "Artifacts", icon: Boxes },
-      { href: "/backups", label: "Backups", icon: ArchiveRestore },
-      { href: "/workflow-templates", label: "Templates", icon: ClipboardList },
-      { href: "/failures", label: "Failures", icon: TriangleAlert },
+      { href: '/usage', label: 'Usage', icon: BarChart3 },
+      { href: '/outbox', label: 'Outbox', icon: Inbox },
+      { href: '/jobs', label: 'Jobs', icon: BriefcaseBusiness },
+      { href: '/schedules', label: 'Schedules', icon: CalendarClock },
+      { href: '/artifacts', label: 'Artifacts', icon: Boxes },
+      { href: '/backups', label: 'Backups', icon: ArchiveRestore },
+      { href: '/workflow-templates', label: 'Templates', icon: ClipboardList },
+      { href: '/failures', label: 'Failures', icon: TriangleAlert },
     ],
   },
   {
-    label: "Platform",
+    label: 'Platform',
     items: [
-      { href: "/audit", label: "Audit Log", icon: ScrollText },
-      { href: "/health", label: "System Health", icon: Activity },
-      { href: "/upgrade", label: "Upgrade", icon: PackageCheck, modes: ["self_host"] },
-      { href: "/configuration", label: "Configuration", icon: SlidersHorizontal },
-      { href: "/feature-flags", label: "Feature Flags", icon: Flag },
-      { href: "/announcements", label: "Announcements", icon: Megaphone },
+      {
+        href: '/billing-contracts',
+        label: 'Billing Contracts',
+        icon: CreditCard,
+        modes: ['managed'],
+      },
+      { href: '/audit', label: 'Audit Log', icon: ScrollText },
+      { href: '/health', label: 'System Health', icon: Activity },
+      { href: '/upgrade', label: 'Upgrade', icon: PackageCheck, modes: ['self_host'] },
+      { href: '/configuration', label: 'Configuration', icon: SlidersHorizontal },
+      { href: '/feature-flags', label: 'Feature Flags', icon: Flag },
+      { href: '/announcements', label: 'Announcements', icon: Megaphone },
     ],
   },
 ]
 
 export function isAdminNavActive(item: AdminNavItem, pathname: string) {
-  if (item.href === "/") return pathname === "/"
+  if (item.href === '/') return pathname === '/'
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
 }
 
@@ -88,17 +95,15 @@ export function filterAdminNavGroups(deploymentMode: AdminDeploymentMode) {
 }
 
 export function adminBreadcrumbs(pathname: string, deploymentMode: AdminDeploymentMode) {
-  if (pathname === "/") return [{ label: "Dashboard" }]
+  if (pathname === '/') return [{ label: 'Dashboard' }]
 
   const items = filterAdminNavGroups(deploymentMode).flatMap((group) => group.items)
   const match = items
-    .filter((item) => item.href !== "/")
+    .filter((item) => item.href !== '/')
     .sort((a, b) => b.href.length - a.href.length)
     .find((item) => isAdminNavActive(item, pathname))
 
-  const crumbs: Array<{ label: string; href?: string }> = [
-    { label: "Dashboard", href: "/" },
-  ]
+  const crumbs: Array<{ label: string; href?: string }> = [{ label: 'Dashboard', href: '/' }]
 
   if (!match) return crumbs
   crumbs.push({ label: match.label, href: match.href })
@@ -106,9 +111,9 @@ export function adminBreadcrumbs(pathname: string, deploymentMode: AdminDeployme
   if (pathname !== match.href) {
     const rest = pathname
       .slice(match.href.length)
-      .split("/")
+      .split('/')
       .filter(Boolean)
-      .map((segment) => segment.replace(/-/g, " "))
+      .map((segment) => segment.replace(/-/g, ' '))
 
     for (const segment of rest) {
       crumbs.push({ label: titleCase(segment) })
