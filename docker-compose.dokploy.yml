@@ -5,6 +5,7 @@ x-api-env: &api-env
   NODE_ENV: production
   DEPLOYMENT_MODE: managed
   PORT: 4000
+  API_KEY_AUTH_CACHE_TTL_MS: ${API_KEY_AUTH_CACHE_TTL_MS:-15000}
   DATABASE_URL: postgresql://planisfy:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/planisfy
   REDIS_URL: redis://redis:6379
   BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}

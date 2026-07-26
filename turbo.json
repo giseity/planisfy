@@ -29,6 +29,7 @@
         "NEXT_PHASE",
         "DATABASE_URL",
         "APP_VERSION",
+        "API_KEY_AUTH_CACHE_TTL_MS",
         "DEPLOYMENT_MODE",
         "BETTER_AUTH_SECRET",
         "AUTH_COOKIE_DOMAIN",

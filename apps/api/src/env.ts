@@ -14,6 +14,7 @@ const schema = z.object({
   DEPLOYMENT_MODE: z.enum(['self_host', 'managed']),
 
   REDIS_URL: z.string().url(),
+  API_KEY_AUTH_CACHE_TTL_MS: z.coerce.number().int().min(1_000).max(60_000).default(15_000),
   GEODATA_STALE_JOB_THRESHOLD_MS: z.coerce
     .number()
     .int()
