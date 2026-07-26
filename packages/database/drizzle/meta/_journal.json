@@ -183,6 +183,13 @@
       "when": 1782866000000,
       "tag": "0025_runtime_installations",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1785060000000,
+      "tag": "0026_managed_contract_billing",
+      "breakpoints": true
     }
   ]
 }

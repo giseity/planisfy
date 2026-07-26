@@ -18,6 +18,7 @@ import {
   type BillablePlanSlug,
   type SubscriptionProduct,
 } from './subscription-products'
+import { getManagedPlanLimits, reconcileOpenManagedUsagePeriods } from './managed-contracts'
 
 export { PLANS }
 export type { PlanLimits, PlanSlug }
@@ -309,6 +310,9 @@ export async function getUserPlan(userId: string): Promise<PlanSlug> {
 export async function getAccountPlanLimits(accountId: string): Promise<PlanLimits> {
   if (env.DEPLOYMENT_MODE === 'self_host') return PLANS.platform
 
+  const managedLimits = await getManagedPlanLimits(accountId)
+  if (managedLimits) return managedLimits
+
   const plan = await getAccountPlan(accountId)
   return (await getPlanDefinition(plan)).limits
 }
@@ -488,8 +492,7 @@ export function planRank(planId: PlanSlug): number {
 }
 
 export async function reportUsage(): Promise<void> {
-  // Dodo subscription usage metering is not wired yet. Keep request logging as
-  // the source of truth for Planisfy quotas.
+  await reconcileOpenManagedUsagePeriods()
 }
 
 export async function applyDodoWebhookEvent(

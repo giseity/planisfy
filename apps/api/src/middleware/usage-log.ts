@@ -1,7 +1,7 @@
-import { createMiddleware } from "hono/factory";
-import { enqueueUsageLog } from "../domains/usage/usage-queue";
-import { getEndpointCost } from "../domains/keys/api-key";
-import type { AuthEnv } from "./auth";
+import { createMiddleware } from 'hono/factory'
+import { enqueueUsageLog } from '../domains/usage/usage-queue'
+import { getEndpointCost } from '../domains/keys/api-key'
+import type { AuthEnv } from './auth'
 
 /**
  * Usage logging middleware for public API endpoints.
@@ -9,16 +9,16 @@ import type { AuthEnv } from "./auth";
  * Non-blocking — never affects request latency.
  */
 export const usageLogMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
-  const startedAt = performance.now();
-  let statusCode = 500;
+  const startedAt = performance.now()
+  let statusCode = 500
 
   try {
-    await next();
-    statusCode = c.res.status;
+    await next()
+    statusCode = c.res.status
   } finally {
-    const apiKeyId = c.get("apiKeyId") ?? null;
-    const ownerId = c.get("ownerId") ?? null;
-    const cost = getEndpointCost(c.req.path);
+    const apiKeyId = c.get('apiKeyId') ?? null
+    const ownerId = c.get('ownerId') ?? null
+    const cost = statusCode >= 200 && statusCode < 400 ? getEndpointCost(c.req.path) : 0
 
     enqueueUsageLog({
       apiKeyId,
@@ -29,11 +29,9 @@ export const usageLogMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
       durationMs: Math.round(performance.now() - startedAt),
       cost,
       ipAddress:
-        c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-        c.req.header("x-real-ip") ||
-        null,
-      referer: c.req.header("referer") || null,
-      userAgent: c.req.header("user-agent") || null,
-    });
+        c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || null,
+      referer: c.req.header('referer') || null,
+      userAgent: c.req.header('user-agent') || null,
+    })
   }
-});
+})
