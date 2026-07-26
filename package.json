@@ -4,6 +4,7 @@
   "license": "AGPL-3.0-only",
   "scripts": {
     "build": "turbo run build",
+    "compose:validate:managed": "scripts/validate-managed-compose.sh",
     "db:generate": "pnpm --filter @planisfy/database db:generate",
     "db:migrate": "pnpm --filter @planisfy/database db:migrate",
     "db:push": "pnpm --filter @planisfy/database db:push",
