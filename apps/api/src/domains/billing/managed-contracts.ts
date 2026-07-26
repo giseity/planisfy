@@ -1,6 +1,12 @@
-import { db, managedContracts, usageAllowanceGrants, usageBillingPeriods } from '@planisfy/database'
+import {
+  billableRequests,
+  db,
+  managedContracts,
+  usageAllowanceGrants,
+  usageBillingPeriods,
+} from '@planisfy/database'
 import { PLANS, normalizePlanSlug, type PlanLimits, type PlanSlug } from '@planisfy/types'
-import { and, desc, eq, gt, gte, isNull, lte, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, gte, isNull, lt, lte, or, sql } from 'drizzle-orm'
 import {
   getMonthlyUsagePeriod,
   getMonthlyUsageUnits,
@@ -265,6 +271,11 @@ export async function reconcileOpenManagedUsagePeriods(now = new Date()) {
     )
 
   return Promise.all(contracts.map(({ accountId }) => reconcileManagedUsagePeriod({ accountId })))
+}
+
+export async function deleteExpiredBillableRequests(now = new Date(), retentionDays = 7) {
+  const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000)
+  await db.delete(billableRequests).where(lt(billableRequests.createdAt, cutoff))
 }
 
 function validateManagedContractAssignment(assignment: ManagedContractAssignment) {

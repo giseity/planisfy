@@ -1,74 +1,110 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 
-const jsonSchema = z.record(z.string(), z.unknown()).openapi("JsonObject");
+const jsonSchema = z.record(z.string(), z.unknown()).openapi('JsonObject')
 const errorSchema = z
   .object({
     error: z.object({
-      code: z.string().openapi({ example: "BAD_REQUEST" }),
-      message: z.string().openapi({ example: "Invalid request" }),
+      code: z.string().openapi({ example: 'BAD_REQUEST' }),
+      message: z.string().openapi({ example: 'Invalid request' }),
       details: z.unknown().optional(),
     }),
   })
-  .openapi("ApiError");
+  .openapi('ApiError')
 
 const coordinatesParamSchema = z.object({
   coords: z.string().openapi({
-    param: { name: "coords", in: "path" },
-    example: "-73.9857,40.7484;-73.9851,40.7580",
+    param: { name: 'coords', in: 'path' },
+    example: '-73.9857,40.7484;-73.9851,40.7580',
   }),
-});
+})
 
 const ownerStyleParamsSchema = z.object({
   owner: z.string().openapi({
-    param: { name: "owner", in: "path" },
-    example: "planisfy",
+    param: { name: 'owner', in: 'path' },
+    example: 'planisfy',
   }),
   handle: z.string().openapi({
-    param: { name: "handle", in: "path" },
-    example: "streets",
+    param: { name: 'handle', in: 'path' },
+    example: 'streets',
   }),
-});
+})
 
 const ownerTilesetParamsSchema = z.object({
   owner: z.string().openapi({
-    param: { name: "owner", in: "path" },
-    example: "planisfy",
+    param: { name: 'owner', in: 'path' },
+    example: 'planisfy',
   }),
   handle: z.string().openapi({
-    param: { name: "handle", in: "path" },
-    example: "places",
+    param: { name: 'handle', in: 'path' },
+    example: 'places',
   }),
-});
+})
 
 const profileParamSchema = z.object({
   profile: z.string().openapi({
-    param: { name: "profile", in: "path" },
-    example: "driving",
+    param: { name: 'profile', in: 'path' },
+    example: 'driving',
   }),
-});
+})
 
 const geocodingForwardQuerySchema = z.object({
-  q: z.string().openapi({ example: "Lagos" }),
+  q: z.string().openapi({ example: 'Lagos' }),
   limit: z.coerce.number().int().min(1).max(25).optional(),
   bbox: z.string().optional(),
   language: z.string().optional(),
   country: z.string().optional(),
-});
+})
 
 const geocodingReverseQuerySchema = z.object({
   lon: z.coerce.number().min(-180).max(180),
   lat: z.coerce.number().min(-90).max(90),
   limit: z.coerce.number().int().min(1).max(10).optional(),
   language: z.string().optional(),
-});
+})
 
 const geocodingAutocompleteQuerySchema = z.object({
-  text: z.string().openapi({ example: "Ikoyi" }),
+  text: z.string().openapi({ example: 'Ikoyi' }),
   limit: z.coerce.number().int().min(1).max(10).optional(),
   language: z.string().optional(),
-  "focus.lon": z.coerce.number().min(-180).max(180).optional(),
-  "focus.lat": z.coerce.number().min(-90).max(90).optional(),
-});
+  'focus.lon': z.coerce.number().min(-180).max(180).optional(),
+  'focus.lat': z.coerce.number().min(-90).max(90).optional(),
+})
+
+const geocodingBatchBodySchema = z.object({
+  queries: z
+    .array(
+      z.union([
+        z.object({
+          type: z.literal('forward'),
+          q: z.string().min(1).max(500),
+          limit: z.number().int().min(1).max(25).optional(),
+          language: z.string().optional(),
+          country: z.string().optional(),
+          bbox: z.string().optional(),
+        }),
+        z.object({
+          type: z.literal('reverse'),
+          lon: z.number().min(-180).max(180),
+          lat: z.number().min(-90).max(90),
+          limit: z.number().int().min(1).max(10).optional(),
+          language: z.string().optional(),
+        }),
+      ])
+    )
+    .min(1)
+    .max(50),
+})
+
+const idempotencyHeaderSchema = z.object({
+  'Idempotency-Key': z
+    .string()
+    .min(8)
+    .max(128)
+    .openapi({
+      param: { name: 'Idempotency-Key', in: 'header' },
+      example: 'geobble-job-01J123456789',
+    }),
+})
 
 const routeBodySchema = z
   .object({
@@ -77,267 +113,329 @@ const routeBodySchema = z
         z.object({
           lon: z.number().min(-180).max(180),
           lat: z.number().min(-90).max(90),
-        }),
+        })
       )
       .min(2),
     costing: z.string().optional(),
-    units: z.enum(["kilometers", "miles"]).optional(),
+    units: z.enum(['kilometers', 'miles']).optional(),
     language: z.string().optional(),
   })
-  .passthrough();
+  .passthrough()
 
 const staticMapParamsSchema = z.object({
-  owner: z.string().openapi({ param: { name: "owner", in: "path" } }),
-  style: z.string().openapi({ param: { name: "style", in: "path" } }),
+  owner: z.string().openapi({ param: { name: 'owner', in: 'path' } }),
+  style: z.string().openapi({ param: { name: 'style', in: 'path' } }),
   center: z.string().openapi({
-    param: { name: "center", in: "path" },
-    example: "-73.9857,40.7484,12",
+    param: { name: 'center', in: 'path' },
+    example: '-73.9857,40.7484,12',
   }),
   size: z.string().openapi({
-    param: { name: "size", in: "path" },
-    example: "800x600.png",
+    param: { name: 'size', in: 'path' },
+    example: '800x600.png',
   }),
-});
+})
 
 const jsonResponse = (description: string) => ({
   content: {
-    "application/json": {
+    'application/json': {
       schema: jsonSchema,
     },
   },
   description,
-});
+})
 
 const errorResponse = {
   content: {
-    "application/json": {
+    'application/json': {
       schema: errorSchema,
     },
   },
-  description: "Error response",
-};
+  description: 'Error response',
+}
 
 const pbfResponse = {
   content: {
-    "application/x-protobuf": {
-      schema: z.string().openapi({ format: "binary" }),
+    'application/x-protobuf': {
+      schema: z.string().openapi({ format: 'binary' }),
     },
   },
-  description: "Protocol buffer payload",
-};
+  description: 'Protocol buffer payload',
+}
 
 const pngResponse = {
   content: {
-    "image/png": {
-      schema: z.string().openapi({ format: "binary" }),
+    'image/png': {
+      schema: z.string().openapi({ format: 'binary' }),
     },
   },
-  description: "PNG image",
-};
+  description: 'PNG image',
+}
 
 const routeConfigs = [
   createRoute({
-    method: "get",
-    path: "/styles/v1/{owner}/{handle}",
+    method: 'get',
+    path: '/styles/v1/{owner}/{handle}',
     request: { params: ownerStyleParamsSchema },
-    responses: { 200: jsonResponse("Published style JSON"), 404: errorResponse },
-    tags: ["Styles"],
+    responses: { 200: jsonResponse('Published style JSON'), 404: errorResponse },
+    tags: ['Styles'],
   }),
   createRoute({
-    method: "get",
-    path: "/styles/v1/{owner}/{handle}/sprite.json",
+    method: 'get',
+    path: '/styles/v1/{owner}/{handle}/sprite.json',
     request: { params: ownerStyleParamsSchema },
-    responses: { 200: jsonResponse("Style sprite metadata"), 404: errorResponse },
-    tags: ["Styles"],
+    responses: { 200: jsonResponse('Style sprite metadata'), 404: errorResponse },
+    tags: ['Styles'],
   }),
   createRoute({
-    method: "get",
-    path: "/styles/v1/{owner}/{handle}/sprite.png",
+    method: 'get',
+    path: '/styles/v1/{owner}/{handle}/sprite.png',
     request: { params: ownerStyleParamsSchema },
     responses: { 200: pngResponse, 404: errorResponse },
-    tags: ["Styles"],
+    tags: ['Styles'],
   }),
   createRoute({
-    method: "get",
-    path: "/tiles/v1/{owner}/{handle}.json",
+    method: 'get',
+    path: '/tiles/v1/{owner}/{handle}.json',
     request: { params: ownerTilesetParamsSchema },
-    responses: { 200: jsonResponse("TileJSON for the current tileset version"), 404: errorResponse },
-    tags: ["Tiles"],
+    responses: {
+      200: jsonResponse('TileJSON for the current tileset version'),
+      404: errorResponse,
+    },
+    tags: ['Tiles'],
   }),
   createRoute({
-    method: "get",
-    path: "/tiles/v1/{owner}/{handle}/versions/{version}.json",
+    method: 'get',
+    path: '/tiles/v1/{owner}/{handle}/versions/{version}.json',
     request: {
       params: ownerTilesetParamsSchema.extend({
-        version: z.coerce.number().int().positive().openapi({
-          param: { name: "version", in: "path" },
-        }),
+        version: z.coerce
+          .number()
+          .int()
+          .positive()
+          .openapi({
+            param: { name: 'version', in: 'path' },
+          }),
       }),
     },
-    responses: { 200: jsonResponse("TileJSON for an immutable tileset version"), 404: errorResponse },
-    tags: ["Tiles"],
+    responses: {
+      200: jsonResponse('TileJSON for an immutable tileset version'),
+      404: errorResponse,
+    },
+    tags: ['Tiles'],
   }),
   createRoute({
-    method: "get",
-    path: "/tiles/v1/{owner}/{handle}/{z}/{x}/{y}",
+    method: 'get',
+    path: '/tiles/v1/{owner}/{handle}/{z}/{x}/{y}',
     request: {
       params: ownerTilesetParamsSchema.extend({
-        z: z.coerce.number().int().nonnegative().openapi({ param: { name: "z", in: "path" } }),
-        x: z.coerce.number().int().nonnegative().openapi({ param: { name: "x", in: "path" } }),
-        y: z.string().openapi({ param: { name: "y", in: "path" }, example: "192.png" }),
+        z: z.coerce
+          .number()
+          .int()
+          .nonnegative()
+          .openapi({ param: { name: 'z', in: 'path' } }),
+        x: z.coerce
+          .number()
+          .int()
+          .nonnegative()
+          .openapi({ param: { name: 'x', in: 'path' } }),
+        y: z.string().openapi({ param: { name: 'y', in: 'path' }, example: '192.png' }),
       }),
     },
     responses: { 200: pbfResponse, 400: errorResponse, 404: errorResponse },
-    tags: ["Tiles"],
+    tags: ['Tiles'],
   }),
   createRoute({
-    method: "get",
-    path: "/fonts/v1/{fontstack}/{range}",
+    method: 'get',
+    path: '/fonts/v1/{fontstack}/{range}',
     request: {
       params: z.object({
-        fontstack: z.string().openapi({ param: { name: "fontstack", in: "path" } }),
-        range: z.string().openapi({ param: { name: "range", in: "path" }, example: "0-255.pbf" }),
+        fontstack: z.string().openapi({ param: { name: 'fontstack', in: 'path' } }),
+        range: z.string().openapi({ param: { name: 'range', in: 'path' }, example: '0-255.pbf' }),
       }),
     },
     responses: { 200: pbfResponse, 400: errorResponse },
-    tags: ["Fonts"],
+    tags: ['Fonts'],
   }),
   createRoute({
-    method: "get",
-    path: "/geocoding/v1/forward",
+    method: 'get',
+    path: '/geocoding/v1/forward',
     request: { query: geocodingForwardQuerySchema },
-    responses: { 200: jsonResponse("Forward geocoding results"), 400: errorResponse, 503: errorResponse },
-    tags: ["Geocoding"],
+    responses: {
+      200: jsonResponse('Forward geocoding results'),
+      400: errorResponse,
+      503: errorResponse,
+    },
+    tags: ['Geocoding'],
   }),
   createRoute({
-    method: "get",
-    path: "/geocoding/v1/reverse",
+    method: 'get',
+    path: '/geocoding/v1/reverse',
     request: { query: geocodingReverseQuerySchema },
-    responses: { 200: jsonResponse("Reverse geocoding results"), 400: errorResponse, 503: errorResponse },
-    tags: ["Geocoding"],
+    responses: {
+      200: jsonResponse('Reverse geocoding results'),
+      400: errorResponse,
+      503: errorResponse,
+    },
+    tags: ['Geocoding'],
   }),
   createRoute({
-    method: "get",
-    path: "/geocoding/v1/autocomplete",
+    method: 'get',
+    path: '/geocoding/v1/autocomplete',
     request: { query: geocodingAutocompleteQuerySchema },
-    responses: { 200: jsonResponse("Geocoding autocomplete results"), 400: errorResponse, 503: errorResponse },
-    tags: ["Geocoding"],
+    responses: {
+      200: jsonResponse('Geocoding autocomplete results'),
+      400: errorResponse,
+      503: errorResponse,
+    },
+    tags: ['Geocoding'],
   }),
   createRoute({
-    method: "get",
-    path: "/directions/v1/{profile}/{coords}",
+    method: 'post',
+    path: '/geocoding/v1/batch',
+    request: {
+      headers: idempotencyHeaderSchema,
+      body: {
+        content: {
+          'application/json': { schema: geocodingBatchBodySchema },
+        },
+        required: true,
+      },
+    },
+    responses: {
+      200: jsonResponse('Ordered batch geocoding results'),
+      400: errorResponse,
+      409: errorResponse,
+      503: errorResponse,
+    },
+    tags: ['Geocoding'],
+  }),
+  createRoute({
+    method: 'get',
+    path: '/directions/v1/{profile}/{coords}',
     request: { params: profileParamSchema.merge(coordinatesParamSchema) },
-    responses: { 200: jsonResponse("Route result"), 400: errorResponse, 503: errorResponse },
-    tags: ["Routing"],
+    responses: { 200: jsonResponse('Route result'), 400: errorResponse, 503: errorResponse },
+    tags: ['Routing'],
   }),
   createRoute({
-    method: "post",
-    path: "/directions/v1/{profile}",
+    method: 'post',
+    path: '/directions/v1/{profile}',
     request: {
       params: profileParamSchema,
-      body: { content: { "application/json": { schema: routeBodySchema } }, required: true },
+      body: { content: { 'application/json': { schema: routeBodySchema } }, required: true },
     },
-    responses: { 200: jsonResponse("Route result"), 400: errorResponse, 503: errorResponse },
-    tags: ["Routing"],
+    responses: { 200: jsonResponse('Route result'), 400: errorResponse, 503: errorResponse },
+    tags: ['Routing'],
   }),
   createRoute({
-    method: "get",
-    path: "/isochrone/v1/{profile}/{coords}",
+    method: 'get',
+    path: '/isochrone/v1/{profile}/{coords}',
     request: { params: profileParamSchema.merge(coordinatesParamSchema) },
-    responses: { 200: jsonResponse("Isochrone GeoJSON"), 400: errorResponse, 503: errorResponse },
-    tags: ["Routing"],
+    responses: { 200: jsonResponse('Isochrone GeoJSON'), 400: errorResponse, 503: errorResponse },
+    tags: ['Routing'],
   }),
   createRoute({
-    method: "get",
-    path: "/matching/v1/{profile}/{coords}",
+    method: 'get',
+    path: '/matching/v1/{profile}/{coords}',
     request: { params: profileParamSchema.merge(coordinatesParamSchema) },
-    responses: { 200: jsonResponse("Map matching result"), 400: errorResponse, 503: errorResponse },
-    tags: ["Routing"],
+    responses: { 200: jsonResponse('Map matching result'), 400: errorResponse, 503: errorResponse },
+    tags: ['Routing'],
   }),
   createRoute({
-    method: "get",
-    path: "/matrix/v1/{profile}/{coords}",
+    method: 'get',
+    path: '/matrix/v1/{profile}/{coords}',
     request: { params: profileParamSchema.merge(coordinatesParamSchema) },
-    responses: { 200: jsonResponse("Route matrix result"), 400: errorResponse, 503: errorResponse },
-    tags: ["Routing"],
+    responses: { 200: jsonResponse('Route matrix result'), 400: errorResponse, 503: errorResponse },
+    tags: ['Routing'],
   }),
   createRoute({
-    method: "get",
-    path: "/optimized-trips/v1/{profile}/{coords}",
+    method: 'get',
+    path: '/optimized-trips/v1/{profile}/{coords}',
     request: { params: profileParamSchema.merge(coordinatesParamSchema) },
-    responses: { 200: jsonResponse("Optimized trip result"), 400: errorResponse, 503: errorResponse },
-    tags: ["Routing"],
+    responses: {
+      200: jsonResponse('Optimized trip result'),
+      400: errorResponse,
+      503: errorResponse,
+    },
+    tags: ['Routing'],
   }),
   createRoute({
-    method: "get",
-    path: "/elevation/v1/{coords}",
+    method: 'get',
+    path: '/elevation/v1/{coords}',
     request: { params: coordinatesParamSchema },
-    responses: { 200: jsonResponse("Elevation lookup result"), 400: errorResponse, 503: errorResponse },
-    tags: ["Elevation"],
+    responses: {
+      200: jsonResponse('Elevation lookup result'),
+      400: errorResponse,
+      503: errorResponse,
+    },
+    tags: ['Elevation'],
   }),
   createRoute({
-    method: "get",
-    path: "/elevation/v1/along/{coords}",
+    method: 'get',
+    path: '/elevation/v1/along/{coords}',
     request: { params: coordinatesParamSchema },
-    responses: { 200: jsonResponse("Elevation profile result"), 400: errorResponse, 503: errorResponse },
-    tags: ["Elevation"],
+    responses: {
+      200: jsonResponse('Elevation profile result'),
+      400: errorResponse,
+      503: errorResponse,
+    },
+    tags: ['Elevation'],
   }),
   createRoute({
-    method: "get",
-    path: "/static/v1/{owner}/{style}/{center}/{size}",
+    method: 'get',
+    path: '/static/v1/{owner}/{style}/{center}/{size}',
     request: { params: staticMapParamsSchema },
     responses: { 200: pngResponse, 400: errorResponse, 501: errorResponse },
-    tags: ["Static Maps"],
+    tags: ['Static Maps'],
   }),
-] as const;
+] as const
 
-const publicOpenApi = new OpenAPIHono();
+const publicOpenApi = new OpenAPIHono()
 for (const route of routeConfigs) {
-  publicOpenApi.openAPIRegistry.registerPath(route);
+  publicOpenApi.openAPIRegistry.registerPath(route)
 }
 
 type PublicOpenApiDocument = Record<string, unknown> & {
   components?: {
-    securitySchemes?: Record<string, unknown>;
-  };
-};
+    securitySchemes?: Record<string, unknown>
+  }
+}
 
 export function buildPublicOpenApiDocument(): PublicOpenApiDocument {
   const document = publicOpenApi.getOpenAPI31Document({
-    openapi: "3.1.0",
+    openapi: '3.1.0',
     info: {
-      title: "Planisfy Public API",
-      version: "0.1.0",
+      title: 'Planisfy Public API',
+      version: '0.1.0',
       description:
-        "Public customer-facing APIs for map styles, tiles, glyphs, geocoding, routing, elevation, and static maps.",
+        'Public customer-facing APIs for map styles, tiles, glyphs, geocoding, routing, elevation, and static maps.',
     },
     tags: [
-      { name: "Styles" },
-      { name: "Tiles" },
-      { name: "Fonts" },
-      { name: "Geocoding" },
-      { name: "Routing" },
-      { name: "Elevation" },
-      { name: "Static Maps" },
+      { name: 'Styles' },
+      { name: 'Tiles' },
+      { name: 'Fonts' },
+      { name: 'Geocoding' },
+      { name: 'Routing' },
+      { name: 'Elevation' },
+      { name: 'Static Maps' },
     ],
     security: [{ ApiKeyAuth: [] }, { CookieAuth: [] }],
-  });
+  })
 
-  const mutableDocument = document as unknown as PublicOpenApiDocument;
-  mutableDocument.components ??= {};
+  const mutableDocument = document as unknown as PublicOpenApiDocument
+  mutableDocument.components ??= {}
   mutableDocument.components.securitySchemes = {
     ...mutableDocument.components.securitySchemes,
     ApiKeyAuth: {
-      type: "apiKey",
-      in: "header",
-      name: "x-api-key",
+      type: 'apiKey',
+      in: 'header',
+      name: 'x-api-key',
     },
     CookieAuth: {
-      type: "apiKey",
-      in: "cookie",
-      name: "planisfy.session_token",
+      type: 'apiKey',
+      in: 'cookie',
+      name: 'planisfy.session_token',
     },
-  };
+  }
 
-  return mutableDocument;
+  return mutableDocument
 }

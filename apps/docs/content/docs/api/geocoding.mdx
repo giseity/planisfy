@@ -1,6 +1,6 @@
 ---
 title: Geocoding API
-description: Forward, reverse, and autocomplete geocoding through a configured Pelias-compatible service.
+description: Forward, reverse, autocomplete, and batch geocoding through a configured Pelias-compatible service.
 ---
 
 # Geocoding API
@@ -14,6 +14,7 @@ Geocoding requires `PELIAS_INTERNAL_URL` to point at a Pelias-compatible service
 | `GET`  | `/geocoding/v1/forward`      | Search text to coordinates and places. |
 | `GET`  | `/geocoding/v1/reverse`      | Coordinates to nearby places.          |
 | `GET`  | `/geocoding/v1/autocomplete` | Typeahead place suggestions.           |
+| `POST` | `/geocoding/v1/batch`        | Up to 50 ordered forward/reverse jobs. |
 
 ## Forward parameters
 
@@ -54,9 +55,25 @@ curl "https://api.example.com/geocoding/v1/reverse?lon=3.3792&lat=6.5244" \
 | `focus.lon` | No       | Longitude bias.                          |
 | `focus.lat` | No       | Latitude bias.                           |
 
+## Idempotent batches
+
+Batch requests accept between 1 and 50 forward or reverse queries. Supply an
+`Idempotency-Key` header unique to the caller operation. Repeating the same key
+and payload returns the stored response without consuming usage twice; reusing
+the key with a different payload returns `409 IDEMPOTENCY_CONFLICT`.
+
+```bash
+curl "https://api.example.com/geocoding/v1/batch" \
+  -X POST \
+  -H "X-API-Key: pk_your_key_here" \
+  -H "Idempotency-Key: geobble-import-01J123456789" \
+  -H "Content-Type: application/json" \
+  --data '{"queries":[{"type":"forward","q":"Lagos"},{"type":"reverse","lon":3.3792,"lat":6.5244}]}'
+```
+
 ## Auth, caching, and errors
 
-Requests require API key or session auth. Forward and reverse responses cache for one hour. Autocomplete responses cache for one minute.
+Requests require API key or session auth. Forward and reverse responses cache for one hour. Autocomplete responses cache for one minute. Batch responses are private and retained for seven days for idempotent replay.
 
 If Pelias is not configured, the API returns `503 GEOCODER_NOT_CONFIGURED`. Upstream Pelias failures return `502 UPSTREAM_ERROR` or `503 GEOCODER_UNAVAILABLE`.
 

@@ -178,6 +178,9 @@ export function parseQuotaReservation(result: unknown): [number, number] {
 }
 
 export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
+  const cost = await getRequestCost(c)
+  c.set('requestCost', cost)
+  c.set('billableUsage', true)
   const clientIp =
     c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown'
 
@@ -197,7 +200,6 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
 
   const ownerId = c.get('ownerId')
   if (!ownerId) {
-    const cost = getEndpointCost(c.req.path)
     const anonymousLimit = ANONYMOUS_PUBLIC_RPM
     const limiter = getRequestLimiter(anonymousLimit)
 
@@ -234,7 +236,6 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
 
   const planLimits = await getAccountPlanLimits(ownerId)
   const requestsPerMinute = normalizeRequestsPerMinute(planLimits.requestsPerMinute)
-  const cost = getEndpointCost(c.req.path)
 
   if (requestsPerMinute === Infinity) {
     c.header('X-RateLimit-Limit', 'unlimited')
@@ -305,8 +306,23 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
     await next()
     successful = c.res.status >= 200 && c.res.status < 400
   } finally {
-    if (!successful) {
+    if (!successful || c.get('billableUsage') === false) {
       await releaseMonthlyQuota(quota.reservationKey, cost)
     }
   }
 })
+
+async function getRequestCost(c: Context<AuthEnv>) {
+  const baseCost = getEndpointCost(c.req.path)
+  if (c.req.method !== 'POST' || c.req.path !== '/geocoding/v1/batch') {
+    return baseCost
+  }
+
+  try {
+    const body = (await c.req.raw.clone().json()) as { queries?: unknown }
+    const count = Array.isArray(body.queries) ? Math.max(1, Math.min(50, body.queries.length)) : 1
+    return baseCost * count
+  } catch {
+    return baseCost
+  }
+}

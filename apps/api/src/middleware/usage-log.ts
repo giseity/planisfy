@@ -18,7 +18,10 @@ export const usageLogMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   } finally {
     const apiKeyId = c.get('apiKeyId') ?? null
     const ownerId = c.get('ownerId') ?? null
-    const cost = statusCode >= 200 && statusCode < 400 ? getEndpointCost(c.req.path) : 0
+    const cost =
+      statusCode >= 200 && statusCode < 400 && c.get('billableUsage') !== false
+        ? (c.get('requestCost') ?? getEndpointCost(c.req.path))
+        : 0
 
     enqueueUsageLog({
       apiKeyId,

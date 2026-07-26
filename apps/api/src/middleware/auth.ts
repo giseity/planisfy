@@ -1,36 +1,33 @@
-import { createMiddleware } from "hono/factory";
-import type { Context } from "hono";
-import { accounts, db, members, sessions } from "@planisfy/database";
-import { eq, and, gt, isNull } from "drizzle-orm";
-import { getCookie } from "hono/cookie";
-import {
-  canOrg,
-  hasMinOrgRole,
-  type OrgPermission,
-  type OrgRole,
-} from "@planisfy/utils";
+import { createMiddleware } from 'hono/factory'
+import type { Context } from 'hono'
+import { accounts, db, members, sessions } from '@planisfy/database'
+import { eq, and, gt, isNull } from 'drizzle-orm'
+import { getCookie } from 'hono/cookie'
+import { canOrg, hasMinOrgRole, type OrgPermission, type OrgRole } from '@planisfy/utils'
 
 type SessionContext = {
-  id: string;
-  userId: string;
-  token: string;
-  activeOrganizationId: string | null;
-};
+  id: string
+  userId: string
+  token: string
+  activeOrganizationId: string | null
+}
 
 export type AuthEnv = {
   Variables: {
-    userId: string;
-    ownerId: string;
-    orgRole: string | null;
-    session: SessionContext;
+    userId: string
+    ownerId: string
+    orgRole: string | null
+    session: SessionContext
     // API key context (set by apiKeyMiddleware, may be null)
-    apiKeyId: string | null;
-    apiKeyOwnerId: string | null;
-    apiKeyScopes: string[] | null;
+    apiKeyId: string | null
+    apiKeyOwnerId: string | null
+    apiKeyScopes: string[] | null
     // Request ID for correlation
-    requestId: string;
-  };
-};
+    requestId: string
+    requestCost: number
+    billableUsage: boolean
+  }
+}
 
 /**
  * Validates the better-auth session cookie by looking up the token directly
@@ -41,43 +38,39 @@ export type AuthEnv = {
  */
 export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   const rawToken =
-    getBetterAuthSessionCookie(c) ||
-    c.req.header("authorization")?.replace("Bearer ", "");
+    getBetterAuthSessionCookie(c) || c.req.header('authorization')?.replace('Bearer ', '')
 
   if (!rawToken) {
-    return c.json(
-      { error: { code: "UNAUTHORIZED", message: "Not authenticated" } },
-      401,
-    );
+    return c.json({ error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } }, 401)
   }
 
-  const session = await findValidSession(rawToken);
+  const session = await findValidSession(rawToken)
   if (!session) {
     return c.json(
       {
-        error: { code: "UNAUTHORIZED", message: "Invalid or expired session" },
+        error: { code: 'UNAUTHORIZED', message: 'Invalid or expired session' },
       },
-      401,
-    );
+      401
+    )
   }
 
-  const ownerContext = await resolveSessionOwnerContext(session);
+  const ownerContext = await resolveSessionOwnerContext(session)
   if (!ownerContext.ok) {
     return c.json(
       {
         error: {
-          code: "FORBIDDEN",
+          code: 'FORBIDDEN',
           message: ownerContext.message,
         },
       },
-      403,
-    );
+      403
+    )
   }
 
-  setSessionContext(c, session, ownerContext);
+  setSessionContext(c, session, ownerContext)
 
-  await next();
-});
+  await next()
+})
 
 /**
  * Dual auth middleware: accepts either API key (X-API-Key) or session cookie.
@@ -87,233 +80,228 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
  */
 export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   // Check if API key was validated by apiKeyMiddleware
-  const apiKeyOwnerId = c.get("apiKeyOwnerId");
+  const apiKeyOwnerId = c.get('apiKeyOwnerId')
   if (apiKeyOwnerId) {
     // API key auth: use the key owner as the identity
-    c.set("userId", apiKeyOwnerId);
-    c.set("ownerId", apiKeyOwnerId);
-    c.set("session", {
-      id: "api-key",
+    c.set('userId', apiKeyOwnerId)
+    c.set('ownerId', apiKeyOwnerId)
+    c.set('session', {
+      id: 'api-key',
       userId: apiKeyOwnerId,
-      token: "",
+      token: '',
       activeOrganizationId: null,
-    });
-    c.set("orgRole", null);
-    await next();
-    return;
+    })
+    c.set('orgRole', null)
+    await next()
+    return
   }
 
   // Fall back to session cookie
   const rawToken =
-    getBetterAuthSessionCookie(c) ||
-    c.req.header("authorization")?.replace("Bearer ", "");
+    getBetterAuthSessionCookie(c) || c.req.header('authorization')?.replace('Bearer ', '')
 
   if (!rawToken) {
     return c.json(
       {
-        error: { code: "UNAUTHORIZED", message: "API key or session required" },
+        error: { code: 'UNAUTHORIZED', message: 'API key or session required' },
       },
-      401,
-    );
+      401
+    )
   }
 
-  const session = await findValidSession(rawToken);
+  const session = await findValidSession(rawToken)
   if (!session) {
     return c.json(
       {
-        error: { code: "UNAUTHORIZED", message: "Invalid or expired session" },
+        error: { code: 'UNAUTHORIZED', message: 'Invalid or expired session' },
       },
-      401,
-    );
+      401
+    )
   }
 
-  const ownerContext = await resolveSessionOwnerContext(session);
+  const ownerContext = await resolveSessionOwnerContext(session)
   if (!ownerContext.ok) {
     return c.json(
       {
         error: {
-          code: "FORBIDDEN",
+          code: 'FORBIDDEN',
           message: ownerContext.message,
         },
       },
-      403,
-    );
+      403
+    )
   }
 
-  setSessionContext(c, session, ownerContext);
+  setSessionContext(c, session, ownerContext)
 
-  await next();
-});
+  await next()
+})
 
 /**
  * Optional auth middleware for published map assets.
  * Valid API keys or sessions attach owner context for metering/private reads,
  * but missing or stale cookies do not block anonymous public resources.
  */
-export const optionalAuthMiddleware = createMiddleware<AuthEnv>(
-  async (c, next) => {
-    const apiKeyOwnerId = c.get("apiKeyOwnerId");
-    if (apiKeyOwnerId) {
-      c.set("userId", apiKeyOwnerId);
-      c.set("ownerId", apiKeyOwnerId);
-      c.set("session", {
-        id: "api-key",
-        userId: apiKeyOwnerId,
-        token: "",
-        activeOrganizationId: null,
-      });
-      c.set("orgRole", null);
-      await next();
-      return;
-    }
+export const optionalAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
+  const apiKeyOwnerId = c.get('apiKeyOwnerId')
+  if (apiKeyOwnerId) {
+    c.set('userId', apiKeyOwnerId)
+    c.set('ownerId', apiKeyOwnerId)
+    c.set('session', {
+      id: 'api-key',
+      userId: apiKeyOwnerId,
+      token: '',
+      activeOrganizationId: null,
+    })
+    c.set('orgRole', null)
+    await next()
+    return
+  }
 
-    const rawToken =
-      getBetterAuthSessionCookie(c) ||
-      c.req.header("authorization")?.replace("Bearer ", "");
-    if (rawToken) {
-      const session = await findValidSession(rawToken);
-      if (session) {
-        const ownerContext = await resolveSessionOwnerContext(session);
-        if (ownerContext.ok) {
-          setSessionContext(c, session, ownerContext);
-        } else {
-          setSessionContext(
-            c,
-            { ...session, activeOrganizationId: null },
-            {
-              ownerId: session.userId,
-              orgRole: null,
-            },
-          );
-        }
+  const rawToken =
+    getBetterAuthSessionCookie(c) || c.req.header('authorization')?.replace('Bearer ', '')
+  if (rawToken) {
+    const session = await findValidSession(rawToken)
+    if (session) {
+      const ownerContext = await resolveSessionOwnerContext(session)
+      if (ownerContext.ok) {
+        setSessionContext(c, session, ownerContext)
+      } else {
+        setSessionContext(
+          c,
+          { ...session, activeOrganizationId: null },
+          {
+            ownerId: session.userId,
+            orgRole: null,
+          }
+        )
       }
     }
+  }
 
-    await next();
-  },
-);
+  await next()
+})
 
 export function isOrgRoleAtLeast(role: string | null, minRole: OrgRole) {
-  return hasMinOrgRole(role, minRole);
+  return hasMinOrgRole(role, minRole)
 }
 
 export function requireOrgMinRole(minRole: OrgRole) {
   return createMiddleware<AuthEnv>(async (c, next) => {
-    const session = c.get("session");
+    const session = c.get('session')
     if (!session?.activeOrganizationId) {
-      await next();
-      return;
+      await next()
+      return
     }
 
-    if (!isOrgRoleAtLeast(c.get("orgRole"), minRole)) {
+    if (!isOrgRoleAtLeast(c.get('orgRole'), minRole)) {
       return c.json(
         {
           error: {
-            code: "FORBIDDEN",
+            code: 'FORBIDDEN',
             message: `Requires ${minRole} access to this organization.`,
           },
         },
-        403,
-      );
+        403
+      )
     }
 
-    await next();
-  });
+    await next()
+  })
 }
 
 export function requireOrgPermission(permission: OrgPermission) {
   return createMiddleware<AuthEnv>(async (c, next) => {
-    const session = c.get("session");
+    const session = c.get('session')
     if (!session?.activeOrganizationId) {
-      await next();
-      return;
+      await next()
+      return
     }
 
-    if (!canOrg(c.get("orgRole"), permission)) {
+    if (!canOrg(c.get('orgRole'), permission)) {
       return c.json(
         {
           error: {
-            code: "FORBIDDEN",
+            code: 'FORBIDDEN',
             message: `Requires ${permission} permission for this organization.`,
           },
         },
-        403,
-      );
+        403
+      )
     }
 
-    await next();
-  });
+    await next()
+  })
 }
 
 export function requireAnyOrgPermission(permissions: OrgPermission[]) {
   return createMiddleware<AuthEnv>(async (c, next) => {
-    const session = c.get("session");
+    const session = c.get('session')
     if (!session?.activeOrganizationId) {
-      await next();
-      return;
+      await next()
+      return
     }
 
-    if (!permissions.some((permission) => canOrg(c.get("orgRole"), permission))) {
+    if (!permissions.some((permission) => canOrg(c.get('orgRole'), permission))) {
       return c.json(
         {
           error: {
-            code: "FORBIDDEN",
-            message: `Requires one of these permissions for this organization: ${permissions.join(", ")}.`,
+            code: 'FORBIDDEN',
+            message: `Requires one of these permissions for this organization: ${permissions.join(', ')}.`,
           },
         },
-        403,
-      );
+        403
+      )
     }
 
-    await next();
-  });
+    await next()
+  })
 }
 
 export function requireOrgMutationRole(
   minRole: OrgRole,
-  methods = ["POST", "PUT", "PATCH", "DELETE"],
+  methods = ['POST', 'PUT', 'PATCH', 'DELETE']
 ) {
-  const methodSet = new Set(methods);
-  const requireRole = requireOrgMinRole(minRole);
+  const methodSet = new Set(methods)
+  const requireRole = requireOrgMinRole(minRole)
 
   return createMiddleware<AuthEnv>(async (c, next) => {
     if (!methodSet.has(c.req.method.toUpperCase())) {
-      await next();
-      return;
+      await next()
+      return
     }
 
-    return requireRole(c, next);
-  });
+    return requireRole(c, next)
+  })
 }
 
 export function requireOrgMutationPermission(
   permission: OrgPermission,
-  methods = ["POST", "PUT", "PATCH", "DELETE"],
+  methods = ['POST', 'PUT', 'PATCH', 'DELETE']
 ) {
-  const methodSet = new Set(methods);
-  const requirePermission = requireOrgPermission(permission);
+  const methodSet = new Set(methods)
+  const requirePermission = requireOrgPermission(permission)
 
   return createMiddleware<AuthEnv>(async (c, next) => {
     if (!methodSet.has(c.req.method.toUpperCase())) {
-      await next();
-      return;
+      await next()
+      return
     }
 
-    return requirePermission(c, next);
-  });
+    return requirePermission(c, next)
+  })
 }
 
 export function getBetterAuthSessionCookie(c: Parameters<typeof getCookie>[0]) {
   return (
-    getCookie(c, "__Secure-better-auth.session_token") ||
-    getCookie(c, "better-auth.session_token")
-  );
+    getCookie(c, '__Secure-better-auth.session_token') || getCookie(c, 'better-auth.session_token')
+  )
 }
 
 async function findValidSession(rawToken: string) {
   // better-auth stores the cookie as "{token}.{signature}" but
   // the sessions table only stores the token portion.
-  const token = rawToken.split(".")[0]!;
+  const token = rawToken.split('.')[0]!
 
   const [session] = await db
     .select({
@@ -329,42 +317,36 @@ async function findValidSession(rawToken: string) {
       and(
         eq(sessions.token, token),
         gt(sessions.expiresAt, new Date()),
-        eq(accounts.lifecycleStatus, "ACTIVE"),
-        isNull(accounts.deletedAt),
-      ),
+        eq(accounts.lifecycleStatus, 'ACTIVE'),
+        isNull(accounts.deletedAt)
+      )
     )
-    .limit(1);
+    .limit(1)
 
-  return session ?? null;
+  return session ?? null
 }
 
 export async function resolveSessionOwnerContext(
   session: SessionContext,
-  findRole: (
-    userId: string,
-    orgId: string,
-  ) => Promise<string | null> = findMembershipRole,
-): Promise<
-  | { ok: true; ownerId: string; orgRole: string | null }
-  | { ok: false; message: string }
-> {
+  findRole: (userId: string, orgId: string) => Promise<string | null> = findMembershipRole
+): Promise<{ ok: true; ownerId: string; orgRole: string | null } | { ok: false; message: string }> {
   if (!session.activeOrganizationId) {
-    return { ok: true, ownerId: session.userId, orgRole: null };
+    return { ok: true, ownerId: session.userId, orgRole: null }
   }
 
-  const role = await findRole(session.userId, session.activeOrganizationId);
+  const role = await findRole(session.userId, session.activeOrganizationId)
   if (!role) {
     return {
       ok: false,
-      message: "Active organization access is no longer available.",
-    };
+      message: 'Active organization access is no longer available.',
+    }
   }
 
   return {
     ok: true,
     ownerId: session.activeOrganizationId,
     orgRole: role,
-  };
+  }
 }
 
 async function findMembershipRole(userId: string, orgId: string) {
@@ -376,22 +358,22 @@ async function findMembershipRole(userId: string, orgId: string) {
       and(
         eq(members.userId, userId),
         eq(members.organizationId, orgId),
-        eq(accounts.lifecycleStatus, "ACTIVE"),
-        isNull(accounts.deletedAt),
-      ),
+        eq(accounts.lifecycleStatus, 'ACTIVE'),
+        isNull(accounts.deletedAt)
+      )
     )
-    .limit(1);
+    .limit(1)
 
-  return membership?.role ?? null;
+  return membership?.role ?? null
 }
 
 function setSessionContext(
   c: Context<AuthEnv>,
   session: SessionContext,
-  ownerContext: { ownerId: string; orgRole: string | null },
+  ownerContext: { ownerId: string; orgRole: string | null }
 ) {
-  c.set("userId", session.userId);
-  c.set("session", session);
-  c.set("ownerId", ownerContext.ownerId);
-  c.set("orgRole", ownerContext.orgRole);
+  c.set('userId', session.userId)
+  c.set('session', session)
+  c.set('ownerId', ownerContext.ownerId)
+  c.set('orgRole', ownerContext.orgRole)
 }

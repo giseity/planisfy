@@ -18,7 +18,11 @@ import {
   type BillablePlanSlug,
   type SubscriptionProduct,
 } from './subscription-products'
-import { getManagedPlanLimits, reconcileOpenManagedUsagePeriods } from './managed-contracts'
+import {
+  deleteExpiredBillableRequests,
+  getManagedPlanLimits,
+  reconcileOpenManagedUsagePeriods,
+} from './managed-contracts'
 
 export { PLANS }
 export type { PlanLimits, PlanSlug }
@@ -493,6 +497,7 @@ export function planRank(planId: PlanSlug): number {
 
 export async function reportUsage(): Promise<void> {
   await reconcileOpenManagedUsagePeriods()
+  await deleteExpiredBillableRequests()
 }
 
 export async function applyDodoWebhookEvent(

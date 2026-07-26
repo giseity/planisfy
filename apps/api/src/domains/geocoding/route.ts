@@ -1,9 +1,15 @@
+import { createHash } from 'node:crypto'
 import { Hono, type Context } from 'hono'
+import { billableRequests, db } from '@planisfy/database'
+import { and, eq } from 'drizzle-orm'
 import type { AuthEnv } from '../../middleware/auth'
 import { env } from '../../env'
 import { isPeliasConfigured } from '../setup/geocoding-config'
 
 export const geocodingRoute = new Hono<AuthEnv>()
+
+const MAX_BATCH_QUERIES = 50
+const BATCH_CONCURRENCY = 5
 
 // ── GET /geocoding/v1/forward — Forward geocoding (address → coordinates) ───
 
@@ -132,6 +138,96 @@ geocodingRoute.get('/geocoding/v1/autocomplete', async (c) => {
   }
 })
 
+geocodingRoute.post('/geocoding/v1/batch', async (c) => {
+  if (!isPeliasConfigured(env.PELIAS_INTERNAL_URL)) {
+    return geocoderNotConfigured(c)
+  }
+
+  const idempotencyKey = c.req.header('idempotency-key')?.trim()
+  if (!idempotencyKey || idempotencyKey.length < 8 || idempotencyKey.length > 128) {
+    return c.json(
+      {
+        error: {
+          code: 'IDEMPOTENCY_KEY_REQUIRED',
+          message: 'Idempotency-Key must contain between 8 and 128 characters.',
+        },
+      },
+      400
+    )
+  }
+
+  let rawBody: unknown
+  try {
+    rawBody = await c.req.json()
+  } catch {
+    return c.json({ error: { code: 'BAD_REQUEST', message: 'Request body must be JSON.' } }, 400)
+  }
+
+  const parsed = parseBatchGeocodingRequest(rawBody)
+  if (!parsed.ok) {
+    return c.json({ error: { code: 'BAD_REQUEST', message: parsed.message } }, 400)
+  }
+
+  const accountId = c.get('ownerId')
+  const requestFingerprint = createHash('sha256')
+    .update(JSON.stringify(parsed.queries))
+    .digest('hex')
+  const existing = await findBillableRequest(accountId, idempotencyKey)
+  if (existing) {
+    return await replayBillableRequest(c, existing, requestFingerprint)
+  }
+
+  const [reservation] = await db
+    .insert(billableRequests)
+    .values({
+      accountId,
+      idempotencyKey,
+      requestFingerprint,
+      endpoint: c.req.path,
+      method: c.req.method,
+      units: c.get('requestCost'),
+    })
+    .onConflictDoNothing({
+      target: [billableRequests.accountId, billableRequests.idempotencyKey],
+    })
+    .returning({ id: billableRequests.id })
+
+  if (!reservation) {
+    const raced = await findBillableRequest(accountId, idempotencyKey)
+    if (raced) return await replayBillableRequest(c, raced, requestFingerprint)
+    return c.json(
+      {
+        error: {
+          code: 'IDEMPOTENCY_CONFLICT',
+          message: 'The request could not acquire its idempotency reservation.',
+        },
+      },
+      409
+    )
+  }
+
+  try {
+    const results = await mapWithConcurrency(parsed.queries, BATCH_CONCURRENCY, executeBatchQuery)
+    const responseBody = { data: { results } }
+    await db
+      .update(billableRequests)
+      .set({
+        statusCode: 200,
+        responseBody,
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(billableRequests.id, reservation.id))
+
+    c.header('Cache-Control', 'private, no-store')
+    return c.json(responseBody)
+  } catch (error) {
+    await db.delete(billableRequests).where(eq(billableRequests.id, reservation.id))
+    console.error('[geocoding] Batch error:', error)
+    return peliasError(c, error)
+  }
+})
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 async function requestPelias(endpoint: string, params: Record<string, string>): Promise<unknown> {
@@ -151,6 +247,198 @@ async function requestPelias(endpoint: string, params: Record<string, string>): 
   } finally {
     clearTimeout(timeout)
   }
+}
+
+type BatchGeocodingQuery =
+  | {
+      type: 'forward'
+      q: string
+      limit: number
+      language: string
+      country?: string
+      bbox?: string
+    }
+  | {
+      type: 'reverse'
+      lon: number
+      lat: number
+      limit: number
+      language: string
+    }
+
+export function parseBatchGeocodingRequest(
+  value: unknown
+): { ok: true; queries: BatchGeocodingQuery[] } | { ok: false; message: string } {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !Array.isArray((value as { queries?: unknown }).queries)
+  ) {
+    return { ok: false, message: "'queries' must be an array." }
+  }
+  const values = (value as { queries: unknown[] }).queries
+  if (values.length === 0 || values.length > MAX_BATCH_QUERIES) {
+    return {
+      ok: false,
+      message: `'queries' must contain between 1 and ${MAX_BATCH_QUERIES} items.`,
+    }
+  }
+
+  const queries: BatchGeocodingQuery[] = []
+  for (const [index, item] of values.entries()) {
+    if (!item || typeof item !== 'object') {
+      return { ok: false, message: `Query ${index} must be an object.` }
+    }
+    const query = item as Record<string, unknown>
+    const language =
+      typeof query.language === 'string' && query.language ? query.language.slice(0, 16) : 'en'
+    if (query.type === 'forward') {
+      if (typeof query.q !== 'string' || !query.q.trim() || query.q.length > 500) {
+        return { ok: false, message: `Query ${index} has an invalid 'q'.` }
+      }
+      queries.push({
+        type: 'forward',
+        q: query.q,
+        limit: boundedInteger(query.limit, 5, 1, 25),
+        language,
+        ...(typeof query.country === 'string' && query.country
+          ? { country: query.country.slice(0, 8) }
+          : {}),
+        ...(typeof query.bbox === 'string' && query.bbox ? { bbox: query.bbox.slice(0, 128) } : {}),
+      })
+      continue
+    }
+    if (query.type === 'reverse') {
+      const lon = Number(query.lon)
+      const lat = Number(query.lat)
+      if (
+        !Number.isFinite(lon) ||
+        !Number.isFinite(lat) ||
+        lon < -180 ||
+        lon > 180 ||
+        lat < -90 ||
+        lat > 90
+      ) {
+        return { ok: false, message: `Query ${index} has invalid coordinates.` }
+      }
+      queries.push({
+        type: 'reverse',
+        lon,
+        lat,
+        limit: boundedInteger(query.limit, 1, 1, 10),
+        language,
+      })
+      continue
+    }
+    return { ok: false, message: `Query ${index} has an unsupported 'type'.` }
+  }
+
+  return { ok: true, queries }
+}
+
+async function executeBatchQuery(query: BatchGeocodingQuery) {
+  if (query.type === 'forward') {
+    return requestPelias('search', {
+      text: query.q,
+      size: String(query.limit),
+      lang: query.language,
+      ...(query.bbox ? { 'boundary.rect': query.bbox } : {}),
+      ...(query.country ? { 'boundary.country': query.country } : {}),
+    })
+  }
+  return requestPelias('reverse', {
+    'point.lon': String(query.lon),
+    'point.lat': String(query.lat),
+    size: String(query.limit),
+    lang: query.language,
+  })
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>
+) {
+  const results = new Array<R>(values.length)
+  let nextIndex = 0
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (nextIndex < values.length) {
+        const index = nextIndex++
+        results[index] = await mapper(values[index]!)
+      }
+    })
+  )
+  return results
+}
+
+function boundedInteger(value: unknown, fallback: number, minimum: number, maximum: number) {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed)) return fallback
+  return Math.max(minimum, Math.min(maximum, parsed))
+}
+
+async function findBillableRequest(accountId: string, idempotencyKey: string) {
+  const [request] = await db
+    .select()
+    .from(billableRequests)
+    .where(
+      and(
+        eq(billableRequests.accountId, accountId),
+        eq(billableRequests.idempotencyKey, idempotencyKey)
+      )
+    )
+    .limit(1)
+  return request
+}
+
+async function replayBillableRequest(
+  c: Context<AuthEnv>,
+  existing: NonNullable<Awaited<ReturnType<typeof findBillableRequest>>>,
+  requestFingerprint: string
+) {
+  c.set('billableUsage', false)
+  if (existing.requestFingerprint !== requestFingerprint) {
+    return c.json(
+      {
+        error: {
+          code: 'IDEMPOTENCY_CONFLICT',
+          message: 'Idempotency-Key was already used for a different request.',
+        },
+      },
+      409
+    )
+  }
+  if (!existing.completedAt || !existing.statusCode || !existing.responseBody) {
+    if (existing.createdAt.getTime() < Date.now() - 5 * 60 * 1000) {
+      await db.delete(billableRequests).where(eq(billableRequests.id, existing.id))
+      return c.json(
+        {
+          error: {
+            code: 'STALE_REQUEST_RELEASED',
+            message: 'A stale request reservation was released. Retry the request.',
+          },
+        },
+        409
+      )
+    }
+    return c.json(
+      {
+        error: {
+          code: 'REQUEST_IN_PROGRESS',
+          message: 'A request with this Idempotency-Key is still in progress.',
+        },
+      },
+      409
+    )
+  }
+
+  c.header('Idempotency-Replayed', 'true')
+  c.header('Cache-Control', 'private, no-store')
+  return new Response(JSON.stringify(existing.responseBody), {
+    status: existing.statusCode,
+    headers: { 'content-type': 'application/json; charset=UTF-8' },
+  })
 }
 
 function geocoderNotConfigured(c: Context<AuthEnv>) {
