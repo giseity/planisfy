@@ -15,9 +15,14 @@ Record these values before importing:
 - Pelias index name;
 - Elasticsearch and Pelias image versions.
 
-The managed planet-address profile contains OpenStreetMap, Who's On First,
-OpenAddresses, and Geonames. Interpolation, transit, and polylines are not part
-of the first managed release.
+The managed `planet_geocoder` profile version 1 contains OpenStreetMap,
+Who's On First, OpenAddresses, Geonames, and the Pelias polylines street
+network. It includes Placeholder, PIP, and Libpostal runtime support.
+Interpolation and transit are not part of profile version 1.
+
+The profile name identifies the stable capability contract. Increment
+`profileVersion` when importer membership, required runtime services, or index
+semantics change. Source refreshes that preserve the contract remain version 1.
 
 ## Create the Snapshot
 
@@ -49,12 +54,12 @@ Confirm that the snapshot state is `SUCCESS`, then package the repository
 contents at the archive root:
 
 ```bash
-PELIAS_SNAPSHOT_NAME=pelias-planet-address-YYYY-MM-DD \
+PELIAS_SNAPSHOT_NAME=pelias-planet-geocoder-YYYY-MM-DD \
   scripts/create-pelias-snapshot.sh
 
 scripts/package-pelias-snapshot.sh \
   /path/to/snapshots/repository \
-  /path/to/artifacts/pelias-planet-address.tar
+  /path/to/artifacts/pelias-planet-geocoder.tar
 ```
 
 The archive must contain `index.latest` or `index-N` at its root. Keep the

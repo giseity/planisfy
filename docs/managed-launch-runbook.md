@@ -47,7 +47,7 @@ Before sign-off:
 
 Before advertising managed geocoding:
 
-- Follow `docs/pelias-lifecycle.md` to snapshot and package the planet-address
+- Follow `docs/pelias-lifecycle.md` to snapshot and package the `planet_geocoder`
   build.
 - Verify the source PBF SHA-256, Pelias Docker commit, archive SHA-256, and
   archive byte size against the release manifest.

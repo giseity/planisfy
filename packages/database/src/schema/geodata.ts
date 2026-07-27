@@ -952,7 +952,8 @@ export const geocodingBuilds = pgTable(
     activationWorkerNodeId: uuid('activation_worker_node_id').references(() => workerNodes.id, {
       onDelete: 'set null',
     }),
-    profile: varchar('profile', { length: 64 }).notNull().default('planet_address'),
+    profile: varchar('profile', { length: 64 }).notNull().default('planet_geocoder'),
+    profileVersion: integer('profile_version').notNull().default(1),
     sourceUrl: text('source_url').notNull(),
     sourceDate: timestamp('source_date', { withTimezone: true }),
     sourceChecksumSha256: varchar('source_checksum_sha256', { length: 64 }),

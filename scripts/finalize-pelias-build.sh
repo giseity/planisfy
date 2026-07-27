@@ -12,6 +12,11 @@ source_date=${PELIAS_SOURCE_DATE:?PELIAS_SOURCE_DATE is required}
 source_checksum=${PELIAS_SOURCE_SHA256:?PELIAS_SOURCE_SHA256 is required}
 source_size=${PELIAS_SOURCE_SIZE:?PELIAS_SOURCE_SIZE is required}
 docker_commit=${PELIAS_DOCKER_COMMIT:?PELIAS_DOCKER_COMMIT is required}
+street_source_build_id=${PELIAS_STREET_SOURCE_BUILD_ID:?PELIAS_STREET_SOURCE_BUILD_ID is required}
+street_source_checksum=${PELIAS_STREET_SOURCE_SHA256:?PELIAS_STREET_SOURCE_SHA256 is required}
+street_export_checksum=${PELIAS_STREET_EXPORT_SHA256:?PELIAS_STREET_EXPORT_SHA256 is required}
+street_export_size=${PELIAS_STREET_EXPORT_SIZE:?PELIAS_STREET_EXPORT_SIZE is required}
+valhalla_image=${PELIAS_VALHALLA_IMAGE:?PELIAS_VALHALLA_IMAGE is required}
 
 if ! grep -q '^BUILD_COMPLETED$' "$build_log"; then
   echo "Pelias build has not completed successfully" >&2
@@ -66,6 +71,11 @@ PELIAS_SOURCE_DATE="$source_date" \
 PELIAS_SOURCE_SHA256="$source_checksum" \
 PELIAS_SOURCE_SIZE="$source_size" \
 PELIAS_DOCKER_COMMIT="$docker_commit" \
+PELIAS_STREET_SOURCE_BUILD_ID="$street_source_build_id" \
+PELIAS_STREET_SOURCE_SHA256="$street_source_checksum" \
+PELIAS_STREET_EXPORT_SHA256="$street_export_checksum" \
+PELIAS_STREET_EXPORT_SIZE="$street_export_size" \
+PELIAS_VALHALLA_IMAGE="$valhalla_image" \
 python3 - <<'PY'
 import datetime
 import hashlib
@@ -113,12 +123,14 @@ images = [
         "pelias/geonames:master",
         "pelias/openaddresses:master",
         "pelias/openstreetmap:master",
+        "pelias/polylines:master",
     )
 ]
 
 manifest = {
     "schemaVersion": 1,
-    "profile": "planet_address",
+    "profile": "planet_geocoder",
+    "profileVersion": 1,
     "createdAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "source": {
         "url": os.environ["PELIAS_SOURCE_URL"],
@@ -127,13 +139,25 @@ manifest = {
         "sha256": os.environ["PELIAS_SOURCE_SHA256"],
     },
     "peliasDockerCommit": os.environ["PELIAS_DOCKER_COMMIT"],
+    "streetData": {
+        "sourceArtifact": {
+            "buildId": os.environ["PELIAS_STREET_SOURCE_BUILD_ID"],
+            "sha256": os.environ["PELIAS_STREET_SOURCE_SHA256"],
+            "valhallaImage": os.environ["PELIAS_VALHALLA_IMAGE"],
+        },
+        "export": {
+            "sha256": os.environ["PELIAS_STREET_EXPORT_SHA256"],
+            "size": int(os.environ["PELIAS_STREET_EXPORT_SIZE"]),
+        },
+    },
     "importers": [
         "whosonfirst",
         "geonames",
         "openaddresses",
         "openstreetmap",
+        "polylines",
     ],
-    "excludedImporters": ["interpolation", "transit", "polylines"],
+    "excludedImporters": ["interpolation", "transit"],
     "index": {
         "name": "pelias",
         "documentCount": index_stats["total"]["docs"]["count"],

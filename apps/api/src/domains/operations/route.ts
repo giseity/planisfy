@@ -40,6 +40,8 @@ import {
   STALE_JOB_RECONCILED_CODE,
 } from '@planisfy/database/jobs/reconciliation'
 import {
+  MANAGED_PELIAS_PROFILE,
+  MANAGED_PELIAS_PROFILE_VERSION,
   SOURCE_PROCESSING_QUEUE_NAME,
   WORKER_GEODATA_HEARTBEAT_KEY,
   WORKER_GEODATA_HEARTBEAT_STALE_MS,
@@ -342,7 +344,8 @@ const geocodingBuildSchema = z.object({
     .length(64)
     .regex(/^[a-f0-9]+$/i),
   peliasDockerCommit: z.string().min(7).max(64),
-  profile: z.literal('planet_address').default('planet_address'),
+  profile: z.literal(MANAGED_PELIAS_PROFILE).default(MANAGED_PELIAS_PROFILE),
+  profileVersion: z.literal(MANAGED_PELIAS_PROFILE_VERSION).default(MANAGED_PELIAS_PROFILE_VERSION),
   indexName: z.string().min(1).max(128).default('pelias'),
   activationWorkerNodeId: z.string().uuid().optional(),
   config: z.record(z.string(), z.unknown()).default({}),
@@ -1520,6 +1523,7 @@ operationsRoute.post('/operations/geocoding-builds', async (c) => {
       sourceChecksumSha256: parsed.data.sourceChecksumSha256.toLowerCase(),
       peliasDockerCommit: parsed.data.peliasDockerCommit,
       profile: parsed.data.profile,
+      profileVersion: parsed.data.profileVersion,
       indexName: parsed.data.indexName,
       activationWorkerNodeId: parsed.data.activationWorkerNodeId ?? null,
       status: 'external_build',
@@ -1531,6 +1535,7 @@ operationsRoute.post('/operations/geocoding-builds', async (c) => {
     message: 'External Pelias build registered',
     metadata: {
       profile: parsed.data.profile,
+      profileVersion: parsed.data.profileVersion,
       sourceChecksumSha256: parsed.data.sourceChecksumSha256.toLowerCase(),
       peliasDockerCommit: parsed.data.peliasDockerCommit,
     },
