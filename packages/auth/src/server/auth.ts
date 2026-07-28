@@ -1,21 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { createAccessControl, organization } from 'better-auth/plugins'
 import { oAuthProxy } from 'better-auth/plugins/oauth-proxy'
-import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { apiKey } from '@better-auth/api-key'
-import {
-  db,
-  users,
-  accounts,
-  organizations,
-  members,
-  invitations,
-  sessions,
-  oauthAccounts,
-  verifications,
-  apiKeys,
-} from '@planisfy/database'
-import { eq } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 import {
   getApiURL,
@@ -24,17 +10,27 @@ import {
   getAuthSecret,
   getAuthTrustedOrigins,
   getInternalApiSecret,
+  getEnabledSocialProviderNames,
   getOAuthProxyURL,
   getSocialProviderCredentials,
   isAuthEmailDeliveryConfigured,
+  isEmailPasswordAuthEnabled,
   isProductionEnvironment,
 } from './env'
+import {
+  PLANISFY_ACCOUNT_ANCHOR_FIELD,
+  planisfyAuthAdapter,
+  type PlanisfyAccountAnchor,
+} from './adapter'
 
 const apiUrl = getApiURL()
 const authBaseURL = getAuthBaseURL()
 const oauthProxyURL = getOAuthProxyURL()
 const authCookieDomain = getAuthCookieDomain(authBaseURL)
 const trustedOrigins = getAuthTrustedOrigins()
+const emailPasswordEnabled = isEmailPasswordAuthEnabled()
+const configuredSocialProviders = socialProviders()
+const enabledSocialProviderNames = getEnabledSocialProviderNames()
 const betterAuthBaseURL = oauthProxyURL
   ? {
       allowedHosts: Array.from(new Set([new URL(authBaseURL).host, new URL(oauthProxyURL).host])),
@@ -183,6 +179,27 @@ function getAuthCookieDomain(baseURL: string) {
   return undefined
 }
 
+if (emailPasswordEnabled && !isAuthEmailDeliveryConfigured()) {
+  throw new Error(
+    'Email/password authentication requires ZEPTOMAIL_SEND_MAIL_TOKEN and ZEPTOMAIL_FROM_AUTH'
+  )
+}
+
+const unusableExposedProviders = enabledSocialProviderNames.filter(
+  (provider) => !(provider in configuredSocialProviders)
+)
+if (unusableExposedProviders.length > 0) {
+  throw new Error(
+    `Social providers are exposed without complete credentials: ${unusableExposedProviders.join(', ')}`
+  )
+}
+
+if (!emailPasswordEnabled && enabledSocialProviderNames.length === 0) {
+  throw new Error(
+    'No authentication method is configured. Enable email/password authentication or configure a social provider.'
+  )
+}
+
 // ============================================================================
 // Better-Auth instance
 // ============================================================================
@@ -191,28 +208,15 @@ export const auth = betterAuth({
   secret: getAuthSecret(),
   baseURL: betterAuthBaseURL,
   trustedOrigins,
-  socialProviders: socialProviders(),
+  socialProviders: configuredSocialProviders,
   account: {
     accountLinking: {
       enabled: true,
-      trustedProviders: ['google'],
-      requireLocalEmailVerified: false,
+      disableImplicitLinking: true,
     },
   },
 
-  database: drizzleAdapter(db, {
-    provider: 'pg',
-    schema: {
-      user: users,
-      session: sessions,
-      account: oauthAccounts,
-      verification: verifications,
-      organization: organizations,
-      member: members,
-      invitation: invitations,
-      apikey: apiKeys,
-    },
-  }),
+  database: planisfyAuthAdapter(),
 
   plugins: [
     ...(oauthProxyURL
@@ -227,6 +231,7 @@ export const auth = betterAuth({
     organization({
       ac: organizationAccessControl,
       roles: organizationRoles,
+      disableOrganizationDeletion: true,
       sendInvitationEmail: async ({ invitation, organization, inviter }) => {
         // Email sending delegated to API email service
         // The API hooks into this via the onInviteSent callback pattern
@@ -261,33 +266,23 @@ export const auth = betterAuth({
             throw new Error('Organization slug and name are required')
           }
 
-          // Check for duplicate slug before creating the account,
-          // since better-auth's org insert happens *after* this hook.
-          const [existing] = await db
-            .select({ id: organizations.id })
-            .from(organizations)
-            .where(eq(organizations.slug, organization.slug))
-            .limit(1)
-          if (existing) {
-            throw new Error('Organization with this slug already exists')
-          }
-
-          // Generate a shared ID for both account and organization
           const id = randomUUID()
           const handle = generateHandle(organization.name)
 
-          // Create the account anchor row first
-          await db.insert(accounts).values({
+          const anchor: PlanisfyAccountAnchor = {
             id,
             type: 'ORGANIZATION',
             handle,
             displayName: organization.name,
             avatarUrl: organization.logo ?? null,
-          })
+          }
 
-          // Set the org's ID to match the account
           return {
-            data: { ...organization, id },
+            data: {
+              ...organization,
+              id,
+              [PLANISFY_ACCOUNT_ANCHOR_FIELD]: anchor,
+            },
           }
         },
       },
@@ -323,7 +318,7 @@ export const auth = betterAuth({
   ],
 
   emailAndPassword: {
-    enabled: true,
+    enabled: emailPasswordEnabled,
     requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
       console.log(`[password-reset] Sending reset link to ${user.email}`)
@@ -347,8 +342,8 @@ export const auth = betterAuth({
   },
 
   emailVerification: {
-    sendOnSignUp: true,
-    sendOnSignIn: true,
+    sendOnSignUp: emailPasswordEnabled,
+    sendOnSignIn: emailPasswordEnabled,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
       console.log(`[email-verify] Sending verification to ${user.email}`)
@@ -385,18 +380,6 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (userData) => {
-          // Check for duplicate email before creating the account,
-          // since better-auth's user insert happens *after* this hook
-          // and we can't catch its constraint violations from here.
-          const [existing] = await db
-            .select({ id: users.id })
-            .from(users)
-            .where(eq(users.email, userData.email))
-            .limit(1)
-          if (existing) {
-            throw new Error('User with this email already exists')
-          }
-
           const rawHandle = (userData as Record<string, unknown>).handle as string | undefined
           const handle = rawHandle?.trim()
             ? normalizeAccountHandle(rawHandle)
@@ -405,23 +388,22 @@ export const auth = betterAuth({
           // Generate a shared ID for both account and user
           const id = randomUUID()
 
-          // Create the account anchor row first
-          await db.insert(accounts).values({
+          const anchor: PlanisfyAccountAnchor = {
             id,
             type: 'USER',
             handle,
             displayName: userData.name,
             avatarUrl: userData.image ?? null,
-          })
+          }
 
-          // Set the user's ID to match the account, strip handle
           const userFields = { ...(userData as Record<string, unknown>) }
           delete userFields.handle
           return {
             data: {
               ...userFields,
               id,
-            } as typeof userData,
+              [PLANISFY_ACCOUNT_ANCHOR_FIELD]: anchor,
+            } as unknown as typeof userData,
           }
         },
         after: async (userData) => {
@@ -435,8 +417,7 @@ export const auth = betterAuth({
 
   session: {
     cookieCache: {
-      enabled: true,
-      maxAge: 5 * 60,
+      enabled: false,
     },
   },
 

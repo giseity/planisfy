@@ -26,6 +26,10 @@ const schema = z.object({
   NEXT_PUBLIC_ADMIN_URL: z.string().url().optional(),
   NEXT_PUBLIC_MARKETING_URL: z.string().url().optional(),
   NEXT_PUBLIC_DOCS_URL: z.string().url().optional(),
+  NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED: z.preprocess(
+    (value) => value === 'true' || value === true,
+    z.boolean().default(false)
+  ),
   INTERNAL_API_SECRET: z.string().min(1),
   BETTER_AUTH_SECRET: z.string().min(1),
 

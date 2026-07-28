@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildTrustedOrigins, getAuthTrustedOrigins } from '../src/server/env'
+import {
+  buildTrustedOrigins,
+  getAuthTrustedOrigins,
+  getEnabledSocialProviderNames,
+  isAuthEmailDeliveryConfigured,
+  isEmailPasswordAuthEnabled,
+} from '../src/server/env'
 
 const AUTH_ORIGIN_ENV_KEYS = [
   'NEXT_PUBLIC_AUTH_ORIGIN',
@@ -9,6 +15,10 @@ const AUTH_ORIGIN_ENV_KEYS = [
   'NEXT_PUBLIC_DOCS_URL',
   'NEXT_PUBLIC_MARKETING_URL',
   'OAUTH_PROXY_ORIGIN',
+  'NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED',
+  'ZEPTOMAIL_SEND_MAIL_TOKEN',
+  'ZEPTOMAIL_FROM_AUTH',
+  'NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS',
 ] as const
 
 const originalEnv = Object.fromEntries(AUTH_ORIGIN_ENV_KEYS.map((key) => [key, process.env[key]]))
@@ -67,5 +77,27 @@ describe('auth trusted origins', () => {
       'http://localhost:3002',
       'http://localhost:3000',
     ])
+  })
+
+  it('requires both the auth sender and token for password email delivery', () => {
+    process.env.ZEPTOMAIL_SEND_MAIL_TOKEN = 'token'
+    delete process.env.ZEPTOMAIL_FROM_AUTH
+    expect(isAuthEmailDeliveryConfigured()).toBe(false)
+
+    process.env.ZEPTOMAIL_FROM_AUTH = 'Planisfy <auth@example.com>'
+    expect(isAuthEmailDeliveryConfigured()).toBe(true)
+  })
+
+  it('keeps email/password authentication behind an explicit public flag', () => {
+    delete process.env.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED
+    expect(isEmailPasswordAuthEnabled()).toBe(false)
+
+    process.env.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED = 'true'
+    expect(isEmailPasswordAuthEnabled()).toBe(true)
+  })
+
+  it('normalizes the public social-provider list', () => {
+    process.env.NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS = ' GitHub,google,github,invalid '
+    expect(getEnabledSocialProviderNames()).toEqual(['github', 'google'])
   })
 })

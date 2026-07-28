@@ -12,6 +12,8 @@ type AuthHook = (...args: any[]) => any
 
 export type AuthClient = {
   changePassword: AuthMethod
+  linkSocial: AuthMethod
+  listAccounts: AuthMethod
   listSessions: AuthMethod
   organization: {
     cancelInvitation: AuthMethod
@@ -33,6 +35,7 @@ export type AuthClient = {
   signOut: AuthMethod
   signIn: { email: AuthMethod; social: AuthMethod }
   signUp: { email: AuthMethod }
+  unlinkAccount: AuthMethod
   useSession: AuthHook
 }
 
@@ -46,6 +49,7 @@ export type SocialProvider = 'github' | 'google'
 export const enabledSocialProviders = parseEnabledSocialProviders(
   clientEnv.NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS
 )
+export const isEmailPasswordAuthEnabled = clientEnv.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED
 
 export function isSocialProviderEnabled(provider: SocialProvider) {
   return enabledSocialProviders.has(provider)

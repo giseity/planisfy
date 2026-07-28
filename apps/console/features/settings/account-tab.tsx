@@ -1,19 +1,25 @@
-"use client";
+'use client'
 
-import type React from "react";
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import type React from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { api } from '@/lib/api'
 import {
   parseUserAgent,
   timeAgo,
   type ProfileData,
   type SecurityActivity,
   type SessionData,
-} from "@/features/settings/model";
-import { authClient, useSession } from "@planisfy/auth/client";
-import { Badge } from "@planisfy/ui/components/badge";
-import { Button } from "@planisfy/ui/components/button";
+} from '@/features/settings/model'
+import {
+  authClient,
+  enabledSocialProviders,
+  isEmailPasswordAuthEnabled,
+  useSession,
+  type SocialProvider,
+} from '@planisfy/auth/client'
+import { Badge } from '@planisfy/ui/components/badge'
+import { Button } from '@planisfy/ui/components/button'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,17 +29,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@planisfy/ui/components/alert-dialog";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@planisfy/ui/components/card";
-import { Input } from "@planisfy/ui/components/input";
-import { Label } from "@planisfy/ui/components/label";
-import { Separator } from "@planisfy/ui/components/separator";
-import { Skeleton } from "@planisfy/ui/components/skeleton";
+} from '@planisfy/ui/components/alert-dialog'
+import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
+import { Input } from '@planisfy/ui/components/input'
+import { Label } from '@planisfy/ui/components/label'
+import { Separator } from '@planisfy/ui/components/separator'
+import { Skeleton } from '@planisfy/ui/components/skeleton'
 import {
   Table,
   TableBody,
@@ -41,23 +42,169 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table";
-import { Monitor, ShieldCheck, Smartphone, X } from "lucide-react";
+} from '@planisfy/ui/components/table'
+import { Github, Link2, Monitor, ShieldCheck, Smartphone, Unlink, X } from 'lucide-react'
 
 export function AccountTab() {
   return (
     <div className="space-y-10">
       <TwoFactorSection />
       <Separator />
-      <ChangePasswordSection />
+      <ConnectedAccountsSection />
       <Separator />
+      {isEmailPasswordAuthEnabled && (
+        <>
+          <ChangePasswordSection />
+          <Separator />
+        </>
+      )}
       <SessionsSection />
       <Separator />
       <LoginHistorySection />
       <Separator />
       <DangerZone />
     </div>
-  );
+  )
+}
+
+interface ConnectedAccount {
+  id: string
+  providerId: string
+}
+
+function ConnectedAccountsSection() {
+  const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
+  const [loading, setLoading] = useState(true)
+  const [pendingProvider, setPendingProvider] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  const fetchAccounts = useCallback(async () => {
+    setLoading(true)
+    try {
+      const result = await authClient.listAccounts()
+      if (result.error) {
+        throw new Error(result.error.message ?? 'Unable to load connected accounts')
+      }
+      setAccounts((result.data ?? []) as ConnectedAccount[])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load connected accounts')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchAccounts()
+  }, [fetchAccounts])
+
+  const handleLink = async (provider: SocialProvider) => {
+    setError('')
+    setPendingProvider(provider)
+    try {
+      const result = await authClient.linkSocial({
+        provider,
+        callbackURL: `${window.location.origin}/settings?tab=account`,
+      })
+      if (result.error) {
+        throw new Error(result.error.message ?? `Unable to link ${provider}`)
+      }
+      const url =
+        result.data && typeof result.data === 'object' && typeof result.data.url === 'string'
+          ? result.data.url
+          : null
+      if (url) window.location.assign(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Unable to link ${provider}`)
+      setPendingProvider(null)
+    }
+  }
+
+  const handleUnlink = async (providerId: string) => {
+    setError('')
+    setPendingProvider(providerId)
+    try {
+      const result = await authClient.unlinkAccount({ providerId })
+      if (result.error) {
+        throw new Error(result.error.message ?? `Unable to unlink ${providerId}`)
+      }
+      await fetchAccounts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Unable to unlink ${providerId}`)
+    } finally {
+      setPendingProvider(null)
+    }
+  }
+
+  const connectedProviders = new Set(accounts.map((account) => account.providerId))
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">Connected accounts</h2>
+        <p className="text-sm text-muted-foreground">
+          Link a provider only after signing in here. Matching email addresses are never merged
+          automatically.
+        </p>
+      </div>
+      {loading ? (
+        <Skeleton className="h-20 rounded-lg" />
+      ) : (
+        <div className="space-y-3">
+          {[...enabledSocialProviders].map((provider) => {
+            const connected = connectedProviders.has(provider)
+            return (
+              <Card key={provider}>
+                <CardContent className="flex items-center justify-between py-4">
+                  <div className="flex items-center gap-3">
+                    {provider === 'github' ? (
+                      <Github className="h-5 w-5" />
+                    ) : (
+                      <span className="flex h-5 w-5 items-center justify-center font-semibold">
+                        G
+                      </span>
+                    )}
+                    <div>
+                      <p className="font-medium capitalize">{provider}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {connected ? 'Connected' : 'Not connected'}
+                      </p>
+                    </div>
+                  </div>
+                  {connected ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pendingProvider === provider}
+                      onClick={() => void handleUnlink(provider)}
+                    >
+                      <Unlink className="h-4 w-4" />
+                      Unlink
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pendingProvider === provider}
+                      onClick={() => void handleLink(provider)}
+                    >
+                      <Link2 className="h-4 w-4" />
+                      Link
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
+          {enabledSocialProviders.size === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No social providers are configured for this deployment.
+            </p>
+          )}
+        </div>
+      )}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+    </div>
+  )
 }
 
 function TwoFactorSection() {
@@ -79,8 +226,8 @@ function TwoFactorSection() {
             <Badge variant="outline">Not enabled</Badge>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            Add an extra layer of security by requiring a verification code from
-            your authenticator app when signing in.
+            Add an extra layer of security by requiring a verification code from your authenticator
+            app when signing in.
           </p>
           <Button className="mt-4">
             <ShieldCheck className="h-4 w-4" />
@@ -89,50 +236,50 @@ function TwoFactorSection() {
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 function ChangePasswordSection() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSuccess(false);
+    e.preventDefault()
+    setError('')
+    setSuccess(false)
 
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
+      setError('Passwords do not match')
+      return
     }
 
     if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters");
-      return;
+      setError('Password must be at least 8 characters')
+      return
     }
 
-    setLoading(true);
+    setLoading(true)
     try {
       await authClient.changePassword({
         currentPassword,
         newPassword,
         revokeOtherSessions: true,
-      });
-      setSuccess(true);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setTimeout(() => setSuccess(false), 3000);
+      })
+      setSuccess(true)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setTimeout(() => setSuccess(false), 3000)
     } catch {
-      setError("Failed to change password. Check your current password.");
+      setError('Failed to change password. Check your current password.')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
     <div className="max-w-lg space-y-4">
@@ -181,61 +328,61 @@ function ChangePasswordSection() {
         {success && <p className="text-sm text-green-600">Password changed.</p>}
 
         <Button type="submit" disabled={loading}>
-          {loading ? "Changing..." : "Change password"}
+          {loading ? 'Changing...' : 'Change password'}
         </Button>
       </form>
     </div>
-  );
+  )
 }
 
 function SessionsSection() {
-  const { data: session } = useSession();
-  const [sessions, setSessions] = useState<SessionData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [revokeId, setRevokeId] = useState<string | null>(null);
-  const [revokeAllOpen, setRevokeAllOpen] = useState(false);
+  const { data: session } = useSession()
+  const [sessions, setSessions] = useState<SessionData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [revokeId, setRevokeId] = useState<string | null>(null)
+  const [revokeAllOpen, setRevokeAllOpen] = useState(false)
 
-  const currentToken = session?.session?.token;
+  const currentToken = session?.session?.token
 
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await authClient.listSessions();
+      const res = await authClient.listSessions()
       if (res.data) {
-        setSessions(res.data as unknown as SessionData[]);
+        setSessions(res.data as unknown as SessionData[])
       }
     } catch {
       // ignore
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+    fetchSessions()
+  }, [fetchSessions])
 
   const handleRevoke = async () => {
-    if (!revokeId) return;
-    const sessionToRevoke = sessions.find((s) => s.id === revokeId);
-    if (!sessionToRevoke) return;
+    if (!revokeId) return
+    const sessionToRevoke = sessions.find((s) => s.id === revokeId)
+    if (!sessionToRevoke) return
     try {
-      await authClient.revokeSession({ token: sessionToRevoke.token });
-      setRevokeId(null);
-      await fetchSessions();
+      await authClient.revokeSession({ token: sessionToRevoke.token })
+      setRevokeId(null)
+      await fetchSessions()
     } catch {
       // ignore
     }
-  };
+  }
 
   const handleRevokeAll = async () => {
     try {
-      await authClient.revokeOtherSessions();
-      setRevokeAllOpen(false);
-      await fetchSessions();
+      await authClient.revokeOtherSessions()
+      setRevokeAllOpen(false)
+      await fetchSessions()
     } catch {
       // ignore
     }
-  };
+  }
 
   if (loading) {
     return (
@@ -244,10 +391,10 @@ function SessionsSection() {
           <Skeleton key={i} className="h-16 rounded-lg" />
         ))}
       </div>
-    );
+    )
   }
 
-  const otherSessions = sessions.filter((s) => s.token !== currentToken);
+  const otherSessions = sessions.filter((s) => s.token !== currentToken)
 
   return (
     <div className="space-y-6">
@@ -259,11 +406,7 @@ function SessionsSection() {
           </p>
         </div>
         {otherSessions.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setRevokeAllOpen(true)}
-          >
+          <Button variant="outline" size="sm" onClick={() => setRevokeAllOpen(true)}>
             Revoke all other sessions
           </Button>
         )}
@@ -281,15 +424,13 @@ function SessionsSection() {
         </TableHeader>
         <TableBody>
           {sessions.map((s) => {
-            const isCurrent = s.token === currentToken;
+            const isCurrent = s.token === currentToken
             return (
               <TableRow key={s.id}>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <Monitor className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">
-                      {parseUserAgent(s.userAgent)}
-                    </span>
+                    <span className="font-medium">{parseUserAgent(s.userAgent)}</span>
                     {isCurrent && (
                       <Badge variant="success" className="text-[10px]">
                         Current
@@ -298,7 +439,7 @@ function SessionsSection() {
                   </div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {s.ipAddress ?? "Unknown"}
+                  {s.ipAddress ?? 'Unknown'}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {timeAgo(s.updatedAt)}
@@ -308,17 +449,13 @@ function SessionsSection() {
                 </TableCell>
                 <TableCell>
                   {!isCurrent && (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setRevokeId(s.id)}
-                    >
+                    <Button variant="ghost" size="icon-sm" onClick={() => setRevokeId(s.id)}>
                       <X className="h-4 w-4" />
                     </Button>
                   )}
                 </TableCell>
               </TableRow>
-            );
+            )
           })}
         </TableBody>
       </Table>
@@ -350,8 +487,7 @@ function SessionsSection() {
           <AlertDialogHeader>
             <AlertDialogTitle>Revoke all other sessions?</AlertDialogTitle>
             <AlertDialogDescription>
-              All devices except your current session will be signed out
-              immediately.
+              All devices except your current session will be signed out immediately.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -366,20 +502,20 @@ function SessionsSection() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
+  )
 }
 
 function LoginHistorySection() {
-  const [activity, setActivity] = useState<SecurityActivity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activity, setActivity] = useState<SecurityActivity[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     api
-      .get<{ data: SecurityActivity[] }>("/security/activity")
+      .get<{ data: SecurityActivity[] }>('/security/activity')
       .then((res) => setActivity(res.data))
       .catch(() => setActivity([]))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => setLoading(false))
+  }, [])
 
   return (
     <div className="space-y-4">
@@ -408,10 +544,7 @@ function LoginHistorySection() {
           <TableBody>
             {activity.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={4}
-                  className="py-8 text-center text-sm text-muted-foreground"
-                >
+                <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
                   No security activity has been recorded yet.
                 </TableCell>
               </TableRow>
@@ -423,12 +556,12 @@ function LoginHistorySection() {
                   </TableCell>
                   <TableCell>{formatSecurityAction(entry.action)}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {entry.ipAddress ?? "Unknown"}
+                    {entry.ipAddress ?? 'Unknown'}
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">
                       {entry.resourceType}
-                      {entry.resourceId ? `:${entry.resourceId}` : ""}
+                      {entry.resourceId ? `:${entry.resourceId}` : ''}
                     </Badge>
                   </TableCell>
                 </TableRow>
@@ -438,7 +571,7 @@ function LoginHistorySection() {
         </Table>
       )}
     </div>
-  );
+  )
 }
 
 function formatSecurityAction(action: string) {
@@ -446,62 +579,56 @@ function formatSecurityAction(action: string) {
     .split(/[._-]/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+    .join(' ')
 }
 
 function DangerZone() {
-  const router = useRouter();
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [confirmation, setConfirmation] = useState("");
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState("");
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const router = useRouter()
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [confirmation, setConfirmation] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
+  const [profile, setProfile] = useState<ProfileData | null>(null)
 
   useEffect(() => {
     api
-      .get<{ data: ProfileData }>("/profile")
+      .get<{ data: ProfileData }>('/profile')
       .then((res) => setProfile(res.data))
-      .catch(() => {});
-  }, []);
+      .catch(() => {})
+  }, [])
 
   const handleDelete = async () => {
-    setError("");
-    setDeleting(true);
+    setError('')
+    setDeleting(true)
     try {
-      await api.delete("/profile", { confirmation });
-      router.push("/sign-in");
+      await api.delete('/profile', { confirmation })
+      router.push('/sign-in')
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to delete account";
-      setError(message);
+      const message = err instanceof Error ? err.message : 'Failed to deactivate account'
+      setError(message)
     } finally {
-      setDeleting(false);
+      setDeleting(false)
     }
-  };
+  }
 
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold text-destructive">Danger Zone</h2>
-        <p className="text-sm text-muted-foreground">
-          Irreversible actions. Proceed with caution.
-        </p>
+        <p className="text-sm text-muted-foreground">Irreversible actions. Proceed with caution.</p>
       </div>
 
       <Card className="border-destructive/30">
         <CardContent className="flex items-center justify-between py-4">
           <div>
-            <p className="font-medium">Delete account</p>
+            <p className="font-medium">Deactivate account</p>
             <p className="text-sm text-muted-foreground">
-              Permanently delete your account and all associated data.
+              Revoke access and public delivery while retaining operational, billing, audit, and
+              storage records.
             </p>
           </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setDeleteOpen(true)}
-          >
-            Delete account
+          <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+            Deactivate account
           </Button>
         </CardContent>
       </Card>
@@ -509,17 +636,15 @@ function DangerZone() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogTitle>Deactivate your account?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action is permanent. All your styles, API keys, tilesets, and
-              data will be deleted. This cannot be undone.
+              This terminal action cannot be undone. Your sessions, credentials, and public access
+              will be revoked immediately, but retained records are not physically erased.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-2">
             <Label>
-              Type{" "}
-              <span className="font-mono font-semibold">{profile?.email}</span>{" "}
-              to confirm
+              Type <span className="font-mono font-semibold">{profile?.email}</span> to confirm
             </Label>
             <Input
               value={confirmation}
@@ -529,19 +654,17 @@ function DangerZone() {
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteOpen(false)}>
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setDeleteOpen(false)}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={deleting || confirmation !== profile?.email}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleting ? "Deleting..." : "Delete my account"}
+              {deleting ? 'Deactivating...' : 'Deactivate my account'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
+  )
 }

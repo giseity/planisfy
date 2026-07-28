@@ -3,6 +3,7 @@
 import * as React from 'react'
 import {
   authClient,
+  isEmailPasswordAuthEnabled,
   isSocialProviderEnabled,
   signIn,
   signUp,
@@ -296,9 +297,11 @@ function SocialButton({
 function SocialAuthOptions({
   callbackURL,
   compact = false,
+  showDivider = true,
 }: {
   callbackURL: string
   compact?: boolean
+  showDivider?: boolean
 }) {
   const providers = (['github', 'google'] as const).filter(isSocialProviderEnabled)
 
@@ -308,7 +311,7 @@ function SocialAuthOptions({
 
   return (
     <>
-      <AuthDivider />
+      {showDivider && <AuthDivider />}
       <div className={compact ? 'flex gap-2' : 'flex flex-col gap-2'}>
         {providers.includes('github') && (
           <SocialButton provider="github" callbackURL={callbackURL} compact={compact}>
@@ -366,7 +369,11 @@ export function SignInForm({
   return (
     <AuthShell
       title="Login to your account"
-      description="Enter your email below to login to your account"
+      description={
+        isEmailPasswordAuthEnabled
+          ? 'Enter your email below to login to your account'
+          : 'Continue with a configured identity provider'
+      }
       variant="split"
       footer={
         <p className="text-center text-sm">
@@ -377,43 +384,47 @@ export function SignInForm({
         </p>
       }
     >
-      <form onSubmit={handleSubmit} className="grid gap-6">
-        <div className="grid gap-2">
-          <Label htmlFor="email">Email</Label>
-          <AuthInput
-            id="email"
-            type="email"
-            icon={<Mail />}
-            placeholder="you@company.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-            autoComplete="email"
-          />
-        </div>
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <a href={resetHref} className="text-sm underline-offset-4 hover:underline">
-              Forgot your password?
-            </a>
+      {isEmailPasswordAuthEnabled ? (
+        <form onSubmit={handleSubmit} className="grid gap-6">
+          <div className="grid gap-2">
+            <Label htmlFor="email">Email</Label>
+            <AuthInput
+              id="email"
+              type="email"
+              icon={<Mail />}
+              placeholder="you@company.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              autoComplete="email"
+            />
           </div>
-          <AuthInput
-            id="password"
-            type="password"
-            icon={<Lock />}
-            placeholder="Enter your password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            autoComplete="current-password"
-          />
-        </div>
-        <Button type="submit" size="marketing" className="w-full" disabled={loading}>
-          {loading ? 'Signing in...' : 'Login'}
-        </Button>
-        <SocialAuthOptions callbackURL={target} />
-      </form>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <a href={resetHref} className="text-sm underline-offset-4 hover:underline">
+                Forgot your password?
+              </a>
+            </div>
+            <AuthInput
+              id="password"
+              type="password"
+              icon={<Lock />}
+              placeholder="Enter your password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </div>
+          <Button type="submit" size="marketing" className="w-full" disabled={loading}>
+            {loading ? 'Signing in...' : 'Login'}
+          </Button>
+          <SocialAuthOptions callbackURL={target} />
+        </form>
+      ) : (
+        <SocialAuthOptions callbackURL={target} showDivider={false} />
+      )}
     </AuthShell>
   )
 }
@@ -460,7 +471,11 @@ export function SignUpForm({
   return (
     <AuthShell
       title="Create an account"
-      description="Enter your information below to create your account"
+      description={
+        isEmailPasswordAuthEnabled
+          ? 'Enter your information below to create your account'
+          : 'Continue with a configured identity provider'
+      }
       variant="split"
       width="md"
       footer={
@@ -484,61 +499,68 @@ export function SignUpForm({
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="grid gap-6">
-        <div className="grid gap-2">
-          <Label htmlFor="name">Name</Label>
-          <AuthInput
-            id="name"
-            placeholder="Alex Chen"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-            autoComplete="name"
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="email">Email</Label>
-          <AuthInput
-            id="email"
-            type="email"
-            icon={<Mail />}
-            placeholder="you@company.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-            autoComplete="email"
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="password">Password</Label>
-          <AuthInput
-            id="password"
-            type="password"
-            icon={<Lock />}
-            placeholder="At least 8 characters"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-          />
-          <div className="mt-1.5 flex gap-1">
-            {[1, 2, 3, 4].map((index) => (
-              <div
-                key={index}
-                className={cn('h-[3px] flex-1 rounded-sm', index <= 3 ? 'bg-chart-4' : 'bg-muted')}
-              />
-            ))}
+      {isEmailPasswordAuthEnabled ? (
+        <form onSubmit={handleSubmit} className="grid gap-6">
+          <div className="grid gap-2">
+            <Label htmlFor="name">Name</Label>
+            <AuthInput
+              id="name"
+              placeholder="Alex Chen"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+              autoComplete="name"
+            />
           </div>
-          <span className="mt-0.5 block text-[10px] text-chart-4">
-            Good - add a special character for strong
-          </span>
-        </div>
-        <Button type="submit" size="marketing" className="w-full" disabled={loading}>
-          {loading ? 'Creating account...' : 'Create account'}
-        </Button>
-        <SocialAuthOptions callbackURL={target} compact />
-      </form>
+          <div className="grid gap-2">
+            <Label htmlFor="email">Email</Label>
+            <AuthInput
+              id="email"
+              type="email"
+              icon={<Mail />}
+              placeholder="you@company.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              autoComplete="email"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="password">Password</Label>
+            <AuthInput
+              id="password"
+              type="password"
+              icon={<Lock />}
+              placeholder="At least 8 characters"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+            <div className="mt-1.5 flex gap-1">
+              {[1, 2, 3, 4].map((index) => (
+                <div
+                  key={index}
+                  className={cn(
+                    'h-[3px] flex-1 rounded-sm',
+                    index <= 3 ? 'bg-chart-4' : 'bg-muted'
+                  )}
+                />
+              ))}
+            </div>
+            <span className="mt-0.5 block text-[10px] text-chart-4">
+              Good - add a special character for strong
+            </span>
+          </div>
+          <Button type="submit" size="marketing" className="w-full" disabled={loading}>
+            {loading ? 'Creating account...' : 'Create account'}
+          </Button>
+          <SocialAuthOptions callbackURL={target} compact />
+        </form>
+      ) : (
+        <SocialAuthOptions callbackURL={target} compact showDivider={false} />
+      )}
     </AuthShell>
   )
 }
@@ -555,6 +577,20 @@ export function ResetPasswordForm({ signInHref = '/sign-in' }: { signInHref?: st
   React.useEffect(() => {
     setToken(tokenFromUrl())
   }, [])
+
+  if (!isEmailPasswordAuthEnabled) {
+    return (
+      <AuthShell
+        title="Password authentication unavailable"
+        description="This deployment uses external identity providers for sign-in."
+        variant="split"
+      >
+        <Button asChild variant="outline" size="marketing" className="w-full">
+          <a href={signInHref}>Back to sign in</a>
+        </Button>
+      </AuthShell>
+    )
+  }
 
   async function handleRequest(event: React.FormEvent) {
     event.preventDefault()

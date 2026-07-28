@@ -11,7 +11,7 @@ Start from `.env.example` and keep production secrets out of source control.
 
 | Group                 | Examples                                                                                                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Identity and security | `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, OAuth credentials, `SOURCE_CREDENTIAL_ENCRYPTION_KEY`                                                     |
+| Identity and security | `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, `NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED`, OAuth credentials, `SOURCE_CREDENTIAL_ENCRYPTION_KEY`          |
 | Deployment            | `DEPLOYMENT_MODE`, `APP_VERSION`, public `NEXT_PUBLIC_*` URLs                                                                                          |
 | Geospatial services   | `MARTIN_INTERNAL_URL`, `VALHALLA_INTERNAL_URL`, `PELIAS_INTERNAL_URL`, `GLYPHS_INTERNAL_URL`, `ELEVATION_INTERNAL_URL`, `STATIC_RENDERER_INTERNAL_URL` |
 | Storage               | `STORAGE_PROVIDER`, local storage paths, S3 settings, R2 settings                                                                                      |
@@ -83,7 +83,15 @@ Review [data sources](/docs/self-hosting/data-sources) before testing clients.
 
 Dodo Payments settings are required for managed hosted checkout. In self-host mode they can remain empty unless you are building a custom billing integration outside the built-in hosted checkout flow.
 
-ZeptoMail settings are required for managed transactional email. Self-host deployments can configure provider settings or run with degraded email readiness while testing local workflows.
+Email/password authentication is disabled by default. Enable it explicitly with:
+
+```bash
+NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED=true
+```
+
+When enabled, `ZEPTOMAIL_SEND_MAIL_TOKEN` and `ZEPTOMAIL_FROM_AUTH` are mandatory so signup verification and password recovery cannot lead to unusable accounts. Keep the flag false for OAuth-only deployments. At least one complete GitHub or Google provider must then be configured.
+
+`ZEPTOMAIL_FROM_NOTIFICATIONS` is additionally required for managed transactional notifications. Existing password-based installations must configure the flag and auth sender before upgrading.
 
 ## Related
 

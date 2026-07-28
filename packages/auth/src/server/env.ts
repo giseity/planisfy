@@ -20,9 +20,15 @@ const authEnvSchema = z.object({
   NEXT_PUBLIC_ADMIN_URL: optionalUrlSchema,
   NEXT_PUBLIC_DOCS_URL: optionalUrlSchema,
   NEXT_PUBLIC_MARKETING_URL: optionalUrlSchema,
+  NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: optionalStringSchema,
   OAUTH_PROXY_ORIGIN: optionalUrlSchema,
   INTERNAL_API_SECRET: optionalStringSchema,
   ZEPTOMAIL_SEND_MAIL_TOKEN: optionalStringSchema,
+  ZEPTOMAIL_FROM_AUTH: optionalStringSchema,
+  NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
   AUTH_COOKIE_DOMAIN: optionalStringSchema,
   GITHUB_CLIENT_ID: optionalStringSchema,
   GITHUB_CLIENT_SECRET: optionalStringSchema,
@@ -75,7 +81,12 @@ export function getInternalApiSecret() {
 }
 
 export function isAuthEmailDeliveryConfigured() {
-  return Boolean(getAuthEnv().ZEPTOMAIL_SEND_MAIL_TOKEN)
+  const env = getAuthEnv()
+  return Boolean(env.ZEPTOMAIL_SEND_MAIL_TOKEN && env.ZEPTOMAIL_FROM_AUTH)
+}
+
+export function isEmailPasswordAuthEnabled() {
+  return getAuthEnv().NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED
 }
 
 export function getAuthCookieDomainOverride() {
@@ -111,6 +122,20 @@ export function getSocialProviderCredentials() {
     github: optionalProviderCredentials(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET),
     google: optionalProviderCredentials(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET),
   }
+}
+
+export function getEnabledSocialProviderNames() {
+  return Array.from(
+    new Set(
+      (getAuthEnv().NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS ?? '')
+        .split(',')
+        .map((provider) => provider.trim().toLowerCase())
+        .filter(
+          (provider): provider is 'github' | 'google' =>
+            provider === 'github' || provider === 'google'
+        )
+    )
+  )
 }
 
 function optionalProviderCredentials(

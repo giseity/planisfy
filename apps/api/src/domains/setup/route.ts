@@ -116,6 +116,13 @@ async function buildPreflightChecks(
   deploymentMode = activeDeploymentMode()
 ): Promise<PreflightCheck[]> {
   const managed = deploymentMode === 'managed'
+  const authEmailConfigured = Boolean(env.ZEPTOMAIL_SEND_MAIL_TOKEN && env.ZEPTOMAIL_FROM_AUTH)
+  const notificationsEmailConfigured = Boolean(
+    env.ZEPTOMAIL_SEND_MAIL_TOKEN && env.ZEPTOMAIL_FROM_NOTIFICATIONS
+  )
+  const requiredEmailConfigured = managed
+    ? authEmailConfigured && notificationsEmailConfigured
+    : authEmailConfigured
   const storage = await storageCheck(deploymentMode)
   const productLoopChecks = await buildProductLoopChecks(deploymentMode)
   const upgradeChecks = managed ? [] : await buildUpgradeReadinessChecks(storage)
@@ -271,20 +278,21 @@ async function buildPreflightChecks(
       id: 'email',
       group: 'Communications',
       label: 'Transactional email',
-      severity: managed ? 'required' : 'optional',
-      ok: Boolean(
-        env.ZEPTOMAIL_SEND_MAIL_TOKEN && env.ZEPTOMAIL_FROM_AUTH && env.ZEPTOMAIL_FROM_NOTIFICATIONS
-      ),
+      severity: managed || env.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED ? 'required' : 'optional',
+      ok: requiredEmailConfigured,
       warnWhenMissing: !managed,
-      message:
-        env.ZEPTOMAIL_SEND_MAIL_TOKEN && env.ZEPTOMAIL_FROM_AUTH && env.ZEPTOMAIL_FROM_NOTIFICATIONS
-          ? 'ZeptoMail email delivery is configured.'
-          : env.ZEPTOMAIL_SEND_MAIL_TOKEN
-            ? 'ZeptoMail email delivery is partially configured.'
-            : 'Email delivery is disabled.',
+      message: requiredEmailConfigured
+        ? managed
+          ? 'ZeptoMail auth and notifications delivery are configured.'
+          : 'ZeptoMail auth email delivery is configured.'
+        : env.ZEPTOMAIL_SEND_MAIL_TOKEN
+          ? 'ZeptoMail email delivery is partially configured.'
+          : 'Email delivery is disabled.',
       action: managed
-        ? 'Set ZEPTOMAIL_SEND_MAIL_TOKEN, ZEPTOMAIL_FROM_AUTH, and ZEPTOMAIL_FROM_NOTIFICATIONS before enabling managed mode.'
-        : 'Set ZeptoMail credentials for production email delivery.',
+        ? 'Configure the ZeptoMail token plus auth and notifications sender addresses before enabling managed mode.'
+        : env.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED
+          ? 'Configure the ZeptoMail token and auth sender address before enabling password authentication.'
+          : 'Email delivery may remain disabled while password authentication is disabled.',
     }),
     check({
       id: 'billing',
