@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo, type FormEvent } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, type FormEvent } from 'react'
 import { ApiRequestError, api, type ConsoleProfile, type PlatformPreflight } from '@/lib/api'
 import { Button } from '@planisfy/ui/components/button'
 import { Input } from '@planisfy/ui/components/input'
@@ -110,6 +110,12 @@ export default function ApiKeysPage() {
   const [rotateId, setRotateId] = useState<string | null>(null)
   const [profile, setProfile] = useState<ConsoleProfile | null>(null)
   const [preflight, setPreflight] = useState<PlatformPreflight | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [rotating, setRotating] = useState(false)
+  const creatingRef = useRef(false)
+  const rotatingRef = useRef(false)
+  const createRequestIdRef = useRef<string | null>(null)
+  const rotateRequestIdRef = useRef<string | null>(null)
 
   const fetchKeys = useCallback(async () => {
     try {
@@ -214,7 +220,10 @@ export default function ApiKeysPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 disabled={managedEmailBlocked}
-                onClick={() => setRotateId(row.original.id)}
+                onClick={() => {
+                  rotateRequestIdRef.current = crypto.randomUUID()
+                  setRotateId(row.original.id)
+                }}
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Rotate key
@@ -237,11 +246,15 @@ export default function ApiKeysPage() {
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (creatingRef.current) return
 
     if (managedEmailBlocked) {
       toast.error('Verify your email before creating API keys')
       return
     }
+    creatingRef.current = true
+    setCreating(true)
+    createRequestIdRef.current ??= crypto.randomUUID()
 
     const formData = new FormData(event.currentTarget)
     const name = formData.get('name') as string
@@ -266,6 +279,7 @@ export default function ApiKeysPage() {
 
     try {
       const res = await api.post<{ data: { id: string; key: string } }>('/keys', {
+        requestId: createRequestIdRef.current,
         name,
         scopes: scopeValues,
         allowedDomains: domains,
@@ -273,6 +287,7 @@ export default function ApiKeysPage() {
       })
       setRevealedKey(res.data.key)
       setCreateOpen(false)
+      createRequestIdRef.current = null
       fetchKeys()
     } catch (err) {
       if (err instanceof ApiRequestError && err.code === 'EMAIL_VERIFICATION_REQUIRED') {
@@ -280,6 +295,9 @@ export default function ApiKeysPage() {
         return
       }
       toast.error('Failed to create key')
+    } finally {
+      creatingRef.current = false
+      setCreating(false)
     }
   }
 
@@ -297,14 +315,21 @@ export default function ApiKeysPage() {
 
   const handleRotate = async () => {
     if (!rotateId) return
+    if (rotatingRef.current) return
     if (managedEmailBlocked) {
       toast.error('Verify your email before rotating API keys')
       return
     }
+    rotatingRef.current = true
+    setRotating(true)
+    rotateRequestIdRef.current ??= crypto.randomUUID()
 
     try {
-      const res = await api.post<{ data: { key: string } }>(`/keys/${rotateId}/rotate`)
+      const res = await api.post<{ data: { key: string } }>(`/keys/${rotateId}/rotate`, {
+        requestId: rotateRequestIdRef.current,
+      })
       setRotateId(null)
+      rotateRequestIdRef.current = null
       setRevealedKey(res.data.key)
       fetchKeys()
     } catch (err) {
@@ -313,6 +338,9 @@ export default function ApiKeysPage() {
         return
       }
       toast.error('Failed to rotate key')
+    } finally {
+      rotatingRef.current = false
+      setRotating(false)
     }
   }
 
@@ -326,7 +354,14 @@ export default function ApiKeysPage() {
     <div className="py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">API Keys</h1>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <Dialog
+          open={createOpen}
+          onOpenChange={(open) => {
+            if (creatingRef.current) return
+            setCreateOpen(open)
+            if (!open) createRequestIdRef.current = null
+          }}
+        >
           <DialogTrigger asChild>
             <Button disabled={managedEmailBlocked}>
               <Plus className="h-4 w-4 mr-2" />
@@ -367,7 +402,7 @@ export default function ApiKeysPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="domains">Allowed domains (optional)</Label>
+                  <Label htmlFor="domains">Browser origin restriction (optional)</Label>
                   <Input
                     id="domains"
                     name="domains"
@@ -375,7 +410,8 @@ export default function ApiKeysPage() {
                     className="mt-1"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Leave empty to allow all domains
+                    Best-effort browser abuse friction only. Origin headers can be forged by
+                    non-browser clients.
                   </p>
                 </div>
 
@@ -398,7 +434,9 @@ export default function ApiKeysPage() {
                 <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">Create</Button>
+                <Button type="submit" disabled={creating}>
+                  {creating ? 'Creating...' : 'Create'}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -472,7 +510,16 @@ export default function ApiKeysPage() {
       </AlertDialog>
 
       {/* Rotate confirmation */}
-      <AlertDialog open={!!rotateId} onOpenChange={() => setRotateId(null)}>
+      <AlertDialog
+        open={!!rotateId}
+        onOpenChange={(open) => {
+          if (rotatingRef.current) return
+          if (!open) {
+            setRotateId(null)
+            rotateRequestIdRef.current = null
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Rotate API key?</AlertDialogTitle>
@@ -482,7 +529,9 @@ export default function ApiKeysPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRotate}>Rotate</AlertDialogAction>
+            <AlertDialogAction onClick={handleRotate} disabled={rotating}>
+              {rotating ? 'Rotating...' : 'Rotate'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

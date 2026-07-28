@@ -13,7 +13,7 @@ In Console, open API keys and create a key with:
 
 - A name that identifies the app or environment.
 - Only the scopes the integration needs.
-- Optional domain restrictions for browser-facing keys.
+- Optional browser-origin restrictions for browser-facing keys.
 - An expiry date when the key is temporary or used by automation.
 
 Use the key with:
@@ -29,11 +29,11 @@ Use narrow scopes for public clients. A map display client usually needs public 
 
 Common service areas include geocoding, directions/routing, elevation, static maps, and tiles/styles access.
 
-## Domain restrictions
+## Browser-origin restrictions
 
-Domain restrictions reduce blast radius for keys embedded in browser apps. If a request origin does not match the key policy, the API can return `403 DOMAIN_NOT_ALLOWED`.
+Browser-origin restrictions provide best-effort abuse friction for keys embedded in browser apps. If a request origin does not match the key policy, the API can return `403 DOMAIN_NOT_ALLOWED`.
 
-Domain restrictions are not a replacement for keeping privileged keys on the server. Use them for public clients, not for administrative automation.
+`Origin` and `Referer` are client-supplied headers. Non-browser clients can forge them, so this feature does not prove where a request originated and is not an authorization boundary. Keep privileged keys on the server, use narrow scopes and quotas, and use browser-origin restrictions only as defense in depth.
 
 ## Rotation
 

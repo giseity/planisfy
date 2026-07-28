@@ -4,11 +4,8 @@ import { auth } from '@planisfy/auth/server'
 import { accounts, apiKeys, db } from '@planisfy/database'
 import { and, eq, gt, isNull, or } from 'drizzle-orm'
 import {
-  isRequestOriginAllowed,
-  metadataAllowedDomains,
+  evaluateApiKeyPolicy,
   ORG_API_KEY_CONFIG_ID,
-  permissionsToScopes,
-  requiredScopeForPath,
   USER_API_KEY_CONFIG_ID,
 } from '../domains/keys/api-key'
 import { env } from '../env'
@@ -22,9 +19,10 @@ export type ApiKeyEnv = {
 }
 
 type VerifiedApiKey = NonNullable<Awaited<ReturnType<typeof auth.api.verifyApiKey>>['key']>
+type VerifiedApiKeyIdentity = Pick<VerifiedApiKey, 'id' | 'referenceId'>
 
 const MAX_CACHED_API_KEYS = 5_000
-const verifiedApiKeyCache = new Map<string, { key: VerifiedApiKey; expiresAt: number }>()
+const verifiedApiKeyCache = new Map<string, { key: VerifiedApiKeyIdentity; expiresAt: number }>()
 
 /**
  * Validates an API key from the X-API-Key header.
@@ -66,12 +64,18 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
   }
 
   const [liveKey] = await db
-    .select({ id: apiKeys.id })
+    .select({
+      id: apiKeys.id,
+      referenceId: apiKeys.referenceId,
+      permissions: apiKeys.permissions,
+      metadata: apiKeys.metadata,
+    })
     .from(apiKeys)
     .innerJoin(accounts, eq(accounts.id, apiKeys.referenceId))
     .where(
       and(
         eq(apiKeys.id, verified.key.id),
+        eq(apiKeys.referenceId, verified.key.referenceId),
         eq(apiKeys.enabled, true),
         or(isNull(apiKeys.expiresAt), gt(apiKeys.expiresAt, new Date())),
         eq(accounts.lifecycleStatus, 'ACTIVE'),
@@ -88,41 +92,27 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
     writeVerifiedApiKeyCache(cacheKey, verified.key)
   }
 
-  const domains = metadataAllowedDomains(verified.key.metadata)
-  if (domains.length > 0) {
-    const origin = c.req.header('origin') || c.req.header('referer')
-    if (!isRequestOriginAllowed(origin, domains)) {
-      return c.json(
-        {
-          error: {
-            code: 'DOMAIN_NOT_ALLOWED',
-            message: origin
-              ? 'Request origin not in allowed domains'
-              : 'API key is restricted to browser origins',
-          },
-        },
-        403
-      )
-    }
-  }
-
-  const scopes = permissionsToScopes(verified.key.permissions)
-  const requiredScope = requiredScopeForPath(c.req.path)
-  if (requiredScope && !scopes.includes(requiredScope)) {
+  const policy = evaluateApiKeyPolicy({
+    permissions: liveKey.permissions,
+    metadata: liveKey.metadata,
+    path: c.req.path,
+    origin: c.req.header('origin') || c.req.header('referer'),
+  })
+  if (!policy.allowed) {
     return c.json(
       {
         error: {
-          code: 'SCOPE_DENIED',
-          message: `API key missing required scope: ${requiredScope}`,
+          code: policy.code,
+          message: policy.message,
         },
       },
-      403
+      policy.status
     )
   }
 
-  c.set('apiKeyId', verified.key.id)
-  c.set('apiKeyOwnerId', verified.key.referenceId)
-  c.set('apiKeyScopes', scopes)
+  c.set('apiKeyId', liveKey.id)
+  c.set('apiKeyOwnerId', liveKey.referenceId)
+  c.set('apiKeyScopes', policy.scopes)
 
   await next()
 })
@@ -141,7 +131,7 @@ function readVerifiedApiKeyCache(cacheKey: string) {
   return cached.key
 }
 
-function writeVerifiedApiKeyCache(cacheKey: string, key: VerifiedApiKey) {
+function writeVerifiedApiKeyCache(cacheKey: string, key: VerifiedApiKeyIdentity) {
   if (verifiedApiKeyCache.size >= MAX_CACHED_API_KEYS) {
     const now = Date.now()
     for (const [entryKey, cached] of verifiedApiKeyCache) {
@@ -152,7 +142,7 @@ function writeVerifiedApiKeyCache(cacheKey: string, key: VerifiedApiKey) {
     }
   }
   verifiedApiKeyCache.set(cacheKey, {
-    key,
+    key: { id: key.id, referenceId: key.referenceId },
     expiresAt: Date.now() + env.API_KEY_AUTH_CACHE_TTL_MS,
   })
 }
@@ -164,7 +154,7 @@ export function clearVerifiedApiKeyCache() {
 async function verifyApiKeyAcrossConfigs(
   rawKey: string
 ): Promise<
-  | { valid: true; key: VerifiedApiKey }
+  | { valid: true; key: VerifiedApiKeyIdentity }
   | { valid: false; status: 401; code: string; message: string }
 > {
   let lastError: { code?: string; message?: string } | null = null
@@ -178,7 +168,10 @@ async function verifyApiKeyAcrossConfigs(
     })
 
     if (result.valid && result.key) {
-      return { valid: true, key: result.key }
+      return {
+        valid: true,
+        key: { id: result.key.id, referenceId: result.key.referenceId },
+      }
     }
     lastError = result.error
       ? {

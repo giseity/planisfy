@@ -11,7 +11,7 @@ Use this checklist before relying on a Planisfy deployment for production traffi
 
 - Set strong `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, and source credential encryption.
 - Keep privileged API keys server-side.
-- Use narrow scopes, domain restrictions, and regular key rotation for browser-facing keys.
+- Use narrow scopes, quotas, advisory browser-origin restrictions, and regular key rotation for browser-facing keys.
 - Keep database, Redis, and object storage ports private to the deployment network.
 
 ## Data and storage
