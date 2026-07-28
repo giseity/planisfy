@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./relations": "./src/relations/index.ts",
+    "./accounts/lifecycle": "./src/accounts/lifecycle.ts",
     "./styles/service": "./src/styles/service.ts",
     "./jobs/reconciliation": "./src/jobs/reconciliation.ts"
   },

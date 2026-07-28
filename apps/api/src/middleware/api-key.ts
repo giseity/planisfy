@@ -1,8 +1,8 @@
 import { createMiddleware } from 'hono/factory'
 import { createHash } from 'node:crypto'
 import { auth } from '@planisfy/auth/server'
-import { accounts, db } from '@planisfy/database'
-import { and, eq, isNull } from 'drizzle-orm'
+import { accounts, apiKeys, db } from '@planisfy/database'
+import { and, eq, gt, isNull, or } from 'drizzle-orm'
 import {
   isRequestOriginAllowed,
   metadataAllowedDomains,
@@ -65,22 +65,26 @@ export const apiKeyMiddleware = createMiddleware<ApiKeyEnv>(async (c, next) => {
     )
   }
 
-  if (!cached) {
-    const [account] = await db
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(
-        and(
-          eq(accounts.id, verified.key.referenceId),
-          eq(accounts.lifecycleStatus, 'ACTIVE'),
-          isNull(accounts.deletedAt)
-        )
+  const [liveKey] = await db
+    .select({ id: apiKeys.id })
+    .from(apiKeys)
+    .innerJoin(accounts, eq(accounts.id, apiKeys.referenceId))
+    .where(
+      and(
+        eq(apiKeys.id, verified.key.id),
+        eq(apiKeys.enabled, true),
+        or(isNull(apiKeys.expiresAt), gt(apiKeys.expiresAt, new Date())),
+        eq(accounts.lifecycleStatus, 'ACTIVE'),
+        isNull(accounts.deletedAt)
       )
-      .limit(1)
+    )
+    .limit(1)
 
-    if (!account) {
-      return c.json({ error: { code: 'UNAUTHORIZED', message: 'Invalid API key' } }, 401)
-    }
+  if (!liveKey) {
+    return c.json({ error: { code: 'UNAUTHORIZED', message: 'Invalid API key' } }, 401)
+  }
+
+  if (!cached) {
     writeVerifiedApiKeyCache(cacheKey, verified.key)
   }
 

@@ -4,6 +4,7 @@ import { Hono, type Context } from 'hono'
 import { and, eq, gt, inArray, isNull } from 'drizzle-orm'
 import { z } from 'zod'
 import {
+  accounts,
   db,
   basemapArtifacts,
   basemapBuildLogs,
@@ -135,15 +136,25 @@ rootAgentRoute.post('/root-agent/register', async (c) => {
 
   const result = await db.transaction(async (tx) => {
     const [registration] = await tx
-      .select()
+      .select({
+        id: rootAgentRegistrationTokens.id,
+        accountId: rootAgentRegistrationTokens.accountId,
+        name: rootAgentRegistrationTokens.name,
+        kind: rootAgentRegistrationTokens.kind,
+        metadata: rootAgentRegistrationTokens.metadata,
+      })
       .from(rootAgentRegistrationTokens)
+      .innerJoin(accounts, eq(accounts.id, rootAgentRegistrationTokens.accountId))
       .where(
         and(
           eq(rootAgentRegistrationTokens.tokenHash, registrationHash),
           isNull(rootAgentRegistrationTokens.usedAt),
-          gt(rootAgentRegistrationTokens.expiresAt, now)
+          gt(rootAgentRegistrationTokens.expiresAt, now),
+          eq(accounts.lifecycleStatus, 'ACTIVE'),
+          isNull(accounts.deletedAt)
         )
       )
+      .for('update')
       .limit(1)
     if (!registration) return null
 
@@ -928,11 +939,14 @@ async function authenticateAgent(c: Context<AgentEnv>) {
   const [node] = await db
     .select({ id: workerNodes.id })
     .from(workerNodes)
+    .innerJoin(accounts, eq(accounts.id, workerNodes.accountId))
     .where(
       and(
         eq(workerNodes.id, row.workerNodeId),
         eq(workerNodes.accountId, row.accountId),
-        isNull(workerNodes.deletedAt)
+        isNull(workerNodes.deletedAt),
+        eq(accounts.lifecycleStatus, 'ACTIVE'),
+        isNull(accounts.deletedAt)
       )
     )
     .limit(1)
