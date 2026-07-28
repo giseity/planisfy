@@ -1,17 +1,27 @@
-import { adminMetadata } from "../../../lib/metadata";
+import { adminMetadata } from '../../../lib/metadata'
 
 export const metadata = adminMetadata({
-  title: "Organization Details",
-  description: "Inspect organization membership, resources, and usage.",
-  path: "/orgs",
-});
+  title: 'Organization Details',
+  description: 'Inspect organization membership, resources, and usage.',
+  path: '/orgs',
+})
 
-import { notFound } from "next/navigation"
-import { db, organizations, members, invitations, accounts, users, styles, apiKeys } from "@planisfy/database"
-import { eq, and, isNull, desc } from "drizzle-orm"
-import { Badge } from "@planisfy/ui/components/badge"
-import { Button } from "@planisfy/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@planisfy/ui/components/card"
+import { notFound } from 'next/navigation'
+import {
+  db,
+  organizations,
+  members,
+  invitations,
+  accounts,
+  users,
+  styles,
+  apiKeys,
+} from '@planisfy/database'
+import { eq, and, isNull, desc } from 'drizzle-orm'
+import { Badge } from '@planisfy/ui/components/badge'
+import { Button } from '@planisfy/ui/components/button'
+import { Input } from '@planisfy/ui/components/input'
+import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
 import {
   Table,
   TableBody,
@@ -19,19 +29,16 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@planisfy/ui/components/tabs"
-import Link from "next/link"
-import { Settings, Trash2 } from "lucide-react"
-import { requireAdmin } from "@/features/auth/admin-auth"
+} from '@planisfy/ui/components/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@planisfy/ui/components/tabs'
+import Link from 'next/link'
+import { Settings } from 'lucide-react'
+import { requireAdmin } from '@/features/auth/admin-auth'
+import { changeOrganizationLifecycleAction } from '@/features/accounts/lifecycle-actions'
 
-export const dynamic = "force-dynamic"
+export const dynamic = 'force-dynamic'
 
-export default async function OrgDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+export default async function OrgDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin()
   const { id } = await params
 
@@ -46,6 +53,8 @@ export default async function OrgDetailPage({
       handle: accounts.handle,
       displayName: accounts.displayName,
       bio: accounts.bio,
+      lifecycleStatus: accounts.lifecycleStatus,
+      lifecycleReason: accounts.lifecycleReason,
     })
     .from(organizations)
     .leftJoin(accounts, eq(organizations.id, accounts.id))
@@ -120,23 +129,44 @@ export default async function OrgDetailPage({
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">{org.name}</h1>
-            <Badge variant={org.deletedAt ? "destructive" : "success"}>
-              {org.deletedAt ? "Deleted" : "Active"}
+            <Badge variant={org.deletedAt ? 'destructive' : 'success'}>
+              {org.deletedAt ? 'DEACTIVATED' : org.lifecycleStatus}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
             @{org.slug} - Created {new Date(org.createdAt).toLocaleDateString()}
           </p>
+          {org.lifecycleReason && (
+            <p className="text-sm text-muted-foreground">Reason: {org.lifecycleReason}</p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm">
             <Settings className="h-4 w-4" />
             Edit
           </Button>
-          <Button variant="destructive" size="sm">
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </Button>
+          {!org.deletedAt && org.lifecycleStatus === 'ACTIVE' ? (
+            <form
+              action={changeOrganizationLifecycleAction}
+              className="flex flex-wrap items-center gap-2"
+            >
+              <input type="hidden" name="accountId" value={org.id} />
+              <Input name="reason" required placeholder="Lifecycle reason" className="h-8 w-48" />
+              <Button type="submit" name="status" value="SUSPENDED" variant="destructive" size="sm">
+                Suspend
+              </Button>
+              <Button type="submit" name="status" value="BANNED" variant="destructive" size="sm">
+                Ban
+              </Button>
+            </form>
+          ) : !org.deletedAt ? (
+            <form action={changeOrganizationLifecycleAction}>
+              <input type="hidden" name="accountId" value={org.id} />
+              <Button type="submit" name="status" value="ACTIVE" size="sm">
+                Reactivate
+              </Button>
+            </form>
+          ) : null}
         </div>
       </div>
 
@@ -209,7 +239,7 @@ export default async function OrgDetailPage({
                     @{member.userHandle}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={member.role === "owner" ? "warning" : "secondary"}>
+                    <Badge variant={member.role === 'owner' ? 'warning' : 'secondary'}>
                       {member.role}
                     </Badge>
                   </TableCell>
@@ -250,8 +280,11 @@ export default async function OrgDetailPage({
                   <TableCell>
                     <Badge
                       variant={
-                        inv.status === "accepted" ? "success" :
-                        inv.status === "pending" ? "warning" : "secondary"
+                        inv.status === 'accepted'
+                          ? 'success'
+                          : inv.status === 'pending'
+                            ? 'warning'
+                            : 'secondary'
                       }
                     >
                       {inv.status}
@@ -287,16 +320,22 @@ export default async function OrgDetailPage({
                   title={`Styles (${orgStyles.length})`}
                   detail={
                     orgStyles.length > 0
-                      ? orgStyles.map((style) => style.handle).slice(0, 4).join(", ")
-                      : "No styles"
+                      ? orgStyles
+                          .map((style) => style.handle)
+                          .slice(0, 4)
+                          .join(', ')
+                      : 'No styles'
                   }
                 />
                 <ResourceSummary
                   title={`API Keys (${orgKeys.length})`}
                   detail={
                     orgKeys.length > 0
-                      ? orgKeys.map((key) => key.name).slice(0, 4).join(", ")
-                      : "No API keys"
+                      ? orgKeys
+                          .map((key) => key.name)
+                          .slice(0, 4)
+                          .join(', ')
+                      : 'No API keys'
                   }
                 />
               </CardContent>
@@ -320,10 +359,12 @@ export default async function OrgDetailPage({
                     {orgStyles.map((style) => (
                       <TableRow key={style.id}>
                         <TableCell className="font-medium">{style.name}</TableCell>
-                        <TableCell className="text-muted-foreground font-mono text-xs">{style.handle}</TableCell>
+                        <TableCell className="text-muted-foreground font-mono text-xs">
+                          {style.handle}
+                        </TableCell>
                         <TableCell>
-                          <Badge variant={style.isPublic ? "success" : "secondary"}>
-                            {style.isPublic ? "Public" : "Draft"}
+                          <Badge variant={style.isPublic ? 'success' : 'secondary'}>
+                            {style.isPublic ? 'Public' : 'Draft'}
                           </Badge>
                         </TableCell>
                         <TableCell>v{style.version}</TableCell>
@@ -362,30 +403,34 @@ export default async function OrgDetailPage({
                     {orgKeys.map((key) => {
                       const scopes = keyScopes(key.permissions)
                       return (
-                      <TableRow key={key.id}>
-                        <TableCell className="font-medium">{key.name}</TableCell>
-                        <TableCell className="font-mono text-xs">{key.id.slice(0, 12)}...</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {scopes.slice(0, 3).map((scope) => (
-                              <Badge key={scope} variant="secondary" className="text-[10px]">
-                                {scope}
-                              </Badge>
-                            ))}
-                            {scopes.length > 3 && (
-                              <Badge variant="secondary" className="text-[10px]">
-                                +{scopes.length - 3}
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : "Never"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {new Date(key.createdAt).toLocaleDateString()}
-                        </TableCell>
-                      </TableRow>
+                        <TableRow key={key.id}>
+                          <TableCell className="font-medium">{key.name}</TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {key.id.slice(0, 12)}...
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {scopes.slice(0, 3).map((scope) => (
+                                <Badge key={scope} variant="secondary" className="text-[10px]">
+                                  {scope}
+                                </Badge>
+                              ))}
+                              {scopes.length > 3 && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  +{scopes.length - 3}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {key.lastUsedAt
+                              ? new Date(key.lastUsedAt).toLocaleDateString()
+                              : 'Never'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {new Date(key.createdAt).toLocaleDateString()}
+                          </TableCell>
+                        </TableRow>
                       )
                     })}
                     {orgKeys.length === 0 && (
@@ -430,7 +475,6 @@ export default async function OrgDetailPage({
             </Card>
           </div>
         </TabsContent>
-
       </Tabs>
     </div>
   )
@@ -450,7 +494,7 @@ function keyScopes(permissions: string | null) {
   try {
     const parsed = JSON.parse(permissions) as { scopes?: unknown }
     return Array.isArray(parsed.scopes)
-      ? parsed.scopes.filter((scope): scope is string => typeof scope === "string")
+      ? parsed.scopes.filter((scope): scope is string => typeof scope === 'string')
       : []
   } catch {
     return []

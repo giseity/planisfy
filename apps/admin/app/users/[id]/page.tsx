@@ -1,30 +1,18 @@
-import { adminMetadata } from "../../../lib/metadata";
+import { adminMetadata } from '../../../lib/metadata'
 
 export const metadata = adminMetadata({
-  title: "User Details",
-  description: "Inspect user identity, organizations, and administrative state.",
-  path: "/users",
-});
+  title: 'User Details',
+  description: 'Inspect user identity, organizations, and administrative state.',
+  path: '/users',
+})
 
-import { notFound } from "next/navigation";
-import {
-  db,
-  users,
-  accounts,
-  styles,
-  apiKeys,
-  auditEvents,
-  sessions,
-} from "@planisfy/database";
-import { eq, and, isNull, desc } from "drizzle-orm";
-import { Badge } from "@planisfy/ui/components/badge";
-import { Button } from "@planisfy/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@planisfy/ui/components/card";
+import { notFound } from 'next/navigation'
+import { db, users, accounts, styles, apiKeys, auditEvents, sessions } from '@planisfy/database'
+import { eq, and, isNull, desc } from 'drizzle-orm'
+import { Badge } from '@planisfy/ui/components/badge'
+import { Button } from '@planisfy/ui/components/button'
+import { Input } from '@planisfy/ui/components/input'
+import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
 import {
   Table,
   TableBody,
@@ -32,26 +20,18 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@planisfy/ui/components/tabs";
-import Link from "next/link";
-import { Ban, LogIn, Monitor, Shield } from "lucide-react";
-import { requireAdmin } from "@/features/auth/admin-auth";
+} from '@planisfy/ui/components/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@planisfy/ui/components/tabs'
+import Link from 'next/link'
+import { Ban, LogIn, Monitor, Shield } from 'lucide-react'
+import { requireAdmin } from '@/features/auth/admin-auth'
+import { changeUserLifecycleAction } from '@/features/accounts/lifecycle-actions'
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic'
 
-export default async function UserDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  await requireAdmin();
-  const { id } = await params;
+export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdmin()
+  const { id } = await params
 
   const [user] = await db
     .select({
@@ -63,13 +43,16 @@ export default async function UserDetailPage({
       handle: accounts.handle,
       displayName: accounts.displayName,
       bio: accounts.bio,
+      lifecycleStatus: accounts.lifecycleStatus,
+      lifecycleReason: accounts.lifecycleReason,
+      deletedAt: accounts.deletedAt,
     })
     .from(users)
     .leftJoin(accounts, eq(users.id, accounts.id))
     .where(eq(users.id, id))
-    .limit(1);
+    .limit(1)
 
-  if (!user) notFound();
+  if (!user) notFound()
 
   const [userStyles, userKeys, recentAudit, recentSessions] = await Promise.all([
     db
@@ -122,15 +105,12 @@ export default async function UserDetailPage({
       .where(eq(sessions.userId, id))
       .orderBy(desc(sessions.updatedAt))
       .limit(25),
-  ]);
+  ])
 
   return (
     <div className="p-6">
       <div className="flex items-center gap-2 mb-1">
-        <Link
-          href="/users"
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
+        <Link href="/users" className="text-sm text-muted-foreground hover:text-foreground">
           Users
         </Link>
         <span className="text-sm text-muted-foreground">/</span>
@@ -155,10 +135,26 @@ export default async function UserDetailPage({
             <Shield className="h-4 w-4" />
             Change role
           </Button>
-          <Button variant="destructive" size="sm">
-            <Ban className="h-4 w-4" />
-            Suspend
-          </Button>
+          {!user.deletedAt && user.lifecycleStatus === 'ACTIVE' ? (
+            <form action={changeUserLifecycleAction} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="accountId" value={user.id} />
+              <Input name="reason" required placeholder="Lifecycle reason" className="h-8 w-48" />
+              <Button type="submit" name="status" value="SUSPENDED" variant="destructive" size="sm">
+                <Ban className="h-4 w-4" />
+                Suspend
+              </Button>
+              <Button type="submit" name="status" value="BANNED" variant="destructive" size="sm">
+                Ban
+              </Button>
+            </form>
+          ) : !user.deletedAt ? (
+            <form action={changeUserLifecycleAction}>
+              <input type="hidden" name="accountId" value={user.id} />
+              <Button type="submit" name="status" value="ACTIVE" size="sm">
+                Reactivate
+              </Button>
+            </form>
+          ) : null}
         </div>
       </div>
 
@@ -171,23 +167,28 @@ export default async function UserDetailPage({
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-lg font-semibold">{user.name}</p>
               <RoleBadge role={user.role} />
+              <Badge
+                variant={
+                  user.deletedAt || user.lifecycleStatus !== 'ACTIVE' ? 'destructive' : 'success'
+                }
+              >
+                {user.deletedAt ? 'DEACTIVATED' : user.lifecycleStatus}
+              </Badge>
               <Badge variant="success">Email verified</Badge>
             </div>
             <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <Fact label="Handle" value={`@${user.handle ?? "-"}`} />
-              <Fact
-                label="Joined"
-                value={new Date(user.createdAt).toLocaleDateString()}
-              />
+              <Fact label="Handle" value={`@${user.handle ?? '-'}`} />
+              <Fact label="Joined" value={new Date(user.createdAt).toLocaleDateString()} />
               <Fact
                 label="Last active"
                 value={
                   recentSessions[0]
                     ? new Date(recentSessions[0].updatedAt).toLocaleString()
-                    : "No sessions"
+                    : 'No sessions'
                 }
               />
               <Fact label="Organization" value="See memberships" />
+              <Fact label="Lifecycle reason" value={user.lifecycleReason ?? '-'} />
             </div>
           </div>
         </CardContent>
@@ -215,9 +216,7 @@ export default async function UserDetailPage({
             <CardTitle className="text-sm font-medium">Joined</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm">
-              {new Date(user.createdAt).toLocaleDateString()}
-            </p>
+            <p className="text-sm">{new Date(user.createdAt).toLocaleDateString()}</p>
           </CardContent>
         </Card>
         <Card>
@@ -236,9 +235,7 @@ export default async function UserDetailPage({
         <TabsList>
           <TabsTrigger value="styles">Styles ({userStyles.length})</TabsTrigger>
           <TabsTrigger value="keys">API Keys ({userKeys.length})</TabsTrigger>
-          <TabsTrigger value="audit">
-            Audit Log ({recentAudit.length})
-          </TabsTrigger>
+          <TabsTrigger value="audit">Audit Log ({recentAudit.length})</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
         </TabsList>
 
@@ -261,8 +258,8 @@ export default async function UserDetailPage({
                     {style.handle}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={style.isPublic ? "success" : "secondary"}>
-                      {style.isPublic ? "Public" : "Draft"}
+                    <Badge variant={style.isPublic ? 'success' : 'secondary'}>
+                      {style.isPublic ? 'Public' : 'Draft'}
                     </Badge>
                   </TableCell>
                   <TableCell>v{style.version}</TableCell>
@@ -273,10 +270,7 @@ export default async function UserDetailPage({
               ))}
               {userStyles.length === 0 && (
                 <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center py-8 text-muted-foreground"
-                  >
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     No styles
                   </TableCell>
                 </TableRow>
@@ -300,46 +294,35 @@ export default async function UserDetailPage({
               {userKeys.map((key) => {
                 const scopes = keyScopes(key.permissions)
                 return (
-                <TableRow key={key.id}>
-                  <TableCell className="font-medium">{key.name}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {key.id.slice(0, 12)}...
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {scopes.slice(0, 3).map((s) => (
-                        <Badge
-                          key={s}
-                          variant="secondary"
-                          className="text-[10px]"
-                        >
-                          {s}
-                        </Badge>
-                      ))}
-                      {scopes.length > 3 && (
-                        <Badge variant="secondary" className="text-[10px]">
-                          +{scopes.length - 3}
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {key.lastUsedAt
-                      ? new Date(key.lastUsedAt).toLocaleDateString()
-                      : "Never"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {new Date(key.createdAt).toLocaleDateString()}
-                  </TableCell>
-                </TableRow>
+                  <TableRow key={key.id}>
+                    <TableCell className="font-medium">{key.name}</TableCell>
+                    <TableCell className="font-mono text-xs">{key.id.slice(0, 12)}...</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {scopes.slice(0, 3).map((s) => (
+                          <Badge key={s} variant="secondary" className="text-[10px]">
+                            {s}
+                          </Badge>
+                        ))}
+                        {scopes.length > 3 && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            +{scopes.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : 'Never'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {new Date(key.createdAt).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
                 )
               })}
               {userKeys.length === 0 && (
                 <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center py-8 text-muted-foreground"
-                  >
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     No API keys
                   </TableCell>
                 </TableRow>
@@ -370,23 +353,18 @@ export default async function UserDetailPage({
                       {event.action}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm">
-                    {event.resourceType}
-                  </TableCell>
+                  <TableCell className="text-sm">{event.resourceType}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {event.resourceId?.slice(0, 12) || "—"}
+                    {event.resourceId?.slice(0, 12) || '—'}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
-                    {event.ipAddress || "—"}
+                    {event.ipAddress || '—'}
                   </TableCell>
                 </TableRow>
               ))}
               {recentAudit.length === 0 && (
                 <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center py-8 text-muted-foreground"
-                  >
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     No audit events
                   </TableCell>
                 </TableRow>
@@ -408,39 +386,35 @@ export default async function UserDetailPage({
             </TableHeader>
             <TableBody>
               {recentSessions.map((session) => {
-                const active = session.expiresAt > new Date();
+                const active = session.expiresAt > new Date()
                 return (
-                <TableRow key={session.id}>
-                  <TableCell>
-                    <span className="flex items-center gap-2 font-medium">
-                      <Monitor className="h-4 w-4 text-muted-foreground" />
-                      {session.userAgent
-                        ? session.userAgent.slice(0, 80)
-                        : "Unknown device"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {session.ipAddress ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    Created {new Date(session.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {new Date(session.updatedAt).toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={active ? "success" : "secondary"}>
-                      {active ? "Active" : "Expired"}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              )})}
+                  <TableRow key={session.id}>
+                    <TableCell>
+                      <span className="flex items-center gap-2 font-medium">
+                        <Monitor className="h-4 w-4 text-muted-foreground" />
+                        {session.userAgent ? session.userAgent.slice(0, 80) : 'Unknown device'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {session.ipAddress ?? '—'}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      Created {new Date(session.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(session.updatedAt).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={active ? 'success' : 'secondary'}>
+                        {active ? 'Active' : 'Expired'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
               {recentSessions.length === 0 && (
                 <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center py-8 text-muted-foreground"
-                  >
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     No sessions
                   </TableCell>
                 </TableRow>
@@ -450,25 +424,25 @@ export default async function UserDetailPage({
         </TabsContent>
       </Tabs>
     </div>
-  );
+  )
 }
 
 function RoleBadge({ role }: { role: string }) {
   return (
     <Badge
       variant={
-        role === "OWNER"
-          ? "destructive"
-          : role === "SUPER"
-            ? "destructive"
-            : role === "ADMIN"
-              ? "warning"
-              : "secondary"
+        role === 'OWNER'
+          ? 'destructive'
+          : role === 'SUPER'
+            ? 'destructive'
+            : role === 'ADMIN'
+              ? 'warning'
+              : 'secondary'
       }
     >
       {role}
     </Badge>
-  );
+  )
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
@@ -477,26 +451,26 @@ function Fact({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
-  );
+  )
 }
 
 function keyScopes(permissions: string | null) {
-  if (!permissions) return [];
+  if (!permissions) return []
   try {
-    const parsed = JSON.parse(permissions) as { scopes?: unknown };
+    const parsed = JSON.parse(permissions) as { scopes?: unknown }
     return Array.isArray(parsed.scopes)
-      ? parsed.scopes.filter((scope): scope is string => typeof scope === "string")
-      : [];
+      ? parsed.scopes.filter((scope): scope is string => typeof scope === 'string')
+      : []
   } catch {
-    return [];
+    return []
   }
 }
 
 function initials(name: string | null) {
-  return (name ?? "?")
-    .split(" ")
+  return (name ?? '?')
+    .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
-    .join("");
+    .join('')
 }

@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@planisfy/ui/components/tabs'
 import { Building2, Settings, AlertTriangle, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { api } from '@/lib/api'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -267,11 +268,14 @@ function SettingsTab({ org, onRefresh }: { org: OrgData; onRefresh: () => Promis
     if (deleteConfirm !== org.name) return
     setDeleting(true)
     try {
-      await organization.delete({ organizationId: org.id })
+      await api.delete('/organization', {
+        organizationId: org.id,
+        confirmation: deleteConfirm,
+      })
       router.push('/styles')
       router.refresh()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete organization')
+      toast.error(err instanceof Error ? err.message : 'Failed to deactivate organization')
       setDeleting(false)
     }
   }
@@ -320,12 +324,12 @@ function SettingsTab({ org, onRefresh }: { org: OrgData; onRefresh: () => Promis
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Deleting an organization is permanent. All styles, tilesets, API keys, and usage data
-            owned by this organization will be lost.
+            Deactivation immediately revokes access, credentials, and public delivery. Operational,
+            billing, audit, and storage records are retained.
           </p>
           <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
             <Trash2 className="h-4 w-4 mr-2" />
-            Delete organization
+            Deactivate organization
           </Button>
         </CardContent>
       </Card>
@@ -334,10 +338,10 @@ function SettingsTab({ org, onRefresh }: { org: OrgData; onRefresh: () => Promis
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete organization?</AlertDialogTitle>
+            <AlertDialogTitle>Deactivate organization?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. All resources owned by <strong>{org.name}</strong> will
-              be permanently deleted.
+              This terminal action cannot be undone. <strong>{org.name}</strong> and its resources
+              will become inaccessible immediately, but retained records are not physically erased.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4">
@@ -366,7 +370,7 @@ function SettingsTab({ org, onRefresh }: { org: OrgData; onRefresh: () => Promis
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleting ? 'Deleting...' : 'Delete organization'}
+              {deleting ? 'Deactivating...' : 'Deactivate organization'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
