@@ -1,9 +1,12 @@
 import { and, eq, or } from "drizzle-orm";
 import { billingTransactions, db } from "@planisfy/database";
 
-type BillingTransactionStatus =
-  typeof billingTransactions.$inferInsert.status;
-type BillingTransactionType = typeof billingTransactions.$inferInsert.type;
+type BillingTransactionStatus = NonNullable<
+  typeof billingTransactions.$inferInsert.status
+>;
+type BillingTransactionType = NonNullable<
+  typeof billingTransactions.$inferInsert.type
+>;
 
 export interface RecordDodoBillingTransactionInput {
   accountId: string;
@@ -51,22 +54,44 @@ export async function recordDodoBillingTransaction(
       ? await tx
           .select({
             id: billingTransactions.id,
+            status: billingTransactions.status,
             paidAt: billingTransactions.paidAt,
+            lastWebhookAt: billingTransactions.lastWebhookAt,
+            lastWebhookId: billingTransactions.lastWebhookId,
           })
           .from(billingTransactions)
           .where(predicates.length === 1 ? predicates[0]! : or(...predicates))
           .limit(1)
       : [];
 
+    if (
+      existing[0] &&
+      input.webhookAt &&
+      !shouldApplyBillingTransactionEvent({
+        currentAt: existing[0].lastWebhookAt,
+        currentStatus: existing[0].status,
+        currentId: existing[0].lastWebhookId,
+        incomingAt: input.webhookAt,
+        incomingStatus: input.status,
+        incomingId: input.webhookId ?? null,
+      })
+    ) {
+      return;
+    }
+
+    const status =
+      existing[0]?.lastWebhookAt && !input.webhookAt
+        ? existing[0].status
+        : input.status;
     const paidAt =
-      input.status === "PAID" ? (existing[0]?.paidAt ?? new Date()) : null;
+      status === "PAID" ? (existing[0]?.paidAt ?? new Date()) : null;
 
     const insertValues = {
       accountId: input.accountId,
       initiatedByAccountId: input.initiatedByAccountId ?? null,
       provider: "DODO" as const,
       type: input.type,
-      status: input.status,
+      status,
       providerCheckoutId: input.providerCheckoutId ?? null,
       providerOrderId: input.providerOrderId ?? null,
       providerCustomerId: input.providerCustomerId ?? null,
@@ -95,7 +120,7 @@ export async function recordDodoBillingTransaction(
                 ? undefined
                 : input.initiatedByAccountId,
             type: input.type,
-            status: input.status,
+            status,
             providerCheckoutId: input.providerCheckoutId || undefined,
             providerOrderId: input.providerOrderId || undefined,
             providerCustomerId: input.providerCustomerId || undefined,
@@ -125,6 +150,38 @@ export async function recordDodoBillingTransaction(
 
     await tx.insert(billingTransactions).values(insertValues);
   });
+}
+
+export function shouldApplyBillingTransactionEvent(params: {
+  currentAt: Date | null;
+  currentStatus: BillingTransactionStatus;
+  currentId: string | null;
+  incomingAt: Date;
+  incomingStatus: BillingTransactionStatus;
+  incomingId: string | null;
+}) {
+  if (!params.currentAt) return true;
+  const timestampDelta =
+    params.incomingAt.getTime() - params.currentAt.getTime();
+  if (timestampDelta !== 0) return timestampDelta > 0;
+
+  const precedenceDelta =
+    billingTransactionStatusPrecedence(params.incomingStatus) -
+    billingTransactionStatusPrecedence(params.currentStatus);
+  if (precedenceDelta !== 0) return precedenceDelta > 0;
+  return (params.incomingId ?? "") > (params.currentId ?? "");
+}
+
+function billingTransactionStatusPrecedence(
+  status: BillingTransactionStatus,
+) {
+  if (status === "REFUNDED") return 7;
+  if (status === "CANCELED") return 6;
+  if (status === "FAILED") return 5;
+  if (status === "PAID") return 4;
+  if (status === "PENDING") return 3;
+  if (status === "CHECKOUT_CREATED") return 2;
+  return 1;
 }
 
 function compactUndefined<T extends Record<string, unknown>>(value: T): T {

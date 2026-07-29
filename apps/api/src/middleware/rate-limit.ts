@@ -54,8 +54,12 @@ const redis = new Redis({
   enableOfflineQueue: false,
   maxRetriesPerRequest: 1,
   lazyConnect: true,
+  retryStrategy: process.env.NODE_ENV === 'test' ? () => null : undefined,
 })
 
+redis.on('error', () => {
+  // Connection failures are handled through each limiter's in-memory insurance store.
+})
 redis.connect().catch((err) => {
   console.warn('[rate-limit] Redis connection failed, using memory fallback:', err.message)
 })

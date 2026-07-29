@@ -1,9 +1,9 @@
 import { Hono, type Context } from 'hono'
 import { z } from 'zod'
 import { Webhook, WebhookVerificationError } from 'standardwebhooks'
+import { bodyLimit } from 'hono/body-limit'
 import type { AuthEnv } from '../../middleware/auth'
 import {
-  applyDodoWebhookEvent,
   changeSubscriptionPlan,
   createCheckoutSession,
   createCustomerPortalSession,
@@ -18,17 +18,19 @@ import {
   serializePlanLimits,
 } from './billing'
 import { getMonthlyUsagePeriod, getMonthlyUsageUnits } from '../usage/usage-quota'
-import {
-  db,
-  styles,
-  tilesets,
-  apiKeys,
-  billingTransactions,
-  billingWebhookEvents,
-} from '@planisfy/database'
+import { db, styles, tilesets, apiKeys, billingTransactions } from '@planisfy/database'
 import { eq, and, isNull, count, desc } from 'drizzle-orm'
 import { env } from '../../env'
 import { requireOrgPermission } from '../../middleware/auth'
+import { acceptDodoWebhookEvent, parseDodoEventTimestamp } from './webhook-inbox'
+import {
+  beginBillingMutation,
+  billingMutationFingerprint,
+  BillingMutationError,
+  completeBillingMutation,
+  failBillingMutation,
+  requireIdempotencyKey,
+} from './billing-mutations'
 
 const checkoutSchema = z.object({
   planId: z.enum(['starter', 'scale']),
@@ -39,6 +41,20 @@ const changePlanSchema = checkoutSchema
 
 export const billingRoute = new Hono<AuthEnv>()
 export const billingWebhookRoute = new Hono()
+export const DODO_WEBHOOK_BODY_LIMIT_BYTES = 256 * 1024
+export const dodoWebhookBodyLimit = bodyLimit({
+  maxSize: DODO_WEBHOOK_BODY_LIMIT_BYTES,
+  onError: (c) =>
+    c.json(
+      {
+        error: {
+          code: 'PAYLOAD_TOO_LARGE',
+          message: 'Webhook payload exceeds the 256 KiB limit.',
+        },
+      },
+      413
+    ),
+})
 
 billingRoute.use('/billing', requireOrgPermission('billing.manage'))
 billingRoute.use('/billing/*', requireOrgPermission('billing.manage'))
@@ -187,9 +203,31 @@ billingRoute.post('/billing/checkout', async (c) => {
   const ownerId = c.get('ownerId')
   const body = await c.req.json()
   const { planId, interval } = checkoutSchema.parse(body)
+  const clientIp = getClientIp(c)
+
+  let mutation
+  try {
+    const idempotencyKey = requireIdempotencyKey(c.req.header('idempotency-key'))
+    mutation = await beginBillingMutation({
+      accountId: ownerId,
+      initiatedByAccountId: userId,
+      operation: 'checkout',
+      idempotencyKey,
+      requestFingerprint: billingMutationFingerprint('checkout', { planId, interval }),
+      clientIp,
+    })
+  } catch (error) {
+    if (error instanceof BillingMutationError) {
+      if (error.retryAfter) c.header('Retry-After', String(error.retryAfter))
+      return c.json({ error: { code: error.code, message: error.message } }, error.status)
+    }
+    throw error
+  }
+  if (mutation.kind === 'replay') return c.json(mutation.body as Record<string, unknown>)
 
   const activeSubscription = await getActivePaidSubscription(ownerId)
   if (activeSubscription) {
+    await failBillingMutation(mutation.id, 'Account already has an active subscription', false)
     return c.json(
       {
         error: {
@@ -202,14 +240,22 @@ billingRoute.post('/billing/checkout', async (c) => {
     )
   }
 
-  const session = await createCheckoutSession({
-    userId,
-    accountId: ownerId,
-    planId,
-    interval,
-  })
+  let session
+  try {
+    session = await createCheckoutSession({
+      userId,
+      accountId: ownerId,
+      planId,
+      interval,
+      idempotencyKey: c.req.header('idempotency-key'),
+    })
+  } catch (error) {
+    await failBillingMutation(mutation.id, error)
+    throw error
+  }
 
   if (!session) {
+    await failBillingMutation(mutation.id, 'Billing is not configured', false)
     return c.json(
       {
         error: {
@@ -222,6 +268,7 @@ billingRoute.post('/billing/checkout', async (c) => {
     )
   }
 
+  await completeBillingMutation(mutation.id, 200, session)
   return c.json(session)
 })
 
@@ -242,14 +289,45 @@ billingRoute.post('/billing/subscription/change-plan', async (c) => {
   }
 
   const ownerId = c.get('ownerId')
+  const userId = c.get('userId')
   const body = await c.req.json()
   const { planId, interval } = changePlanSchema.parse(body)
+  const clientIp = getClientIp(c)
+
+  let mutation
+  try {
+    const idempotencyKey = requireIdempotencyKey(c.req.header('idempotency-key'))
+    mutation = await beginBillingMutation({
+      accountId: ownerId,
+      initiatedByAccountId: userId,
+      operation: 'change-plan',
+      idempotencyKey,
+      requestFingerprint: billingMutationFingerprint('change-plan', { planId, interval }),
+      clientIp,
+    })
+  } catch (error) {
+    if (error instanceof BillingMutationError) {
+      if (error.retryAfter) c.header('Retry-After', String(error.retryAfter))
+      return c.json({ error: { code: error.code, message: error.message } }, error.status)
+    }
+    throw error
+  }
+  if (mutation.kind === 'replay') return c.json(mutation.body as Record<string, unknown>)
 
   try {
-    const result = await changeSubscriptionPlan({ accountId: ownerId, planId, interval })
-    if (result.changed) return c.json(result)
+    const result = await changeSubscriptionPlan({
+      accountId: ownerId,
+      planId,
+      interval,
+      idempotencyKey: c.req.header('idempotency-key'),
+    })
+    if (result.changed) {
+      await completeBillingMutation(mutation.id, 200, result)
+      return c.json(result)
+    }
 
     if (result.reason === 'no-active-paid-subscription') {
+      await failBillingMutation(mutation.id, result.reason, false)
       return c.json(
         {
           error: {
@@ -261,6 +339,7 @@ billingRoute.post('/billing/subscription/change-plan', async (c) => {
       )
     }
     if (result.reason === 'not-dodo-managed') {
+      await failBillingMutation(mutation.id, result.reason, false)
       return c.json(
         {
           error: {
@@ -272,6 +351,7 @@ billingRoute.post('/billing/subscription/change-plan', async (c) => {
       )
     }
     if (result.reason === 'portal-required') {
+      await failBillingMutation(mutation.id, result.reason, false)
       return c.json(
         {
           error: {
@@ -283,6 +363,7 @@ billingRoute.post('/billing/subscription/change-plan', async (c) => {
       )
     }
 
+    await failBillingMutation(mutation.id, result.reason, false)
     return c.json(
       {
         error: {
@@ -294,6 +375,7 @@ billingRoute.post('/billing/subscription/change-plan', async (c) => {
       503
     )
   } catch (err) {
+    await failBillingMutation(mutation.id, err)
     console.error('Failed to change Dodo subscription plan', {
       err,
       ownerId,
@@ -381,7 +463,7 @@ async function createBillingPortalResponse(c: Context<AuthEnv>) {
   return c.json({ url })
 }
 
-billingWebhookRoute.post('/webhooks/dodo', async (c) => {
+billingWebhookRoute.post('/webhooks/dodo', dodoWebhookBodyLimit, async (c) => {
   if (!env.DODO_PAYMENTS_WEBHOOK_SECRET) {
     return c.json(
       {
@@ -416,6 +498,12 @@ billingWebhookRoute.post('/webhooks/dodo', async (c) => {
   }
 
   const webhookId = c.req.header('webhook-id')
+  if (!webhookId) {
+    return c.json(
+      { error: { code: 'MISSING_WEBHOOK_ID', message: 'webhook-id header is required.' } },
+      400
+    )
+  }
   const eventPayload = payload as Record<string, unknown>
   if (!isExpectedDodoWebhookBrand(eventPayload)) {
     return c.json({
@@ -427,65 +515,13 @@ billingWebhookRoute.post('/webhooks/dodo', async (c) => {
     })
   }
 
-  const claimed = webhookId ? await claimDodoWebhookEvent(webhookId, eventPayload) : true
-  if (!claimed) {
-    return c.json({
-      data: {
-        applied: false,
-        reason: 'duplicate-webhook',
-        webhookId,
-      },
-    })
-  }
-
-  try {
-    const result = await applyDodoWebhookEvent(eventPayload, {
-      webhookId,
-      webhookTimestamp: c.req.header('webhook-timestamp'),
-    })
-    if (webhookId) await markDodoWebhookProcessed(webhookId, result)
-    return c.json({ data: result })
-  } catch (err) {
-    if (webhookId) await releaseDodoWebhookClaim(webhookId)
-    throw err
-  }
+  const result = await acceptDodoWebhookEvent({
+    webhookId,
+    payload: eventPayload,
+    eventAt: parseDodoEventTimestamp(eventPayload, c.req.header('webhook-timestamp')),
+  })
+  return c.json({ data: { ...result, webhookId } })
 })
-
-async function claimDodoWebhookEvent(webhookId: string, payload: Record<string, unknown>) {
-  const [event] = await db
-    .insert(billingWebhookEvents)
-    .values({
-      provider: 'DODO',
-      webhookId,
-      eventType: stringValue(payload.type) ?? stringValue(payload.event_type),
-      payload,
-    })
-    .onConflictDoNothing()
-    .returning({ id: billingWebhookEvents.id })
-
-  return Boolean(event)
-}
-
-async function markDodoWebhookProcessed(webhookId: string, result: unknown) {
-  await db
-    .update(billingWebhookEvents)
-    .set({ result, processedAt: new Date() })
-    .where(
-      and(eq(billingWebhookEvents.provider, 'DODO'), eq(billingWebhookEvents.webhookId, webhookId))
-    )
-}
-
-async function releaseDodoWebhookClaim(webhookId: string) {
-  await db
-    .delete(billingWebhookEvents)
-    .where(
-      and(
-        eq(billingWebhookEvents.provider, 'DODO'),
-        eq(billingWebhookEvents.webhookId, webhookId),
-        isNull(billingWebhookEvents.processedAt)
-      )
-    )
-}
 
 function stringValue(value: unknown) {
   return typeof value === 'string' && value.length > 0 ? value : null
@@ -511,4 +547,10 @@ function recordValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
+}
+
+function getClientIp(c: Context<AuthEnv>) {
+  return (
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown'
+  )
 }

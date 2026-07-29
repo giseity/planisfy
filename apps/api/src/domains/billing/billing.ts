@@ -8,7 +8,7 @@ import {
   type PlanLimits,
   type PlanSlug,
 } from '@planisfy/types'
-import { and, desc, eq, gt, isNull, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, isNull, lt, or, sql } from 'drizzle-orm'
 import { env } from '../../env'
 import { recordDodoBillingTransaction } from './billing-transactions'
 import {
@@ -330,6 +330,7 @@ export async function createCheckoutSession(params: {
   accountId: string
   planId: BillablePlanSlug
   interval?: BillingInterval
+  idempotencyKey?: string
 }): Promise<CheckoutSession | null> {
   const interval = params.interval ?? 'monthly'
   const product = resolveSubscriptionProduct(params.planId, interval)
@@ -365,6 +366,7 @@ export async function createCheckoutSession(params: {
       accountId: params.accountId,
       planId: params.planId,
       interval,
+      idempotencyKey: params.idempotencyKey,
     },
   }
 
@@ -397,6 +399,7 @@ export async function createCheckoutSession(params: {
       interval,
       productId: product.dodoProductId,
       userId: params.userId,
+      idempotencyKey: params.idempotencyKey,
     },
   })
 
@@ -449,6 +452,7 @@ export async function changeSubscriptionPlan(params: {
   accountId: string
   planId: BillablePlanSlug
   interval: BillingInterval
+  idempotencyKey?: string
 }): Promise<SubscriptionPlanChangeResult> {
   const subscription = await getActivePaidSubscription(params.accountId)
   if (!subscription) return { changed: false, reason: 'no-active-paid-subscription' }
@@ -483,6 +487,7 @@ export async function changeSubscriptionPlan(params: {
           previousPlanId: subscription.planId,
           planId: params.planId,
           interval: params.interval,
+          idempotencyKey: params.idempotencyKey,
         },
       }),
     }
@@ -589,6 +594,12 @@ export async function applyDodoWebhookEvent(
     'id',
   ])
   const status = normalizeDodoSubscriptionStatus(eventType, stringValue(data.status))
+  const eventAt = parseWebhookTimestamp(payload.timestamp ?? context.webhookTimestamp)
+  if (!eventAt) {
+    throw new Error(`Subscription webhook ${eventType} is missing a valid occurrence timestamp`)
+  }
+  const eventPrecedence = subscriptionEventPrecedence(status)
+  const providerEventId = context.webhookId ?? `${eventType}:${eventAt.toISOString()}`
   const periodStart = dateValue(
     readFirst(data, [
       'current_period_start',
@@ -606,8 +617,9 @@ export async function applyDodoWebhookEvent(
     ])
   )
 
+  let changed = false
   if (subscriptionId) {
-    await db
+    const [inserted] = await db
       .insert(subscriptions)
       .values({
         accountId,
@@ -617,29 +629,51 @@ export async function applyDodoWebhookEvent(
         currentPeriodEnd: periodEnd,
         billingInterval: product.interval,
         providerSubscriptionId: subscriptionId,
+        providerEventAt: eventAt,
+        providerEventPrecedence: eventPrecedence,
+        providerEventId,
       })
-      .onConflictDoUpdate({
+      .onConflictDoNothing({
         target: subscriptions.providerSubscriptionId,
-        set: {
+      })
+      .returning({ id: subscriptions.id })
+    changed = Boolean(inserted)
+    if (!changed) {
+      const updated = await db
+        .update(subscriptions)
+        .set({
           accountId,
           planId: product.planId,
           status,
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
           billingInterval: product.interval,
+          providerEventAt: eventAt,
+          providerEventPrecedence: eventPrecedence,
+          providerEventId,
           updatedAt: new Date(),
-        },
-      })
+        })
+        .where(
+          and(
+            eq(subscriptions.providerSubscriptionId, subscriptionId),
+            newerSubscriptionEventCondition(eventAt, eventPrecedence, providerEventId)
+          )
+        )
+        .returning({ id: subscriptions.id })
+      changed = updated.length > 0
+    }
   } else {
     const [existing] = await db
-      .select({ id: subscriptions.id })
+      .select({
+        id: subscriptions.id,
+      })
       .from(subscriptions)
       .where(eq(subscriptions.accountId, accountId))
       .orderBy(desc(subscriptions.updatedAt))
       .limit(1)
 
     if (existing) {
-      await db
+      const updated = await db
         .update(subscriptions)
         .set({
           planId: product.planId,
@@ -647,9 +681,19 @@ export async function applyDodoWebhookEvent(
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
           billingInterval: product.interval,
+          providerEventAt: eventAt,
+          providerEventPrecedence: eventPrecedence,
+          providerEventId,
           updatedAt: new Date(),
         })
-        .where(eq(subscriptions.id, existing.id))
+        .where(
+          and(
+            eq(subscriptions.id, existing.id),
+            newerSubscriptionEventCondition(eventAt, eventPrecedence, providerEventId)
+          )
+        )
+        .returning({ id: subscriptions.id })
+      changed = updated.length > 0
     } else {
       await db.insert(subscriptions).values({
         accountId,
@@ -659,7 +703,23 @@ export async function applyDodoWebhookEvent(
         currentPeriodEnd: periodEnd,
         billingInterval: product.interval,
         providerSubscriptionId: null,
+        providerEventAt: eventAt,
+        providerEventPrecedence: eventPrecedence,
+        providerEventId,
       })
+      changed = true
+    }
+  }
+
+  if (!changed) {
+    return {
+      applied: false,
+      reason: 'stale-subscription-event',
+      eventType,
+      accountId,
+      planId: product.planId,
+      status,
+      subscriptionId,
     }
   }
 
@@ -994,8 +1054,41 @@ function dateValue(value: unknown): Date | null {
 
 function parseWebhookTimestamp(timestamp: string | null | undefined): Date | null {
   if (!timestamp) return null
-  const date = new Date(timestamp)
+  const numeric = Number(timestamp)
+  const date =
+    Number.isFinite(numeric) && /^\d+$/.test(timestamp)
+      ? new Date(numeric * 1000)
+      : new Date(timestamp)
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+export function subscriptionEventPrecedence(
+  status: 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'INACTIVE'
+) {
+  if (status === 'CANCELED') return 4
+  if (status === 'PAST_DUE') return 3
+  if (status === 'INACTIVE') return 2
+  return 1
+}
+
+function newerSubscriptionEventCondition(
+  eventAt: Date,
+  precedence: number,
+  providerEventId: string
+) {
+  return or(
+    isNull(subscriptions.providerEventAt),
+    lt(subscriptions.providerEventAt, eventAt),
+    and(
+      eq(subscriptions.providerEventAt, eventAt),
+      lt(subscriptions.providerEventPrecedence, precedence)
+    ),
+    and(
+      eq(subscriptions.providerEventAt, eventAt),
+      eq(subscriptions.providerEventPrecedence, precedence),
+      or(isNull(subscriptions.providerEventId), lt(subscriptions.providerEventId, providerEventId))
+    )
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
