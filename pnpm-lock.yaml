@@ -79,7 +79,7 @@ importers:
         version: link:../../packages/assets
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.2)(kysely@0.28.17)(postgres@3.4.8)
+        version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(kysely@0.28.17)(postgres@3.4.8)
       lucide-react:
         specifier: ^0.563.0
         version: 0.563.0(react@19.2.4)
@@ -834,9 +834,6 @@ importers:
       '@planisfy/storage-paths':
         specifier: workspace:*
         version: link:../../packages/storage-paths
-      better-sqlite3:
-        specifier: ^13.0.2
-        version: 13.0.2
       bullmq:
         specifier: ^5.71.0
         version: 5.71.0
@@ -848,7 +845,7 @@ importers:
         version: 16.6.1
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.2)(kysely@0.28.17)(postgres@3.4.8)
+        version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(kysely@0.28.17)(postgres@3.4.8)
       ioredis:
         specifier: ^5.5.0
         version: 5.9.3
@@ -865,9 +862,6 @@ importers:
       '@planisfy/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.2
@@ -1013,7 +1007,7 @@ importers:
         version: 16.6.1
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.2)(kysely@0.28.17)(postgres@3.4.8)
+        version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(kysely@0.28.17)(postgres@3.4.8)
       postgres:
         specifier: ^3.4.8
         version: 3.4.8
@@ -1209,8 +1203,8 @@ importers:
         specifier: ^3.940.0
         version: 3.1062.0
       '@aws-sdk/lib-storage':
-        specifier: ^3.940.0
-        version: 3.1097.0(@aws-sdk/client-s3@3.1062.0)
+        specifier: 3.1062.0
+        version: 3.1062.0(@aws-sdk/client-s3@3.1062.0)
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1062.0
         version: 3.1062.0
@@ -1281,7 +1275,7 @@ importers:
         version: link:../storage
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.2)(kysely@0.28.17)(postgres@3.4.8)
+        version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(kysely@0.28.17)(postgres@3.4.8)
       pbf:
         specifier: 4.0.1
         version: 4.0.1
@@ -1520,11 +1514,11 @@ packages:
     resolution: {integrity: sha512-YYsumc2oe09gl4l+fjfmR64JDn6+0o4Ql5HMBkMuhFazO1tZlE5NjSnZM3oXHwenPjh2qow0TFgSIVjfWfsojg==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/lib-storage@3.1097.0':
-    resolution: {integrity: sha512-BntU0TisTIpoH54zIaAxmzsETRLi+RsJN3GdQCvUVH88UlgXGdQMDx99KRRwKCGW2j8o+kjDzqXVzHf94zP8eQ==}
+  '@aws-sdk/lib-storage@3.1062.0':
+    resolution: {integrity: sha512-yD4P7+19rd4JqLmQ+Z4zcnPiwVQlsbT2Bppam5R8mOLpBHnWExVVRdlQy90RitQfevTGWj5CM/6EzWaGvs1h/w==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
-      '@aws-sdk/client-s3': ^3.1097.0
+      '@aws-sdk/client-s3': ^3.1062.0
 
   '@aws-sdk/middleware-flexible-checksums@3.974.26':
     resolution: {integrity: sha512-WndRXQV8wAU/bW3GH8THumEOSV7FpS0AtoluT2M7lYaaDUyG0gOCD+DppB+IWQ4TPmzuTtFcCedh9xCzM4Zv4g==}
@@ -4030,10 +4024,6 @@ packages:
     resolution: {integrity: sha512-dq9AtApgg5PGFtBzPFSBl3HZQjHok5gaQCM6zh2Yk0aSmDCs1CbnVI8/HgASQkNKsWFpseIO9beg5xxpYhbIfA==}
     engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x || 26.x}
 
-  better-sqlite3@13.0.2:
-    resolution: {integrity: sha512-jW6oufeDhXZaiX9Lw5A+oerVClx4iFrI6uDj1zu7SqUAjak9vbJvA0NEcKLNxHiQHb6kYCoFzzXYV0YOauhV3g==}
-    engines: {node: '>=22'}
-
   bindings@1.5.0:
     resolution: {integrity: sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==}
 
@@ -5705,10 +5695,6 @@ packages:
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
 
-  node-addon-api@8.9.0:
-    resolution: {integrity: sha512-ekZMeaaIzSQTSpr7X2X3iJM7lTzgnx8ahAG9pJfT/7+14mlEM8ZYQ9cgCDvSSRbReFK0oHli3WrZdCiRsgAT9Q==}
-    engines: {node: ^18 || ^20 || >= 21}
-
   node-fetch@2.7.0:
     resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
     engines: {node: 4.x || >=6.0.0}
@@ -6214,11 +6200,6 @@ packages:
 
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
-    hasBin: true
-
-  semver@7.7.3:
-    resolution: {integrity: sha512-SdsKMrI9TdgjdweUSR9MweHA4EJ8YxHn8DFaDisvhVlUOe4BF1tLD7GAj0lIqWVl+dPb/rExr0Btby5loQm20Q==}
-    engines: {node: '>=10'}
     hasBin: true
 
   semver@7.7.4:
@@ -6964,8 +6945,8 @@ snapshots:
       '@aws-crypto/util': 5.2.0
       '@aws-sdk/core': 3.974.17
       '@aws-sdk/types': 3.973.10
-      '@smithy/core': 3.24.6
-      '@smithy/types': 4.14.3
+      '@smithy/core': 3.31.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@aws-sdk/client-s3@3.1062.0':
@@ -7000,18 +6981,18 @@ snapshots:
     dependencies:
       '@aws-sdk/core': 3.974.17
       '@aws-sdk/types': 3.973.10
-      '@smithy/core': 3.24.6
-      '@smithy/types': 4.14.3
+      '@smithy/core': 3.31.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-http@3.972.45':
     dependencies:
       '@aws-sdk/core': 3.974.17
       '@aws-sdk/types': 3.973.10
-      '@smithy/core': 3.24.6
+      '@smithy/core': 3.31.0
       '@smithy/fetch-http-handler': 5.4.6
       '@smithy/node-http-handler': 4.7.7
-      '@smithy/types': 4.14.3
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-ini@3.972.49':
@@ -7025,9 +7006,9 @@ snapshots:
       '@aws-sdk/credential-provider-web-identity': 3.972.48
       '@aws-sdk/nested-clients': 3.997.16
       '@aws-sdk/types': 3.973.10
-      '@smithy/core': 3.24.6
+      '@smithy/core': 3.31.0
       '@smithy/credential-provider-imds': 4.3.8
-      '@smithy/types': 4.14.3
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-login@3.972.48':
@@ -7035,8 +7016,8 @@ snapshots:
       '@aws-sdk/core': 3.974.17
       '@aws-sdk/nested-clients': 3.997.16
       '@aws-sdk/types': 3.973.14
-      '@smithy/core': 3.28.0
-      '@smithy/types': 4.15.0
+      '@smithy/core': 3.31.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-node@3.972.51':
@@ -7057,8 +7038,8 @@ snapshots:
     dependencies:
       '@aws-sdk/core': 3.974.17
       '@aws-sdk/types': 3.973.10
-      '@smithy/core': 3.24.6
-      '@smithy/types': 4.14.3
+      '@smithy/core': 3.31.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-sso@3.972.48':
@@ -7067,8 +7048,8 @@ snapshots:
       '@aws-sdk/nested-clients': 3.997.16
       '@aws-sdk/token-providers': 3.1062.0
       '@aws-sdk/types': 3.973.10
-      '@smithy/core': 3.24.6
-      '@smithy/types': 4.14.3
+      '@smithy/core': 3.31.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@aws-sdk/credential-provider-web-identity@3.972.48':
@@ -7076,11 +7057,11 @@ snapshots:
       '@aws-sdk/core': 3.974.17
       '@aws-sdk/nested-clients': 3.997.16
       '@aws-sdk/types': 3.973.10
-      '@smithy/core': 3.24.6
-      '@smithy/types': 4.14.3
+      '@smithy/core': 3.31.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
-  '@aws-sdk/lib-storage@3.1097.0(@aws-sdk/client-s3@3.1062.0)':
+  '@aws-sdk/lib-storage@3.1062.0(@aws-sdk/client-s3@3.1062.0)':
     dependencies:
       '@aws-sdk/client-s3': 3.1062.0
       '@smithy/core': 3.31.0
@@ -7111,10 +7092,10 @@ snapshots:
       '@aws-sdk/core': 3.974.17
       '@aws-sdk/signature-v4-multi-region': 3.996.36
       '@aws-sdk/types': 3.973.14
-      '@smithy/core': 3.28.0
+      '@smithy/core': 3.31.0
       '@smithy/fetch-http-handler': 5.4.6
       '@smithy/node-http-handler': 4.7.7
-      '@smithy/types': 4.15.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@aws-sdk/s3-request-presigner@3.1062.0':
@@ -7145,8 +7126,8 @@ snapshots:
       '@aws-sdk/core': 3.974.17
       '@aws-sdk/nested-clients': 3.997.16
       '@aws-sdk/types': 3.973.14
-      '@smithy/core': 3.28.0
-      '@smithy/types': 4.15.0
+      '@smithy/core': 3.31.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@aws-sdk/types@3.973.10':
@@ -7165,7 +7146,7 @@ snapshots:
 
   '@aws-sdk/xml-builder@3.972.27':
     dependencies:
-      '@smithy/types': 4.14.3
+      '@smithy/types': 4.16.1
       fast-xml-parser: 5.7.3
       tslib: 2.8.1
 
@@ -7826,7 +7807,7 @@ snapshots:
       nopt: 5.0.0
       npmlog: 5.0.1
       rimraf: 3.0.2
-      semver: 7.7.3
+      semver: 7.7.4
       tar: 6.2.1
     transitivePeerDependencies:
       - encoding
@@ -8977,8 +8958,8 @@ snapshots:
 
   '@smithy/credential-provider-imds@4.3.8':
     dependencies:
-      '@smithy/core': 3.24.6
-      '@smithy/types': 4.14.3
+      '@smithy/core': 3.31.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@smithy/fetch-http-handler@5.4.6':
@@ -8999,14 +8980,14 @@ snapshots:
 
   '@smithy/signature-v4@5.4.6':
     dependencies:
-      '@smithy/core': 3.24.6
-      '@smithy/types': 4.14.3
+      '@smithy/core': 3.31.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@smithy/signature-v4@5.6.0':
     dependencies:
-      '@smithy/core': 3.28.0
-      '@smithy/types': 4.15.0
+      '@smithy/core': 3.31.0
+      '@smithy/types': 4.16.1
       tslib: 2.8.1
 
   '@smithy/types@4.14.3':
@@ -9152,6 +9133,7 @@ snapshots:
   '@types/better-sqlite3@7.6.13':
     dependencies:
       '@types/node': 24.13.2
+    optional: true
 
   '@types/busboy@1.5.4':
     dependencies:
@@ -9320,7 +9302,7 @@ snapshots:
       '@typescript-eslint/visitor-keys': 8.56.0
       debug: 4.4.3
       minimatch: 9.0.5
-      semver: 7.7.3
+      semver: 7.7.4
       tinyglobby: 0.2.15
       ts-api-utils: 2.4.0(typescript@5.9.2)
       typescript: 5.9.2
@@ -9353,6 +9335,14 @@ snapshots:
       '@vitest/utils': 4.0.18
       chai: 6.2.2
       tinyrainbow: 3.0.3
+
+  '@vitest/mocker@4.0.18(vite@7.3.1(@types/node@24.13.2)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))':
+    dependencies:
+      '@vitest/spy': 4.0.18
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 7.3.1(@types/node@24.13.2)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0)
 
   '@vitest/mocker@4.0.18(vite@7.3.1(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))':
     dependencies:
@@ -9556,10 +9546,6 @@ snapshots:
       bindings: 1.5.0
       prebuild-install: 7.1.3
     optional: true
-
-  better-sqlite3@13.0.2:
-    dependencies:
-      node-addon-api: 8.9.0
 
   bindings@1.5.0:
     dependencies:
@@ -9877,13 +9863,6 @@ snapshots:
     optionalDependencies:
       '@types/better-sqlite3': 7.6.13
       better-sqlite3: 12.11.1
-      kysely: 0.28.17
-      postgres: 3.4.8
-
-  drizzle-orm@0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@13.0.2)(kysely@0.28.17)(postgres@3.4.8):
-    optionalDependencies:
-      '@types/better-sqlite3': 7.6.13
-      better-sqlite3: 13.0.2
       kysely: 0.28.17
       postgres: 3.4.8
 
@@ -11601,8 +11580,6 @@ snapshots:
   node-addon-api@7.1.1:
     optional: true
 
-  node-addon-api@8.9.0: {}
-
   node-fetch@2.7.0:
     dependencies:
       whatwg-url: 5.0.0
@@ -12240,8 +12217,6 @@ snapshots:
       compute-scroll-into-view: 3.1.1
 
   semver@6.3.1: {}
-
-  semver@7.7.3: {}
 
   semver@7.7.4: {}
 
@@ -12895,7 +12870,7 @@ snapshots:
   vitest@4.0.18(@types/node@24.13.2)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0):
     dependencies:
       '@vitest/expect': 4.0.18
-      '@vitest/mocker': 4.0.18(vite@7.3.1(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
+      '@vitest/mocker': 4.0.18(vite@7.3.1(@types/node@24.13.2)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
       '@vitest/pretty-format': 4.0.18
       '@vitest/runner': 4.0.18
       '@vitest/snapshot': 4.0.18

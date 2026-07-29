@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import test from "node:test";
-import Database from "better-sqlite3";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import {
   type ArtifactValidationLimits,
   validateGeneratedArtifact,
@@ -19,6 +20,7 @@ const limits: ArtifactValidationLimits = {
   maxZipExpandedBytes: 512 * 1024,
   maxZipCompressionRatio: 20,
 };
+const execFileAsync = promisify(execFile);
 
 test("CSV validation follows RFC 4180 quoting and multiline records", async () => {
   await withTempDir(async (directory) => {
@@ -68,8 +70,9 @@ test("Shapefile validation requires a safe matching component set", async () => 
 test("MBTiles validation checks SQLite integrity, tables, and coordinate uniqueness", async () => {
   await withTempDir(async (directory) => {
     const validPath = join(directory, "valid.mbtiles");
-    const valid = new Database(validPath);
-    valid.exec(`
+    await createSqliteDatabase(
+      validPath,
+      `
       CREATE TABLE metadata (name TEXT, value TEXT);
       CREATE TABLE tiles (
         zoom_level INTEGER NOT NULL,
@@ -79,16 +82,17 @@ test("MBTiles validation checks SQLite integrity, tables, and coordinate uniquen
         UNIQUE (zoom_level, tile_column, tile_row)
       );
       INSERT INTO metadata VALUES ('format', 'pbf');
-    `);
-    valid.close();
+    `,
+    );
 
     const result = await validateUploadFile(validPath, "mbtiles", undefined, limits);
     assert.equal(result.format, "mbtiles");
     await validateGeneratedArtifact(validPath, "mbtiles", limits);
 
     const invalidPath = join(directory, "invalid.mbtiles");
-    const invalid = new Database(invalidPath);
-    invalid.exec(`
+    await createSqliteDatabase(
+      invalidPath,
+      `
       CREATE TABLE metadata (name TEXT, value TEXT);
       CREATE TABLE tiles (
         zoom_level INTEGER,
@@ -96,14 +100,33 @@ test("MBTiles validation checks SQLite integrity, tables, and coordinate uniquen
         tile_row INTEGER,
         tile_data BLOB
       );
-    `);
-    invalid.close();
+    `,
+    );
     await assert.rejects(
       validateUploadFile(invalidPath, "mbtiles", undefined, limits),
       /uniquely index/,
     );
   });
 });
+
+async function createSqliteDatabase(path: string, statements: string) {
+  await execFileAsync(
+    process.env.PYTHON_PATH ?? "python3",
+    [
+      "-I",
+      "-c",
+      [
+        "import sqlite3, sys",
+        "database = sqlite3.connect(sys.argv[1])",
+        "database.executescript(sys.argv[2])",
+        "database.close()",
+      ].join("; "),
+      path,
+      statements,
+    ],
+    { timeout: 10_000, maxBuffer: 64 * 1024 },
+  );
+}
 
 test("PMTiles validation rejects magic-header-only impostors", async () => {
   await withTempDir(async (directory) => {

@@ -122,9 +122,7 @@ tilesRoute.get('/tiles/v1/:source/:z/:x/:y', async (c) => {
       return c.json({ error: { code: 'NOT_FOUND', message: 'Tileset not found' } }, 404)
     }
 
-    const martinSource = parsed.version
-      ? `${parsed.owner}.${parsed.handle}.v${parsed.version}`
-      : `${parsed.owner}.${parsed.handle}`
+    const martinSource = martinSourceForResolvedTileset(parsed.owner, parsed.handle, resolved)
     return serveResolvedTile(c, resolved, z, x, y, () =>
       proxyMartinTile(c, `${martinSource}/${z}/${x}/${y}`)
     )
@@ -156,7 +154,7 @@ tilesRoute.get('/tiles/v1/:owner/:handle/versions/:version/:z/:x/:y', async (c) 
   }
 
   return serveResolvedTile(c, resolved, z, x, y, () =>
-    proxyMartinTile(c, `${owner}.${handle}.v${version}/${z}/${x}/${y}`)
+    proxyMartinTile(c, `${martinSourceForResolvedTileset(owner, handle, resolved)}/${z}/${x}/${y}`)
   )
 })
 
@@ -168,7 +166,7 @@ tilesRoute.get('/tiles/v1/:owner/:handle/:z/:x/:y', async (c) => {
   }
 
   return serveResolvedTile(c, resolved, z, x, y, () =>
-    proxyMartinTile(c, `${owner}.${handle}/${z}/${x}/${y}`)
+    proxyMartinTile(c, `${martinSourceForResolvedTileset(owner, handle, resolved)}/${z}/${x}/${y}`)
   )
 })
 
@@ -278,6 +276,17 @@ export function martinTileResponseHeaders(upstreamHeaders: Headers) {
     cacheControl: 'public, max-age=3600',
     accessControlAllowOrigin: '*',
   }
+}
+
+export function martinSourceForResolvedTileset(
+  owner: string,
+  handle: string,
+  resolved: ResolvedTileset
+) {
+  if (!resolved.version) {
+    throw new Error('Resolved tileset has no version')
+  }
+  return `${owner}.${handle}.v${resolved.version.version}`
 }
 
 async function serveResolvedTile(

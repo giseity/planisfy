@@ -57,7 +57,6 @@ test("buildTilesetPublishAuditMetadata preserves alias registration evidence", (
   const tileAliasRegistration = {
     provider: "r2",
     delivery: "object-storage",
-    stableStorageKey: "martin-sources/acme.roads.pmtiles",
     versionedStorageKey: "martin-sources/acme.roads.v4.pmtiles",
   };
 

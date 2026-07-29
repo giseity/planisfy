@@ -1,4 +1,3 @@
-import Database from "better-sqlite3";
 import { parse } from "csv-parse";
 import { createReadStream } from "node:fs";
 import { open as openFile, readFile, stat } from "node:fs/promises";
@@ -6,6 +5,7 @@ import { basename, extname } from "node:path";
 import { PMTiles, type Source } from "pmtiles";
 import { open as openZip, type Entry, type ZipFile } from "yauzl";
 import { env } from "../../env";
+import { runCancellableCommand } from "../jobs/cancellable-command";
 import {
   validateUpload,
   type SourceFormat,
@@ -72,7 +72,7 @@ export async function validateUploadFile(
     };
   }
   if (format === "mbtiles") {
-    validateMbtilesFile(path);
+    await validateMbtilesFile(path);
     return { format, byteLength: file.size };
   }
 
@@ -96,7 +96,7 @@ export async function validateGeneratedArtifact(
   if (format === "pmtiles") {
     await validatePmtilesFile(path, file.size);
   } else {
-    validateMbtilesFile(path);
+    await validateMbtilesFile(path);
   }
   return file.size;
 }
@@ -329,54 +329,69 @@ async function validatePmtilesFile(path: string, fileSize: number) {
   }
 }
 
-function validateMbtilesFile(path: string) {
-  let sqlite: Database.Database | undefined;
+async function validateMbtilesFile(path: string) {
   try {
-    sqlite = new Database(path, { readonly: true, fileMustExist: true });
-    const quickCheck = sqlite.pragma("quick_check") as Array<Record<string, unknown>>;
-    if (
-      quickCheck.length !== 1 ||
-      String(Object.values(quickCheck[0] ?? {})[0]).toLowerCase() !== "ok"
-    ) {
-      throw new Error("SQLite quick_check failed");
-    }
-    const tables = new Set(
-      (
-        sqlite
-          .prepare(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('metadata', 'tiles')",
-          )
-          .all() as Array<{ name: string }>
-      ).map((row) => row.name),
-    );
-    if (!tables.has("metadata") || !tables.has("tiles")) {
-      throw new Error("MBTiles database must contain metadata and tiles tables");
-    }
-
-    const uniqueIndexes = sqlite
-      .prepare("SELECT name FROM pragma_index_list('tiles') WHERE \"unique\" = 1")
-      .all() as Array<{ name: string }>;
-    const hasCoordinateUniqueness = uniqueIndexes.some((index) => {
-      const columns = sqlite!
-        .prepare("SELECT name FROM pragma_index_info(?) ORDER BY seqno")
-        .all(index.name) as Array<{ name: string }>;
-      return ["zoom_level", "tile_column", "tile_row"].every((name) =>
-        columns.some((column) => column.name === name),
-      );
+    await runCancellableCommand({
+      file: env.PYTHON_PATH,
+      args: ["-I", "-c", MBTILES_VALIDATOR_SCRIPT, path],
+      timeoutMs: 30_000,
+      cancellationPollMs: env.GEODATA_CANCELLATION_POLL_MS,
     });
-    if (!hasCoordinateUniqueness) {
-      throw new Error(
-        "MBTiles tiles table must uniquely index zoom_level, tile_column, and tile_row",
-      );
-    }
   } catch (error) {
     throw new Error(
       `Invalid MBTiles database: ${error instanceof Error ? error.message : String(error)}`,
     );
-  } finally {
-    sqlite?.close();
   }
 }
+
+const MBTILES_VALIDATOR_SCRIPT = String.raw`
+import sqlite3
+import sys
+import urllib.parse
+
+path = sys.argv[1]
+uri = "file:" + urllib.parse.quote(path, safe="/") + "?mode=ro"
+database = sqlite3.connect(uri, uri=True)
+try:
+    database.execute("PRAGMA query_only = ON")
+    quick_check = database.execute("PRAGMA quick_check").fetchall()
+    if quick_check != [("ok",)]:
+        raise RuntimeError("SQLite quick_check failed")
+
+    tables = {
+        row[0]
+        for row in database.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type = 'table' AND name IN ('metadata', 'tiles') LIMIT 2"
+        )
+    }
+    if tables != {"metadata", "tiles"}:
+        raise RuntimeError("MBTiles database must contain metadata and tiles tables")
+
+    unique_indexes = database.execute(
+        "SELECT name FROM pragma_index_list('tiles') WHERE \"unique\" = 1 LIMIT 128"
+    ).fetchall()
+    coordinate_columns = {"zoom_level", "tile_column", "tile_row"}
+    has_coordinate_uniqueness = False
+    for (index_name,) in unique_indexes:
+        columns = {
+            row[0]
+            for row in database.execute(
+                "SELECT name FROM pragma_index_info(?) ORDER BY seqno LIMIT 16",
+                (index_name,),
+            )
+        }
+        if coordinate_columns.issubset(columns):
+            has_coordinate_uniqueness = True
+            break
+    if not has_coordinate_uniqueness:
+        raise RuntimeError(
+            "MBTiles tiles table must uniquely index "
+            "zoom_level, tile_column, and tile_row"
+        )
+finally:
+    database.close()
+`
 
 class NodeFileSource implements Source {
   private readonly handlePromise;

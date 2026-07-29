@@ -20,6 +20,7 @@ import {
 import {
   buildMartinSourceUrl,
   buildMartinTileUrl,
+  martinSourceForResolvedTileset,
   martinTileResponseHeaders,
   tileWorkerUrlForPath,
   toTileJson,
@@ -182,6 +183,17 @@ test("Martin tile URLs validate coordinates and encode path segments", () => {
   assert.equal(buildMartinTileUrl("http://martin:3000", "owner/3/8/0"), null);
   assert.equal(buildMartinTileUrl("http://martin:3000", "owner/3/0/0?x=1"), null);
   assert.equal(buildMartinTileUrl("http://martin:3000", "../owner/0/0/0"), null);
+});
+
+test("stable Martin fallbacks use the database-resolved immutable version alias", () => {
+  const resolved = {
+    version: { version: 7 },
+  } as Parameters<typeof martinSourceForResolvedTileset>[2];
+
+  assert.equal(
+    martinSourceForResolvedTileset("acme", "roads", resolved),
+    "acme.roads.v7",
+  );
 });
 
 test("Martin tile proxy drops stale upstream content encoding", () => {

@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { link, mkdir, unlink } from 'node:fs/promises'
+import { link, mkdir, rename, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getStorage, type StorageProvider } from '@planisfy/storage'
 
@@ -12,16 +13,12 @@ interface LocalStorageObject {
 }
 
 export interface PublishedTileAliasRegistration {
-  stableAlias: string
   versionedAlias: string
-  stablePath: string
   versionedPath: string
   delivery: 'martin' | 'object-storage'
   provider: 'local' | 's3' | 'r2'
   aliasMode: 'hardlink' | 'object_copy'
-  stableStorageKey?: string
   versionedStorageKey?: string
-  stableUrl?: string
   versionedUrl?: string
 }
 
@@ -43,17 +40,14 @@ export async function registerPublishedTileAliases({
   if (artifactFormat !== 'PMTILES' && artifactFormat !== 'MBTILES') return null
 
   const extension = artifactFormat === 'MBTILES' ? 'mbtiles' : 'pmtiles'
-  const stableSource = `${ownerHandle}.${tilesetHandle}`
-  const versionedSource = `${stableSource}.v${version}`
+  const versionedSource = `${ownerHandle}.${tilesetHandle}.v${version}`
 
-  assertSafeMartinSource(stableSource)
   assertSafeMartinSource(versionedSource)
 
   if (storageObject.provider === 'local') {
     return registerLocalMartinSources({
       storageKey: storageObject.storageKey,
       extension,
-      stableSource,
       versionedSource,
     })
   }
@@ -63,7 +57,6 @@ export async function registerPublishedTileAliases({
       storage,
       storageObject,
       extension,
-      stableSource,
       versionedSource,
     })
   }
@@ -74,31 +67,24 @@ export async function registerPublishedTileAliases({
 async function registerLocalMartinSources({
   storageKey,
   extension,
-  stableSource,
   versionedSource,
 }: {
   storageKey: string
   extension: 'pmtiles' | 'mbtiles'
-  stableSource: string
   versionedSource: string
 }): Promise<PublishedTileAliasRegistration> {
   const localStoragePath = process.env.LOCAL_STORAGE_PATH ?? join(process.cwd(), '.storage')
   const sourcesDir = process.env.MARTIN_SOURCES_PATH ?? join(localStoragePath, 'martin-sources')
   const targetPath = join(localStoragePath, storageKey)
-  const stablePath = join(sourcesDir, `${stableSource}.${extension}`)
   const versionedPath = join(sourcesDir, `${versionedSource}.${extension}`)
   const staleExtension = extension === 'pmtiles' ? 'mbtiles' : 'pmtiles'
 
   await mkdir(sourcesDir, { recursive: true })
-  await unlinkIfExists(join(sourcesDir, `${stableSource}.${staleExtension}`))
+  await replaceAliasAtomically(versionedPath, targetPath)
   await unlinkIfExists(join(sourcesDir, `${versionedSource}.${staleExtension}`))
-  await replaceAlias(stablePath, targetPath)
-  await replaceAlias(versionedPath, targetPath)
 
   return {
-    stableAlias: stableSource,
     versionedAlias: versionedSource,
-    stablePath,
     versionedPath,
     delivery: 'martin',
     provider: 'local',
@@ -110,13 +96,11 @@ async function registerObjectStorageMartinSources({
   storage,
   storageObject,
   extension,
-  stableSource,
   versionedSource,
 }: {
   storage: StorageProvider
   storageObject: LocalStorageObject
   extension: 'pmtiles' | 'mbtiles'
-  stableSource: string
   versionedSource: string
 }): Promise<PublishedTileAliasRegistration> {
   const info = storage.getInfo()
@@ -137,26 +121,27 @@ async function registerObjectStorageMartinSources({
   const prefix = normalizeStoragePrefix(
     process.env.TILE_ALIAS_STORAGE_PREFIX ?? process.env.MARTIN_SOURCES_PREFIX ?? 'tile-aliases'
   )
-  const stableStorageKey = `${prefix}/${stableSource}.${extension}`
   const versionedStorageKey = `${prefix}/${versionedSource}.${extension}`
   const staleExtension = extension === 'pmtiles' ? 'mbtiles' : 'pmtiles'
+  const sourceMetadata = await storage.getMetadata(storageObject.storageKey)
+  if (!sourceMetadata) {
+    throw new Error(`Published tileset artifact not found: ${storageObject.storageKey}`)
+  }
 
-  await storage.delete(`${prefix}/${stableSource}.${staleExtension}`)
-  await storage.delete(`${prefix}/${versionedSource}.${staleExtension}`)
-  await storage.copy(storageObject.storageKey, stableStorageKey)
   await storage.copy(storageObject.storageKey, versionedStorageKey)
+  const aliasMetadata = await storage.getMetadata(versionedStorageKey)
+  if (!aliasMetadata || aliasMetadata.size !== sourceMetadata.size) {
+    throw new Error(`Published tileset alias verification failed: ${versionedStorageKey}`)
+  }
+  await storage.delete(`${prefix}/${versionedSource}.${staleExtension}`)
 
   return {
-    stableAlias: stableSource,
     versionedAlias: versionedSource,
-    stablePath: stableStorageKey,
     versionedPath: versionedStorageKey,
     delivery: 'object-storage',
     provider: info.provider,
     aliasMode: 'object_copy',
-    stableStorageKey,
     versionedStorageKey,
-    stableUrl: storage.getUrl(stableStorageKey),
     versionedUrl: storage.getUrl(versionedStorageKey),
   }
 }
@@ -167,15 +152,17 @@ function assertSafeMartinSource(source: string) {
   }
 }
 
-async function replaceAlias(aliasPath: string, targetPath: string) {
+async function replaceAliasAtomically(aliasPath: string, targetPath: string) {
   if (!existsSync(targetPath)) {
     throw new Error(`Published tileset artifact not found: ${targetPath}`)
   }
 
-  await unlinkIfExists(aliasPath)
+  const temporaryAliasPath = `${aliasPath}.${randomUUID()}.tmp`
   try {
-    await link(targetPath, aliasPath)
+    await link(targetPath, temporaryAliasPath)
+    await rename(temporaryAliasPath, aliasPath)
   } catch (err) {
+    await unlinkIfExists(temporaryAliasPath)
     throw new Error(
       `Published tileset alias hardlink failed for ${aliasPath}; ensure LOCAL_STORAGE_PATH and MARTIN_SOURCES_PATH are on one filesystem that supports hardlinks. ${
         err instanceof Error ? err.message : String(err)

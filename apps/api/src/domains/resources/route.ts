@@ -692,39 +692,191 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
   const id = c.req.param("id");
   const version = Number(c.req.param("version"));
 
-  const [tileset] = await db
-    .select()
-    .from(tilesets)
-    .where(
-      and(
-        eq(tilesets.id, id),
-        eq(tilesets.accountId, accountId),
-        isNull(tilesets.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (!tileset)
+  if (!Number.isInteger(version) || version <= 0) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid tileset version",
+        },
+      },
+      400,
+    );
+  }
+
+  const publication = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`tilesetPublish:${id}`}))`,
+    );
+
+    const [lockedTileset] = await tx
+      .select()
+      .from(tilesets)
+      .where(
+        and(
+          eq(tilesets.id, id),
+          eq(tilesets.accountId, accountId),
+          isNull(tilesets.deletedAt),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!lockedTileset)
+      return { error: "tileset_not_found", data: null } as const;
+
+    const [targetVersion] = await tx
+      .select()
+      .from(tilesetVersions)
+      .where(
+        and(
+          eq(tilesetVersions.tilesetId, id),
+          eq(tilesetVersions.version, version),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!targetVersion)
+      return { error: "version_not_found", data: null } as const;
+    if (!targetVersion.artifactStorageObjectId) {
+      return { error: "version_artifact_missing", data: null } as const;
+    }
+    if (
+      targetVersion.format !== "PMTILES" &&
+      targetVersion.format !== "MBTILES"
+    ) {
+      return { error: "unsupported_artifact", data: null } as const;
+    }
+
+    const [owner] = await tx
+      .select({ handle: accounts.handle })
+      .from(accounts)
+      .where(and(eq(accounts.id, accountId), isNull(accounts.deletedAt)))
+      .for("share")
+      .limit(1);
+    if (!owner?.handle)
+      return { error: "owner_handle_not_found", data: null } as const;
+
+    const [artifact] = await tx
+      .select({
+        provider: storageObjects.provider,
+        bucket: storageObjects.bucket,
+        storageKey: storageObjects.storageKey,
+      })
+      .from(storageObjects)
+      .where(
+        and(
+          eq(storageObjects.id, targetVersion.artifactStorageObjectId),
+          eq(storageObjects.accountId, accountId),
+          isNull(storageObjects.deletedAt),
+        ),
+      )
+      .for("share")
+      .limit(1);
+    if (!artifact) return { error: "artifact_not_found", data: null } as const;
+
+    const previousVersion = lockedTileset.currentVersionId
+      ? await tx
+          .select({ version: tilesetVersions.version })
+          .from(tilesetVersions)
+          .where(
+            and(
+              eq(tilesetVersions.id, lockedTileset.currentVersionId),
+              eq(tilesetVersions.tilesetId, id),
+            ),
+          )
+          .limit(1)
+          .then((rows) => rows[0]?.version ?? null)
+      : null;
+    const publishAction = classifyVersionPublish({
+      currentVersionNumber: previousVersion,
+      targetVersionNumber: targetVersion.version,
+      isCurrentVersion: lockedTileset.currentVersionId === targetVersion.id,
+    });
+
+    // The alias is immutable and version-scoped. If the transaction later
+    // rolls back, an unreferenced alias is harmless and can be cleaned up.
+    const tileAliasRegistration = await registerPublishedTileAliases({
+      storageObject: artifact,
+      artifactFormat: targetVersion.format,
+      ownerHandle: owner.handle,
+      tilesetHandle: lockedTileset.handle,
+      version: targetVersion.version,
+    });
+
+    const now = new Date();
+    const [updated] = await tx
+      .update(tilesets)
+      .set({
+        currentVersionId: targetVersion.id,
+        status: "READY",
+        bounds: targetVersion.bounds,
+        minZoom: targetVersion.minZoom,
+        maxZoom: targetVersion.maxZoom,
+        layerMetadata: targetVersion.schema,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(tilesets.id, id),
+          eq(tilesets.accountId, accountId),
+          isNull(tilesets.deletedAt),
+        ),
+      )
+      .returning();
+    if (!updated) throw new Error("Tileset disappeared during publication");
+
+    await tx
+      .update(tilesetVersions)
+      .set({ publishedAt: now })
+      .where(eq(tilesetVersions.id, targetVersion.id));
+    await enqueueOutboxEvent(
+      {
+        eventName: "tileset.version.published",
+        payload: {
+          accountId,
+          tilesetId: id,
+          tilesetVersionId: targetVersion.id,
+          publishedBy: userId,
+        },
+      },
+      tx,
+    );
+    await logAudit(
+      {
+        accountId,
+        actorUserId: userId,
+        action: "tileset.published",
+        resourceType: "tileset",
+        resourceId: id,
+        metadata: buildTilesetPublishAuditMetadata({
+          targetVersion: targetVersion.version,
+          previousVersion,
+          action: publishAction,
+          tileAliasRegistration,
+        }),
+      },
+      tx,
+    );
+
+    return {
+      error: null,
+      data: { ...updated, tileAliasRegistration },
+    } as const;
+  });
+
+  if (publication.error === "tileset_not_found") {
     return c.json(
       { error: { code: "NOT_FOUND", message: "Tileset not found" } },
       404,
     );
-
-  const [targetVersion] = await db
-    .select()
-    .from(tilesetVersions)
-    .where(
-      and(
-        eq(tilesetVersions.tilesetId, id),
-        eq(tilesetVersions.version, version),
-      ),
-    )
-    .limit(1);
-  if (!targetVersion)
+  }
+  if (publication.error === "version_not_found") {
     return c.json(
       { error: { code: "NOT_FOUND", message: "Tileset version not found" } },
       404,
     );
-  if (!targetVersion.artifactStorageObjectId)
+  }
+  if (publication.error === "version_artifact_missing") {
     return c.json(
       {
         error: {
@@ -734,7 +886,8 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
       },
       400,
     );
-  if (targetVersion.format !== "PMTILES" && targetVersion.format !== "MBTILES")
+  }
+  if (publication.error === "unsupported_artifact") {
     return c.json(
       {
         error: {
@@ -745,9 +898,8 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
       },
       400,
     );
-
-  const ownerHandle = await getOwnerHandle(accountId);
-  if (!ownerHandle)
+  }
+  if (publication.error === "owner_handle_not_found") {
     return c.json(
       {
         error: {
@@ -757,31 +909,8 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
       },
       400,
     );
-
-  const previousVersion = tileset.currentVersionId
-    ? await db
-        .select({ version: tilesetVersions.version })
-        .from(tilesetVersions)
-        .where(eq(tilesetVersions.id, tileset.currentVersionId))
-        .limit(1)
-        .then((rows) => rows[0]?.version ?? null)
-    : null;
-  const publishAction = classifyVersionPublish({
-    currentVersionNumber: previousVersion,
-    targetVersionNumber: targetVersion.version,
-    isCurrentVersion: tileset.currentVersionId === targetVersion.id,
-  });
-
-  const [artifact] = await db
-    .select({
-      provider: storageObjects.provider,
-      bucket: storageObjects.bucket,
-      storageKey: storageObjects.storageKey,
-    })
-    .from(storageObjects)
-    .where(eq(storageObjects.id, targetVersion.artifactStorageObjectId))
-    .limit(1);
-  if (!artifact)
+  }
+  if (publication.error === "artifact_not_found") {
     return c.json(
       {
         error: {
@@ -791,56 +920,9 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
       },
       404,
     );
+  }
 
-  const tileAliasRegistration = await registerPublishedTileAliases({
-    storageObject: artifact,
-    artifactFormat: targetVersion.format,
-    ownerHandle,
-    tilesetHandle: tileset.handle,
-    version: targetVersion.version,
-  });
-
-  const [updated] = await db
-    .update(tilesets)
-    .set({
-      currentVersionId: targetVersion.id,
-      status: "READY",
-      bounds: targetVersion.bounds,
-      minZoom: targetVersion.minZoom,
-      maxZoom: targetVersion.maxZoom,
-      layerMetadata: targetVersion.schema,
-    })
-    .where(eq(tilesets.id, id))
-    .returning();
-
-  await db
-    .update(tilesetVersions)
-    .set({ publishedAt: new Date() })
-    .where(eq(tilesetVersions.id, targetVersion.id));
-  await enqueueOutboxEvent({
-    eventName: "tileset.version.published",
-    payload: {
-      accountId,
-      tilesetId: id,
-      tilesetVersionId: targetVersion.id,
-      publishedBy: userId,
-    },
-  });
-  await logAudit({
-    accountId,
-    actorUserId: userId,
-    action: "tileset.published",
-    resourceType: "tileset",
-    resourceId: id,
-    metadata: buildTilesetPublishAuditMetadata({
-      targetVersion: version,
-      previousVersion,
-      action: publishAction,
-      tileAliasRegistration,
-    }),
-  });
-
-  return c.json({ data: { ...updated, tileAliasRegistration } });
+  return c.json({ data: publication.data });
 });
 
 resourcesRoute.post("/tilesets/:id/rebuild", async (c) => {

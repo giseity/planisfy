@@ -31,6 +31,7 @@ const schema = z.object({
   DUCKDB_PATH: z.string().min(1),
   TIPPECANOE_PATH: z.string().min(1),
   OGR2OGR_PATH: z.string().min(1),
+  PYTHON_PATH: z.string().min(1).default('python3'),
   GEODATA_ALLOW_RAW_FALLBACK: z.preprocess(
     (value) => value === 'true' || value === '1',
     z.boolean()

@@ -156,6 +156,7 @@ services:
       DUCKDB_PATH: ${DUCKDB_PATH:-duckdb}
       TIPPECANOE_PATH: ${TIPPECANOE_PATH:-tippecanoe}
       OGR2OGR_PATH: ${OGR2OGR_PATH:-ogr2ogr}
+      PYTHON_PATH: ${PYTHON_PATH:-python3}
       GEODATA_ALLOW_RAW_FALLBACK: ${GEODATA_ALLOW_RAW_FALLBACK:-false}
     depends_on:
       postgres:
