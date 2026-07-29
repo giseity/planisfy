@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../index";
 import { stylePublications, styles, styleVersions } from "../schema";
 
@@ -8,6 +8,26 @@ export const BLANK_STYLE = {
   sources: {},
   layers: [],
 };
+
+export const STYLE_HANDLE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const STYLE_HANDLE_MAX_LENGTH = 64;
+const STYLE_NAME_MAX_LENGTH = 128;
+const STYLE_HANDLE_ATTEMPTS = 100;
+
+export class StyleCreationError extends Error {
+  constructor(
+    readonly code:
+      | "INVALID_HANDLE"
+      | "PLAN_LIMIT"
+      | "STYLE_NOT_FOUND"
+      | "HANDLE_UNAVAILABLE",
+    message: string,
+    readonly limit?: number,
+  ) {
+    super(message);
+    this.name = "StyleCreationError";
+  }
+}
 
 export class StyleRevisionError extends Error {
   constructor(
@@ -176,19 +196,18 @@ export function slugifyStyleName(name: string): string {
     .slice(0, 60);
 }
 
+export function normalizeCustomStyleHandle(handle: string) {
+  const normalized = handle.trim().toLowerCase();
+  return normalized.length <= STYLE_HANDLE_MAX_LENGTH &&
+    STYLE_HANDLE_PATTERN.test(normalized)
+    ? normalized
+    : null;
+}
+
 function styleHandleCandidate(base: string, attempt: number): string {
   const fallback = base || "untitled";
   const suffix = attempt === 0 ? "" : `-${attempt}`;
-  return `${fallback.slice(0, 64 - suffix.length)}${suffix}`;
-}
-
-function isUniqueViolation(err: unknown) {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    err.code === "23505"
-  );
+  return `${fallback.slice(0, STYLE_HANDLE_MAX_LENGTH - suffix.length)}${suffix}`;
 }
 
 export async function uniqueStyleHandle(
@@ -223,67 +242,136 @@ export async function createStyleRecord(input: {
   handle?: string;
   description?: string | null;
   styleJson?: Record<string, unknown>;
+  maxStyles: number;
 }) {
-  const styleJson = input.styleJson ?? { ...BLANK_STYLE, name: input.name };
-  const baseHandle = input.handle ?? slugifyStyleName(input.name);
-
-  for (let attempt = 0; attempt <= 100; attempt++) {
-    try {
-      const [created] = await db
-        .insert(styles)
-        .values({
-          ownerId: input.ownerId,
-          handle: styleHandleCandidate(baseHandle, attempt),
-          name: input.name,
-          description: input.description ?? null,
-          styleJson,
-          originalStyleJson: styleJson,
-          version: 1,
-        })
-        .returning();
-
-      return created!;
-    } catch (err) {
-      if (!isUniqueViolation(err)) throw err;
-    }
+  const customHandle =
+    input.handle === undefined ? undefined : normalizeCustomStyleHandle(input.handle);
+  if (input.handle !== undefined && !customHandle) {
+    throw new StyleCreationError(
+      "INVALID_HANDLE",
+      "Style handles must be lowercase slugs containing letters, numbers, and single dashes.",
+    );
   }
 
-  throw new Error("Unable to allocate a unique style handle");
+  return db.transaction(async (tx) => {
+    await lockStyleCreation(tx, input.ownerId);
+    await assertStyleCapacity(tx, input.ownerId, input.maxStyles);
+    const styleJson = input.styleJson ?? { ...BLANK_STYLE, name: input.name };
+    return insertStyleWithAllocatedHandle(tx, {
+      ownerId: input.ownerId,
+      baseHandle: customHandle ?? slugifyStyleName(input.name),
+      name: input.name,
+      description: input.description ?? null,
+      styleJson,
+    });
+  });
 }
 
-export async function duplicateStyleRecord(ownerId: string, styleId: string) {
-  const [original] = await db
-    .select()
-    .from(styles)
-    .where(and(eq(styles.id, styleId), eq(styles.ownerId, ownerId), isNull(styles.deletedAt)))
-    .limit(1);
+export async function duplicateStyleRecord(params: {
+  ownerId: string;
+  styleId: string;
+  maxStyles: number;
+}) {
+  return db.transaction(async (tx) => {
+    await lockStyleCreation(tx, params.ownerId);
+    const [original] = await tx
+      .select()
+      .from(styles)
+      .where(
+        and(
+          eq(styles.id, params.styleId),
+          eq(styles.ownerId, params.ownerId),
+          isNull(styles.deletedAt),
+        ),
+      )
+      .limit(1);
 
-  if (!original) return null;
-
-  const baseHandle = `${original.handle}-copy`;
-
-  for (let attempt = 0; attempt <= 100; attempt++) {
-    try {
-      const [created] = await db
-        .insert(styles)
-        .values({
-          ownerId,
-          handle: styleHandleCandidate(baseHandle, attempt),
-          name: `${original.name} (copy)`,
-          description: original.description,
-          styleJson: original.styleJson,
-          originalStyleJson: original.styleJson,
-          version: 1,
-        })
-        .returning();
-
-      return created!;
-    } catch (err) {
-      if (!isUniqueViolation(err)) throw err;
+    if (!original) {
+      throw new StyleCreationError("STYLE_NOT_FOUND", "Style not found");
     }
-  }
+    await assertStyleCapacity(tx, params.ownerId, params.maxStyles);
 
-  throw new Error("Unable to allocate a unique style handle");
+    const name = duplicateStyleName(original.name);
+    return insertStyleWithAllocatedHandle(tx, {
+      ownerId: params.ownerId,
+      baseHandle: `${original.handle}-copy`,
+      name,
+      description: original.description,
+      styleJson: original.styleJson as Record<string, unknown>,
+    });
+  });
+}
+
+async function lockStyleCreation(tx: DatabaseTransaction, ownerId: string) {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`styleQuota:${ownerId}`}))`,
+  );
+}
+
+async function assertStyleCapacity(
+  tx: DatabaseTransaction,
+  ownerId: string,
+  maxStyles: number,
+) {
+  if (maxStyles === Infinity) return;
+  const [row] = await tx
+    .select({ count: count() })
+    .from(styles)
+    .where(and(eq(styles.ownerId, ownerId), isNull(styles.deletedAt)));
+  if ((row?.count ?? 0) >= maxStyles) {
+    throw new StyleCreationError(
+      "PLAN_LIMIT",
+      `The account has reached its ${maxStyles}-style limit.`,
+      maxStyles,
+    );
+  }
+}
+
+async function insertStyleWithAllocatedHandle(
+  tx: DatabaseTransaction,
+  input: {
+    ownerId: string;
+    baseHandle: string;
+    name: string;
+    description: string | null;
+    styleJson: Record<string, unknown>;
+  },
+) {
+  const normalizedBase =
+    normalizeCustomStyleHandle(input.baseHandle) ??
+    (slugifyStyleName(input.baseHandle) || "untitled");
+  for (let attempt = 0; attempt <= STYLE_HANDLE_ATTEMPTS; attempt++) {
+    const [created] = await tx
+      .insert(styles)
+      .values({
+        ownerId: input.ownerId,
+        handle: styleHandleCandidate(normalizedBase, attempt),
+        name: input.name,
+        description: input.description,
+        styleJson: input.styleJson,
+        originalStyleJson: input.styleJson,
+        version: 1,
+      })
+      .onConflictDoNothing()
+      .returning();
+    if (created) return created;
+  }
+  throw new StyleCreationError(
+    "HANDLE_UNAVAILABLE",
+    "Unable to allocate a unique style handle",
+  );
+}
+
+function truncateCharacters(value: string, maxLength: number) {
+  return Array.from(value).slice(0, maxLength).join("");
+}
+
+export function duplicateStyleName(name: string) {
+  const suffix = " (copy)";
+  return `${truncateCharacters(
+    name,
+    STYLE_NAME_MAX_LENGTH - suffix.length,
+  )}${suffix}`;
 }
 
 export async function softDeleteStyleRecord(ownerId: string, styleId: string) {

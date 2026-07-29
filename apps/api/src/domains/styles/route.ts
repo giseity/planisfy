@@ -18,11 +18,12 @@ import {
   duplicateStyleRecord,
   restoreStyleRevision,
   softDeleteStyleRecord,
+  StyleCreationError,
   StyleRevisionError,
   updateStyleRevision,
 } from "@planisfy/database/styles/service";
 import { logAudit } from "../../shared/audit";
-import { checkResourceLimit } from "../../shared/policy/plan-check";
+import { getAccountPlanLimits } from "../billing/billing";
 import { requireOrgMutationPermission, type AuthEnv } from "../../middleware/auth";
 import { recordStorageObject } from "../../shared/storage/storage-ledger";
 import {
@@ -475,27 +476,21 @@ stylesRoute.post("/styles", async (c) => {
     );
   }
 
-  const planCheck = await checkResourceLimit(userId, ownerId, "styles");
-  if (!planCheck.allowed) {
-    return c.json(
-      {
-        error: {
-          code: "PLAN_LIMIT",
-          message: `You've reached the maximum of ${planCheck.limit} styles on your current plan. Please upgrade to create more.`,
-        },
-      },
-      403,
-    );
-  }
-
   const { name, description, styleJson, handle } = parsed.data;
-  const created = await createStyleRecord({
-    ownerId,
-    name,
-    handle,
-    description,
-    styleJson,
-  });
+  const limits = await getAccountPlanLimits(ownerId);
+  let created;
+  try {
+    created = await createStyleRecord({
+      ownerId,
+      name,
+      handle,
+      description,
+      styleJson,
+      maxStyles: limits.maxStyles,
+    });
+  } catch (err) {
+    return styleCreationErrorResponse(c, err);
+  }
 
   await logAudit({
     accountId: ownerId,
@@ -936,12 +931,16 @@ stylesRoute.post("/styles/:id/duplicate", async (c) => {
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
 
-  const created = await duplicateStyleRecord(ownerId, styleId);
-  if (!created) {
-    return c.json(
-      { error: { code: "NOT_FOUND", message: "Style not found" } },
-      404,
-    );
+  const limits = await getAccountPlanLimits(ownerId);
+  let created;
+  try {
+    created = await duplicateStyleRecord({
+      ownerId,
+      styleId,
+      maxStyles: limits.maxStyles,
+    });
+  } catch (err) {
+    return styleCreationErrorResponse(c, err);
   }
 
   await logAudit({
@@ -1069,6 +1068,36 @@ function styleRevisionErrorResponse(
       },
     },
     404,
+  );
+}
+
+function styleCreationErrorResponse(c: Context<AuthEnv>, err: unknown) {
+  if (!(err instanceof StyleCreationError)) throw err;
+  if (err.code === "STYLE_NOT_FOUND") {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
+  }
+  if (err.code === "PLAN_LIMIT") {
+    return c.json(
+      {
+        error: {
+          code: "PLAN_LIMIT",
+          message: `You've reached the maximum of ${err.limit} styles on your current plan. Please upgrade to create more.`,
+        },
+      },
+      403,
+    );
+  }
+  return c.json(
+    {
+      error: {
+        code: err.code === "INVALID_HANDLE" ? "VALIDATION_ERROR" : "CONFLICT",
+        message: err.message,
+      },
+    },
+    err.code === "INVALID_HANDLE" ? 400 : 409,
   );
 }
 
