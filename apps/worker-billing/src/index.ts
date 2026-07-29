@@ -8,11 +8,13 @@ const timers = [
   schedule('webhooks', env.BILLING_WEBHOOK_POLL_INTERVAL_MS),
   schedule('reconcile', env.BILLING_RECONCILE_INTERVAL_MS),
   schedule('cleanup', env.BILLING_CLEANUP_INTERVAL_MS),
+  schedule('notifications', env.BILLING_NOTIFICATION_INTERVAL_MS),
 ]
 
 void run('webhooks')
 void run('reconcile')
 void run('cleanup')
+void run('notifications')
 
 function schedule(jobName: BillingJobName, intervalMs: number) {
   return setInterval(() => void run(jobName), intervalMs)

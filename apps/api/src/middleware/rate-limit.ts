@@ -6,6 +6,7 @@ import { getEndpointCost, getPostEndpointCost } from '../domains/keys/api-key'
 import { getAccountPlanLimits } from '../domains/billing/billing'
 import { normalizeRequestsPerMinute } from '../shared/policy/rate-limit-policy'
 import {
+  buildQuotaWarningRequest,
   checkMonthlyUsageQuota,
   evaluateMonthlyQuota,
   getMonthlyUsagePeriod,
@@ -13,6 +14,8 @@ import {
   type QuotaEvaluation,
 } from '../domains/usage/usage-quota'
 import { redisConnection } from '../env'
+import { isQuotaEmailDeliveryConfigured } from '../domains/email/email'
+import { enqueueOutboxEvent } from '../shared/outbox/outbox'
 import type { AuthEnv } from './auth'
 
 const MONTHLY_QUOTA_CACHE_TTL_SECONDS = 35 * 24 * 60 * 60
@@ -335,6 +338,26 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
       c.get('billableUsage') !== false && (successful || c.get('chargeUsageOnFailure') === true)
     const finalCost = billable ? Math.max(0, Math.min(cost, c.get('requestCost') ?? cost)) : 0
     await releaseMonthlyQuota(quota.reservationKey, cost - finalCost)
+    if (successful && isQuotaEmailDeliveryConfigured()) {
+      const warning = buildQuotaWarningRequest({
+        accountId: ownerId,
+        usedUnits: quota.used,
+        billableUnits: finalCost,
+        totalUnits: quota.limit,
+      })
+      if (warning) {
+        await enqueueOutboxEvent({
+          eventName: 'quota.warning.requested',
+          ...warning,
+        }).catch((error) => {
+          console.error('[quota-warning] Failed to enqueue notification', {
+            accountId: ownerId,
+            periodKey: warning.payload.periodKey,
+            error,
+          })
+        })
+      }
+    }
   }
 })
 

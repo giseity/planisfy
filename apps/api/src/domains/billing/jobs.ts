@@ -5,19 +5,22 @@ import {
   reconcileOpenManagedUsagePeriods,
 } from './managed-contracts'
 import { processDueDodoWebhookEvents } from './webhook-inbox'
+import { processQuotaNotificationEvents } from './quota-notifications'
 
-export type BillingJobName = 'reconcile' | 'cleanup' | 'webhooks'
+export type BillingJobName = 'reconcile' | 'cleanup' | 'webhooks' | 'notifications'
 
 type BillingJobHandlers = {
   reconcile: (now: Date) => Promise<readonly unknown[]>
   cleanup: (now: Date) => Promise<unknown>
   webhooks: (params: { now: Date; limit: number }) => Promise<unknown>
+  notifications: (params: { now: Date; limit: number }) => Promise<unknown>
 }
 
 const defaultHandlers: BillingJobHandlers = {
   reconcile: reconcileOpenManagedUsagePeriods,
   cleanup: deleteExpiredBillableRequests,
   webhooks: processDueDodoWebhookEvents,
+  notifications: processQuotaNotificationEvents,
 }
 
 export async function executeBillingJob(
@@ -32,6 +35,9 @@ export async function executeBillingJob(
   if (jobName === 'cleanup') {
     await handlers.cleanup(now)
     return { cleaned: true }
+  }
+  if (jobName === 'notifications') {
+    return handlers.notifications({ now, limit: 25 })
   }
   return handlers.webhooks({ now, limit: 25 })
 }

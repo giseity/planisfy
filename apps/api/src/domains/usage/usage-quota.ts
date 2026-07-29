@@ -80,6 +80,41 @@ export function evaluateMonthlyQuota(params: {
   }
 }
 
+export function buildQuotaWarningRequest(params: {
+  accountId: string
+  usedUnits: number
+  billableUnits: number
+  totalUnits: number
+  now?: Date
+}) {
+  if (
+    params.billableUnits <= 0 ||
+    !Number.isFinite(params.totalUnits) ||
+    params.totalUnits <= 0
+  ) {
+    return null
+  }
+
+  const usedUnits = Math.max(0, params.usedUnits + params.billableUnits)
+  const percentUsed = Math.min(100, Math.round((usedUnits / params.totalUnits) * 100))
+  if (percentUsed < 80) return null
+
+  const period = getMonthlyUsagePeriod(params.now)
+  return {
+    deduplicationKey: `quota-warning:${params.accountId}:${period.key}:80`,
+    payload: {
+      accountId: params.accountId,
+      periodStart: period.start.toISOString(),
+      periodEnd: period.end.toISOString(),
+      periodKey: period.key,
+      usedUnits,
+      totalUnits: params.totalUnits,
+      percentUsed,
+      threshold: 80 as const,
+    },
+  }
+}
+
 export async function checkMonthlyUsageQuota(params: {
   ownerId: string
   cost: number

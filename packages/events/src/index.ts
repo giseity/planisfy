@@ -135,6 +135,19 @@ export const artifactCleanupRequestedPayloadSchema = z
     message: "Provide storageObjectId or resourceType/resourceId",
   });
 
+export const quotaWarningRequestedPayloadSchema = z
+  .object({
+    accountId: uuid,
+    periodStart: z.string().datetime(),
+    periodEnd: z.string().datetime(),
+    periodKey: nonEmptyString,
+    usedUnits: z.number().int().nonnegative(),
+    totalUnits: z.number().int().positive(),
+    percentUsed: z.number().int().min(80).max(100),
+    threshold: z.literal(80),
+  })
+  .strict();
+
 export const eventPayloadSchemas = {
   "upload.created": uploadCreatedPayloadSchema,
   "upload.validated": uploadValidatedPayloadSchema,
@@ -150,6 +163,7 @@ export const eventPayloadSchemas = {
   "usage.rollup.requested": usageRollupRequestedPayloadSchema,
   "scheduled_operation.run_requested": scheduledOperationRunRequestedPayloadSchema,
   "artifact.cleanup.requested": artifactCleanupRequestedPayloadSchema,
+  "quota.warning.requested": quotaWarningRequestedPayloadSchema,
 } as const;
 
 export type EventName = keyof typeof eventPayloadSchemas;

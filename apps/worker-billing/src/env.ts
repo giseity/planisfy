@@ -14,6 +14,11 @@ const schema = z.object({
     .int()
     .min(60_000)
     .default(24 * 60 * 60_000),
+  BILLING_NOTIFICATION_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(10_000)
+    .default(60_000),
 })
 
 export const env = createEnv(schema, process.env, { appName: 'worker-billing' })

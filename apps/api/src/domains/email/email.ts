@@ -22,6 +22,10 @@ const senderDisplayNames = {
   notifications: 'Planisfy Notifications',
 } satisfies Record<EmailSender, string>
 
+export function isQuotaEmailDeliveryConfigured() {
+  return Boolean(ZEPTOMAIL_SEND_MAIL_TOKEN && env.ZEPTOMAIL_FROM_NOTIFICATIONS)
+}
+
 interface SendEmailOptions {
   to: string | string[]
   subject: string

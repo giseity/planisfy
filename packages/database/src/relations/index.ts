@@ -34,6 +34,7 @@ import {
   customDomains,
   workflowTemplates,
   eventOutbox,
+  quotaNotificationDeliveries,
   storageObjects,
   routingGraphBuilds,
   routingGraphArtifacts,
@@ -492,7 +493,27 @@ export const processingJobLogsRelations = relations(processingJobLogs, ({ one })
   }),
 }))
 
-export const eventOutboxRelations = relations(eventOutbox, () => ({}))
+export const eventOutboxRelations = relations(eventOutbox, ({ many }) => ({
+  quotaNotificationDeliveries: many(quotaNotificationDeliveries),
+}))
+
+export const quotaNotificationDeliveriesRelations = relations(
+  quotaNotificationDeliveries,
+  ({ one }) => ({
+    event: one(eventOutbox, {
+      fields: [quotaNotificationDeliveries.outboxEventId],
+      references: [eventOutbox.id],
+    }),
+    account: one(accounts, {
+      fields: [quotaNotificationDeliveries.accountId],
+      references: [accounts.id],
+    }),
+    user: one(users, {
+      fields: [quotaNotificationDeliveries.userId],
+      references: [users.id],
+    }),
+  })
+)
 
 export const storageObjectsRelations = relations(storageObjects, ({ one }) => ({
   account: one(accounts, {

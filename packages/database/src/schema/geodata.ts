@@ -771,6 +771,7 @@ export const eventOutbox = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     eventName: varchar('event_name', { length: 128 }).notNull(),
+    deduplicationKey: varchar('deduplication_key', { length: 256 }),
     payload: jsonb('payload').notNull(),
     status: eventStatusEnum('status').notNull().default('PENDING'),
     attempts: integer('attempts').notNull().default(0),
@@ -784,6 +785,44 @@ export const eventOutbox = pgTable(
   (table) => [
     index('event_outbox_next_event_idx').on(table.status, table.processAt),
     index('event_outbox_event_name_idx').on(table.eventName),
+    uniqueIndex('event_outbox_deduplication_key_unique')
+      .on(table.deduplicationKey)
+      .where(sql`${table.deduplicationKey} IS NOT NULL`),
+  ]
+)
+
+export const quotaNotificationDeliveries = pgTable(
+  'quota_notification_deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    outboxEventId: uuid('outbox_event_id')
+      .notNull()
+      .references(() => eventOutbox.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: varchar('status', { length: 24 }).notNull().default('PENDING'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    leaseUntil: timestamp('lease_until', { withTimezone: true }),
+    lastError: text('last_error'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex('quota_notification_deliveries_event_user_unique').on(
+      table.outboxEventId,
+      table.userId
+    ),
+    index('quota_notification_deliveries_due_idx').on(table.status, table.nextAttemptAt),
+    index('quota_notification_deliveries_event_idx').on(table.outboxEventId),
   ]
 )
 

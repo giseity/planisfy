@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  buildQuotaWarningRequest,
   evaluateMonthlyQuota,
   getMonthlyUsagePeriod,
 } from "./usage-quota";
@@ -52,5 +53,30 @@ describe("usage quota helpers", () => {
     assert.equal(quota.allowed, true);
     assert.equal(quota.remaining, Infinity);
     assert.equal(quota.percent, 0);
+  });
+
+  it("requests one threshold-keyed warning after successful billable usage", () => {
+    const warning = buildQuotaWarningRequest({
+      accountId: "11111111-1111-4111-8111-111111111111",
+      usedUnits: 79,
+      billableUnits: 1,
+      totalUnits: 100,
+      now: new Date("2026-07-29T12:00:00.000Z"),
+    });
+
+    assert.equal(
+      warning?.deduplicationKey,
+      "quota-warning:11111111-1111-4111-8111-111111111111:2026-07:80",
+    );
+    assert.equal(warning?.payload.percentUsed, 80);
+    assert.equal(
+      buildQuotaWarningRequest({
+        accountId: "11111111-1111-4111-8111-111111111111",
+        usedUnits: 79,
+        billableUnits: 0,
+        totalUnits: 100,
+      }),
+      null,
+    );
   });
 });

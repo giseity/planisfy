@@ -13,8 +13,21 @@ test('billing scheduler dispatches reconciliation with the scheduled timestamp',
     },
     cleanup: async () => undefined,
     webhooks: async () => ({ claimed: 0, processed: 0, failed: 0 }),
+    notifications: async () => ({ events: 0, sent: 0, failed: 0 }),
   })
 
   assert.deepEqual(calls, [now])
   assert.deepEqual(result, { periods: 2 })
+})
+
+test('billing scheduler dispatches quota notifications with a bounded batch', async () => {
+  const now = new Date('2026-07-29T12:00:00.000Z')
+  const result = await executeBillingJob('notifications', now, {
+    reconcile: async () => [],
+    cleanup: async () => undefined,
+    webhooks: async () => ({}),
+    notifications: async (params) => params,
+  })
+
+  assert.deepEqual(result, { now, limit: 25 })
 })

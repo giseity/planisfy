@@ -14,6 +14,7 @@ export async function enqueueOutboxEvent<N extends EventName>(
     eventName: N;
     payload: EventPayload<N>;
     processAt?: Date;
+    deduplicationKey?: string;
   },
   database: DatabaseClient | DatabaseTransaction = db,
 ) {
@@ -24,10 +25,12 @@ export async function enqueueOutboxEvent<N extends EventName>(
       eventName: params.eventName,
       payload,
       processAt: params.processAt ?? new Date(),
+      deduplicationKey: params.deduplicationKey,
     })
+    .onConflictDoNothing()
     .returning();
 
-  return event!;
+  return event ?? null;
 }
 
 export async function claimDueOutboxEvents(params: { limit?: number } = {}) {

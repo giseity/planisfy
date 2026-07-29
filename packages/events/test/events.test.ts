@@ -47,4 +47,25 @@ describe("@planisfy/events", () => {
       EventPayloadValidationError,
     );
   });
+
+  it("validates durable quota warning payloads at the notification threshold", () => {
+    const payload = parseEventPayload("quota.warning.requested", {
+      accountId,
+      periodStart: "2026-07-01T00:00:00.000Z",
+      periodEnd: "2026-08-01T00:00:00.000Z",
+      periodKey: "2026-07",
+      usedUnits: 80,
+      totalUnits: 100,
+      percentUsed: 80,
+      threshold: 80,
+    });
+
+    expect(payload.percentUsed).toBe(80);
+    expect(() =>
+      parseEventPayload("quota.warning.requested", {
+        ...payload,
+        percentUsed: 79,
+      }),
+    ).toThrow(EventPayloadValidationError);
+  });
 });

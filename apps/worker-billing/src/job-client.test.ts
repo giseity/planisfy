@@ -9,4 +9,11 @@ describe('billingJobUrl', () => {
       'http://api:3000/internal/billing/jobs/reconcile'
     )
   })
+
+  it('targets the durable quota notification job', () => {
+    assert.equal(
+      billingJobUrl('http://api:3000', 'notifications'),
+      'http://api:3000/internal/billing/jobs/notifications'
+    )
+  })
 })

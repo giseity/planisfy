@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { runBillingJob } from './jobs'
 
-const jobNameSchema = z.enum(['reconcile', 'cleanup', 'webhooks'])
+const jobNameSchema = z.enum(['reconcile', 'cleanup', 'webhooks', 'notifications'])
 
 export const billingInternalRoute = new Hono()
 
