@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { Hono, type Context } from 'hono'
-import { and, eq, gt, inArray, isNull } from 'drizzle-orm'
+import { and, eq, gt, inArray, isNull, lt } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   accounts,
@@ -14,6 +14,8 @@ import {
   geocodingBuildLogs,
   geocodingBuilds,
   geocodingReleases,
+  rootAgentArtifactUploadSessions,
+  rootAgentJobClaims,
   rootAgentNodeTokens,
   rootAgentRegistrationTokens,
   runtimeInstallations,
@@ -25,6 +27,11 @@ import {
   workerNodes,
 } from '@planisfy/database'
 import { getStorage } from '@planisfy/storage'
+import {
+  canApplyActivationTransition,
+  canApplyBuildTransition,
+  isTerminalBuildStatus,
+} from './protocol'
 
 type AgentEnv = {
   Variables: {
@@ -34,6 +41,10 @@ type AgentEnv = {
 }
 
 export const rootAgentRoute = new Hono<AgentEnv>()
+
+const ROOT_AGENT_CLAIM_HEADER = 'x-planisfy-root-agent-claim-id'
+const ROOT_AGENT_CLAIM_LEASE_MS = 2 * 60 * 1000
+const ROOT_AGENT_UPLOAD_SESSION_MS = 7 * 24 * 60 * 60 * 1000
 
 const registerSchema = z.object({
   registrationToken: z.string().min(1),
@@ -88,6 +99,7 @@ const artifactKindSchema = z
   .regex(/^[A-Za-z0-9._-]+$/)
 
 const artifactUploadSessionSchema = z.object({
+  idempotencyKey: z.string().uuid(),
   kind: artifactKindSchema.default('valhalla_graph'),
   fileName: z.string().min(1).max(256),
   size: z.number().int().nonnegative(),
@@ -101,31 +113,16 @@ const artifactUploadSessionSchema = z.object({
 })
 
 const artifactFinalizeSchema = z.object({
-  kind: artifactKindSchema.default('valhalla_graph'),
-  fileName: z.string().min(1).max(256),
-  size: z.number().int().nonnegative(),
-  checksumSha256: z
-    .string()
-    .length(64)
-    .regex(/^[a-f0-9]+$/i)
-    .optional(),
-  contentType: z.string().min(1).max(128).default('application/gzip'),
-  manifest: z.record(z.string(), z.unknown()).default({}),
-  storage: z.object({
-    provider: z.enum(['s3', 'r2']),
-    bucket: z.string().min(1).max(256),
-    key: z.string().min(1),
-    uploadId: z.string().min(1),
-    parts: z
-      .array(
-        z.object({
-          partNumber: z.number().int().min(1).max(10_000),
-          eTag: z.string().min(1).max(256),
-        })
-      )
-      .min(1)
-      .max(10_000),
-  }),
+  sessionId: z.string().uuid(),
+  parts: z
+    .array(
+      z.object({
+        partNumber: z.number().int().min(1).max(10_000),
+        eTag: z.string().min(1).max(256),
+      })
+    )
+    .min(1)
+    .max(10_000),
 })
 
 rootAgentRoute.post('/root-agent/register', async (c) => {
@@ -157,6 +154,18 @@ rootAgentRoute.post('/root-agent/register', async (c) => {
       .for('update')
       .limit(1)
     if (!registration) return null
+
+    const [consumed] = await tx
+      .update(rootAgentRegistrationTokens)
+      .set({ usedAt: now })
+      .where(
+        and(
+          eq(rootAgentRegistrationTokens.id, registration.id),
+          isNull(rootAgentRegistrationTokens.usedAt)
+        )
+      )
+      .returning({ id: rootAgentRegistrationTokens.id })
+    if (!consumed) return null
 
     const [node] = await tx
       .insert(workerNodes)
@@ -190,7 +199,7 @@ rootAgentRoute.post('/root-agent/register', async (c) => {
     })
     await tx
       .update(rootAgentRegistrationTokens)
-      .set({ usedAt: now, createdWorkerNodeId: node.id })
+      .set({ createdWorkerNodeId: node.id })
       .where(eq(rootAgentRegistrationTokens.id, registration.id))
     return { node, agentToken }
   })
@@ -247,10 +256,43 @@ rootAgentRoute.post('/root-agent/heartbeat', async (c) => {
   return c.json({ data: node })
 })
 
+rootAgentRoute.post('/root-agent/claims/:id/renew', async (c) => {
+  const claimId = c.req.param('id')
+  if (c.req.header(ROOT_AGENT_CLAIM_HEADER) !== claimId) {
+    return c.json(
+      { error: { code: 'INVALID_CLAIM', message: 'Root-agent claim is required.' } },
+      409
+    )
+  }
+  const now = new Date()
+  const leaseExpiresAt = new Date(now.getTime() + ROOT_AGENT_CLAIM_LEASE_MS)
+  const [claim] = await db
+    .update(rootAgentJobClaims)
+    .set({ lastRenewedAt: now, leaseExpiresAt, updatedAt: now })
+    .where(
+      and(
+        eq(rootAgentJobClaims.id, claimId),
+        eq(rootAgentJobClaims.accountId, c.get('accountId')),
+        eq(rootAgentJobClaims.workerNodeId, c.get('workerNodeId')),
+        eq(rootAgentJobClaims.status, 'active'),
+        gt(rootAgentJobClaims.leaseExpiresAt, now)
+      )
+    )
+    .returning()
+  if (!claim) {
+    return c.json(
+      { error: { code: 'CLAIM_EXPIRED', message: 'Root-agent claim has expired.' } },
+      409
+    )
+  }
+  return c.json({ data: { id: claim.id, expiresAt: claim.leaseExpiresAt.toISOString() } })
+})
+
 rootAgentRoute.get('/root-agent/jobs/next', async (c) => {
   const accountId = c.get('accountId')
   const workerNodeId = c.get('workerNodeId')
   const now = new Date()
+  await expireAgentClaims(accountId, workerNodeId, now)
 
   const [build] = await db
     .select()
@@ -266,13 +308,29 @@ rootAgentRoute.get('/root-agent/jobs/next', async (c) => {
     .orderBy(routingGraphBuilds.createdAt)
     .limit(1)
   if (build) {
-    const [claimed] = await db
-      .update(routingGraphBuilds)
-      .set({ status: 'assigned', assignedAt: now, updatedAt: now })
-      .where(eq(routingGraphBuilds.id, build.id))
-      .returning()
-    await appendLog(build.id, 'info', 'Build claimed by root agent', { workerNodeId })
-    return c.json({ data: { kind: 'routing_graph_build', build: claimed } })
+    const result = await db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(routingGraphBuilds)
+        .set({ status: 'assigned', assignedAt: now, updatedAt: now })
+        .where(and(eq(routingGraphBuilds.id, build.id), eq(routingGraphBuilds.status, 'queued')))
+        .returning()
+      if (!claimed) return null
+      const claim = await createAgentClaim(tx, {
+        accountId,
+        workerNodeId,
+        targetType: 'routing_build',
+        targetId: build.id,
+        phase: 'build',
+        now,
+      })
+      return { claimed, claim }
+    })
+    if (result) {
+      await appendLog(build.id, 'info', 'Build claimed by root agent', { workerNodeId })
+      return c.json({
+        data: { kind: 'routing_graph_build', build: result.claimed, claim: result.claim },
+      })
+    }
   }
 
   const [activation] = await db
@@ -290,21 +348,47 @@ rootAgentRoute.get('/root-agent/jobs/next', async (c) => {
     .orderBy(routingGraphBuilds.updatedAt)
     .limit(1)
   if (activation) {
-    const [claimed] = await db
-      .update(routingGraphBuilds)
-      .set({ activationStatus: 'activating', updatedAt: now })
-      .where(eq(routingGraphBuilds.id, activation.id))
-      .returning()
-    const artifacts = await db
-      .select()
-      .from(routingGraphArtifacts)
-      .where(eq(routingGraphArtifacts.buildId, activation.id))
-    await appendLog(activation.id, 'info', 'Activation claimed by root agent', {
-      workerNodeId,
+    const result = await db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(routingGraphBuilds)
+        .set({ activationStatus: 'activating', updatedAt: now })
+        .where(
+          and(
+            eq(routingGraphBuilds.id, activation.id),
+            eq(routingGraphBuilds.activationStatus, 'activation_requested')
+          )
+        )
+        .returning()
+      if (!claimed) return null
+      const claim = await createAgentClaim(tx, {
+        accountId,
+        workerNodeId,
+        targetType: 'routing_activation',
+        targetId: activation.id,
+        phase: 'activation',
+        now,
+      })
+      return { claimed, claim }
     })
-    return c.json({
-      data: { kind: 'routing_graph_activation', build: claimed, artifacts },
-    })
+    if (!result) {
+      // A concurrent poll won the claim.
+    } else {
+      const artifacts = await db
+        .select()
+        .from(routingGraphArtifacts)
+        .where(eq(routingGraphArtifacts.buildId, activation.id))
+      await appendLog(activation.id, 'info', 'Activation claimed by root agent', {
+        workerNodeId,
+      })
+      return c.json({
+        data: {
+          kind: 'routing_graph_activation',
+          build: result.claimed,
+          artifacts,
+          claim: result.claim,
+        },
+      })
+    }
   }
 
   const [basemapBuild] = await db
@@ -321,15 +405,33 @@ rootAgentRoute.get('/root-agent/jobs/next', async (c) => {
     .orderBy(basemapBuilds.createdAt)
     .limit(1)
   if (basemapBuild) {
-    const [claimed] = await db
-      .update(basemapBuilds)
-      .set({ status: 'assigned', assignedAt: now, updatedAt: now })
-      .where(eq(basemapBuilds.id, basemapBuild.id))
-      .returning()
-    await appendLog(basemapBuild.id, 'info', 'Basemap build claimed by root agent', {
-      workerNodeId,
+    const result = await db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(basemapBuilds)
+        .set({ status: 'assigned', assignedAt: now, updatedAt: now })
+        .where(and(eq(basemapBuilds.id, basemapBuild.id), eq(basemapBuilds.status, 'queued')))
+        .returning()
+      if (!claimed) return null
+      const claim = await createAgentClaim(tx, {
+        accountId,
+        workerNodeId,
+        targetType: 'basemap_build',
+        targetId: basemapBuild.id,
+        phase: 'build',
+        now,
+      })
+      return { claimed, claim }
     })
-    return c.json({ data: { kind: 'basemap_build', build: claimed } })
+    if (!result) {
+      // A concurrent poll won the claim.
+    } else {
+      await appendLog(basemapBuild.id, 'info', 'Basemap build claimed by root agent', {
+        workerNodeId,
+      })
+      return c.json({
+        data: { kind: 'basemap_build', build: result.claimed, claim: result.claim },
+      })
+    }
   }
 
   const [basemapActivation] = await db
@@ -347,28 +449,55 @@ rootAgentRoute.get('/root-agent/jobs/next', async (c) => {
     .orderBy(basemapBuilds.updatedAt)
     .limit(1)
   if (basemapActivation) {
-    const [claimed] = await db
-      .update(basemapBuilds)
-      .set({ activationStatus: 'activating', updatedAt: now })
-      .where(eq(basemapBuilds.id, basemapActivation.id))
-      .returning()
-    const artifacts = await db
-      .select()
-      .from(basemapArtifacts)
-      .where(eq(basemapArtifacts.buildId, basemapActivation.id))
-    const tileArtifact = artifacts.find(
-      (artifact) => artifact.kind === 'basemap_tiles' && artifact.status === 'available'
-    )
-    const runtimeTarget = tileArtifact
-      ? await basemapRuntimeTargetForActivation(claimed!, tileArtifact)
-      : null
-    await appendLog(basemapActivation.id, 'info', 'Basemap activation claimed by root agent', {
-      workerNodeId,
-      runtimeTarget,
+    const result = await db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(basemapBuilds)
+        .set({ activationStatus: 'activating', updatedAt: now })
+        .where(
+          and(
+            eq(basemapBuilds.id, basemapActivation.id),
+            eq(basemapBuilds.activationStatus, 'activation_requested')
+          )
+        )
+        .returning()
+      if (!claimed) return null
+      const claim = await createAgentClaim(tx, {
+        accountId,
+        workerNodeId,
+        targetType: 'basemap_activation',
+        targetId: basemapActivation.id,
+        phase: 'activation',
+        now,
+      })
+      return { claimed, claim }
     })
-    return c.json({
-      data: { kind: 'basemap_activation', build: claimed, artifacts, runtimeTarget },
-    })
+    if (!result) {
+      // A concurrent poll won the claim.
+    } else {
+      const artifacts = await db
+        .select()
+        .from(basemapArtifacts)
+        .where(eq(basemapArtifacts.buildId, basemapActivation.id))
+      const tileArtifact = artifacts.find(
+        (artifact) => artifact.kind === 'basemap_tiles' && artifact.status === 'available'
+      )
+      const runtimeTarget = tileArtifact
+        ? await basemapRuntimeTargetForActivation(result.claimed, tileArtifact)
+        : null
+      await appendLog(basemapActivation.id, 'info', 'Basemap activation claimed by root agent', {
+        workerNodeId,
+        runtimeTarget,
+      })
+      return c.json({
+        data: {
+          kind: 'basemap_activation',
+          build: result.claimed,
+          artifacts,
+          runtimeTarget,
+          claim: result.claim,
+        },
+      })
+    }
   }
 
   const [geocodingActivation] = await db
@@ -385,6 +514,9 @@ rootAgentRoute.get('/root-agent/jobs/next', async (c) => {
     .where(
       and(
         eq(geocodingReleases.accountId, accountId),
+        eq(geocodingBuilds.accountId, accountId),
+        eq(geocodingArtifacts.accountId, accountId),
+        eq(storageObjects.accountId, accountId),
         eq(geocodingBuilds.activationWorkerNodeId, workerNodeId),
         eq(geocodingReleases.status, 'ready'),
         eq(geocodingReleases.activationStatus, 'activation_requested'),
@@ -396,32 +528,45 @@ rootAgentRoute.get('/root-agent/jobs/next', async (c) => {
     .orderBy(geocodingReleases.updatedAt)
     .limit(1)
   if (geocodingActivation) {
-    const [claimed] = await db
-      .update(geocodingReleases)
-      .set({ activationStatus: 'activating', updatedAt: now })
-      .where(
-        and(
-          eq(geocodingReleases.id, geocodingActivation.release.id),
-          eq(geocodingReleases.activationStatus, 'activation_requested')
+    const result = await db.transaction(async (tx) => {
+      const [claimed] = await tx
+        .update(geocodingReleases)
+        .set({ activationStatus: 'activating', updatedAt: now })
+        .where(
+          and(
+            eq(geocodingReleases.id, geocodingActivation.release.id),
+            eq(geocodingReleases.activationStatus, 'activation_requested')
+          )
         )
-      )
-      .returning()
-    if (claimed) {
-      await db
+        .returning()
+      if (!claimed) return null
+      const claim = await createAgentClaim(tx, {
+        accountId,
+        workerNodeId,
+        targetType: 'geocoding_activation',
+        targetId: claimed.id,
+        phase: 'activation',
+        now,
+      })
+      await tx
         .update(geocodingBuilds)
         .set({ activationStatus: 'activating', updatedAt: now })
         .where(eq(geocodingBuilds.id, geocodingActivation.build.id))
-      await db.insert(geocodingBuildLogs).values({
+      await tx.insert(geocodingBuildLogs).values({
         buildId: geocodingActivation.build.id,
         message: 'Geocoding activation claimed by root agent',
         metadata: { workerNodeId, releaseId: claimed.id },
       })
+      return { claimed, claim }
+    })
+    if (result) {
       return c.json({
         data: {
           kind: 'geocoding_activation',
           build: geocodingActivation.build,
-          release: claimed,
+          release: result.claimed,
           artifact: geocodingActivation.artifact,
+          claim: result.claim,
         },
       })
     }
@@ -448,15 +593,50 @@ rootAgentRoute.post('/root-agent/geocoding-activations/:id/state', async (c) => 
         eq(geocodingBuilds.id, buildId),
         eq(geocodingBuilds.accountId, c.get('accountId')),
         eq(geocodingBuilds.activationWorkerNodeId, c.get('workerNodeId')),
-        eq(geocodingReleases.activationStatus, 'activating'),
+        inArray(geocodingReleases.activationStatus, ['activating', 'active', 'failed']),
         isNull(geocodingBuilds.deletedAt)
       )
     )
     .limit(1)
   if (!row) return notFound(c, 'Geocoding activation not found')
+  const claim = await requireAgentClaim(c, 'geocoding_activation', row.release.id, 'activation', {
+    allowCompleted: true,
+  })
+  if (!claim) return notFound(c, 'Geocoding activation not found')
+  if (!canApplyActivationTransition(row.release.activationStatus, parsed.data.activationStatus)) {
+    return c.json(
+      {
+        error: {
+          code: 'INVALID_ACTIVATION_TRANSITION',
+          message: `Activation cannot transition from ${row.release.activationStatus} to ${parsed.data.activationStatus}.`,
+        },
+      },
+      409
+    )
+  }
+  if (row.release.activationStatus === parsed.data.activationStatus) {
+    return c.json({ data: { activationStatus: parsed.data.activationStatus } })
+  }
 
   const now = new Date()
-  await db.transaction(async (tx) => {
+  const applied = await db.transaction(async (tx) => {
+    const [updatedRelease] = await tx
+      .update(geocodingReleases)
+      .set({
+        status: parsed.data.activationStatus === 'active' ? 'active' : row.release.status,
+        activationStatus: parsed.data.activationStatus,
+        activationMetadata: parsed.data.output ?? {},
+        activatedAt: parsed.data.activationStatus === 'active' ? now : row.release.activatedAt,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(geocodingReleases.id, row.release.id),
+          eq(geocodingReleases.activationStatus, 'activating')
+        )
+      )
+      .returning({ id: geocodingReleases.id })
+    if (!updatedRelease) return false
     await tx
       .update(geocodingBuilds)
       .set({
@@ -469,16 +649,6 @@ rootAgentRoute.post('/root-agent/geocoding-activations/:id/state', async (c) => 
         updatedAt: now,
       })
       .where(eq(geocodingBuilds.id, row.build.id))
-    await tx
-      .update(geocodingReleases)
-      .set({
-        status: parsed.data.activationStatus === 'active' ? 'active' : row.release.status,
-        activationStatus: parsed.data.activationStatus,
-        activationMetadata: parsed.data.output ?? {},
-        activatedAt: parsed.data.activationStatus === 'active' ? now : row.release.activatedAt,
-        updatedAt: now,
-      })
-      .where(eq(geocodingReleases.id, row.release.id))
     await tx.insert(geocodingBuildLogs).values({
       buildId,
       level: parsed.data.activationStatus === 'active' ? 'info' : 'error',
@@ -503,7 +673,23 @@ rootAgentRoute.post('/root-agent/geocoding-activations/:id/state', async (c) => 
       activatedAt: parsed.data.activationStatus === 'active' ? now : null,
       updatedAt: now,
     })
+    await tx
+      .update(rootAgentJobClaims)
+      .set({
+        status: 'completed',
+        completedAt: now,
+        outcome: parsed.data.activationStatus,
+        updatedAt: now,
+      })
+      .where(and(eq(rootAgentJobClaims.id, claim.id), eq(rootAgentJobClaims.status, 'active')))
+    return true
   })
+  if (!applied) {
+    return c.json(
+      { error: { code: 'STALE_ACTIVATION_STATE', message: 'Activation changed concurrently.' } },
+      409
+    )
+  }
   return c.json({ data: { activationStatus: parsed.data.activationStatus } })
 })
 
@@ -514,12 +700,37 @@ rootAgentRoute.get('/root-agent/jobs/:id/cancel', async (c) => {
 })
 
 rootAgentRoute.post('/root-agent/jobs/:id/state', async (c) => {
-  const job = await findBuildForAgent(c, c.req.param('id'))
+  const job = await findBuildForAgent(c, c.req.param('id'), { allowCompletedClaim: true })
   if (!job) return notFound(c, 'Build not found')
   const parsed = buildStateSchema.safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
 
-  const terminal = ['succeeded', 'failed', 'canceled'].includes(parsed.data.status)
+  const normalizedStatus =
+    job.kind === 'basemap' && parsed.data.status === 'building_admins'
+      ? 'building_tiles'
+      : parsed.data.status
+  if (
+    !canApplyBuildTransition({
+      kind: job.kind,
+      current: job.build.status,
+      next: normalizedStatus,
+    })
+  ) {
+    return c.json(
+      {
+        error: {
+          code: 'INVALID_BUILD_TRANSITION',
+          message: `Build cannot transition from ${job.build.status} to ${normalizedStatus}.`,
+        },
+      },
+      409
+    )
+  }
+  if (isTerminalBuildStatus(job.build.status)) {
+    return c.json({ data: job.build })
+  }
+
+  const terminal = isTerminalBuildStatus(normalizedStatus)
   const now = new Date()
   const baseUpdate = {
     progress:
@@ -531,22 +742,51 @@ rootAgentRoute.post('/root-agent/jobs/:id/state', async (c) => {
     completedAt: terminal ? now : job.build.completedAt,
     updatedAt: now,
   }
-  const [updated] =
-    job.kind === 'routing'
-      ? await db
-          .update(routingGraphBuilds)
-          .set({ ...baseUpdate, status: parsed.data.status })
-          .where(eq(routingGraphBuilds.id, job.build.id))
-          .returning()
-      : await db
-          .update(basemapBuilds)
-          .set({
-            ...baseUpdate,
-            status:
-              parsed.data.status === 'building_admins' ? 'building_tiles' : parsed.data.status,
-          })
-          .where(eq(basemapBuilds.id, job.build.id))
-          .returning()
+  const updated = await db.transaction(async (tx) => {
+    const [row] =
+      job.kind === 'routing'
+        ? await tx
+            .update(routingGraphBuilds)
+            .set({ ...baseUpdate, status: normalizedStatus })
+            .where(
+              and(
+                eq(routingGraphBuilds.id, job.build.id),
+                eq(routingGraphBuilds.status, job.build.status)
+              )
+            )
+            .returning()
+        : await tx
+            .update(basemapBuilds)
+            .set({
+              ...baseUpdate,
+              status: normalizedStatus === 'building_admins' ? 'building_tiles' : normalizedStatus,
+            })
+            .where(
+              and(eq(basemapBuilds.id, job.build.id), eq(basemapBuilds.status, job.build.status))
+            )
+            .returning()
+    if (!row) return null
+    if (terminal) {
+      await tx
+        .update(rootAgentJobClaims)
+        .set({
+          status: 'completed',
+          completedAt: now,
+          outcome: normalizedStatus,
+          updatedAt: now,
+        })
+        .where(
+          and(eq(rootAgentJobClaims.id, job.claim.id), eq(rootAgentJobClaims.status, 'active'))
+        )
+    }
+    return row
+  })
+  if (!updated) {
+    return c.json(
+      { error: { code: 'STALE_BUILD_STATE', message: 'Build state changed concurrently.' } },
+      409
+    )
+  }
   if (parsed.data.message) {
     await appendLog(
       job.build.id,
@@ -559,10 +799,24 @@ rootAgentRoute.post('/root-agent/jobs/:id/state', async (c) => {
 })
 
 rootAgentRoute.post('/root-agent/activations/:id/state', async (c) => {
-  const job = await findActivationForAgent(c, c.req.param('id'))
+  const job = await findActivationForAgent(c, c.req.param('id'), { allowCompletedClaim: true })
   if (!job) return notFound(c, 'Activation not found')
   const parsed = activationStateSchema.safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
+  if (!canApplyActivationTransition(job.build.activationStatus, parsed.data.activationStatus)) {
+    return c.json(
+      {
+        error: {
+          code: 'INVALID_ACTIVATION_TRANSITION',
+          message: `Activation cannot transition from ${job.build.activationStatus} to ${parsed.data.activationStatus}.`,
+        },
+      },
+      409
+    )
+  }
+  if (job.build.activationStatus === parsed.data.activationStatus) {
+    return c.json({ data: job.build })
+  }
   const now = new Date()
   const update = {
     activationStatus: parsed.data.activationStatus,
@@ -571,23 +825,38 @@ rootAgentRoute.post('/root-agent/activations/:id/state', async (c) => {
     activatedAt: parsed.data.activationStatus === 'active' ? now : job.build.activatedAt,
     updatedAt: now,
   }
-  const [updated] =
-    job.kind === 'routing'
-      ? await db
-          .update(routingGraphBuilds)
-          .set(update)
-          .where(eq(routingGraphBuilds.id, job.build.id))
-          .returning()
-      : await db
-          .update(basemapBuilds)
-          .set(update)
-          .where(eq(basemapBuilds.id, job.build.id))
-          .returning()
-  if (parsed.data.activationStatus === 'active') {
+  const updated = await db.transaction(async (tx) => {
+    const [row] =
+      job.kind === 'routing'
+        ? await tx
+            .update(routingGraphBuilds)
+            .set(update)
+            .where(
+              and(
+                eq(routingGraphBuilds.id, job.build.id),
+                eq(routingGraphBuilds.activationStatus, 'activating')
+              )
+            )
+            .returning()
+        : await tx
+            .update(basemapBuilds)
+            .set(update)
+            .where(
+              and(
+                eq(basemapBuilds.id, job.build.id),
+                eq(basemapBuilds.activationStatus, 'activating')
+              )
+            )
+            .returning()
+    if (!row) return null
     if (job.kind === 'routing') {
-      await db
+      await tx
         .update(routingGraphReleases)
-        .set({ activationStatus: 'active', activatedAt: now, updatedAt: now })
+        .set({
+          activationStatus: parsed.data.activationStatus,
+          activatedAt: parsed.data.activationStatus === 'active' ? now : undefined,
+          updatedAt: now,
+        })
         .where(eq(routingGraphReleases.buildId, job.build.id))
     } else {
       const output = asRecord(parsed.data.output)
@@ -595,11 +864,11 @@ rootAgentRoute.post('/root-agent/activations/:id/state', async (c) => {
       const releaseFilter = releaseId
         ? eq(basemapReleases.id, releaseId)
         : eq(basemapReleases.buildId, job.build.id)
-      await db
+      await tx
         .update(basemapReleases)
         .set({
-          activationStatus: 'active',
-          activatedAt: now,
+          activationStatus: parsed.data.activationStatus,
+          activatedAt: parsed.data.activationStatus === 'active' ? now : undefined,
           updatedAt: now,
           martinSource: typeof output.martinSource === 'string' ? output.martinSource : undefined,
           martinSourceVersioned:
@@ -610,16 +879,35 @@ rootAgentRoute.post('/root-agent/activations/:id/state', async (c) => {
         })
         .where(releaseFilter)
     }
-  }
-  await recordRuntimeInstallation({
-    accountId: c.get('accountId'),
-    workerNodeId: c.get('workerNodeId'),
-    job,
-    activationStatus: parsed.data.activationStatus,
-    output: parsed.data.output,
-    errorMessage: parsed.data.errorMessage,
-    now,
+    await recordRuntimeInstallation(
+      {
+        accountId: c.get('accountId'),
+        workerNodeId: c.get('workerNodeId'),
+        job,
+        activationStatus: parsed.data.activationStatus,
+        output: parsed.data.output,
+        errorMessage: parsed.data.errorMessage,
+        now,
+      },
+      tx
+    )
+    await tx
+      .update(rootAgentJobClaims)
+      .set({
+        status: 'completed',
+        completedAt: now,
+        outcome: parsed.data.activationStatus,
+        updatedAt: now,
+      })
+      .where(and(eq(rootAgentJobClaims.id, job.claim.id), eq(rootAgentJobClaims.status, 'active')))
+    return row
   })
+  if (!updated) {
+    return c.json(
+      { error: { code: 'STALE_ACTIVATION_STATE', message: 'Activation changed concurrently.' } },
+      409
+    )
+  }
   if (parsed.data.message) {
     await appendLog(
       job.build.id,
@@ -633,8 +921,8 @@ rootAgentRoute.post('/root-agent/activations/:id/state', async (c) => {
 
 rootAgentRoute.post('/root-agent/jobs/:id/logs', async (c) => {
   const job =
-    (await findBuildForAgent(c, c.req.param('id'))) ??
-    (await findActivationForAgent(c, c.req.param('id')))
+    (await findBuildForAgent(c, c.req.param('id'), { allowCompletedClaim: true })) ??
+    (await findActivationForAgent(c, c.req.param('id'), { allowCompletedClaim: true }))
   if (!job) return notFound(c, 'Build not found')
   const parsed = logSchema.safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
@@ -658,23 +946,121 @@ rootAgentRoute.post('/root-agent/jobs/:id/artifacts/upload-session', async (c) =
   const storage = getStorage()
   const storageInfo = storage.getInfo()
   const fileName = safeFileName(parsed.data.fileName)
-  const storageKey = artifactStorageKey(job, fileName)
-  if (!storage.createMultipartUploadSession || storageInfo.provider === 'local') {
-    return c.json({
-      data: {
-        strategy: 'legacy_proxy',
-        reason: 'Storage provider does not support signed multipart uploads.',
-        uploadUrl: `/root-agent/jobs/${job.build.id}/artifacts`,
+  const [existing] = await db
+    .select()
+    .from(rootAgentArtifactUploadSessions)
+    .where(
+      and(
+        eq(rootAgentArtifactUploadSessions.claimId, job.claim.id),
+        eq(rootAgentArtifactUploadSessions.idempotencyKey, parsed.data.idempotencyKey)
+      )
+    )
+    .limit(1)
+  if (existing) {
+    if (existing.status === 'ready' || existing.status === 'completed') {
+      return c.json({ data: serializeUploadSession(existing) })
+    }
+    return c.json(
+      {
+        error: {
+          code:
+            existing.status === 'failed'
+              ? 'ARTIFACT_UPLOAD_SESSION_FAILED'
+              : 'ARTIFACT_UPLOAD_SESSION_INITIALIZING',
+          message:
+            existing.errorMessage ??
+            'Artifact upload session is still being initialized; retry shortly.',
+        },
       },
+      409
+    )
+  }
+
+  const sessionId = randomUUID()
+  const storageKey = artifactStorageKey(job, sessionId, fileName)
+  const expiresAt = new Date(Date.now() + ROOT_AGENT_UPLOAD_SESSION_MS)
+  const [created] = await db
+    .insert(rootAgentArtifactUploadSessions)
+    .values({
+      id: sessionId,
+      accountId: c.get('accountId'),
+      workerNodeId: c.get('workerNodeId'),
+      claimId: job.claim.id,
+      targetType: job.kind === 'routing' ? 'routing_build' : 'basemap_build',
+      buildId: job.build.id,
+      idempotencyKey: parsed.data.idempotencyKey,
+      status: 'creating',
+      provider: storageInfo.provider,
+      bucket: storageInfo.bucket,
+      storageKey,
+      fileName,
+      contentType: parsed.data.contentType,
+      size: parsed.data.size,
+      checksumSha256: parsed.data.checksumSha256?.toLowerCase() ?? null,
+      artifactKind: parsed.data.kind,
+      manifest: parsed.data.manifest,
+      expiresAt,
+      updatedAt: new Date(),
+    })
+    .onConflictDoNothing()
+    .returning()
+  if (!created) {
+    return c.json(
+      {
+        error: {
+          code: 'ARTIFACT_UPLOAD_SESSION_INITIALIZING',
+          message: 'Artifact upload session is being initialized; retry shortly.',
+        },
+      },
+      409
+    )
+  }
+
+  if (!storage.createMultipartUploadSession || storageInfo.provider === 'local') {
+    const [ready] = await db
+      .update(rootAgentArtifactUploadSessions)
+      .set({ status: 'ready', updatedAt: new Date() })
+      .where(eq(rootAgentArtifactUploadSessions.id, sessionId))
+      .returning()
+    return c.json({
+      data: serializeUploadSession(ready!),
     })
   }
 
-  const session = await storage.createMultipartUploadSession(
-    storageKey,
-    parsed.data.contentType,
-    parsed.data.size
-  )
+  let session
+  try {
+    session = await storage.createMultipartUploadSession(
+      storageKey,
+      parsed.data.contentType,
+      parsed.data.size,
+      { expiresInSeconds: ROOT_AGENT_UPLOAD_SESSION_MS / 1000 }
+    )
+  } catch (error) {
+    await db
+      .update(rootAgentArtifactUploadSessions)
+      .set({
+        status: 'failed',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        updatedAt: new Date(),
+      })
+      .where(eq(rootAgentArtifactUploadSessions.id, sessionId))
+    throw error
+  }
+  const [ready] = await db
+    .update(rootAgentArtifactUploadSessions)
+    .set({
+      status: 'ready',
+      multipartUploadId: session.uploadId,
+      partSize: session.partSize,
+      partCount: session.parts.length,
+      parts: session.parts,
+      expiresAt: new Date(session.expiresAt),
+      updatedAt: new Date(),
+    })
+    .where(eq(rootAgentArtifactUploadSessions.id, sessionId))
+    .returning()
   await appendLog(job.build.id, 'info', 'Created direct artifact upload session', {
+    sessionId,
     fileName,
     kind: parsed.data.kind,
     provider: storageInfo.provider,
@@ -686,20 +1072,7 @@ rootAgentRoute.post('/root-agent/jobs/:id/artifacts/upload-session', async (c) =
   })
 
   return c.json({
-    data: {
-      strategy: 'multipart',
-      storage: {
-        provider: session.provider,
-        bucket: session.bucket,
-        key: session.key,
-      },
-      multipart: {
-        uploadId: session.uploadId,
-        partSize: session.partSize,
-        expiresAt: session.expiresAt,
-        parts: session.parts,
-      },
-    },
+    data: serializeUploadSession(ready!),
   })
 })
 
@@ -711,10 +1084,51 @@ rootAgentRoute.post('/root-agent/jobs/:id/artifacts/finalize', async (c) => {
 
   const storage = getStorage()
   const storageInfo = storage.getInfo()
-  if (
-    parsed.data.storage.provider !== storageInfo.provider ||
-    parsed.data.storage.bucket !== storageInfo.bucket
-  ) {
+  const [session] = await db
+    .select()
+    .from(rootAgentArtifactUploadSessions)
+    .where(
+      and(
+        eq(rootAgentArtifactUploadSessions.id, parsed.data.sessionId),
+        eq(rootAgentArtifactUploadSessions.accountId, c.get('accountId')),
+        eq(rootAgentArtifactUploadSessions.workerNodeId, c.get('workerNodeId')),
+        eq(rootAgentArtifactUploadSessions.claimId, job.claim.id),
+        eq(rootAgentArtifactUploadSessions.buildId, job.build.id)
+      )
+    )
+    .limit(1)
+  if (!session) return notFound(c, 'Artifact upload session not found')
+  if (session.status === 'completed' && session.completedArtifactId) {
+    const existing = await findArtifactById(job, session.completedArtifactId)
+    if (existing) return c.json({ data: existing })
+  }
+  if (session.status !== 'ready' && session.status !== 'finalizing') {
+    return c.json(
+      {
+        error: {
+          code: 'ARTIFACT_UPLOAD_SESSION_INVALID',
+          message: `Artifact upload session is ${session.status}.`,
+        },
+      },
+      409
+    )
+  }
+  if (session.expiresAt <= new Date()) {
+    if (session.multipartUploadId && storage.abortMultipartUpload) {
+      await storage
+        .abortMultipartUpload(session.storageKey, session.multipartUploadId)
+        .catch(() => undefined)
+    }
+    await db
+      .update(rootAgentArtifactUploadSessions)
+      .set({ status: 'failed', errorMessage: 'Upload session expired.', updatedAt: new Date() })
+      .where(eq(rootAgentArtifactUploadSessions.id, session.id))
+    return c.json(
+      { error: { code: 'ARTIFACT_UPLOAD_SESSION_EXPIRED', message: 'Upload session expired.' } },
+      409
+    )
+  }
+  if (session.provider !== storageInfo.provider || session.bucket !== storageInfo.bucket) {
     return c.json(
       {
         error: {
@@ -725,7 +1139,7 @@ rootAgentRoute.post('/root-agent/jobs/:id/artifacts/finalize', async (c) => {
       409
     )
   }
-  if (!storage.completeMultipartUpload) {
+  if (!storage.completeMultipartUpload || !session.multipartUploadId) {
     return c.json(
       {
         error: {
@@ -737,19 +1151,71 @@ rootAgentRoute.post('/root-agent/jobs/:id/artifacts/finalize', async (c) => {
     )
   }
 
-  const existing = await findExistingArtifact(job, parsed.data.storage.key)
-  if (existing) {
-    return c.json({ data: existing })
+  const expectedPartNumbers = Array.from(
+    { length: session.partCount ?? 0 },
+    (_, index) => index + 1
+  )
+  const suppliedPartNumbers = parsed.data.parts
+    .map((part) => part.partNumber)
+    .sort((left, right) => left - right)
+  if (
+    expectedPartNumbers.length === 0 ||
+    expectedPartNumbers.length !== suppliedPartNumbers.length ||
+    expectedPartNumbers.some((partNumber, index) => suppliedPartNumbers[index] !== partNumber)
+  ) {
+    return c.json(
+      {
+        error: {
+          code: 'ARTIFACT_PARTS_MISMATCH',
+          message: 'Uploaded parts do not match the server-issued multipart session.',
+        },
+      },
+      409
+    )
   }
 
-  let objectMetadata = await storage.getMetadata(parsed.data.storage.key)
+  let objectMetadata = await storage.getMetadata(session.storageKey)
+  if (session.status === 'ready') {
+    const [owned] = await db
+      .update(rootAgentArtifactUploadSessions)
+      .set({ status: 'finalizing', updatedAt: new Date() })
+      .where(
+        and(
+          eq(rootAgentArtifactUploadSessions.id, session.id),
+          eq(rootAgentArtifactUploadSessions.status, 'ready')
+        )
+      )
+      .returning({ id: rootAgentArtifactUploadSessions.id })
+    if (!owned) {
+      return c.json(
+        {
+          error: {
+            code: 'ARTIFACT_FINALIZATION_IN_PROGRESS',
+            message: 'Artifact finalization is already in progress.',
+          },
+        },
+        409
+      )
+    }
+  } else if (!objectMetadata) {
+    return c.json(
+      {
+        error: {
+          code: 'ARTIFACT_FINALIZATION_IN_PROGRESS',
+          message: 'Artifact finalization is already in progress.',
+        },
+      },
+      409
+    )
+  }
+
   if (!objectMetadata) {
     await storage.completeMultipartUpload(
-      parsed.data.storage.key,
-      parsed.data.storage.uploadId,
-      parsed.data.storage.parts
+      session.storageKey,
+      session.multipartUploadId,
+      parsed.data.parts
     )
-    objectMetadata = await storage.getMetadata(parsed.data.storage.key)
+    objectMetadata = await storage.getMetadata(session.storageKey)
   }
   if (!objectMetadata) {
     return c.json(
@@ -762,7 +1228,7 @@ rootAgentRoute.post('/root-agent/jobs/:id/artifacts/finalize', async (c) => {
       409
     )
   }
-  if (objectMetadata.size !== parsed.data.size) {
+  if (objectMetadata.size !== session.size) {
     return c.json(
       {
         error: {
@@ -774,23 +1240,27 @@ rootAgentRoute.post('/root-agent/jobs/:id/artifacts/finalize', async (c) => {
     )
   }
 
-  const artifact = await recordBuildArtifact(job, {
-    provider: storageInfo.provider,
-    bucket: storageInfo.bucket,
-    storageKey: parsed.data.storage.key,
-    fileName: safeFileName(parsed.data.fileName),
-    contentType: parsed.data.contentType,
-    size: parsed.data.size,
-    checksumSha256: parsed.data.checksumSha256 ?? null,
-    artifactKind: parsed.data.kind,
-    manifest: parsed.data.manifest,
-    metadata: {
-      ...parsed.data.manifest,
-      directUpload: true,
-      uploadId: parsed.data.storage.uploadId,
-      partCount: parsed.data.storage.parts.length,
+  const artifact = await recordBuildArtifact(
+    job,
+    {
+      provider: session.provider as 's3' | 'r2',
+      bucket: session.bucket,
+      storageKey: session.storageKey,
+      fileName: session.fileName,
+      contentType: session.contentType,
+      size: session.size,
+      checksumSha256: session.checksumSha256,
+      artifactKind: session.artifactKind,
+      manifest: asRecord(session.manifest),
+      metadata: {
+        ...asRecord(session.manifest),
+        directUpload: true,
+        uploadSessionId: session.id,
+        partCount: parsed.data.parts.length,
+      },
     },
-  })
+    session.id
+  )
   await appendLog(job.build.id, 'info', 'Artifact direct upload finalized', {
     artifactId: artifact.id,
     fileName: artifact.fileName,
@@ -802,6 +1272,40 @@ rootAgentRoute.post('/root-agent/jobs/:id/artifacts/finalize', async (c) => {
 rootAgentRoute.post('/root-agent/jobs/:id/artifacts', async (c) => {
   const job = await findBuildForAgent(c, c.req.param('id'))
   if (!job) return notFound(c, 'Build not found')
+  const sessionId = c.req.header('x-planisfy-artifact-upload-session-id')
+  if (!sessionId) {
+    return c.json(
+      {
+        error: { code: 'UPLOAD_SESSION_REQUIRED', message: 'Artifact upload session is required.' },
+      },
+      409
+    )
+  }
+  const [session] = await db
+    .select()
+    .from(rootAgentArtifactUploadSessions)
+    .where(
+      and(
+        eq(rootAgentArtifactUploadSessions.id, sessionId),
+        eq(rootAgentArtifactUploadSessions.accountId, c.get('accountId')),
+        eq(rootAgentArtifactUploadSessions.workerNodeId, c.get('workerNodeId')),
+        eq(rootAgentArtifactUploadSessions.claimId, job.claim.id),
+        eq(rootAgentArtifactUploadSessions.buildId, job.build.id),
+        inArray(rootAgentArtifactUploadSessions.status, ['ready', 'completed'])
+      )
+    )
+    .limit(1)
+  if (!session) return notFound(c, 'Artifact upload session not found')
+  if (session.status === 'completed' && session.completedArtifactId) {
+    const existing = await findArtifactById(job, session.completedArtifactId)
+    if (existing) return c.json({ data: existing })
+  }
+  if (session.expiresAt <= new Date()) {
+    return c.json(
+      { error: { code: 'ARTIFACT_UPLOAD_SESSION_EXPIRED', message: 'Upload session expired.' } },
+      409
+    )
+  }
   const body = c.req.raw.body
   if (!body) {
     return c.json(
@@ -810,37 +1314,46 @@ rootAgentRoute.post('/root-agent/jobs/:id/artifacts', async (c) => {
     )
   }
 
-  const fileName = safeFileName(c.req.header('x-artifact-filename') ?? `${job.build.id}.tar.gz`)
-  const artifactKind =
-    c.req.header('x-artifact-kind') ?? (job.kind === 'routing' ? 'valhalla_graph' : 'basemap_tiles')
-  const checksumSha256 = c.req.header('x-artifact-sha256') ?? null
-  const manifest = parseHeaderJson(c.req.header('x-artifact-manifest'))
   const storage = getStorage()
   const storageInfo = storage.getInfo()
-  const storageKey = artifactStorageKey(job, fileName)
-  const artifactSize = numberHeader(c.req.header('x-artifact-size'))
   const uploaded = await storage.upload(
-    storageKey,
+    session.storageKey,
     Readable.fromWeb(body as unknown as import('node:stream/web').ReadableStream),
-    c.req.header('content-type') ?? 'application/gzip',
-    artifactSize
+    session.contentType,
+    session.size
   )
-  const artifact = await recordBuildArtifact(job, {
-    provider: storageInfo.provider,
-    bucket: storageInfo.bucket,
-    storageKey: uploaded.key,
-    fileName,
-    contentType: uploaded.contentType,
-    size: artifactSize ?? uploaded.size,
-    checksumSha256,
-    artifactKind,
-    manifest,
-    metadata: manifest,
-  })
+  if (uploaded.size !== session.size) {
+    await storage.delete(session.storageKey).catch(() => undefined)
+    return c.json(
+      {
+        error: {
+          code: 'ARTIFACT_SIZE_MISMATCH',
+          message: 'Uploaded artifact size does not match the upload session.',
+        },
+      },
+      409
+    )
+  }
+  const artifact = await recordBuildArtifact(
+    job,
+    {
+      provider: storageInfo.provider,
+      bucket: storageInfo.bucket,
+      storageKey: uploaded.key,
+      fileName: session.fileName,
+      contentType: session.contentType,
+      size: session.size,
+      checksumSha256: session.checksumSha256,
+      artifactKind: session.artifactKind,
+      manifest: asRecord(session.manifest),
+      metadata: { ...asRecord(session.manifest), uploadSessionId: session.id },
+    },
+    session.id
+  )
   await appendLog(job.build.id, 'info', 'Artifact uploaded', {
     artifactId: artifact?.id,
-    fileName,
-    size: artifactSize ?? uploaded.size,
+    fileName: session.fileName,
+    size: session.size,
   })
   return c.json({ data: artifact }, 201)
 })
@@ -850,7 +1363,12 @@ rootAgentRoute.get('/root-agent/artifacts/:id/download', async (c) => {
   const [routingArtifact] = await db
     .select()
     .from(routingGraphArtifacts)
-    .where(eq(routingGraphArtifacts.id, artifactId))
+    .where(
+      and(
+        eq(routingGraphArtifacts.id, artifactId),
+        eq(routingGraphArtifacts.accountId, c.get('accountId'))
+      )
+    )
     .limit(1)
   const artifact = routingArtifact
     ? { kind: 'routing' as const, artifact: routingArtifact }
@@ -864,10 +1382,23 @@ rootAgentRoute.get('/root-agent/artifacts/:id/download', async (c) => {
         ? await findBasemapBuildForArtifact(c, artifact.artifact.buildId)
         : await findGeocodingBuildForArtifact(c, artifact.artifact.buildId)
   if (!build) return notFound(c, 'Artifact not found')
+  const downloadClaim =
+    artifact.kind === 'routing'
+      ? await requireAgentClaim(c, 'routing_activation', build.id, 'activation')
+      : artifact.kind === 'basemap'
+        ? await requireAgentClaim(c, 'basemap_activation', build.id, 'activation')
+        : await findGeocodingDownloadClaim(c, artifact.artifact.id)
+  if (!downloadClaim) return notFound(c, 'Artifact not found')
   const [object] = await db
     .select()
     .from(storageObjects)
-    .where(eq(storageObjects.id, artifact.artifact.storageObjectId))
+    .where(
+      and(
+        eq(storageObjects.id, artifact.artifact.storageObjectId),
+        eq(storageObjects.accountId, c.get('accountId')),
+        isNull(storageObjects.deletedAt)
+      )
+    )
     .limit(1)
   if (!object) return notFound(c, 'Storage object not found')
   const storage = getStorage()
@@ -976,7 +1507,259 @@ async function authenticateAgent(c: Context<AgentEnv>) {
   return { ok: true as const, accountId: row.accountId, workerNodeId: row.workerNodeId }
 }
 
-async function findBuildForAgent(c: Context<AgentEnv>, buildId: string) {
+type DatabaseExecutor = Pick<typeof db, 'select' | 'insert' | 'update'>
+type ClaimExecutor = Pick<DatabaseExecutor, 'insert'>
+
+async function createAgentClaim(
+  executor: ClaimExecutor,
+  params: {
+    accountId: string
+    workerNodeId: string
+    targetType: string
+    targetId: string
+    phase: 'build' | 'activation'
+    now: Date
+  }
+) {
+  const leaseExpiresAt = new Date(params.now.getTime() + ROOT_AGENT_CLAIM_LEASE_MS)
+  const [claim] = await executor
+    .insert(rootAgentJobClaims)
+    .values({
+      accountId: params.accountId,
+      workerNodeId: params.workerNodeId,
+      targetType: params.targetType,
+      targetId: params.targetId,
+      phase: params.phase,
+      status: 'active',
+      lastRenewedAt: params.now,
+      leaseExpiresAt,
+      updatedAt: params.now,
+    })
+    .returning()
+  if (!claim) throw new Error('Failed to create root-agent claim')
+  return { id: claim.id, expiresAt: claim.leaseExpiresAt.toISOString() }
+}
+
+async function requireAgentClaim(
+  c: Context<AgentEnv>,
+  targetType: string,
+  targetId: string,
+  phase: 'build' | 'activation',
+  options: { allowCompleted?: boolean } = {}
+) {
+  const claimId = c.req.header(ROOT_AGENT_CLAIM_HEADER)
+  if (!claimId) return null
+  const now = new Date()
+  const leaseExpiresAt = new Date(now.getTime() + ROOT_AGENT_CLAIM_LEASE_MS)
+  const [claim] = await db
+    .update(rootAgentJobClaims)
+    .set({ lastRenewedAt: now, leaseExpiresAt, updatedAt: now })
+    .where(
+      and(
+        eq(rootAgentJobClaims.id, claimId),
+        eq(rootAgentJobClaims.accountId, c.get('accountId')),
+        eq(rootAgentJobClaims.workerNodeId, c.get('workerNodeId')),
+        eq(rootAgentJobClaims.targetType, targetType),
+        eq(rootAgentJobClaims.targetId, targetId),
+        eq(rootAgentJobClaims.phase, phase),
+        eq(rootAgentJobClaims.status, 'active'),
+        gt(rootAgentJobClaims.leaseExpiresAt, now)
+      )
+    )
+    .returning()
+  if (claim || !options.allowCompleted) return claim ?? null
+  const [completed] = await db
+    .select()
+    .from(rootAgentJobClaims)
+    .where(
+      and(
+        eq(rootAgentJobClaims.id, claimId),
+        eq(rootAgentJobClaims.accountId, c.get('accountId')),
+        eq(rootAgentJobClaims.workerNodeId, c.get('workerNodeId')),
+        eq(rootAgentJobClaims.targetType, targetType),
+        eq(rootAgentJobClaims.targetId, targetId),
+        eq(rootAgentJobClaims.phase, phase),
+        eq(rootAgentJobClaims.status, 'completed')
+      )
+    )
+    .limit(1)
+  return completed ?? null
+}
+
+async function expireAgentClaims(accountId: string, workerNodeId: string, now: Date) {
+  const expired = await db
+    .select()
+    .from(rootAgentJobClaims)
+    .where(
+      and(
+        eq(rootAgentJobClaims.accountId, accountId),
+        eq(rootAgentJobClaims.workerNodeId, workerNodeId),
+        eq(rootAgentJobClaims.status, 'active'),
+        lt(rootAgentJobClaims.leaseExpiresAt, now)
+      )
+    )
+  for (const claim of expired) {
+    await db.transaction(async (tx) => {
+      const [marked] = await tx
+        .update(rootAgentJobClaims)
+        .set({ status: 'expired', completedAt: now, outcome: 'lease_expired', updatedAt: now })
+        .where(
+          and(
+            eq(rootAgentJobClaims.id, claim.id),
+            eq(rootAgentJobClaims.status, 'active'),
+            lt(rootAgentJobClaims.leaseExpiresAt, now)
+          )
+        )
+        .returning({ id: rootAgentJobClaims.id })
+      if (!marked) return
+      if (claim.targetType === 'routing_build') {
+        await tx
+          .update(routingGraphBuilds)
+          .set({ status: 'queued', assignedAt: null, updatedAt: now })
+          .where(
+            and(
+              eq(routingGraphBuilds.id, claim.targetId),
+              inArray(routingGraphBuilds.status, [
+                'assigned',
+                'preparing',
+                'downloading_source',
+                'building_admins',
+                'building_tiles',
+                'packaging',
+                'uploading',
+              ]),
+              isNull(routingGraphBuilds.cancelRequestedAt)
+            )
+          )
+        await tx
+          .update(routingGraphBuilds)
+          .set({ status: 'canceled', completedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(routingGraphBuilds.id, claim.targetId),
+              inArray(routingGraphBuilds.status, [
+                'assigned',
+                'preparing',
+                'downloading_source',
+                'building_admins',
+                'building_tiles',
+                'packaging',
+                'uploading',
+                'canceling',
+              ]),
+              gt(routingGraphBuilds.cancelRequestedAt, new Date(0))
+            )
+          )
+      } else if (claim.targetType === 'basemap_build') {
+        await tx
+          .update(basemapBuilds)
+          .set({ status: 'queued', assignedAt: null, updatedAt: now })
+          .where(
+            and(
+              eq(basemapBuilds.id, claim.targetId),
+              inArray(basemapBuilds.status, [
+                'assigned',
+                'preparing',
+                'downloading_source',
+                'building_tiles',
+                'packaging',
+                'uploading',
+              ]),
+              isNull(basemapBuilds.cancelRequestedAt)
+            )
+          )
+        await tx
+          .update(basemapBuilds)
+          .set({ status: 'canceled', completedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(basemapBuilds.id, claim.targetId),
+              inArray(basemapBuilds.status, [
+                'assigned',
+                'preparing',
+                'downloading_source',
+                'building_tiles',
+                'packaging',
+                'uploading',
+                'canceling',
+              ]),
+              gt(basemapBuilds.cancelRequestedAt, new Date(0))
+            )
+          )
+      } else if (claim.targetType === 'routing_activation') {
+        await tx
+          .update(routingGraphBuilds)
+          .set({ activationStatus: 'activation_requested', updatedAt: now })
+          .where(
+            and(
+              eq(routingGraphBuilds.id, claim.targetId),
+              eq(routingGraphBuilds.activationStatus, 'activating')
+            )
+          )
+      } else if (claim.targetType === 'basemap_activation') {
+        await tx
+          .update(basemapBuilds)
+          .set({ activationStatus: 'activation_requested', updatedAt: now })
+          .where(
+            and(
+              eq(basemapBuilds.id, claim.targetId),
+              eq(basemapBuilds.activationStatus, 'activating')
+            )
+          )
+      } else if (claim.targetType === 'geocoding_activation') {
+        await tx
+          .update(geocodingReleases)
+          .set({ activationStatus: 'activation_requested', updatedAt: now })
+          .where(
+            and(
+              eq(geocodingReleases.id, claim.targetId),
+              eq(geocodingReleases.activationStatus, 'activating')
+            )
+          )
+      }
+    })
+    const abandonedSessions = await db
+      .select()
+      .from(rootAgentArtifactUploadSessions)
+      .where(
+        and(
+          eq(rootAgentArtifactUploadSessions.claimId, claim.id),
+          inArray(rootAgentArtifactUploadSessions.status, ['creating', 'ready', 'finalizing'])
+        )
+      )
+    await db
+      .update(rootAgentArtifactUploadSessions)
+      .set({
+        status: 'failed',
+        errorMessage: 'Owning root-agent claim expired.',
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(rootAgentArtifactUploadSessions.claimId, claim.id),
+          inArray(rootAgentArtifactUploadSessions.status, ['creating', 'ready', 'finalizing'])
+        )
+      )
+    const storage = getStorage()
+    if (storage.abortMultipartUpload) {
+      await Promise.all(
+        abandonedSessions
+          .filter((session) => session.multipartUploadId)
+          .map((session) =>
+            storage.abortMultipartUpload!(session.storageKey, session.multipartUploadId!).catch(
+              () => undefined
+            )
+          )
+      )
+    }
+  }
+}
+
+async function findBuildForAgent(
+  c: Context<AgentEnv>,
+  buildId: string,
+  options: { allowCompletedClaim?: boolean } = {}
+) {
   const [routingBuild] = await db
     .select()
     .from(routingGraphBuilds)
@@ -989,7 +1772,12 @@ async function findBuildForAgent(c: Context<AgentEnv>, buildId: string) {
       )
     )
     .limit(1)
-  if (routingBuild) return { kind: 'routing' as const, build: routingBuild }
+  if (routingBuild) {
+    const claim = await requireAgentClaim(c, 'routing_build', routingBuild.id, 'build', {
+      allowCompleted: options.allowCompletedClaim,
+    })
+    if (claim) return { kind: 'routing' as const, build: routingBuild, claim }
+  }
   const [basemapBuild] = await db
     .select()
     .from(basemapBuilds)
@@ -1002,10 +1790,18 @@ async function findBuildForAgent(c: Context<AgentEnv>, buildId: string) {
       )
     )
     .limit(1)
-  return basemapBuild ? { kind: 'basemap' as const, build: basemapBuild } : null
+  if (!basemapBuild) return null
+  const claim = await requireAgentClaim(c, 'basemap_build', basemapBuild.id, 'build', {
+    allowCompleted: options.allowCompletedClaim,
+  })
+  return claim ? { kind: 'basemap' as const, build: basemapBuild, claim } : null
 }
 
-async function findActivationForAgent(c: Context<AgentEnv>, buildId: string) {
+async function findActivationForAgent(
+  c: Context<AgentEnv>,
+  buildId: string,
+  options: { allowCompletedClaim?: boolean } = {}
+) {
   const [routingBuild] = await db
     .select()
     .from(routingGraphBuilds)
@@ -1014,12 +1810,22 @@ async function findActivationForAgent(c: Context<AgentEnv>, buildId: string) {
         eq(routingGraphBuilds.id, buildId),
         eq(routingGraphBuilds.accountId, c.get('accountId')),
         eq(routingGraphBuilds.activationWorkerNodeId, c.get('workerNodeId')),
-        inArray(routingGraphBuilds.activationStatus, ['activation_requested', 'activating']),
+        inArray(
+          routingGraphBuilds.activationStatus,
+          options.allowCompletedClaim
+            ? ['activation_requested', 'activating', 'active', 'failed']
+            : ['activation_requested', 'activating']
+        ),
         isNull(routingGraphBuilds.deletedAt)
       )
     )
     .limit(1)
-  if (routingBuild) return { kind: 'routing' as const, build: routingBuild }
+  if (routingBuild) {
+    const claim = await requireAgentClaim(c, 'routing_activation', routingBuild.id, 'activation', {
+      allowCompleted: options.allowCompletedClaim,
+    })
+    if (claim) return { kind: 'routing' as const, build: routingBuild, claim }
+  }
   const [basemapBuild] = await db
     .select()
     .from(basemapBuilds)
@@ -1028,12 +1834,21 @@ async function findActivationForAgent(c: Context<AgentEnv>, buildId: string) {
         eq(basemapBuilds.id, buildId),
         eq(basemapBuilds.accountId, c.get('accountId')),
         eq(basemapBuilds.activationWorkerNodeId, c.get('workerNodeId')),
-        inArray(basemapBuilds.activationStatus, ['activation_requested', 'activating']),
+        inArray(
+          basemapBuilds.activationStatus,
+          options.allowCompletedClaim
+            ? ['activation_requested', 'activating', 'active', 'failed']
+            : ['activation_requested', 'activating']
+        ),
         isNull(basemapBuilds.deletedAt)
       )
     )
     .limit(1)
-  return basemapBuild ? { kind: 'basemap' as const, build: basemapBuild } : null
+  if (!basemapBuild) return null
+  const claim = await requireAgentClaim(c, 'basemap_activation', basemapBuild.id, 'activation', {
+    allowCompleted: options.allowCompletedClaim,
+  })
+  return claim ? { kind: 'basemap' as const, build: basemapBuild, claim } : null
 }
 
 function parseByteRange(
@@ -1055,19 +1870,22 @@ function parseByteRange(
   return { status: 'partial', start, end: Math.min(requestedEnd, totalSize - 1) }
 }
 
-async function recordRuntimeInstallation(params: {
-  accountId: string
-  workerNodeId: string
-  job: NonNullable<Awaited<ReturnType<typeof findActivationForAgent>>>
-  activationStatus: 'active' | 'failed'
-  output: Record<string, unknown> | undefined
-  errorMessage: string | undefined
-  now: Date
-}) {
+async function recordRuntimeInstallation(
+  params: {
+    accountId: string
+    workerNodeId: string
+    job: NonNullable<Awaited<ReturnType<typeof findActivationForAgent>>>
+    activationStatus: 'active' | 'failed'
+    output: Record<string, unknown> | undefined
+    errorMessage: string | undefined
+    now: Date
+  },
+  executor: DatabaseExecutor = db
+) {
   const output = asRecord(params.output)
   const [artifact] =
     params.job.kind === 'routing'
-      ? await db
+      ? await executor
           .select({ id: routingGraphArtifacts.id })
           .from(routingGraphArtifacts)
           .where(
@@ -1077,7 +1895,7 @@ async function recordRuntimeInstallation(params: {
             )
           )
           .limit(1)
-      : await db
+      : await executor
           .select({ id: basemapArtifacts.id })
           .from(basemapArtifacts)
           .where(
@@ -1089,12 +1907,12 @@ async function recordRuntimeInstallation(params: {
           .limit(1)
   const [release] =
     params.job.kind === 'routing'
-      ? await db
+      ? await executor
           .select({ id: routingGraphReleases.id })
           .from(routingGraphReleases)
           .where(eq(routingGraphReleases.buildId, params.job.build.id))
           .limit(1)
-      : await db
+      : await executor
           .select({ id: basemapReleases.id })
           .from(basemapReleases)
           .where(eq(basemapReleases.buildId, params.job.build.id))
@@ -1107,7 +1925,7 @@ async function recordRuntimeInstallation(params: {
     stringFromRecord(output, 'valhallaReleaseDir') ??
     stringFromRecord(output, 'martinPathVersioned')
 
-  await db.insert(runtimeInstallations).values({
+  await executor.insert(runtimeInstallations).values({
     accountId: params.accountId,
     workerNodeId: params.workerNodeId,
     resourceType: params.job.kind === 'routing' ? 'routing_graph' : 'basemap',
@@ -1138,33 +1956,63 @@ async function appendLog(buildId: string, level: string, message: string, metada
   await db.insert(basemapBuildLogs).values({ buildId, level, message, metadata })
 }
 
-async function findExistingArtifact(
+function serializeUploadSession(session: typeof rootAgentArtifactUploadSessions.$inferSelect) {
+  if (session.status === 'completed') {
+    return {
+      strategy: 'completed' as const,
+      sessionId: session.id,
+      artifactId: session.completedArtifactId,
+    }
+  }
+  if (session.provider === 'local') {
+    return {
+      strategy: 'legacy_proxy' as const,
+      sessionId: session.id,
+      reason: 'Storage provider does not support signed multipart uploads.',
+      uploadUrl: `/root-agent/jobs/${session.buildId}/artifacts`,
+    }
+  }
+  return {
+    strategy: 'multipart' as const,
+    sessionId: session.id,
+    multipart: {
+      partSize: session.partSize!,
+      expiresAt: session.expiresAt.toISOString(),
+      parts: Array.isArray(session.parts) ? session.parts : [],
+    },
+  }
+}
+
+async function findArtifactById(
   job: NonNullable<Awaited<ReturnType<typeof findBuildForAgent>>>,
-  storageKey: string
+  artifactId: string
 ) {
   if (job.kind === 'routing') {
-    const rows = await db
-      .select({ artifact: routingGraphArtifacts, object: storageObjects })
+    const [artifact] = await db
+      .select()
       .from(routingGraphArtifacts)
-      .innerJoin(storageObjects, eq(routingGraphArtifacts.storageObjectId, storageObjects.id))
       .where(
         and(
-          eq(routingGraphArtifacts.buildId, job.build.id),
-          eq(storageObjects.storageKey, storageKey)
+          eq(routingGraphArtifacts.id, artifactId),
+          eq(routingGraphArtifacts.accountId, job.build.accountId),
+          eq(routingGraphArtifacts.buildId, job.build.id)
         )
       )
       .limit(1)
-    return rows[0]?.artifact ?? null
+    return artifact ?? null
   }
-  const rows = await db
-    .select({ artifact: basemapArtifacts, object: storageObjects })
+  const [artifact] = await db
+    .select()
     .from(basemapArtifacts)
-    .innerJoin(storageObjects, eq(basemapArtifacts.storageObjectId, storageObjects.id))
     .where(
-      and(eq(basemapArtifacts.buildId, job.build.id), eq(storageObjects.storageKey, storageKey))
+      and(
+        eq(basemapArtifacts.id, artifactId),
+        eq(basemapArtifacts.accountId, job.build.accountId),
+        eq(basemapArtifacts.buildId, job.build.id)
+      )
     )
     .limit(1)
-  return rows[0]?.artifact ?? null
+  return artifact ?? null
 }
 
 async function recordBuildArtifact(
@@ -1180,95 +2028,150 @@ async function recordBuildArtifact(
     artifactKind: string
     manifest: Record<string, unknown>
     metadata: Record<string, unknown>
-  }
+  },
+  uploadSessionId: string
 ) {
-  const [existingObject] = await db
-    .select()
-    .from(storageObjects)
-    .where(
-      and(
-        eq(storageObjects.provider, params.provider),
-        eq(storageObjects.bucket, params.bucket),
-        eq(storageObjects.storageKey, params.storageKey),
-        isNull(storageObjects.deletedAt)
-      )
-    )
-    .limit(1)
-  const [createdObject] = existingObject
-    ? [existingObject]
-    : await db
-        .insert(storageObjects)
+  return db.transaction(async (tx) => {
+    const objectValues = {
+      accountId: job.build.accountId,
+      provider: params.provider,
+      bucket: params.bucket,
+      storageKey: params.storageKey,
+      fileName: params.fileName,
+      contentType: params.contentType,
+      size: params.size,
+      contentHash: params.checksumSha256,
+      resourceType: job.kind === 'routing' ? 'routing_graph_build' : 'basemap_build',
+      resourceId: job.build.id,
+      artifactKind: params.artifactKind,
+      metadata: params.metadata,
+    }
+    const [insertedObject] = await tx
+      .insert(storageObjects)
+      .values(objectValues)
+      .onConflictDoNothing()
+      .returning()
+    const [storageObject] = insertedObject
+      ? [insertedObject]
+      : await tx
+          .select()
+          .from(storageObjects)
+          .where(
+            and(
+              eq(storageObjects.accountId, job.build.accountId),
+              eq(storageObjects.provider, params.provider),
+              eq(storageObjects.bucket, params.bucket),
+              eq(storageObjects.storageKey, params.storageKey),
+              eq(storageObjects.resourceId, job.build.id),
+              isNull(storageObjects.deletedAt)
+            )
+          )
+          .limit(1)
+    if (!storageObject) {
+      throw new Error('Artifact storage key is already owned by another tenant or resource')
+    }
+
+    let artifact
+    if (job.kind === 'routing') {
+      const [inserted] = await tx
+        .insert(routingGraphArtifacts)
         .values({
           accountId: job.build.accountId,
-          provider: params.provider,
-          bucket: params.bucket,
-          storageKey: params.storageKey,
+          buildId: job.build.id,
+          storageObjectId: storageObject.id,
+          kind: params.artifactKind,
+          status: 'available',
           fileName: params.fileName,
-          contentType: params.contentType,
           size: params.size,
-          contentHash: params.checksumSha256,
-          resourceType: job.kind === 'routing' ? 'routing_graph_build' : 'basemap_build',
-          resourceId: job.build.id,
-          artifactKind: params.artifactKind,
-          metadata: params.metadata,
+          checksumSha256: params.checksumSha256,
+          manifest: params.manifest,
         })
+        .onConflictDoNothing()
         .returning()
-  if (job.kind === 'routing') {
-    const [artifact] = await db
-      .insert(routingGraphArtifacts)
-      .values({
-        accountId: job.build.accountId,
-        buildId: job.build.id,
-        storageObjectId: createdObject?.id,
-        kind: params.artifactKind,
-        status: 'available',
-        fileName: params.fileName,
-        size: params.size,
-        checksumSha256: params.checksumSha256,
-        manifest: params.manifest,
-      })
-      .returning()
-    if (!artifact) throw new Error('Failed to record routing graph artifact')
-    if (params.artifactKind === 'valhalla_graph') {
-      await ensureRoutingGraphRelease(job.build, artifact.id, params.manifest)
+      artifact =
+        inserted ??
+        (
+          await tx
+            .select()
+            .from(routingGraphArtifacts)
+            .where(
+              and(
+                eq(routingGraphArtifacts.buildId, job.build.id),
+                eq(routingGraphArtifacts.kind, params.artifactKind),
+                eq(routingGraphArtifacts.status, 'available')
+              )
+            )
+            .limit(1)
+        )[0]
+      if (!artifact) throw new Error('Failed to record routing graph artifact')
+      if (params.artifactKind === 'valhalla_graph') {
+        await ensureRoutingGraphRelease(job.build, artifact.id, params.manifest, tx)
+      }
+    } else {
+      const [inserted] = await tx
+        .insert(basemapArtifacts)
+        .values({
+          accountId: job.build.accountId,
+          buildId: job.build.id,
+          storageObjectId: storageObject.id,
+          kind: params.artifactKind,
+          status: 'available',
+          fileName: params.fileName,
+          size: params.size,
+          checksumSha256: params.checksumSha256,
+          manifest: params.manifest,
+        })
+        .onConflictDoNothing()
+        .returning()
+      artifact =
+        inserted ??
+        (
+          await tx
+            .select()
+            .from(basemapArtifacts)
+            .where(
+              and(
+                eq(basemapArtifacts.buildId, job.build.id),
+                eq(basemapArtifacts.kind, params.artifactKind),
+                eq(basemapArtifacts.status, 'available')
+              )
+            )
+            .limit(1)
+        )[0]
+      if (!artifact) throw new Error('Failed to record basemap artifact')
+      if (params.artifactKind === 'basemap_tiles') {
+        await ensureBasemapRelease(job.build, artifact.id, storageObject.id, params.manifest, tx)
+      }
     }
+    await tx
+      .update(rootAgentArtifactUploadSessions)
+      .set({
+        status: 'completed',
+        completedArtifactId: artifact.id,
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(rootAgentArtifactUploadSessions.id, uploadSessionId))
     return artifact
-  }
-  const [artifact] = await db
-    .insert(basemapArtifacts)
-    .values({
-      accountId: job.build.accountId,
-      buildId: job.build.id,
-      storageObjectId: createdObject?.id,
-      kind: params.artifactKind,
-      status: 'available',
-      fileName: params.fileName,
-      size: params.size,
-      checksumSha256: params.checksumSha256,
-      manifest: params.manifest,
-    })
-    .returning()
-  if (!artifact) throw new Error('Failed to record basemap artifact')
-  if (params.artifactKind === 'basemap_tiles') {
-    await ensureBasemapRelease(job.build, artifact.id, createdObject?.id ?? null, params.manifest)
-  }
-  return artifact
+  })
 }
 
 function artifactStorageKey(
   job: NonNullable<Awaited<ReturnType<typeof findBuildForAgent>>>,
+  sessionId: string,
   fileName: string
 ) {
   const domain = job.kind === 'routing' ? 'routing-graphs' : 'basemaps'
-  return `accounts/${job.build.accountId}/${domain}/${job.build.id}/${Date.now()}-${fileName}`
+  return `accounts/${job.build.accountId}/${domain}/${job.build.id}/${sessionId}/${fileName}`
 }
 
 async function ensureRoutingGraphRelease(
   build: typeof routingGraphBuilds.$inferSelect,
   artifactId: string,
-  manifest: Record<string, unknown>
+  manifest: Record<string, unknown>,
+  executor: DatabaseExecutor = db
 ) {
-  const [existing] = await db
+  const [existing] = await executor
     .select()
     .from(routingGraphReleases)
     .where(
@@ -1280,7 +2183,7 @@ async function ensureRoutingGraphRelease(
     .limit(1)
   if (existing) return existing
   const now = new Date()
-  const [release] = await db
+  const [release] = await executor
     .insert(routingGraphReleases)
     .values({
       accountId: build.accountId,
@@ -1298,17 +2201,30 @@ async function ensureRoutingGraphRelease(
       manifest,
       publishedAt: now,
     })
+    .onConflictDoNothing()
     .returning()
-  return release
+  if (release) return release
+  const [concurrent] = await executor
+    .select()
+    .from(routingGraphReleases)
+    .where(
+      and(
+        eq(routingGraphReleases.buildId, build.id),
+        eq(routingGraphReleases.artifactId, artifactId)
+      )
+    )
+    .limit(1)
+  return concurrent
 }
 
 async function ensureBasemapRelease(
   build: typeof basemapBuilds.$inferSelect,
   artifactId: string,
   storageObjectId: string | null,
-  manifest: Record<string, unknown>
+  manifest: Record<string, unknown>,
+  executor: DatabaseExecutor = db
 ) {
-  const [existing] = await db
+  const [existing] = await executor
     .select()
     .from(basemapReleases)
     .where(and(eq(basemapReleases.buildId, build.id), eq(basemapReleases.artifactId, artifactId)))
@@ -1316,7 +2232,7 @@ async function ensureBasemapRelease(
   if (existing) return existing
   const now = new Date()
   const releaseId = randomUUID()
-  const [release] = await db
+  const [release] = await executor
     .insert(basemapReleases)
     .values({
       id: releaseId,
@@ -1345,9 +2261,16 @@ async function ensureBasemapRelease(
       martinSourceVersioned: basemapArtifactMartinSource(artifactId),
       publishedAt: now,
     })
+    .onConflictDoNothing()
     .returning()
-  if (!release) throw new Error('Failed to create basemap release')
-  return release
+  if (release) return release
+  const [concurrent] = await executor
+    .select()
+    .from(basemapReleases)
+    .where(and(eq(basemapReleases.buildId, build.id), eq(basemapReleases.artifactId, artifactId)))
+    .limit(1)
+  if (!concurrent) throw new Error('Failed to create basemap release')
+  return concurrent
 }
 
 async function basemapRuntimeTargetForActivation(
@@ -1403,6 +2326,20 @@ async function findGeocodingArtifactForDownload(artifactId: string) {
     .where(eq(geocodingArtifacts.id, artifactId))
     .limit(1)
   return artifact ? { kind: 'geocoding' as const, artifact } : null
+}
+
+async function findGeocodingDownloadClaim(c: Context<AgentEnv>, artifactId: string) {
+  const [release] = await db
+    .select({ id: geocodingReleases.id })
+    .from(geocodingReleases)
+    .where(
+      and(
+        eq(geocodingReleases.artifactId, artifactId),
+        eq(geocodingReleases.accountId, c.get('accountId'))
+      )
+    )
+    .limit(1)
+  return release ? requireAgentClaim(c, 'geocoding_activation', release.id, 'activation') : null
 }
 
 async function findRoutingBuildForArtifact(c: Context<AgentEnv>, buildId: string) {
@@ -1492,21 +2429,6 @@ function notFound(c: Context, message: string) {
 
 function safeFileName(name: string) {
   return name.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 180) || 'artifact.tar.gz'
-}
-
-function parseHeaderJson(value: string | undefined) {
-  if (!value) return {}
-  try {
-    const parsed = JSON.parse(value) as unknown
-    return asRecord(parsed)
-  } catch {
-    return {}
-  }
-}
-
-function numberHeader(value: string | undefined) {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
 }
 
 async function readJsonObject(c: Context) {

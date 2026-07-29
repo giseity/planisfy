@@ -2,6 +2,8 @@ import { sql } from 'drizzle-orm'
 import {
   boolean,
   bigint,
+  check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -375,6 +377,101 @@ export const rootAgentNodeTokens = pgTable(
   ]
 )
 
+export const rootAgentJobClaims = pgTable(
+  'root_agent_job_claims',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    workerNodeId: uuid('worker_node_id')
+      .notNull()
+      .references(() => workerNodes.id, { onDelete: 'cascade' }),
+    targetType: varchar('target_type', { length: 64 }).notNull(),
+    targetId: uuid('target_id').notNull(),
+    phase: varchar('phase', { length: 32 }).notNull(),
+    status: varchar('status', { length: 32 }).notNull().default('active'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }).notNull(),
+    lastRenewedAt: timestamp('last_renewed_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    outcome: varchar('outcome', { length: 64 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index('root_agent_job_claims_worker_idx').on(table.workerNodeId, table.status),
+    index('root_agent_job_claims_expiry_idx').on(table.status, table.leaseExpiresAt),
+    uniqueIndex('root_agent_job_claims_active_target_unique')
+      .on(table.targetType, table.targetId, table.phase)
+      .where(sql`${table.status} = 'active'`),
+    check('root_agent_job_claims_phase_check', sql`${table.phase} IN ('build', 'activation')`),
+    check(
+      'root_agent_job_claims_status_check',
+      sql`${table.status} IN ('active', 'completed', 'expired')`
+    ),
+  ]
+)
+
+export const rootAgentArtifactUploadSessions = pgTable(
+  'root_agent_artifact_upload_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    workerNodeId: uuid('worker_node_id')
+      .notNull()
+      .references(() => workerNodes.id, { onDelete: 'cascade' }),
+    claimId: uuid('claim_id')
+      .notNull()
+      .references(() => rootAgentJobClaims.id, { onDelete: 'cascade' }),
+    targetType: varchar('target_type', { length: 64 }).notNull(),
+    buildId: uuid('build_id').notNull(),
+    idempotencyKey: uuid('idempotency_key').notNull(),
+    status: varchar('status', { length: 32 }).notNull().default('creating'),
+    provider: varchar('provider', { length: 32 }).notNull(),
+    bucket: varchar('bucket', { length: 256 }).notNull(),
+    storageKey: text('storage_key').notNull(),
+    multipartUploadId: text('multipart_upload_id'),
+    partSize: bigint('part_size', { mode: 'number' }),
+    partCount: integer('part_count'),
+    parts: jsonb('parts').notNull().default([]),
+    fileName: varchar('file_name', { length: 256 }).notNull(),
+    contentType: varchar('content_type', { length: 128 }).notNull(),
+    size: bigint('size', { mode: 'number' }).notNull(),
+    checksumSha256: varchar('checksum_sha256', { length: 128 }),
+    artifactKind: varchar('artifact_kind', { length: 64 }).notNull(),
+    manifest: jsonb('manifest').notNull().default({}),
+    completedArtifactId: uuid('completed_artifact_id'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index('root_agent_upload_sessions_claim_idx').on(table.claimId),
+    index('root_agent_upload_sessions_expiry_idx').on(table.status, table.expiresAt),
+    uniqueIndex('root_agent_upload_sessions_request_unique').on(
+      table.claimId,
+      table.idempotencyKey
+    ),
+    uniqueIndex('root_agent_upload_sessions_storage_key_unique').on(
+      table.provider,
+      table.bucket,
+      table.storageKey
+    ),
+    check(
+      'root_agent_upload_sessions_status_check',
+      sql`${table.status} IN ('creating', 'ready', 'finalizing', 'completed', 'failed')`
+    ),
+  ]
+)
+
 export const runtimeInstallations = pgTable(
   'runtime_installations',
   {
@@ -663,6 +760,7 @@ export const storageObjects = pgTable(
   (table) => [
     index('storage_objects_account_idx').on(table.accountId),
     index('storage_objects_resource_idx').on(table.resourceType, table.resourceId),
+    uniqueIndex('storage_objects_id_account_unique').on(table.id, table.accountId),
     uniqueIndex('storage_objects_key_unique')
       .on(table.provider, table.bucket, table.storageKey)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -679,9 +777,7 @@ export const routingGraphArtifacts = pgTable(
     buildId: uuid('build_id')
       .notNull()
       .references(() => routingGraphBuilds.id, { onDelete: 'cascade' }),
-    storageObjectId: uuid('storage_object_id').references(() => storageObjects.id, {
-      onDelete: 'set null',
-    }),
+    storageObjectId: uuid('storage_object_id'),
     kind: varchar('kind', { length: 64 }).notNull().default('valhalla_graph'),
     status: routingGraphArtifactStatusEnum('status').notNull().default('pending'),
     fileName: varchar('file_name', { length: 256 }).notNull(),
@@ -697,6 +793,14 @@ export const routingGraphArtifacts = pgTable(
   (table) => [
     index('routing_graph_artifacts_account_idx').on(table.accountId),
     index('routing_graph_artifacts_build_idx').on(table.buildId),
+    uniqueIndex('routing_graph_artifacts_available_build_kind_unique')
+      .on(table.buildId, table.kind)
+      .where(sql`${table.status} = 'available'`),
+    foreignKey({
+      columns: [table.storageObjectId, table.accountId],
+      foreignColumns: [storageObjects.id, storageObjects.accountId],
+      name: 'routing_graph_artifacts_storage_account_fk',
+    }).onDelete('restrict'),
   ]
 )
 
@@ -737,6 +841,9 @@ export const routingGraphReleases = pgTable(
       table.name,
       table.version
     ),
+    uniqueIndex('routing_graph_releases_build_artifact_unique')
+      .on(table.buildId, table.artifactId)
+      .where(sql`${table.artifactId} IS NOT NULL`),
   ]
 )
 
@@ -853,9 +960,7 @@ export const basemapArtifacts = pgTable(
     buildId: uuid('build_id')
       .notNull()
       .references(() => basemapBuilds.id, { onDelete: 'cascade' }),
-    storageObjectId: uuid('storage_object_id').references(() => storageObjects.id, {
-      onDelete: 'set null',
-    }),
+    storageObjectId: uuid('storage_object_id'),
     kind: varchar('kind', { length: 64 }).notNull().default('basemap_tiles'),
     status: basemapArtifactStatusEnum('status').notNull().default('pending'),
     fileName: varchar('file_name', { length: 256 }).notNull(),
@@ -871,6 +976,14 @@ export const basemapArtifacts = pgTable(
   (table) => [
     index('basemap_artifacts_account_idx').on(table.accountId),
     index('basemap_artifacts_build_idx').on(table.buildId),
+    uniqueIndex('basemap_artifacts_available_build_kind_unique')
+      .on(table.buildId, table.kind)
+      .where(sql`${table.status} = 'available'`),
+    foreignKey({
+      columns: [table.storageObjectId, table.accountId],
+      foreignColumns: [storageObjects.id, storageObjects.accountId],
+      name: 'basemap_artifacts_storage_account_fk',
+    }).onDelete('restrict'),
   ]
 )
 
@@ -932,6 +1045,9 @@ export const basemapReleases = pgTable(
       table.name,
       table.version
     ),
+    uniqueIndex('basemap_releases_build_artifact_unique')
+      .on(table.buildId, table.artifactId)
+      .where(sql`${table.artifactId} IS NOT NULL`),
   ]
 )
 
@@ -1008,9 +1124,7 @@ export const geocodingArtifacts = pgTable(
     buildId: uuid('build_id')
       .notNull()
       .references(() => geocodingBuilds.id, { onDelete: 'cascade' }),
-    storageObjectId: uuid('storage_object_id').references(() => storageObjects.id, {
-      onDelete: 'set null',
-    }),
+    storageObjectId: uuid('storage_object_id'),
     kind: varchar('kind', { length: 64 }).notNull().default('elasticsearch_snapshot'),
     status: varchar('status', { length: 32 }).notNull().default('pending'),
     fileName: varchar('file_name', { length: 256 }).notNull(),
@@ -1030,6 +1144,11 @@ export const geocodingArtifacts = pgTable(
   (table) => [
     index('geocoding_artifacts_account_idx').on(table.accountId),
     index('geocoding_artifacts_build_idx').on(table.buildId),
+    foreignKey({
+      columns: [table.storageObjectId, table.accountId],
+      foreignColumns: [storageObjects.id, storageObjects.accountId],
+      name: 'geocoding_artifacts_storage_account_fk',
+    }).onDelete('restrict'),
   ]
 )
 

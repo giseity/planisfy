@@ -1611,6 +1611,18 @@ operationsRoute.post('/operations/geocoding-builds/:id/artifacts', async (c) => 
       )
     }
   } else if (parsed.data.storage) {
+    const requiredPrefix = `accounts/${accountId}/geocoding/${buildId}/`
+    if (!parsed.data.storage.key.startsWith(requiredPrefix)) {
+      return c.json(
+        {
+          error: {
+            code: 'INVALID_STORAGE_KEY',
+            message: 'Artifact storage key is outside the account and build namespace.',
+          },
+        },
+        409
+      )
+    }
     const provider = getStorage()
     const providerInfo = provider.getInfo()
     if (
@@ -1639,7 +1651,7 @@ operationsRoute.post('/operations/geocoding-builds/:id/artifacts', async (c) => 
         409
       )
     }
-    const [object] = await db
+    const [inserted] = await db
       .insert(storageObjects)
       .values({
         accountId,
@@ -1654,17 +1666,39 @@ operationsRoute.post('/operations/geocoding-builds/:id/artifacts', async (c) => 
         resourceId: buildId,
         artifactKind: 'elasticsearch_snapshot',
       })
-      .onConflictDoUpdate({
-        target: [storageObjects.provider, storageObjects.bucket, storageObjects.storageKey],
-        targetWhere: sql`${storageObjects.deletedAt} IS NULL`,
-        set: {
-          size: parsed.data.size,
-          contentHash: parsed.data.checksumSha256.toLowerCase(),
-          updatedAt: new Date(),
-        },
-      })
+      .onConflictDoNothing()
       .returning({ id: storageObjects.id })
-    storageObjectId = object!.id
+    const [object] = inserted
+      ? [inserted]
+      : await db
+          .select({ id: storageObjects.id })
+          .from(storageObjects)
+          .where(
+            and(
+              eq(storageObjects.accountId, accountId),
+              eq(storageObjects.provider, parsed.data.storage.provider),
+              eq(storageObjects.bucket, parsed.data.storage.bucket),
+              eq(storageObjects.storageKey, parsed.data.storage.key),
+              eq(storageObjects.resourceType, 'geocoding_build'),
+              eq(storageObjects.resourceId, buildId),
+              eq(storageObjects.size, parsed.data.size),
+              eq(storageObjects.contentHash, parsed.data.checksumSha256.toLowerCase()),
+              isNull(storageObjects.deletedAt)
+            )
+          )
+          .limit(1)
+    if (!object) {
+      return c.json(
+        {
+          error: {
+            code: 'STORAGE_OBJECT_CONFLICT',
+            message: 'Storage key is already owned by another tenant or artifact.',
+          },
+        },
+        409
+      )
+    }
+    storageObjectId = object.id
   }
 
   const [artifact] = await db.transaction(async (tx) => {

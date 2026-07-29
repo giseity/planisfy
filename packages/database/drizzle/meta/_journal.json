@@ -218,6 +218,13 @@
       "when": 1785285600000,
       "tag": "0030_audit_actor_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1785282789607,
+      "tag": "0031_root_agent_protocol",
+      "breakpoints": true
     }
   ]
 }

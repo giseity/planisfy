@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import {
   link,
   lstat,
+  chmod,
   mkdir,
   readFile,
   readdir,
@@ -164,31 +165,40 @@ type DemConfig = {
   baseUrl?: string
 }
 
+type AgentClaim = {
+  id: string
+  expiresAt: string
+}
+
 type AgentJob =
-  | { kind: 'routing_graph_build'; build: RoutingGraphBuild }
+  | { kind: 'routing_graph_build'; build: RoutingGraphBuild; claim: AgentClaim }
   | {
       kind: 'routing_graph_activation'
       build: RoutingGraphBuild
       artifacts: RoutingGraphArtifact[]
+      claim: AgentClaim
     }
-  | { kind: 'basemap_build'; build: BasemapBuild }
+  | { kind: 'basemap_build'; build: BasemapBuild; claim: AgentClaim }
   | {
       kind: 'basemap_activation'
       build: BasemapBuild
       artifacts: BasemapArtifact[]
       runtimeTarget?: BasemapRuntimeTarget | null
+      claim: AgentClaim
     }
   | {
       kind: 'geocoding_activation'
       build: GeocodingBuild
       release: GeocodingRelease
       artifact: GeocodingArtifact
+      claim: AgentClaim
     }
 
 type ArtifactUploadSession =
   | {
       data: {
         strategy: 'legacy_proxy'
+        sessionId: string
         reason?: string
         uploadUrl: string
       }
@@ -196,13 +206,8 @@ type ArtifactUploadSession =
   | {
       data: {
         strategy: 'multipart'
-        storage: {
-          provider: 's3' | 'r2'
-          bucket: string
-          key: string
-        }
+        sessionId: string
         multipart: {
-          uploadId: string
           partSize: number
           expiresAt: string
           parts: Array<{
@@ -213,6 +218,13 @@ type ArtifactUploadSession =
         }
       }
     }
+  | {
+      data: {
+        strategy: 'completed'
+        sessionId: string
+        artifactId: string | null
+      }
+    }
 
 type UploadedPart = {
   partNumber: number
@@ -220,9 +232,11 @@ type UploadedPart = {
 }
 
 let activeChild: ChildProcessWithoutNullStreams | null = null
+let activeClaimId: string | null = null
+let claimRenewalError: Error | null = null
 
 async function main() {
-  await mkdir(config.ROOT_AGENT_STATE_DIR, { recursive: true })
+  await secureStateDirectory(config.ROOT_AGENT_STATE_DIR)
   await mkdir(config.ROOT_AGENT_WORK_DIR, { recursive: true })
   await cleanupStaleActivationWork()
   let lastActivationCleanup = Date.now()
@@ -264,6 +278,9 @@ async function main() {
 async function resolveAgentToken() {
   if (config.ROOT_AGENT_TOKEN) return config.ROOT_AGENT_TOKEN
   const stateFile = join(config.ROOT_AGENT_STATE_DIR, 'agent.json')
+  await chmod(stateFile, 0o600).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error
+  })
   const existing = await readOptionalJson<{ agentToken?: string }>(stateFile)
   if (existing?.agentToken) return existing.agentToken
   if (!config.ROOT_AGENT_REGISTRATION_TOKEN) {
@@ -279,7 +296,7 @@ async function resolveAgentToken() {
   if (typeof agentToken !== 'string') {
     throw new Error('Registration did not return an agent token')
   }
-  await writeJson(stateFile, { agentToken, registeredAt: new Date().toISOString() })
+  await writeAgentState(stateFile, { agentToken, registeredAt: new Date().toISOString() })
   return agentToken
 }
 
@@ -296,6 +313,26 @@ function activationMetadata() {
 }
 
 async function handleJob(token: string, job: AgentJob) {
+  activeClaimId = job.claim.id
+  claimRenewalError = null
+  const renewal = setInterval(() => {
+    void renewActiveClaim(token, job.claim.id).catch((error) => {
+      claimRenewalError = error instanceof Error ? error : new Error(String(error))
+      activeChild?.kill('SIGTERM')
+    })
+  }, 30_000)
+  renewal.unref()
+  try {
+    await handleClaimedJob(token, job)
+    throwIfClaimRenewalFailed()
+  } finally {
+    clearInterval(renewal)
+    activeClaimId = null
+    claimRenewalError = null
+  }
+}
+
+async function handleClaimedJob(token: string, job: AgentJob) {
   if (job.kind === 'routing_graph_build') {
     await buildRoutingGraph(token, job.build)
     return
@@ -1086,9 +1123,11 @@ async function uploadArtifact(
 ) {
   const fileSize = (await stat(path)).size
   const contentType = metadata.contentType ?? 'application/gzip'
+  const idempotencyKey = randomUUID()
   const session = await withRetry(
     () =>
       post<ArtifactUploadSession>(token, `/root-agent/jobs/${build.id}/artifacts/upload-session`, {
+        idempotencyKey,
         kind: metadata.kind,
         fileName: metadata.fileName,
         checksumSha256: metadata.checksumSha256,
@@ -1099,12 +1138,14 @@ async function uploadArtifact(
     `create upload session for ${metadata.fileName}`
   )
 
+  if (session.data.strategy === 'completed') return
+
   if (session.data.strategy === 'multipart') {
     const multipartSession = session.data
     await sendLogs(token, build.id, [
       {
         level: 'info',
-        message: `Uploading ${metadata.fileName} directly to ${multipartSession.storage.provider} in ${multipartSession.multipart.parts.length} part(s)`,
+        message: `Uploading ${metadata.fileName} directly in ${multipartSession.multipart.parts.length} part(s)`,
       },
     ])
     const uploadedParts = await uploadMultipartArtifact(
@@ -1116,17 +1157,8 @@ async function uploadArtifact(
     await withRetry(
       () =>
         post(token, `/root-agent/jobs/${build.id}/artifacts/finalize`, {
-          kind: metadata.kind,
-          fileName: metadata.fileName,
-          checksumSha256: metadata.checksumSha256,
-          manifest: metadata.manifest,
-          size: fileSize,
-          contentType,
-          storage: {
-            ...multipartSession.storage,
-            uploadId: multipartSession.multipart.uploadId,
-            parts: uploadedParts,
-          },
+          sessionId: multipartSession.sessionId,
+          parts: uploadedParts,
         }),
       `finalize upload for ${metadata.fileName}`
     )
@@ -1141,7 +1173,7 @@ async function uploadArtifact(
       }`,
     },
   ])
-  await uploadArtifactViaApi(token, build, path, metadata, fileSize, contentType)
+  await uploadArtifactViaApi(token, build, path, metadata, contentType, session.data.sessionId)
 }
 
 async function uploadArtifactViaApi(
@@ -1155,19 +1187,15 @@ async function uploadArtifactViaApi(
     contentType?: string
     manifest: Record<string, unknown>
   },
-  fileSize: number,
-  contentType: string
+  contentType: string,
+  sessionId: string
 ) {
   const init = {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${token}`,
+      ...agentHeaders(token),
       'content-type': contentType,
-      'x-artifact-kind': metadata.kind,
-      'x-artifact-filename': metadata.fileName,
-      'x-artifact-sha256': metadata.checksumSha256,
-      'x-artifact-manifest': JSON.stringify(metadata.manifest),
-      'x-artifact-size': String(fileSize),
+      'x-planisfy-artifact-upload-session-id': sessionId,
     },
     duplex: 'half',
   } as unknown as RequestInit & { duplex: 'half' }
@@ -1242,7 +1270,7 @@ async function downloadArtifact(
   await mkdir(dirname(target), { recursive: true })
   if (!expectedSize || expectedSize <= 0) {
     const response = await fetch(`${apiBase}/root-agent/artifacts/${artifactId}/download`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: agentHeaders(token),
     })
     if (!response.ok || !response.body) {
       throw new Error(`Artifact download failed: ${response.status}`)
@@ -1270,7 +1298,7 @@ async function downloadArtifact(
         Math.min(currentStart + config.ROOT_AGENT_DOWNLOAD_PART_SIZE_BYTES, expectedSize) - 1
       const response = await fetch(`${apiBase}/root-agent/artifacts/${artifactId}/download`, {
         headers: {
-          authorization: `Bearer ${token}`,
+          ...agentHeaders(token),
           range: `bytes=${currentStart}-${currentEnd}`,
         },
       })
@@ -1339,7 +1367,7 @@ async function sendLogs(
 
 async function get<T>(token: string, path: string): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
-    headers: { authorization: `Bearer ${token}` },
+    headers: agentHeaders(token),
   })
   if (!response.ok) throw new Error(`${path} failed: ${response.status}`)
   return (await response.json()) as T
@@ -1349,13 +1377,28 @@ async function post<T = unknown>(token: string, path: string, body: unknown): Pr
   const response = await fetch(`${apiBase}${path}`, {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${token}`,
+      ...agentHeaders(token),
       'content-type': 'application/json',
     },
     body: JSON.stringify(body),
   })
   if (!response.ok) throw new Error(`${path} failed: ${response.status}`)
   return (await response.json()) as T
+}
+
+function agentHeaders(token: string) {
+  return {
+    authorization: `Bearer ${token}`,
+    ...(activeClaimId ? { 'x-planisfy-root-agent-claim-id': activeClaimId } : {}),
+  }
+}
+
+async function renewActiveClaim(token: string, claimId: string) {
+  await post(token, `/root-agent/claims/${claimId}/renew`, {})
+}
+
+function throwIfClaimRenewalFailed() {
+  if (claimRenewalError) throw claimRenewalError
 }
 
 async function rawPost(path: string, body: unknown) {
@@ -1435,6 +1478,27 @@ async function readOptionalJson<T>(path: string): Promise<T | null> {
 async function writeJson(path: string, data: unknown) {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`)
+}
+
+async function secureStateDirectory(path: string) {
+  await mkdir(path, { recursive: true, mode: 0o700 })
+  await chmod(path, 0o700)
+}
+
+async function writeAgentState(path: string, data: unknown) {
+  await secureStateDirectory(dirname(path))
+  const temporaryPath = `${path}.tmp-${randomUUID()}`
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(data, null, 2)}\n`, {
+      mode: 0o600,
+      flag: 'wx',
+    })
+    await rename(temporaryPath, path)
+    await chmod(path, 0o600)
+  } catch (error) {
+    await rm(temporaryPath, { force: true })
+    throw error
+  }
 }
 
 async function movePathIfExists(from: string, to: string) {
@@ -1606,7 +1670,9 @@ function delay(ms: number) {
 
 export const __rootAgentTest = {
   linkFileAtomic,
+  secureStateDirectory,
   validateBasemapRuntimeTarget,
+  writeAgentState,
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
