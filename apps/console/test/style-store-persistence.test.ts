@@ -76,6 +76,32 @@ describe("style editor persistence sessions", () => {
     expect(state.persistedRevision).toBe(state.documentRevision);
     expect(state.saveStatus).toBe("saved");
   });
+
+  it("loads a requested historical version into a read-only session", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      expect(String(input)).toContain(`/styles/${STYLE_A}/versions/2`);
+      const response = styleResponse(STYLE_A, "Historical", 2);
+      return response.json().then((body) =>
+        jsonResponse({
+          ...body,
+          data: { ...body.data, serverVersion: 8 },
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const token = useStyleStore
+      .getState()
+      .beginStyleSession(STYLE_A, true);
+    await useStyleStore.getState().loadStyleFromApi(STYLE_A, token, 2);
+    useStyleStore.getState().updateStyleName("Forbidden edit");
+
+    const state = useStyleStore.getState();
+    expect(state.style?.name).toBe("Historical");
+    expect(state.styleVersion).toBe(2);
+    expect(state.serverRevision).toBe(8);
+    expect(state.readOnly).toBe(true);
+  });
 });
 
 function styleResponse(id: string, name: string, version: number) {
@@ -86,6 +112,14 @@ function styleResponse(id: string, name: string, version: number) {
       handle: name.toLowerCase().replaceAll(" ", "-"),
       isPublic: false,
       publishedVersion: null,
+      ownerHandle: "owner",
+      publicPath: null,
+      publishedVersionPath: null,
+      description: null,
+      thumbnailUrl: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      originalStyleJson: null,
       styleJson: {
         version: 8,
         name,

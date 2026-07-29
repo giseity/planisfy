@@ -23,13 +23,14 @@ import { Copy, Download, Globe, GlobeLock, Link, MoreHorizontal, Trash2 } from '
 import {
   deleteStyle,
   duplicateStyle,
-  togglePublish,
+  publishStyleSummary,
+  unpublishStyleSummary,
 } from '@/features/style-editor/workflow/style-actions'
 import { api, type ApiEnvelope } from '@/lib/api'
+import { clientEnv } from '@/env.client'
 import {
   styleEditorHref,
   styleJsonFilename,
-  stylePublicUrl,
   type StudioStyleSummary,
 } from '@/features/style-editor/workflow/style-workflow'
 
@@ -55,7 +56,8 @@ export function StyleActionsMenu({
   }
 
   const handleTogglePublish = async () => {
-    await togglePublish(style)
+    if (style.isPublic) await unpublishStyleSummary(style)
+    else await publishStyleSummary(style)
     onMutate?.()
   }
 
@@ -168,14 +170,8 @@ export function StyleActionsMenu({
 }
 
 async function resolveStyleCopyUrl(style: StudioStyleSummary): Promise<string> {
-  if (!style.isPublic) {
+  if (!style.isPublic || !style.publicPath) {
     return `${window.location.origin}${styleEditorHref(style)}`
   }
-
-  const { data: profile } = await api.getProfile()
-  return stylePublicUrl({
-    origin: window.location.origin,
-    ownerHandle: profile.handle,
-    style,
-  })
+  return new URL(style.publicPath, clientEnv.NEXT_PUBLIC_API_URL).toString()
 }

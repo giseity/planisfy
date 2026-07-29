@@ -40,7 +40,14 @@ export async function duplicateStyle(styleId: string): Promise<string> {
   return res.data.id;
 }
 
-export async function togglePublish(style: Pick<StudioStyleSummary, "id" | "isPublic">) {
-  const action = style.isPublic ? "unpublish" : "publish";
-  await api.post<ApiEnvelope<unknown>>(`/styles/${style.id}/${action}`);
+export async function publishStyleSummary(
+  style: Pick<StudioStyleSummary, "id" | "version">,
+) {
+  await api.publishStyle(style.id, style.version);
+}
+
+export async function unpublishStyleSummary(
+  style: Pick<StudioStyleSummary, "id">,
+) {
+  await api.unpublishStyle(style.id);
 }

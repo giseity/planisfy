@@ -45,6 +45,9 @@ export interface StyleStore {
   lastSavedAt: Date | null;
   isPublic: boolean;
   styleHandle: string | null;
+  ownerHandle: string | null;
+  publicPath: string | null;
+  publishedVersionPath: string | null;
   publishedVersion: number | null;
 
   // Undo/redo
@@ -60,9 +63,14 @@ export interface StyleStore {
   setMapPosition: (pos: MapPosition) => void;
 
   // Persistence actions
-  loadStyleFromApi: (id: string, sessionToken?: number) => Promise<void>;
+  loadStyleFromApi: (
+    id: string,
+    sessionToken?: number,
+    version?: number,
+  ) => Promise<void>;
   saveStyle: () => Promise<void>;
   publishStyle: () => Promise<boolean>;
+  unpublishStyle: () => Promise<boolean>;
   setSaveStatus: (status: SaveStatus) => void;
 
   // Layer mutations
@@ -183,6 +191,9 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
     lastSavedAt: null,
     isPublic: false,
     styleHandle: null,
+    ownerHandle: null,
+    publicPath: null,
+    publishedVersionPath: null,
     publishedVersion: null,
 
     // Actions
@@ -219,6 +230,9 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
         documentRevision: 0,
         persistedRevision: 0,
         styleHandle: null,
+        ownerHandle: null,
+        publicPath: null,
+        publishedVersionPath: null,
         isPublic: false,
         publishedVersion: null,
         selectedLayerId: null,
@@ -230,12 +244,16 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
       return token;
     },
 
-    loadStyleFromApi: async (id, providedToken) => {
+    loadStyleFromApi: async (id, providedToken, requestedVersion) => {
       const token =
         providedToken ?? get().beginStyleSession(id);
       const controller = activeLoadController ?? new AbortController();
       activeLoadController = controller;
-      const data = await fetchStyleDetail(id, controller.signal);
+      const data = await fetchStyleDetail(
+        id,
+        controller.signal,
+        requestedVersion,
+      );
       const state = get();
       if (
         state.sessionToken !== token ||
@@ -251,15 +269,22 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
         handle,
         isPublic,
         publishedVersion,
+        ownerHandle,
+        publicPath,
+        publishedVersionPath,
+        serverVersion,
       } = data;
       set({
         style: JSON.parse(JSON.stringify(styleJson)),
         styleId,
         styleVersion: version,
-        serverRevision: version,
+        serverRevision: serverVersion ?? version,
         documentRevision: 0,
         persistedRevision: 0,
         styleHandle: handle ?? null,
+        ownerHandle,
+        publicPath,
+        publishedVersionPath,
         isPublic: isPublic ?? false,
         publishedVersion: publishedVersion ?? null,
         selectedLayerId:
@@ -344,10 +369,10 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
       if (get().documentRevision !== get().persistedRevision) {
         await get().saveStyle();
       }
-      const { styleId, sessionToken } = get();
-      if (!styleId) return false;
+      const { styleId, sessionToken, serverRevision } = get();
+      if (!styleId || serverRevision === null) return false;
 
-      const res = await api.publishStyle(styleId);
+      const res = await api.publishStyle(styleId, serverRevision);
       if (
         get().sessionToken !== sessionToken ||
         get().styleId !== styleId
@@ -357,9 +382,36 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
       set({
         isPublic: res.data.isPublic,
         styleHandle: res.data.handle,
+        ownerHandle: res.data.ownerHandle,
+        publicPath: res.data.publicPath,
+        publishedVersionPath: res.data.publishedVersionPath,
         styleVersion: res.data.version,
         serverRevision: res.data.version,
         publishedVersion: res.data.publishedVersion,
+      });
+      return res.data.isPublic;
+    },
+
+    unpublishStyle: async () => {
+      if (get().readOnly) return false;
+      const { styleId, sessionToken } = get();
+      if (!styleId) return false;
+      const res = await api.unpublishStyle(styleId);
+      if (
+        get().sessionToken !== sessionToken ||
+        get().styleId !== styleId
+      ) {
+        return false;
+      }
+      set({
+        isPublic: res.data.isPublic,
+        styleHandle: res.data.handle,
+        ownerHandle: res.data.ownerHandle,
+        styleVersion: res.data.version,
+        serverRevision: res.data.version,
+        publishedVersion: res.data.publishedVersion,
+        publicPath: res.data.publicPath,
+        publishedVersionPath: res.data.publishedVersionPath,
       });
       return res.data.isPublic;
     },

@@ -3,7 +3,6 @@
 import { useEffect, useCallback, useState } from 'react'
 import NextLink from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
-import { api } from '@/lib/api'
 import { clientEnv } from '@/env.client'
 import { useStyleStore } from '@/features/style-editor/store/style-store'
 import { sampleStyle } from '@/lib/sample-style'
@@ -63,6 +62,7 @@ export default function StyleEditorPage() {
   const loadStyleFromApi = useStyleStore((s) => s.loadStyleFromApi)
   const saveStyle = useStyleStore((s) => s.saveStyle)
   const publishStyle = useStyleStore((s) => s.publishStyle)
+  const unpublishStyle = useStyleStore((s) => s.unpublishStyle)
   const style = useStyleStore((s) => s.style)
   const styleName = useStyleStore((s) => s.style?.name)
   const updateStyleName = useStyleStore((s) => s.updateStyleName)
@@ -75,7 +75,9 @@ export default function StyleEditorPage() {
   const canRedo = useStyleStore((s) => s.canRedo)
   const saveStatus = useStyleStore((s) => s.saveStatus)
   const styleId = useStyleStore((s) => s.styleId)
-  const styleHandle = useStyleStore((s) => s.styleHandle)
+  const publicPath = useStyleStore((s) => s.publicPath)
+  const publishedVersionPath = useStyleStore((s) => s.publishedVersionPath)
+  const readOnly = useStyleStore((s) => s.readOnly)
   const isPublic = useStyleStore((s) => s.isPublic)
   const publishedVersion = useStyleStore((s) => s.publishedVersion)
   const lastSavedAt = useStyleStore((s) => s.lastSavedAt)
@@ -88,7 +90,6 @@ export default function StyleEditorPage() {
   const [urlInput, setUrlInput] = useState('')
   const [urlLoading, setUrlLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [ownerHandle, setOwnerHandle] = useState<string | null>(null)
   const [leftPanelTab, setLeftPanelTab] = useState<'layers' | 'sources' | 'settings'>('layers')
 
   const searchParams = useSearchParams()
@@ -96,13 +97,25 @@ export default function StyleEditorPage() {
   // Load style from API, a URL import, or the local starter style for new drafts.
   useEffect(() => {
     const id = params.styleId
-    const token = beginStyleSession(UUID_RE.test(id) ? id : null)
+    const rawVersion = searchParams.get('version')
+    const requestedVersion = rawVersion === null ? undefined : Number(rawVersion)
+    const validVersion =
+      requestedVersion === undefined ||
+      (Number.isSafeInteger(requestedVersion) && requestedVersion > 0)
+    const token = beginStyleSession(
+      UUID_RE.test(id) ? id : null,
+      requestedVersion !== undefined
+    )
     const controller = new AbortController()
     const isActive = () => useStyleStore.getState().sessionToken === token
     setLoadError(null)
 
     if (UUID_RE.test(id)) {
-      loadStyleFromApi(id, token).catch((err) => {
+      if (!validVersion) {
+        setLoadError('Invalid historical style version')
+        return () => controller.abort()
+      }
+      loadStyleFromApi(id, token, requestedVersion).catch((err) => {
         if (isActive() && err instanceof Error && err.name !== 'AbortError') {
           setLoadError(err.message || 'Failed to load style')
         }
@@ -154,13 +167,6 @@ export default function StyleEditorPage() {
     loadStyle,
     loadStyleFromApi,
   ])
-
-  useEffect(() => {
-    api
-      .getProfile()
-      .then(({ data }) => setOwnerHandle(data.handle))
-      .catch(() => setOwnerHandle(null))
-  }, [])
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
@@ -230,24 +236,23 @@ export default function StyleEditorPage() {
   }
 
   const draftUrl = () => `${window.location.origin}/styles/${styleId ?? params.styleId}`
-  const publicApiRoot = () =>
-    `${window.location.origin}${clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH.replace(/\/console\/?$/, '')}`
-  const publicUrl = (version?: number | null) => {
-    const handle = styleHandle || styleId
-    if (!ownerHandle || !handle) return ''
-    return `${publicApiRoot()}/styles/v1/${ownerHandle}/${handle}${version ? `@${version}` : ''}`
-  }
+  const absoluteApiUrl = (path: string | null) =>
+    path ? new URL(path, clientEnv.NEXT_PUBLIC_API_URL).toString() : ''
+  const publicUrl = (version?: number | null) =>
+    absoluteApiUrl(version ? publishedVersionPath : publicPath)
   const mapLibreSnippet = () => {
     const url = publicUrl()
     if (!url) return ''
     return `new maplibregl.Map({\n  container: "map",\n  style: "${url}"\n});`
   }
 
-  const handlePublishToggle = async () => {
+  const handlePublicationAction = async () => {
     if (!styleId) return
     setPublishing(true)
     try {
-      const nextPublic = await publishStyle()
+      const nextPublic = isPublic
+        ? await unpublishStyle()
+        : await publishStyle()
       toast.success(nextPublic ? 'Style published' : 'Style unpublished')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update publish state')
@@ -329,11 +334,17 @@ export default function StyleEditorPage() {
         </Button>
         <span className="hidden text-xs text-muted-foreground sm:inline">Studio / Styles</span>
         <Separator orientation="vertical" className="h-5" />
+        {readOnly && (
+          <span className="rounded bg-muted px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground">
+            Historical snapshot · read only
+          </span>
+        )}
         <input
           value={styleName ?? ''}
           onChange={(e) => updateStyleName(e.target.value)}
           className="h-7 border-none bg-transparent text-sm font-medium outline-none focus:ring-0"
           placeholder="Style name"
+          disabled={readOnly}
         />
         {/* Save status */}
         {styleId && (
@@ -357,7 +368,7 @@ export default function StyleEditorPage() {
               size="sm"
               className="h-7 gap-1 text-xs"
               onClick={() => saveStyle().catch(() => {})}
-              disabled={saveStatus === 'saving'}
+              disabled={saveStatus === 'saving' || readOnly}
               title="Save (Ctrl+S)"
             >
               <Save className="h-3 w-3" />
@@ -387,8 +398,8 @@ export default function StyleEditorPage() {
                     size="sm"
                     className="w-full justify-start gap-2 text-xs"
                     variant={isPublic ? 'outline' : 'default'}
-                    onClick={handlePublishToggle}
-                    disabled={publishing}
+                    onClick={handlePublicationAction}
+                    disabled={publishing || readOnly}
                     data-testid="publish-style"
                   >
                     {publishing ? (
@@ -418,7 +429,7 @@ export default function StyleEditorPage() {
                       variant="ghost"
                       size="sm"
                       className="h-7 justify-start gap-2 text-xs"
-                      disabled={!isPublic || !ownerHandle || !publishedVersion}
+                      disabled={!publishedVersionPath || !publishedVersion}
                       onClick={() => copyUrl('Version', publicUrl(publishedVersion))}
                     >
                       {copiedUrl === 'Version' ? (
@@ -432,7 +443,7 @@ export default function StyleEditorPage() {
                       variant="ghost"
                       size="sm"
                       className="h-7 justify-start gap-2 text-xs"
-                      disabled={!isPublic || !ownerHandle}
+                      disabled={!publicPath}
                       onClick={() => copyUrl('Published', publicUrl())}
                       data-testid="style-public-url"
                     >
@@ -447,7 +458,7 @@ export default function StyleEditorPage() {
                       variant="ghost"
                       size="sm"
                       className="h-7 justify-start gap-2 text-xs"
-                      disabled={!isPublic || !ownerHandle}
+                      disabled={!publicPath}
                       onClick={() => copyUrl('MapLibre', mapLibreSnippet())}
                     >
                       {copiedUrl === 'MapLibre' ? (
@@ -469,7 +480,7 @@ export default function StyleEditorPage() {
           size="icon"
           className="h-7 w-7"
           onClick={undo}
-          disabled={!canUndo()}
+          disabled={readOnly || !canUndo()}
           title="Undo (Ctrl+Z)"
         >
           <Undo2 className="h-3.5 w-3.5" />
@@ -479,7 +490,7 @@ export default function StyleEditorPage() {
           size="icon"
           className="h-7 w-7"
           onClick={redo}
-          disabled={!canRedo()}
+          disabled={readOnly || !canRedo()}
           title="Redo (Ctrl+Shift+Z)"
         >
           <Redo2 className="h-3.5 w-3.5" />
@@ -525,6 +536,7 @@ export default function StyleEditorPage() {
               size="sm"
               className="h-7 gap-1 text-xs"
               title="Open style from URL"
+              disabled={readOnly}
             >
               <Link className="h-3 w-3" />
               URL
@@ -554,7 +566,13 @@ export default function StyleEditorPage() {
           </PopoverContent>
         </Popover>
 
-        <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={handleImport}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 text-xs"
+          onClick={handleImport}
+          disabled={readOnly}
+        >
           <Upload className="h-3 w-3" />
           Import
         </Button>
@@ -595,7 +613,9 @@ export default function StyleEditorPage() {
           defaultSize="20%"
           minSize="12rem"
           maxSize="26rem"
-          className="flex min-w-0 flex-col border-r bg-background"
+          className={`flex min-w-0 flex-col border-r bg-background ${
+            readOnly ? 'pointer-events-none opacity-80' : ''
+          }`}
         >
           <aside className="flex h-full min-w-0 flex-col">
             <ToggleGroup
@@ -712,7 +732,9 @@ export default function StyleEditorPage() {
           defaultSize="24%"
           minSize="14rem"
           maxSize="28rem"
-          className="min-w-0 border-l bg-background"
+          className={`min-w-0 border-l bg-background ${
+            readOnly ? 'pointer-events-none opacity-80' : ''
+          }`}
         >
           <aside className="h-full min-w-0">
             <PropertyPanel />

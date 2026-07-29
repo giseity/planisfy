@@ -68,8 +68,10 @@ function VersionList({
   const [restoring, setRestoring] = useState<number | null>(null);
   const loadStyleFromApi = useStyleStore((s) => s.loadStyleFromApi);
   const currentVersion = useStyleStore((s) => s.styleVersion);
+  const serverRevision = useStyleStore((s) => s.serverRevision);
   const isPublic = useStyleStore((s) => s.isPublic);
   const publishStyle = useStyleStore((s) => s.publishStyle);
+  const unpublishStyle = useStyleStore((s) => s.unpublishStyle);
   const [publishing, setPublishing] = useState(false);
   const [publishingVersion, setPublishingVersion] = useState<number | null>(
     null,
@@ -89,19 +91,23 @@ function VersionList({
     );
   };
 
-  const handlePublishToggle = async () => {
+  const handlePublicationAction = async () => {
     setPublishing(true);
     try {
-      await publishStyle();
+      if (isPublic) await unpublishStyle();
+      else await publishStyle();
     } finally {
       setPublishing(false);
     }
   };
 
   const handleRestore = async (version: number) => {
+    if (serverRevision === null) return;
     setRestoring(version);
     try {
-      await api.post(`/styles/${styleId}/versions/${version}/restore`);
+      await api.post(`/styles/${styleId}/versions/${version}/restore`, {
+        expectedVersion: serverRevision,
+      });
       await loadStyleFromApi(styleId);
       onClose();
     } catch {
@@ -150,7 +156,7 @@ function VersionList({
           size="sm"
           variant="outline"
           className="h-7 gap-1 text-xs"
-          onClick={handlePublishToggle}
+          onClick={handlePublicationAction}
           disabled={publishing}
         >
           {publishing ? (

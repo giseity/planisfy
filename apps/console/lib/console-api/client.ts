@@ -563,14 +563,20 @@ class ApiClient {
     return this.post<ApiEnvelope<OvertureImportResult>>('/source-imports/overture', options)
   }
 
-  publishStyle(styleId: string) {
-    return this.post<ApiEnvelope<StylePublishResponse>>(`/styles/${styleId}/publish`)
+  publishStyle(styleId: string, expectedVersion: number) {
+    return this.post<ApiEnvelope<StylePublishResponse>>(`/styles/${styleId}/publish`, {
+      expectedVersion,
+    })
   }
 
   publishStyleVersion(styleId: string, version: number) {
     return this.post<ApiEnvelope<StylePublishResponse>>(
       `/styles/${styleId}/versions/${version}/publish`
     )
+  }
+
+  unpublishStyle(styleId: string) {
+    return this.post<ApiEnvelope<StylePublishResponse>>(`/styles/${styleId}/unpublish`)
   }
 
   publishTilesetVersion(tilesetId: string, version: number) {

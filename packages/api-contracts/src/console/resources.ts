@@ -269,5 +269,27 @@ export interface StylePublishResponse {
   name: string;
   isPublic: boolean;
   version: number;
-  publishedVersion: number;
+  ownerHandle: string;
+  publishedVersion: number | null;
+  publicPath: string | null;
+  publishedVersionPath: string | null;
+}
+
+export interface ConsoleStyleSummary extends StylePublishResponse {
+  description: string | null;
+  thumbnailUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsoleStyleDetail extends ConsoleStyleSummary {
+  styleJson: Record<string, unknown>;
+  originalStyleJson: Record<string, unknown> | null;
+}
+
+export interface ConsoleStyleVersionDetail extends ConsoleStyleDetail {
+  snapshotId: string;
+  serverVersion: number;
+  createdBy: string | null;
+  snapshotCreatedAt: string;
 }

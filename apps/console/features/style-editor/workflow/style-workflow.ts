@@ -1,14 +1,12 @@
-export interface StudioStyleSummary {
-  id: string;
-  name: string;
-  handle: string;
-  description: string | null;
-  isPublic: boolean;
-  thumbnailUrl: string | null;
-  version: number;
+import type { ConsoleStyleSummary } from "@planisfy/api-contracts";
+
+export type StudioStyleSummary = Omit<
+  ConsoleStyleSummary,
+  "createdAt" | "updatedAt"
+> & {
   createdAt: string | Date;
   updatedAt: string | Date;
-}
+};
 
 export function styleEditorHref(style: Pick<StudioStyleSummary, "id">) {
   return `/styles/${style.id}`;

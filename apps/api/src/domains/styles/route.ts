@@ -4,6 +4,7 @@ import { z } from "zod";
 import { eq, and, isNull, desc, inArray, sql } from "drizzle-orm";
 import {
   db,
+  accounts,
   spriteAssets,
   storageObjects,
   styles,
@@ -51,6 +52,7 @@ import {
   SPRITE_NORMALIZED_MAX_BYTES,
   type PublishedSpriteMetadata,
 } from "./style-sprites";
+import { canonicalStylePaths } from "./style-contract";
 
 export const stylesRoute = new Hono<AuthEnv>();
 
@@ -95,6 +97,8 @@ const updateStyleSchema = z.object({
 const restoreStyleSchema = z.object({
   expectedVersion: z.number().int().positive(),
 });
+
+const publishStyleSchema = restoreStyleSchema;
 
 const renameSpriteAssetSchema = z.object({
   name: z.string().min(1).max(96).optional(),
@@ -633,7 +637,11 @@ stylesRoute.post("/styles", async (c) => {
     ipAddress: getClientIp(c.req.raw),
   });
 
-  return c.json({ data: created }, 201);
+  const ownerHandle = await getStyleOwnerHandle(ownerId);
+  return c.json(
+    { data: serializeStyleResponse(created, ownerHandle, null) },
+    201,
+  );
 });
 
 // ── GET /console/styles — List ──────────────────────────────────────────────
@@ -652,12 +660,30 @@ stylesRoute.get("/styles", async (c) => {
       version: styles.version,
       createdAt: styles.createdAt,
       updatedAt: styles.updatedAt,
+      ownerHandle: accounts.handle,
+      publishedVersion: styleVersions.version,
     })
     .from(styles)
+    .innerJoin(accounts, eq(styles.ownerId, accounts.id))
+    .leftJoin(
+      stylePublications,
+      and(
+        eq(stylePublications.styleId, styles.id),
+        eq(stylePublications.alias, "latest"),
+      ),
+    )
+    .leftJoin(
+      styleVersions,
+      eq(stylePublications.styleVersionId, styleVersions.id),
+    )
     .where(and(eq(styles.ownerId, ownerId), isNull(styles.deletedAt)))
     .orderBy(desc(styles.updatedAt));
 
-  return c.json({ data: results });
+  return c.json({
+    data: results.map((style) =>
+      serializeStyleResponse(style, style.ownerHandle, style.publishedVersion),
+    ),
+  });
 });
 
 // ── GET /console/styles/:id — Get ──────────────────────────────────────────
@@ -686,8 +712,11 @@ stylesRoute.get("/styles/:id", async (c) => {
   }
 
   const publishedVersion = await resolveLatestPublishedStyleVersion(style.id);
+  const ownerHandle = await getStyleOwnerHandle(ownerId);
 
-  return c.json({ data: { ...style, publishedVersion } });
+  return c.json({
+    data: serializeStyleResponse(style, ownerHandle, publishedVersion),
+  });
 });
 
 // ── PUT /console/styles/:id — Update ────────────────────────────────────────
@@ -789,6 +818,19 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
   const userId = c.get("userId");
   const rateLimited = await spritePublicationRateLimitResponse(c, ownerId);
   if (rateLimited) return rateLimited;
+  const body = await c.req.json().catch(() => null);
+  const parsedBody = publishStyleSchema.safeParse(body);
+  if (!parsedBody.success) {
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "An expected style version is required.",
+        },
+      },
+      400,
+    );
+  }
 
   const [style] = await db
     .select()
@@ -806,6 +848,18 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
     return c.json(
       { error: { code: "NOT_FOUND", message: "Style not found" } },
       404,
+    );
+  }
+  if (style.version !== parsedBody.data.expectedVersion) {
+    return c.json(
+      {
+        error: {
+          code: "VERSION_CONFLICT",
+          message: "Style was modified by another session",
+          details: { currentVersion: style.version },
+        },
+      },
+      409,
     );
   }
 
@@ -857,13 +911,14 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
     );
   }
 
-  let publication: Awaited<ReturnType<typeof publishStyleSnapshot>>;
+  let published: Awaited<ReturnType<typeof publishStyleSnapshot>>;
   try {
-    publication = await publishStyleSnapshot({
+    published = await publishStyleSnapshot({
       styleId,
       ownerId,
       userId,
       snapshot,
+      expectedCurrentVersion: parsedBody.data.expectedVersion,
     });
   } catch (err) {
     if (err instanceof SpriteAssetValidationError) {
@@ -872,20 +927,11 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
         400,
       );
     }
+    if (err instanceof StyleRevisionError) {
+      return styleRevisionErrorResponse(c, err);
+    }
     throw err;
   }
-
-  const [updated] = await db
-    .update(styles)
-    .set({ isPublic: true })
-    .where(eq(styles.id, styleId))
-    .returning({
-      id: styles.id,
-      handle: styles.handle,
-      name: styles.name,
-      isPublic: styles.isPublic,
-      version: styles.version,
-    });
 
   await logAudit({
     accountId: ownerId,
@@ -893,12 +939,23 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
     action: "style.published",
     resourceType: "style",
     resourceId: styleId,
-    metadata: { version: snapshot.version, publicationId: publication.id },
+    metadata: {
+      version: snapshot.version,
+      publicationId: published.publication.id,
+    },
     ipAddress: getClientIp(c.req.raw),
   });
 
+  const ownerHandle = await getStyleOwnerHandle(ownerId);
   return c.json({
-    data: { ...updated!, publishedVersion: snapshot.version, publication },
+    data: {
+      ...serializeStyleResponse(
+        published.style,
+        ownerHandle,
+        snapshot.version,
+      ),
+      publication: published.publication,
+    },
   });
 });
 
@@ -976,9 +1033,9 @@ stylesRoute.post("/styles/:id/versions/:versionNum/publish", async (c) => {
     );
   }
 
-  let publication: Awaited<ReturnType<typeof publishStyleSnapshot>>;
+  let published: Awaited<ReturnType<typeof publishStyleSnapshot>>;
   try {
-    publication = await publishStyleSnapshot({
+    published = await publishStyleSnapshot({
       styleId,
       ownerId,
       userId,
@@ -991,20 +1048,11 @@ stylesRoute.post("/styles/:id/versions/:versionNum/publish", async (c) => {
         400,
       );
     }
+    if (err instanceof StyleRevisionError) {
+      return styleRevisionErrorResponse(c, err);
+    }
     throw err;
   }
-
-  const [updated] = await db
-    .update(styles)
-    .set({ isPublic: true })
-    .where(eq(styles.id, styleId))
-    .returning({
-      id: styles.id,
-      handle: styles.handle,
-      name: styles.name,
-      isPublic: styles.isPublic,
-      version: styles.version,
-    });
 
   await logAudit({
     accountId: ownerId,
@@ -1012,12 +1060,23 @@ stylesRoute.post("/styles/:id/versions/:versionNum/publish", async (c) => {
     action: "style.published_version",
     resourceType: "style",
     resourceId: styleId,
-    metadata: { version: snapshot.version, publicationId: publication.id },
+    metadata: {
+      version: snapshot.version,
+      publicationId: published.publication.id,
+    },
     ipAddress: getClientIp(c.req.raw),
   });
 
+  const ownerHandle = await getStyleOwnerHandle(ownerId);
   return c.json({
-    data: { ...updated!, publishedVersion: snapshot.version, publication },
+    data: {
+      ...serializeStyleResponse(
+        published.style,
+        ownerHandle,
+        snapshot.version,
+      ),
+      publication: published.publication,
+    },
   });
 });
 
@@ -1026,17 +1085,35 @@ stylesRoute.post("/styles/:id/unpublish", async (c) => {
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
 
-  const [updated] = await db
-    .update(styles)
-    .set({ isPublic: false })
-    .where(
-      and(
-        eq(styles.id, styleId),
-        eq(styles.ownerId, ownerId),
-        isNull(styles.deletedAt),
-      ),
-    )
-    .returning({ id: styles.id, isPublic: styles.isPublic });
+  const updated = await db.transaction(async (tx) => {
+    const [style] = await tx
+      .update(styles)
+      .set({ isPublic: false })
+      .where(
+        and(
+          eq(styles.id, styleId),
+          eq(styles.ownerId, ownerId),
+          isNull(styles.deletedAt),
+        ),
+      )
+      .returning({
+        id: styles.id,
+        handle: styles.handle,
+        name: styles.name,
+        isPublic: styles.isPublic,
+        version: styles.version,
+      });
+    if (!style) return null;
+    await tx
+      .delete(stylePublications)
+      .where(
+        and(
+          eq(stylePublications.styleId, styleId),
+          eq(stylePublications.alias, "latest"),
+        ),
+      );
+    return style;
+  });
 
   if (!updated) {
     return c.json(
@@ -1054,8 +1131,9 @@ stylesRoute.post("/styles/:id/unpublish", async (c) => {
     ipAddress: getClientIp(c.req.raw),
   });
 
+  const ownerHandle = await getStyleOwnerHandle(ownerId);
   return c.json({
-    data: { ...updated, handle: styleId, name: "", version: 0 },
+    data: serializeStyleResponse(updated, ownerHandle, null),
   });
 });
 
@@ -1088,7 +1166,11 @@ stylesRoute.post("/styles/:id/duplicate", async (c) => {
     ipAddress: getClientIp(c.req.raw),
   });
 
-  return c.json({ data: created }, 201);
+  const ownerHandle = await getStyleOwnerHandle(ownerId);
+  return c.json(
+    { data: serializeStyleResponse(created, ownerHandle, null) },
+    201,
+  );
 });
 
 // ── GET /console/styles/:id/versions — Version history ────────────────────
@@ -1130,6 +1212,74 @@ stylesRoute.get("/styles/:id/versions", async (c) => {
     .orderBy(desc(styleVersions.version));
 
   return c.json({ data: versions });
+});
+
+stylesRoute.get("/styles/:id/versions/:versionNum", async (c) => {
+  const styleId = c.req.param("id");
+  const versionNum = Number(c.req.param("versionNum"));
+  const ownerId = c.get("ownerId");
+  if (!Number.isSafeInteger(versionNum) || versionNum <= 0) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Invalid version number" } },
+      400,
+    );
+  }
+
+  const [style] = await db
+    .select()
+    .from(styles)
+    .where(
+      and(
+        eq(styles.id, styleId),
+        eq(styles.ownerId, ownerId),
+        isNull(styles.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!style) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Style not found" } },
+      404,
+    );
+  }
+
+  const [snapshot] = await db
+    .select()
+    .from(styleVersions)
+    .where(
+      and(
+        eq(styleVersions.styleId, styleId),
+        eq(styleVersions.version, versionNum),
+      ),
+    )
+    .limit(1);
+  if (!snapshot) {
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Version not found" } },
+      404,
+    );
+  }
+
+  const ownerHandle = await getStyleOwnerHandle(ownerId);
+  const publishedVersion = await resolveLatestPublishedStyleVersion(styleId);
+  return c.json({
+    data: {
+      ...serializeStyleResponse(
+        {
+          ...style,
+          name: snapshot.name,
+          styleJson: snapshot.styleJson,
+          version: snapshot.version,
+        },
+        ownerHandle,
+        publishedVersion,
+      ),
+      snapshotId: snapshot.id,
+      serverVersion: style.version,
+      createdBy: snapshot.createdBy,
+      snapshotCreatedAt: snapshot.createdAt,
+    },
+  });
 });
 
 // ── POST /console/styles/:id/versions/:versionNum/restore — Restore ──────
@@ -1236,18 +1386,52 @@ function styleCreationErrorResponse(c: Context<AuthEnv>, err: unknown) {
   );
 }
 
+async function getStyleOwnerHandle(ownerId: string) {
+  const [owner] = await db
+    .select({ handle: accounts.handle })
+    .from(accounts)
+    .where(and(eq(accounts.id, ownerId), isNull(accounts.deletedAt)))
+    .limit(1);
+  if (!owner) throw new Error("Style owner account not found");
+  return owner.handle;
+}
+
+function serializeStyleResponse<
+  T extends {
+    id: string;
+    handle: string;
+    name: string;
+    isPublic: boolean;
+    version: number;
+  },
+>(style: T, ownerHandle: string, publishedVersion: number | null) {
+  return {
+    ...style,
+    ownerHandle,
+    publishedVersion,
+    ...canonicalStylePaths({
+      ownerHandle,
+      styleHandle: style.handle,
+      isPublic: style.isPublic,
+      publishedVersion,
+    }),
+  };
+}
+
 async function publishStyleSnapshot({
   styleId,
   ownerId,
   userId,
   snapshot,
+  expectedCurrentVersion,
 }: {
   styleId: string;
   ownerId: string;
   userId: string;
   snapshot: typeof styleVersions.$inferSelect;
+  expectedCurrentVersion?: number;
 }) {
-  const [existingImmutable] = await db
+  const [knownImmutable] = await db
     .select()
     .from(stylePublications)
     .where(
@@ -1257,89 +1441,119 @@ async function publishStyleSnapshot({
       ),
     )
     .limit(1);
-  if (existingImmutable) {
-    const [latest] = await db
-      .insert(stylePublications)
-      .values({
-        styleId,
-        styleVersionId: existingImmutable.styleVersionId,
-        accountId: ownerId,
-        alias: "latest",
-        publishedBy: userId,
-        metadata: existingImmutable.metadata,
-      })
-      .onConflictDoUpdate({
-        target: [stylePublications.styleId, stylePublications.alias],
-        set: {
-          styleVersionId: existingImmutable.styleVersionId,
-          accountId: ownerId,
-          publishedBy: userId,
-          metadata: existingImmutable.metadata,
-        },
-      })
-      .returning();
-    if (!latest) throw new Error("Failed to republish immutable style snapshot");
-    return latest;
-  }
-
-  const sprite = await createStyleSpriteAssets({
-    ownerId,
-    styleId,
-    snapshot,
-  });
-  const metadata = {
+  const sprite = knownImmutable
+    ? null
+    : await createStyleSpriteAssets({ ownerId, styleId, snapshot });
+  const generatedMetadata = {
     version: snapshot.version,
     ...(sprite ? { sprite } : {}),
   };
 
-  let publication;
+  let published;
   try {
-    publication = await db.transaction(async (tx) => {
-    const [latest] = await tx
-      .insert(stylePublications)
-      .values({
-        styleId,
-        styleVersionId: snapshot.id,
-        accountId: ownerId,
-        alias: "latest",
-        publishedBy: userId,
-        metadata,
-      })
-      .onConflictDoUpdate({
-        target: [stylePublications.styleId, stylePublications.alias],
-        set: {
-          styleVersionId: snapshot.id,
+    published = await db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ version: styles.version })
+        .from(styles)
+        .where(
+          and(
+            eq(styles.id, styleId),
+            eq(styles.ownerId, ownerId),
+            isNull(styles.deletedAt),
+          ),
+        )
+        .for("update")
+        .limit(1);
+      if (!current) {
+        throw new StyleRevisionError("STYLE_NOT_FOUND", "Style not found");
+      }
+      if (
+        expectedCurrentVersion !== undefined &&
+        current.version !== expectedCurrentVersion
+      ) {
+        throw new StyleRevisionError(
+          "VERSION_CONFLICT",
+          "Style was modified by another session",
+          current.version,
+        );
+      }
+
+      const [existingImmutable] = await tx
+        .select()
+        .from(stylePublications)
+        .where(
+          and(
+            eq(stylePublications.styleId, styleId),
+            eq(stylePublications.alias, `v${snapshot.version}`),
+          ),
+        )
+        .limit(1);
+      const styleVersionId =
+        existingImmutable?.styleVersionId ?? snapshot.id;
+      const metadata =
+        existingImmutable?.metadata ?? generatedMetadata;
+      const [publication] = await tx
+        .insert(stylePublications)
+        .values({
+          styleId,
+          styleVersionId,
           accountId: ownerId,
+          alias: "latest",
           publishedBy: userId,
           metadata,
-        },
-      })
-      .returning();
+        })
+        .onConflictDoUpdate({
+          target: [stylePublications.styleId, stylePublications.alias],
+          set: {
+            styleVersionId,
+            accountId: ownerId,
+            publishedBy: userId,
+            metadata,
+          },
+        })
+        .returning();
 
-    await tx
-      .insert(stylePublications)
-      .values({
-        styleId,
-        styleVersionId: snapshot.id,
-        accountId: ownerId,
-        alias: `v${snapshot.version}`,
-        publishedBy: userId,
-        metadata,
-      })
-      .onConflictDoNothing();
-
-      return latest;
+      if (!existingImmutable) {
+        await tx
+          .insert(stylePublications)
+          .values({
+            styleId,
+            styleVersionId: snapshot.id,
+            accountId: ownerId,
+            alias: `v${snapshot.version}`,
+            publishedBy: userId,
+            metadata,
+          })
+          .onConflictDoNothing();
+      }
+      const [style] = await tx
+        .update(styles)
+        .set({ isPublic: true })
+        .where(eq(styles.id, styleId))
+        .returning({
+          id: styles.id,
+          handle: styles.handle,
+          name: styles.name,
+          isPublic: styles.isPublic,
+          version: styles.version,
+        });
+      if (!publication || !style) {
+        throw new Error("Failed to publish style snapshot");
+      }
+      return {
+        publication,
+        style,
+        usedGeneratedSprite: !existingImmutable,
+      };
     });
   } catch (err) {
     if (sprite) await cleanupPublishedSprite(sprite);
     throw err;
   }
-
-  if (!publication) {
-    throw new Error("Failed to publish style snapshot");
+  if (sprite && !published.usedGeneratedSprite) {
+    await cleanupPublishedSprite(sprite);
   }
-
-  return publication;
+  return published;
 }
 
 async function createStyleSpriteAssets({

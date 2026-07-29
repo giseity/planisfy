@@ -41,7 +41,12 @@ import {
 } from "@planisfy/ui/components/table"
 import type { ApiEnvelope } from "@/lib/api"
 import { api } from "@/lib/api"
-import { deleteStyle, duplicateStyle, togglePublish } from "@/features/style-editor/workflow/style-actions"
+import {
+  deleteStyle,
+  duplicateStyle,
+  publishStyleSummary,
+  unpublishStyleSummary,
+} from "@/features/style-editor/workflow/style-actions"
 import { StyleActionsMenu } from "@/features/style-editor/components/style-actions-menu"
 import {
   styleEditorHref,
@@ -207,7 +212,10 @@ export default function StyleDetailsPage() {
             disabled={mutating}
             onClick={() =>
               runMutation(
-                () => togglePublish(style),
+                () =>
+                  style.isPublic
+                    ? unpublishStyleSummary(style)
+                    : publishStyleSummary(style),
                 style.isPublic ? "Style unpublished" : "Style published",
               )
             }
