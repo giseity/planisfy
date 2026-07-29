@@ -8,6 +8,7 @@ import type {
 import { changeLayerType } from "@/features/style-editor/style-spec/layer";
 import { api, ApiRequestError } from "@/lib/api";
 import type { ApiEnvelope } from "@/lib/api";
+import { fetchStyleDetail } from "@/features/style-editor/workflow/style-api";
 
 const MAX_UNDO = 50;
 
@@ -30,6 +31,12 @@ export interface StyleStore {
   // Persistence state
   styleId: string | null;
   styleVersion: number | null;
+  sessionToken: number;
+  sessionStyleId: string | null;
+  readOnly: boolean;
+  documentRevision: number;
+  persistedRevision: number;
+  serverRevision: number | null;
   saveStatus: SaveStatus;
   lastSavedAt: Date | null;
   isPublic: boolean;
@@ -42,12 +49,14 @@ export interface StyleStore {
 
   // Actions
   loadStyle: (style: StyleSpecification) => void;
+  replaceStyleDocument: (style: StyleSpecification) => void;
+  beginStyleSession: (styleId: string | null, readOnly?: boolean) => number;
   setSelectedLayer: (layerId: string | null) => void;
   setMapLoaded: (loaded: boolean) => void;
   setMapPosition: (pos: MapPosition) => void;
 
   // Persistence actions
-  loadStyleFromApi: (id: string) => Promise<void>;
+  loadStyleFromApi: (id: string, sessionToken?: number) => Promise<void>;
   saveStyle: () => Promise<void>;
   publishStyle: () => Promise<boolean>;
   setSaveStatus: (status: SaveStatus) => void;
@@ -88,15 +97,6 @@ export interface StyleStore {
   getSelectedLayer: () => LayerSpecification | undefined;
 }
 
-interface StyleDetailResponse {
-  styleJson: StyleSpecification;
-  version: number;
-  id: string;
-  handle?: string;
-  isPublic?: boolean;
-  publishedVersion?: number | null;
-}
-
 export interface SourceLayerOptions {
   layerId?: string;
   layerType?: "circle" | "line" | "fill" | "symbol" | "raster" | "hillshade";
@@ -117,6 +117,10 @@ type MutableStyle = StyleSpecification & {
   [key: string]: unknown;
   metadata?: Record<string, unknown>;
 };
+
+let activeLoadController: AbortController | null = null;
+let saveWorker: Promise<void> | null = null;
+let saveRequested = false;
 
 // Helper: produce-based setter that avoids immer middleware type issues
 const immerSet =
@@ -140,11 +144,14 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
 
   /** Update with undo support */
   const tracked = (fn: (draft: StyleStore) => void) => {
+    if (get().readOnly) return;
     pushUndo();
     update((draft) => {
       fn(draft);
+      draft.documentRevision += 1;
       if (draft.saveStatus === "saved") draft.saveStatus = "idle";
     });
+    if (saveWorker) saveRequested = true;
   };
 
   return {
@@ -159,6 +166,12 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
     // Persistence state
     styleId: null,
     styleVersion: null,
+    sessionToken: 0,
+    sessionStyleId: null,
+    readOnly: false,
+    documentRevision: 0,
+    persistedRevision: 0,
+    serverRevision: null,
     saveStatus: "idle",
     lastSavedAt: null,
     isPublic: false,
@@ -172,12 +185,58 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
         selectedLayerId: style.layers?.[0]?.id ?? null,
         undoStack: [],
         redoStack: [],
+        documentRevision: 0,
+        persistedRevision: 0,
+        saveStatus: "idle",
       }),
 
-    loadStyleFromApi: async (id) => {
-      const res = await api.get<ApiEnvelope<StyleDetailResponse>>(
-        `/styles/${id}`,
-      );
+    replaceStyleDocument: (style) =>
+      tracked((draft) => {
+        draft.style = JSON.parse(JSON.stringify(style));
+        draft.selectedLayerId = style.layers?.[0]?.id ?? null;
+      }),
+
+    beginStyleSession: (styleId, readOnly = false) => {
+      activeLoadController?.abort();
+      activeLoadController = new AbortController();
+      saveRequested = false;
+      const token = get().sessionToken + 1;
+      set({
+        sessionToken: token,
+        sessionStyleId: styleId,
+        readOnly,
+        style: null,
+        styleId: null,
+        styleVersion: null,
+        serverRevision: null,
+        documentRevision: 0,
+        persistedRevision: 0,
+        styleHandle: null,
+        isPublic: false,
+        publishedVersion: null,
+        selectedLayerId: null,
+        undoStack: [],
+        redoStack: [],
+        saveStatus: "idle",
+        lastSavedAt: null,
+      });
+      return token;
+    },
+
+    loadStyleFromApi: async (id, providedToken) => {
+      const token =
+        providedToken ?? get().beginStyleSession(id);
+      const controller = activeLoadController ?? new AbortController();
+      activeLoadController = controller;
+      const data = await fetchStyleDetail(id, controller.signal);
+      const state = get();
+      if (
+        state.sessionToken !== token ||
+        state.sessionStyleId !== id ||
+        controller.signal.aborted
+      ) {
+        return;
+      }
       const {
         styleJson,
         version,
@@ -185,11 +244,14 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
         handle,
         isPublic,
         publishedVersion,
-      } = res.data;
+      } = data;
       set({
         style: JSON.parse(JSON.stringify(styleJson)),
         styleId,
         styleVersion: version,
+        serverRevision: version,
+        documentRevision: 0,
+        persistedRevision: 0,
         styleHandle: handle ?? null,
         isPublic: isPublic ?? false,
         publishedVersion: publishedVersion ?? null,
@@ -203,42 +265,93 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
     },
 
     saveStyle: async () => {
-      const { style, styleId, styleVersion } = get();
-      if (!style || !styleId || styleVersion === null) return;
+      if (get().readOnly) return;
+      saveRequested = true;
+      if (saveWorker) return saveWorker;
 
-      set({ saveStatus: "saving" });
-      try {
-        const res = await api.put<ApiEnvelope<StyleSaveResponse>>(
-          `/styles/${styleId}`,
-          {
-            styleJson: style,
-            version: styleVersion,
-          },
-        );
-        set({
-          styleVersion: res.data.version,
-          saveStatus: "saved",
-          lastSavedAt: new Date(),
-        });
-      } catch (err) {
-        if (err instanceof ApiRequestError && err.status === 409) {
-          set({ saveStatus: "conflict" });
-        } else {
-          set({ saveStatus: "error" });
+      saveWorker = (async () => {
+        while (saveRequested) {
+          saveRequested = false;
+          const state = get();
+          if (
+            !state.style ||
+            !state.styleId ||
+            state.serverRevision === null
+          ) {
+            return;
+          }
+          const token = state.sessionToken;
+          const styleId = state.styleId;
+          const serverRevision = state.serverRevision;
+          const documentRevision = state.documentRevision;
+          const snapshot = JSON.parse(JSON.stringify(state.style));
+          set({ saveStatus: "saving" });
+          try {
+            const res = await api.put<ApiEnvelope<StyleSaveResponse>>(
+              `/styles/${styleId}`,
+              {
+                styleJson: snapshot,
+                version: serverRevision,
+              },
+            );
+            const current = get();
+            if (
+              current.sessionToken !== token ||
+              current.styleId !== styleId
+            ) {
+              continue;
+            }
+            const clean = current.documentRevision === documentRevision;
+            set({
+              styleVersion: res.data.version,
+              serverRevision: res.data.version,
+              persistedRevision: documentRevision,
+              saveStatus: clean ? "saved" : "idle",
+              lastSavedAt: new Date(),
+            });
+            if (!clean) saveRequested = true;
+          } catch (err) {
+            const current = get();
+            if (
+              current.sessionToken === token &&
+              current.styleId === styleId
+            ) {
+              set({
+                saveStatus:
+                  err instanceof ApiRequestError && err.status === 409
+                    ? "conflict"
+                    : "error",
+              });
+            }
+            throw err;
+          }
         }
-        throw err;
-      }
+      })().finally(() => {
+        saveWorker = null;
+      });
+      return saveWorker;
     },
 
     publishStyle: async () => {
-      const { styleId } = get();
+      if (get().readOnly) return false;
+      if (get().documentRevision !== get().persistedRevision) {
+        await get().saveStyle();
+      }
+      const { styleId, sessionToken } = get();
       if (!styleId) return false;
 
       const res = await api.publishStyle(styleId);
+      if (
+        get().sessionToken !== sessionToken ||
+        get().styleId !== styleId
+      ) {
+        return false;
+      }
       set({
         isPublic: res.data.isPublic,
         styleHandle: res.data.handle,
         styleVersion: res.data.version,
+        serverRevision: res.data.version,
         publishedVersion: res.data.publishedVersion,
       });
       return res.data.isPublic;
@@ -411,6 +524,7 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
 
     // Undo/redo
     undo: () => {
+      if (get().readOnly) return;
       const { style, undoStack, redoStack } = get();
       if (undoStack.length === 0 || !style) return;
       const prev = undoStack[undoStack.length - 1]!;
@@ -418,10 +532,14 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
         style: prev,
         undoStack: undoStack.slice(0, -1),
         redoStack: [...redoStack, JSON.parse(JSON.stringify(style))],
+        documentRevision: get().documentRevision + 1,
+        saveStatus: "idle",
       });
+      if (saveWorker) saveRequested = true;
     },
 
     redo: () => {
+      if (get().readOnly) return;
       const { style, undoStack, redoStack } = get();
       if (redoStack.length === 0 || !style) return;
       const next = redoStack[redoStack.length - 1]!;
@@ -429,7 +547,10 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
         style: next,
         redoStack: redoStack.slice(0, -1),
         undoStack: [...undoStack, JSON.parse(JSON.stringify(style))],
+        documentRevision: get().documentRevision + 1,
+        saveStatus: "idle",
       });
+      if (saveWorker) saveRequested = true;
     },
 
     canUndo: () => get().undoStack.length > 0,

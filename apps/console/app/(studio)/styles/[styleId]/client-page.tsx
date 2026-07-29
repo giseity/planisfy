@@ -58,6 +58,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export default function StyleEditorPage() {
   const params = useParams<{ styleId: string }>()
   const loadStyle = useStyleStore((s) => s.loadStyle)
+  const replaceStyleDocument = useStyleStore((s) => s.replaceStyleDocument)
+  const beginStyleSession = useStyleStore((s) => s.beginStyleSession)
   const loadStyleFromApi = useStyleStore((s) => s.loadStyleFromApi)
   const saveStyle = useStyleStore((s) => s.saveStyle)
   const publishStyle = useStyleStore((s) => s.publishStyle)
@@ -94,20 +96,26 @@ export default function StyleEditorPage() {
   // Load style from API, a URL import, or the local starter style for new drafts.
   useEffect(() => {
     const id = params.styleId
+    const token = beginStyleSession(UUID_RE.test(id) ? id : null)
+    const controller = new AbortController()
+    const isActive = () => useStyleStore.getState().sessionToken === token
     setLoadError(null)
 
     if (UUID_RE.test(id)) {
-      loadStyleFromApi(id).catch((err) => {
-        setLoadError(err instanceof Error ? err.message : 'Failed to load style')
+      loadStyleFromApi(id, token).catch((err) => {
+        if (isActive() && err instanceof Error && err.name !== 'AbortError') {
+          setLoadError(err.message || 'Failed to load style')
+        }
       })
-      return
+      return () => controller.abort()
     }
 
     const styleUrl = searchParams.get('url')
     if (id === 'new' && styleUrl) {
-      fetch(styleUrl)
+      fetch(styleUrl, { signal: controller.signal })
         .then((r) => r.json())
         .then((json) => {
+          if (!isActive()) return
           if (json.version === 8 && Array.isArray(json.layers)) {
             loadStyle(json)
           } else {
@@ -115,9 +123,11 @@ export default function StyleEditorPage() {
           }
         })
         .catch((err) => {
-          setLoadError(err instanceof Error ? err.message : 'Failed to load style URL')
+          if (isActive() && err instanceof Error && err.name !== 'AbortError') {
+            setLoadError(err.message || 'Failed to load style URL')
+          }
         })
-      return
+      return () => controller.abort()
     }
 
     if (id === 'new') {
@@ -129,14 +139,21 @@ export default function StyleEditorPage() {
             apiRoot: clientEnv.NEXT_PUBLIC_API_URL,
           })
         )
-        return
+        return () => controller.abort()
       }
       loadStyle(sampleStyle)
-      return
+      return () => controller.abort()
     }
 
     setLoadError('Style not found. Open an existing style or use /styles/new to start a draft.')
-  }, [params.styleId, searchParams, loadStyle, loadStyleFromApi])
+    return () => controller.abort()
+  }, [
+    params.styleId,
+    searchParams,
+    beginStyleSession,
+    loadStyle,
+    loadStyleFromApi,
+  ])
 
   useEffect(() => {
     api
@@ -257,7 +274,7 @@ export default function StyleEditorPage() {
         const text = await file.text()
         const json = JSON.parse(text)
         if (json.version === 8 && Array.isArray(json.layers)) {
-          loadStyle(json)
+          replaceStyleDocument(json)
         }
       } catch {
         // Invalid file
@@ -273,7 +290,7 @@ export default function StyleEditorPage() {
       const r = await fetch(urlInput.trim())
       const json = await r.json()
       if (json.version === 8 && Array.isArray(json.layers)) {
-        loadStyle(json)
+        replaceStyleDocument(json)
       }
     } catch {
       // Invalid URL or style
