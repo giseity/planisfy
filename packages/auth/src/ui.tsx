@@ -23,13 +23,27 @@ export function sanitizeCallbackUrl(
   origin?: string
 ) {
   if (!rawCallbackUrl) return fallback
-  if (rawCallbackUrl.startsWith('/') && !rawCallbackUrl.startsWith('//')) {
-    return rawCallbackUrl
-  }
+  if (hasUnsafeCallbackSyntax(rawCallbackUrl)) return fallback
+
+  const currentOrigin = originFromUrl(origin)
   const fallbackOrigin = originFromUrl(fallback)
+
   try {
+    if (rawCallbackUrl.startsWith('/') && !rawCallbackUrl.startsWith('//')) {
+      if (!currentOrigin) return rawCallbackUrl
+      const parsed = new URL(rawCallbackUrl, currentOrigin)
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`
+    }
+
     const parsed = new URL(rawCallbackUrl)
-    if (origin && parsed.origin === origin) {
+    if (
+      !['http:', 'https:'].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return fallback
+    }
+    if (currentOrigin && parsed.origin === currentOrigin) {
       return `${parsed.pathname}${parsed.search}${parsed.hash}`
     }
     if (fallbackOrigin && parsed.origin === fallbackOrigin) {
@@ -41,12 +55,44 @@ export function sanitizeCallbackUrl(
   }
 }
 
-function originFromUrl(value: string) {
+function originFromUrl(value: string | undefined) {
+  if (!value) return null
   try {
-    return new URL(value).origin
+    const parsed = new URL(value)
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.origin : null
   } catch {
     return null
   }
+}
+
+function hasUnsafeCallbackSyntax(value: string) {
+  let decoded = value
+
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (
+      [...decoded].some((character) => {
+        const codePoint = character.codePointAt(0) ?? 0
+        return codePoint <= 31 || codePoint === 127 || character === '\\'
+      }) ||
+      decoded.startsWith('//')
+    ) {
+      return true
+    }
+
+    if (!/%[0-9a-f]{2}/iu.test(decoded)) {
+      return /%(?![0-9a-f]{2})/iu.test(decoded)
+    }
+
+    try {
+      const next = decodeURIComponent(decoded)
+      if (next === decoded) return false
+      decoded = next
+    } catch {
+      return true
+    }
+  }
+
+  return /%[0-9a-f]{2}/iu.test(decoded)
 }
 
 function callbackUrl(fallback: string) {
@@ -58,9 +104,15 @@ function callbackUrl(fallback: string) {
   )
 }
 
-function verificationUrl(callbackURL: string) {
-  const params = new URLSearchParams({ callbackUrl: callbackURL })
-  return `/verify-email?${params.toString()}`
+export function buildVerificationUrl(destination: string, callbackURL: string) {
+  const base = 'https://verification.invalid'
+  const url = new URL(destination, base)
+  url.searchParams.set('callbackUrl', callbackURL)
+
+  if (url.origin === base) {
+    return `${url.pathname}${url.search}${url.hash}`
+  }
+  return url.toString()
 }
 
 function isEmailNotVerifiedError(error: { code?: string; message?: string; statusText?: string }) {
@@ -330,10 +382,12 @@ function SocialAuthOptions({
 
 export function SignInForm({
   defaultCallbackUrl = '/',
+  verificationPageUrl = '/verify-email',
   signUpHref = '/sign-up',
   resetHref = '/reset-password',
 }: {
   defaultCallbackUrl?: string
+  verificationPageUrl?: string
   signUpHref?: string
   resetHref?: string
 }) {
@@ -356,7 +410,7 @@ export function SignInForm({
         onError: (ctx: { error: { code?: string; message: string; statusText?: string } }) => {
           if (isEmailNotVerifiedError(ctx.error)) {
             toast.info('Check your inbox to verify your email address.')
-            window.location.assign(verificationUrl(target))
+            window.location.assign(buildVerificationUrl(verificationPageUrl, target))
             return
           }
           toast.error(ctx.error.message)
@@ -431,9 +485,11 @@ export function SignInForm({
 
 export function SignUpForm({
   defaultCallbackUrl = '/styles',
+  verificationPageUrl = '/verify-email',
   signInHref = '/sign-in',
 }: {
   defaultCallbackUrl?: string
+  verificationPageUrl?: string
   signInHref?: string
 }) {
   const [name, setName] = React.useState('')
@@ -458,7 +514,7 @@ export function SignUpForm({
           }
 
           toast.info('Check your inbox to verify your email address.')
-          window.location.assign(verificationUrl(target))
+          window.location.assign(buildVerificationUrl(verificationPageUrl, target))
         },
         onError: (ctx: { error: { message: string } }) => {
           toast.error(ctx.error.message)

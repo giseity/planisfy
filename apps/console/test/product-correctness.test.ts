@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { sanitizeCallbackUrl } from '@planisfy/auth/ui'
+import { buildVerificationUrl, sanitizeCallbackUrl } from '@planisfy/auth/ui'
 import { canParseFilter } from '@/features/style-editor/components/fields/visual-filter-builder'
 
 describe('console product correctness regressions', () => {
@@ -122,5 +122,49 @@ describe('console product correctness regressions', () => {
         'https://auth.planisfy.localhost'
       )
     ).toBe('https://console.planisfy.localhost')
+  })
+
+  it.each([
+    '/\\evil.example',
+    '/%5cevil.example',
+    '/%255cevil.example',
+    '//evil.example/path',
+    '/%2f%2fevil.example/path',
+    '/styles%0d%0aSet-Cookie:test',
+    '/styles%',
+    'javascript:alert(1)',
+    'https://user:password@console.planisfy.localhost/styles',
+  ])('rejects unsafe auth callback %s', (callbackUrl) => {
+    expect(
+      sanitizeCallbackUrl(
+        callbackUrl,
+        'https://console.planisfy.localhost',
+        'https://auth.planisfy.localhost'
+      )
+    ).toBe('https://console.planisfy.localhost')
+  })
+
+  it('normalizes current-origin absolute callbacks to local paths', () => {
+    expect(
+      sanitizeCallbackUrl(
+        'https://auth.planisfy.localhost/verify-email?token=abc#ready',
+        'https://console.planisfy.localhost',
+        'https://auth.planisfy.localhost'
+      )
+    ).toBe('/verify-email?token=abc#ready')
+  })
+
+  it('builds verification links on the explicitly selected application origin', () => {
+    expect(buildVerificationUrl('/verify-email', 'https://console.planisfy.localhost/styles')).toBe(
+      '/verify-email?callbackUrl=https%3A%2F%2Fconsole.planisfy.localhost%2Fstyles'
+    )
+    expect(
+      buildVerificationUrl(
+        'https://console.planisfy.localhost/verify-email?source=marketing',
+        'https://console.planisfy.localhost/styles'
+      )
+    ).toBe(
+      'https://console.planisfy.localhost/verify-email?source=marketing&callbackUrl=https%3A%2F%2Fconsole.planisfy.localhost%2Fstyles'
+    )
   })
 })
