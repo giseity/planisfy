@@ -35,7 +35,8 @@
     "smoke:self-host-support-bundle": "scripts/self-host-support-bundle-smoke.sh",
     "smoke:self-host-upgrade": "node scripts/self-host-upgrade-smoke.mjs",
     "check-types": "turbo run check-types",
-    "test": "turbo run test --concurrency=1",
+    "test": "turbo run test --concurrency=1 && pnpm test:smoke-tools",
+    "test:smoke-tools": "node --test scripts/*.test.mjs",
     "verify": "turbo run lint check-types test build"
   },
   "devDependencies": {

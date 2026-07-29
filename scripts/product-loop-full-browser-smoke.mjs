@@ -73,11 +73,7 @@ try {
     throw new Error("Published tileset did not expose a TileJSON URL");
   }
   const tilejsonUrl = publicApiUrl(publishedTileset.tilejsonUrl);
-  await expectBrowserFetch(
-    page,
-    tilejsonUrl,
-    "Full loop TileJSON URL",
-  );
+  await expectBrowserFetch(page, tilejsonUrl, "Full loop TileJSON URL");
 
   const publicStyleUrl = await createAndPublishStyle(page, {
     ...publishedTileset,
@@ -120,7 +116,9 @@ try {
 async function uploadTilesetThroughUi(page) {
   await gotoProtectedPage(page, "/tilesets");
   await page.getByTestId("create-tileset").click();
-  await page.getByLabel("Name", { exact: true }).fill(`Smoke Tileset ${suffix}`);
+  await page
+    .getByLabel("Name", { exact: true })
+    .fill(`Smoke Tileset ${suffix}`);
   await page.getByLabel("Handle", { exact: true }).fill(tilesetHandle);
   await page.getByLabel("Description").fill("Browser smoke upload.");
   const [createResponse] = await Promise.all([
@@ -139,8 +137,8 @@ async function uploadTilesetThroughUi(page) {
   }
   const createdTileset = await poll(
     `tileset ${tilesetHandle} to be created`,
-    async () => {
-      const tileset = await findTileset(page, tilesetHandle);
+    async ({ deadline }) => {
+      const tileset = await findTileset(page, tilesetHandle, deadline);
       return tileset ?? null;
     },
     { timeoutMs: 20_000, intervalMs: 1_000 },
@@ -159,13 +157,16 @@ async function uploadTilesetThroughUi(page) {
   const uploadSubmit = page.getByTestId("upload-tileset-submit");
   await poll(
     "tileset upload submit button to become enabled",
-    async () => ((await uploadSubmit.isEnabled().catch(() => false)) ? true : null),
+    async () =>
+      (await uploadSubmit.isEnabled().catch(() => false)) ? true : null,
     { timeoutMs: 20_000, intervalMs: 500 },
   );
   const [uploadResponse] = await Promise.all([
     page.waitForResponse(
       (response) =>
-        response.url().includes(`/api/v1/console/tilesets/${createdTileset.id}/uploads`) &&
+        response
+          .url()
+          .includes(`/api/v1/console/tilesets/${createdTileset.id}/uploads`) &&
         response.request().method() === "POST",
       { timeout: 30_000 },
     ),
@@ -178,8 +179,8 @@ async function uploadTilesetThroughUi(page) {
   }
   await poll(
     `tileset upload ${tilesetHandle} to be queued`,
-    async () => {
-      const tileset = await findTileset(page, tilesetHandle);
+    async ({ deadline }) => {
+      const tileset = await findTileset(page, tilesetHandle, deadline);
       return tileset?.latestUpload ? true : null;
     },
     { timeoutMs: 30_000, intervalMs: 1_000 },
@@ -206,8 +207,8 @@ async function publishTilesetThroughUi(page, tileset) {
 async function waitForTilesetReady(page, handle) {
   return poll(
     `tileset ${handle} to finish processing`,
-    async () => {
-      const tileset = await findTileset(page, handle);
+    async ({ deadline }) => {
+      const tileset = await findTileset(page, handle, deadline);
       if (!tileset) return null;
       if (tileset.status === "ERROR") {
         throw new Error(
@@ -229,16 +230,16 @@ async function waitForTilesetReady(page, handle) {
 async function waitForTilesetPublished(page, handle) {
   return poll(
     `tileset ${handle} to publish`,
-    async () => {
-      const tileset = await findTileset(page, handle);
+    async ({ deadline }) => {
+      const tileset = await findTileset(page, handle, deadline);
       return tileset?.isPublished && tileset.tilejsonUrl ? tileset : null;
     },
     { timeoutMs: 90_000, intervalMs: 2_000 },
   );
 }
 
-async function findTileset(page, handle) {
-  const response = await consoleApi(page, "/tilesets");
+async function findTileset(page, handle, deadline) {
+  const response = await consoleApi(page, "/tilesets", { deadline });
   return response.data.find((tileset) => tileset.handle === handle) ?? null;
 }
 

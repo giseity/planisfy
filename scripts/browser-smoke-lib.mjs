@@ -12,6 +12,54 @@ const staticRendererRequire = createRequire(
 
 export const { chromium } = staticRendererRequire("playwright");
 
+export function createDeadline(label, timeoutMs) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error(`${label} timeout must be a positive finite number`);
+  }
+
+  const expiresAt = Date.now() + timeoutMs;
+
+  const deadline = {
+    remainingMs() {
+      return Math.max(0, expiresAt - Date.now());
+    },
+    throwIfExpired(phase = label) {
+      if (deadline.remainingMs() === 0) {
+        throw new Error(`${phase} exceeded its ${timeoutMs}ms deadline`);
+      }
+    },
+    async run(phase, task) {
+      deadline.throwIfExpired(phase);
+      const controller = new AbortController();
+      const remaining = deadline.remainingMs();
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error(
+            `${phase} exceeded its ${timeoutMs}ms deadline`,
+          );
+          controller.abort(error);
+          reject(error);
+        }, remaining);
+      });
+
+      try {
+        return await Promise.race([
+          Promise.resolve().then(() => task(controller.signal, deadline)),
+          timeout,
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    async delay(intervalMs, phase = `${label} retry delay`) {
+      await deadline.run(phase, (signal) => abortableDelay(intervalMs, signal));
+    },
+  };
+
+  return deadline;
+}
+
 export async function run(command, args, options = {}) {
   await new Promise((resolveRun, rejectRun) => {
     const child = spawn(command, args, {
@@ -29,31 +77,56 @@ export async function run(command, args, options = {}) {
   });
 }
 
-export async function waitForJson(url, label) {
-  await waitForHttp(url, label, async (response) => {
-    await response.json();
-  });
+export async function waitForJson(url, label, options = {}) {
+  await waitForHttp(
+    url,
+    label,
+    async (response) => {
+      await response.json();
+    },
+    options,
+  );
 }
 
-export async function waitForHttp(url, label, validate = async () => {}) {
+export async function waitForHttp(
+  url,
+  label,
+  validate = async () => {},
+  options = {},
+) {
+  const timeoutMs = options.timeoutMs ?? 90_000;
+  const intervalMs = options.intervalMs ?? 1_000;
+  const deadline = options.deadline ?? createDeadline(label, timeoutMs);
   let lastError;
-  for (let attempt = 1; attempt <= 90; attempt += 1) {
+
+  while (deadline.remainingMs() > 0) {
     try {
-      const response = await fetch(url);
-      if (response.ok) {
-        await validate(response);
+      return await deadline.run(`${label} request`, async (signal) => {
+        const response = await fetch(url, {
+          ...options.fetchOptions,
+          signal,
+        });
+        if (!response.ok) {
+          throw new Error(`${label} returned HTTP ${response.status}`);
+        }
+        await validate(response, signal);
         return response;
-      }
-      lastError = new Error(`${label} returned HTTP ${response.status}`);
+      });
     } catch (error) {
       lastError = error;
     }
-    await delay(1000);
+
+    if (deadline.remainingMs() === 0) break;
+    await deadline.delay(Math.min(intervalMs, deadline.remainingMs()));
   }
-  throw lastError ?? new Error(`${label} did not become reachable`);
+
+  throw new Error(`${label} did not become reachable before its deadline`, {
+    cause: lastError,
+  });
 }
 
 export async function signIn(page, { consoleUrl, email, password }) {
+  const deadline = createDeadline("browser sign-in", 60_000);
   const authFailures = [];
   const responseListener = async (response) => {
     const url = response.url();
@@ -79,7 +152,9 @@ export async function signIn(page, { consoleUrl, email, password }) {
       throw new Error("Sign-in email field did not retain the smoke user");
     }
     if ((await passwordInput.inputValue()) !== password) {
-      throw new Error("Sign-in password field did not retain the smoke password");
+      throw new Error(
+        "Sign-in password field did not retain the smoke password",
+      );
     }
     const [signInResponse] = await Promise.all([
       page.waitForResponse(
@@ -95,8 +170,8 @@ export async function signIn(page, { consoleUrl, email, password }) {
         `Sign-in request failed with ${signInResponse.status()}: ${await signInResponse.text()}`,
       );
     }
-    await waitForBrowserSession(page);
-    await waitForProtectedConsoleEntry(page, consoleUrl);
+    await waitForBrowserSession(page, deadline);
+    await waitForProtectedConsoleEntry(page, consoleUrl, deadline);
   } catch (error) {
     const notices = await page
       .locator('[data-sonner-toast], [role="alert"], [role="status"]')
@@ -115,38 +190,51 @@ export async function signIn(page, { consoleUrl, email, password }) {
   }
 }
 
-async function waitForProtectedConsoleEntry(page, consoleUrl) {
+async function waitForProtectedConsoleEntry(page, consoleUrl, deadline) {
   let lastSession = "";
-  for (let attempt = 1; attempt <= 30; attempt += 1) {
-    await page.goto(consoleUrl, { waitUntil: "domcontentloaded" });
+  while (deadline.remainingMs() > 0) {
+    await page.goto(consoleUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: deadline.remainingMs(),
+    });
     if (new URL(page.url()).pathname !== "/sign-in") return;
-    lastSession = await page
-      .evaluate(async () => {
-        const response = await fetch("/api/auth/get-session", {
-          credentials: "include",
-        });
-        return `${response.status} ${(await response.text()).slice(0, 300)}`;
-      })
+    lastSession = await browserFetch(
+      page,
+      {
+        url: "/api/auth/get-session",
+        credentials: "include",
+        readBody: true,
+      },
+      { deadline, label: "protected Console session probe" },
+    )
+      .then((response) => `${response.status} ${response.text.slice(0, 300)}`)
       .catch((error) =>
         error instanceof Error ? error.message : String(error),
       );
-    await delay(500);
+    if (deadline.remainingMs() > 0) {
+      await deadline.delay(Math.min(500, deadline.remainingMs()));
+    }
   }
   throw new Error(
     `Sign-in completed but Console route protection rejected the session; get-session=${lastSession}`,
   );
 }
 
-async function waitForBrowserSession(page) {
+async function waitForBrowserSession(page, deadline) {
   let lastStatus = 0;
   let lastText = "";
-  for (let attempt = 1; attempt <= 40; attempt += 1) {
-    const result = await page
-      .evaluate(async () => {
-        const response = await fetch("/api/auth/get-session", {
-          credentials: "include",
-        });
-        const text = await response.text();
+  while (deadline.remainingMs() > 0) {
+    const result = await browserFetch(
+      page,
+      {
+        url: "/api/auth/get-session",
+        credentials: "include",
+        readBody: true,
+      },
+      { deadline, label: "browser session probe" },
+    )
+      .then((response) => {
+        const text = response.text;
         let hasSession = false;
         try {
           const json = JSON.parse(text);
@@ -170,7 +258,9 @@ async function waitForBrowserSession(page) {
     lastStatus = result.status;
     lastText = result.text;
     if (result.ok && result.hasSession) return;
-    await delay(500);
+    if (deadline.remainingMs() > 0) {
+      await deadline.delay(Math.min(500, deadline.remainingMs()));
+    }
   }
   throw new Error(
     `Session did not become visible after sign-in (${lastStatus}): ${lastText.slice(0, 500)}`,
@@ -186,7 +276,13 @@ export async function expectText(page, text, options = {}) {
   while (Date.now() < deadline) {
     matchCount = await locator.count().catch(() => 0);
     for (let index = 0; index < matchCount; index += 1) {
-      if (await locator.nth(index).isVisible().catch(() => false)) return;
+      if (
+        await locator
+          .nth(index)
+          .isVisible()
+          .catch(() => false)
+      )
+        return;
     }
     await delay(250);
   }
@@ -196,25 +292,64 @@ export async function expectText(page, text, options = {}) {
   );
 }
 
-export async function expectBrowserFetch(page, url, label) {
-  const result = await page.evaluate(async (targetUrl) => {
-    try {
-      const response = await fetch(targetUrl);
-      return {
-        ok: response.ok,
-        status: response.status,
-        contentType: response.headers.get("content-type"),
-        text: response.ok ? "" : await response.text(),
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        status: 0,
-        contentType: null,
-        text: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }, url);
+export async function browserFetch(page, request, options = {}) {
+  const label = options.label ?? "browser fetch";
+  const deadline =
+    options.deadline ?? createDeadline(label, options.timeoutMs ?? 20_000);
+  const browserTimeoutMs = Math.max(1, deadline.remainingMs() - 10);
+  const result = await deadline.run(label, () =>
+    page.evaluate(
+      async ({ request, timeoutMs }) => {
+        const controller = new AbortController();
+        let timedOut = false;
+        const timer = globalThis.setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, timeoutMs);
+
+        try {
+          const response = await fetch(request.url, {
+            method: request.method ?? "GET",
+            headers: request.headers,
+            body: request.body,
+            credentials: request.credentials,
+            signal: controller.signal,
+          });
+          const shouldReadBody = request.readBody || !response.ok;
+          return {
+            ok: response.ok,
+            status: response.status,
+            contentType: response.headers.get("content-type"),
+            text: shouldReadBody ? await response.text() : "",
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            status: 0,
+            contentType: null,
+            text: timedOut
+              ? `request exceeded its ${timeoutMs}ms browser deadline`
+              : error instanceof Error
+                ? error.message
+                : String(error),
+          };
+        } finally {
+          globalThis.clearTimeout(timer);
+        }
+      },
+      { request, timeoutMs: browserTimeoutMs },
+    ),
+  );
+
+  return result;
+}
+
+export async function expectBrowserFetch(page, url, label, options = {}) {
+  const result = await browserFetch(
+    page,
+    { url, readBody: false },
+    { ...options, label },
+  );
 
   if (!result.ok) {
     throw new Error(
@@ -300,46 +435,65 @@ export async function renderMapLibreStyle(
 export async function consoleApi(page, path, options = {}) {
   const apiPath =
     process.env.PLANISFY_E2E_CONSOLE_API_PATH ?? "/api/v1/console";
-  const result = await page.evaluate(
-    async ({ apiPath, path, options }) => {
-      const response = await fetch(`${apiPath}${path}`, {
-        method: options.method ?? "GET",
-        headers: options.body
-          ? { "Content-Type": "application/json" }
-          : undefined,
-        body: options.body ? JSON.stringify(options.body) : undefined,
-        credentials: "include",
-      });
-      const json = await response.json();
-      return { ok: response.ok, status: response.status, json };
+  const result = await browserFetch(
+    page,
+    {
+      url: `${apiPath}${path}`,
+      method: options.method,
+      headers: options.body
+        ? { "Content-Type": "application/json" }
+        : undefined,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      credentials: "include",
+      readBody: true,
     },
-    { apiPath, path, options },
+    {
+      deadline: options.deadline,
+      label: `Console API ${path}`,
+      timeoutMs: options.timeoutMs,
+    },
   );
+  if (result.status === 0) {
+    throw new Error(`Console API ${path} fetch failed: ${result.text}`);
+  }
+
+  let json;
+  try {
+    json = JSON.parse(result.text);
+  } catch {
+    throw new Error(
+      `Console API ${path} returned invalid JSON with ${result.status}`,
+    );
+  }
 
   if (!result.ok) {
     throw new Error(
       `Console API ${path} failed with ${result.status}: ${
-        result.json?.error?.message ?? JSON.stringify(result.json)
+        json?.error?.message ?? JSON.stringify(json)
       }`,
     );
   }
-  return result.json;
+  return json;
 }
 
 export async function poll(label, fn, options = {}) {
   const timeoutMs = options.timeoutMs ?? 120_000;
   const intervalMs = options.intervalMs ?? 2_000;
-  const started = Date.now();
+  const deadline = options.deadline ?? createDeadline(label, timeoutMs);
   let lastError;
 
-  while (Date.now() - started < timeoutMs) {
+  while (deadline.remainingMs() > 0) {
     try {
-      const value = await fn();
+      const value = await deadline.run(`${label} poll attempt`, (signal) =>
+        fn({ deadline, signal }),
+      );
       if (value) return value;
     } catch (error) {
       lastError = error;
     }
-    await delay(intervalMs);
+    if (deadline.remainingMs() > 0) {
+      await deadline.delay(Math.min(intervalMs, deadline.remainingMs()));
+    }
   }
 
   throw lastError ?? new Error(`Timed out waiting for ${label}`);
@@ -347,6 +501,20 @@ export async function poll(label, fn, options = {}) {
 
 export function delay(ms) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+function abortableDelay(ms, signal) {
+  return new Promise((resolveDelay, rejectDelay) => {
+    const timer = setTimeout(resolveDelay, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        rejectDelay(signal.reason ?? new Error("Delay aborted"));
+      },
+      { once: true },
+    );
+  });
 }
 
 function renderMapHtml({ js, css }) {
