@@ -233,18 +233,25 @@ function ChangePasswordSection() {
 
     setLoading(true)
     try {
-      await authClient.changePassword({
+      const result = await authClient.changePassword({
         currentPassword,
         newPassword,
         revokeOtherSessions: true,
       })
+      if (result.error) {
+        throw new Error(result.error.message ?? 'Failed to change password')
+      }
       setSuccess(true)
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
       setTimeout(() => setSuccess(false), 3000)
-    } catch {
-      setError('Failed to change password. Check your current password.')
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'Failed to change password. Check your current password.'
+      )
     } finally {
       setLoading(false)
     }
@@ -310,17 +317,21 @@ function SessionsSection() {
   const [loading, setLoading] = useState(true)
   const [revokeId, setRevokeId] = useState<string | null>(null)
   const [revokeAllOpen, setRevokeAllOpen] = useState(false)
+  const [revoking, setRevoking] = useState(false)
+  const [error, setError] = useState('')
 
   const currentToken = session?.session?.token
 
   const fetchSessions = useCallback(async () => {
+    setError('')
     try {
       const res = await authClient.listSessions()
-      if (res.data) {
-        setSessions(res.data as unknown as SessionData[])
+      if (res.error) {
+        throw new Error(res.error.message ?? 'Unable to load active sessions')
       }
-    } catch {
-      // ignore
+      setSessions((res.data ?? []) as unknown as SessionData[])
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to load active sessions')
     } finally {
       setLoading(false)
     }
@@ -330,26 +341,42 @@ function SessionsSection() {
     fetchSessions()
   }, [fetchSessions])
 
-  const handleRevoke = async () => {
+  const handleRevoke = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
     if (!revokeId) return
     const sessionToRevoke = sessions.find((s) => s.id === revokeId)
     if (!sessionToRevoke) return
+    setRevoking(true)
+    setError('')
     try {
-      await authClient.revokeSession({ token: sessionToRevoke.token })
+      const result = await authClient.revokeSession({ token: sessionToRevoke.token })
+      if (result.error) {
+        throw new Error(result.error.message ?? 'Unable to revoke this session')
+      }
       setRevokeId(null)
       await fetchSessions()
-    } catch {
-      // ignore
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to revoke this session')
+    } finally {
+      setRevoking(false)
     }
   }
 
-  const handleRevokeAll = async () => {
+  const handleRevokeAll = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    setRevoking(true)
+    setError('')
     try {
-      await authClient.revokeOtherSessions()
+      const result = await authClient.revokeOtherSessions()
+      if (result.error) {
+        throw new Error(result.error.message ?? 'Unable to revoke other sessions')
+      }
       setRevokeAllOpen(false)
       await fetchSessions()
-    } catch {
-      // ignore
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to revoke other sessions')
+    } finally {
+      setRevoking(false)
     }
   }
 
@@ -428,6 +455,7 @@ function SessionsSection() {
           })}
         </TableBody>
       </Table>
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       {/* Revoke single session */}
       <AlertDialog open={!!revokeId} onOpenChange={() => setRevokeId(null)}>
@@ -441,10 +469,11 @@ function SessionsSection() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleRevoke}
+              onClick={(event) => void handleRevoke(event)}
+              disabled={revoking}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Revoke
+              {revoking ? 'Revoking...' : 'Revoke'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -462,10 +491,11 @@ function SessionsSection() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleRevokeAll}
+              onClick={(event) => void handleRevokeAll(event)}
+              disabled={revoking}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Revoke all
+              {revoking ? 'Revoking...' : 'Revoke all'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

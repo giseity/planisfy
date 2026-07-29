@@ -22,6 +22,10 @@ describe("settings placeholder removal", () => {
     expect(source).not.toContain("192.168.1.42");
     expect(source).not.toContain("203.0.113.42");
     expect(source).toContain("No security activity has been recorded yet.");
+    expect(source).toContain("result.error.message ?? 'Failed to change password'");
+    expect(source).toContain("res.error.message ?? 'Unable to load active sessions'");
+    expect(source).toContain("result.error.message ?? 'Unable to revoke this session'");
+    expect(source).toContain("event.preventDefault()");
   });
 
   it("wires two-factor enrollment, recovery, and a non-trusting challenge default", () => {
