@@ -18,6 +18,10 @@ test("rejects literal and DNS-resolved private and reserved addresses", async ()
     "http://[::1]/",
     "http://[fe9f::1]/",
     "http://[::ffff:127.0.0.1]/",
+    "http://[::7f00:1]/",
+    "http://[2002:7f00:1::]/",
+    "http://[fec0::1]/",
+    "http://[3fff::1]/",
   ]) {
     await assert.rejects(resolveOutboundTarget(url), OutboundRequestError);
   }
