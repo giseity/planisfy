@@ -24,6 +24,26 @@ describe("settings placeholder removal", () => {
     expect(source).toContain("No security activity has been recorded yet.");
   });
 
+  it("wires two-factor enrollment, recovery, and a non-trusting challenge default", () => {
+    const settingsSource = readFileSync(
+      resolve(__dirname, "../features/settings/two-factor-section.tsx"),
+      "utf8",
+    );
+    const challengeSource = readFileSync(
+      resolve(__dirname, "../app/(auth)/two-factor/client-page.tsx"),
+      "utf8",
+    );
+
+    expect(settingsSource).toContain("authClient.twoFactor.enable");
+    expect(settingsSource).toContain("authClient.twoFactor.verifyTotp");
+    expect(settingsSource).toContain("authClient.twoFactor.generateBackupCodes");
+    expect(settingsSource).toContain("authClient.twoFactor.disable");
+    expect(settingsSource).toContain("QRCode.toDataURL");
+    expect(settingsSource).not.toContain("localStorage");
+    expect(challengeSource).toContain("authClient.twoFactor.verifyBackupCode");
+    expect(challengeSource).toContain("useState(false)");
+  });
+
   it("operations tabs do not render adapter placeholder copy", () => {
     const templatesSource = readFileSync(
       resolve(__dirname, "../features/operations/templates-tab.tsx"),

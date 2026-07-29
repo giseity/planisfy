@@ -4,6 +4,7 @@ import type React from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
+import { TwoFactorSection } from '@/features/settings/two-factor-section'
 import {
   parseUserAgent,
   timeAgo,
@@ -30,7 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@planisfy/ui/components/alert-dialog'
-import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
+import { Card, CardContent } from '@planisfy/ui/components/card'
 import { Input } from '@planisfy/ui/components/input'
 import { Label } from '@planisfy/ui/components/label'
 import { Separator } from '@planisfy/ui/components/separator'
@@ -43,7 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from '@planisfy/ui/components/table'
-import { Github, Link2, Monitor, ShieldCheck, Smartphone, Unlink, X } from 'lucide-react'
+import { Github, Link2, Monitor, Unlink, X } from 'lucide-react'
 
 export function AccountTab() {
   return (
@@ -204,38 +205,6 @@ function ConnectedAccountsSection() {
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
-  )
-}
-
-function TwoFactorSection() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-          Two-factor authentication
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-muted">
-          <Smartphone className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium">Authenticator app</p>
-            <Badge variant="outline">Not enabled</Badge>
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Add an extra layer of security by requiring a verification code from your authenticator
-            app when signing in.
-          </p>
-          <Button className="mt-4">
-            <ShieldCheck className="h-4 w-4" />
-            Enable 2FA
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
   )
 }
 
