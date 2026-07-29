@@ -246,6 +246,13 @@
       "when": 1785326400000,
       "tag": "0034_geodata_admission_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1785330000000,
+      "tag": "0035_scheduled_operation_runs",
+      "breakpoints": true
     }
   ]
 }

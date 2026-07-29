@@ -33,6 +33,8 @@ import {
   routingGraphBuildStatusEnum,
   routingGraphReleaseStatusEnum,
   scheduledOperationKindEnum,
+  scheduledOperationRunDispositionEnum,
+  scheduledOperationRunTriggerEnum,
   scheduledOperationStatusEnum,
   sourceProviderEnum,
   tileArtifactFormatEnum,
@@ -708,6 +710,44 @@ export const processingJobs = pgTable(
   (table) => [
     index('processing_jobs_account_idx').on(table.accountId),
     index('processing_jobs_status_idx').on(table.status),
+  ]
+)
+
+export const scheduledOperationRuns = pgTable(
+  'scheduled_operation_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    scheduleId: uuid('schedule_id')
+      .notNull()
+      .references(() => scheduledOperations.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    trigger: scheduledOperationRunTriggerEnum('trigger').notNull(),
+    scheduledFor: timestamp('scheduled_for', { withTimezone: true }).notNull(),
+    idempotencyKey: varchar('idempotency_key', { length: 128 }).notNull(),
+    disposition: scheduledOperationRunDispositionEnum('disposition').notNull(),
+    processingJobId: uuid('processing_job_id').references(() => processingJobs.id, {
+      onDelete: 'set null',
+    }),
+    reason: varchar('reason', { length: 128 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index('scheduled_operation_runs_account_idx').on(table.accountId, table.createdAt),
+    index('scheduled_operation_runs_job_idx').on(table.processingJobId),
+    uniqueIndex('scheduled_operation_runs_idempotency_unique').on(
+      table.scheduleId,
+      table.idempotencyKey
+    ),
+    uniqueIndex('scheduled_operation_runs_slot_unique').on(
+      table.scheduleId,
+      table.trigger,
+      table.scheduledFor
+    ),
   ]
 )
 

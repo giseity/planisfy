@@ -65,6 +65,7 @@ export function SchedulesTab({
   const [tilesetId, setTilesetId] = useState('')
   const [sourceImportId, setSourceImportId] = useState('')
   const [saving, setSaving] = useState(false)
+  const [runningScheduleId, setRunningScheduleId] = useState<string | null>(null)
   const requiresTileset = kind === 'tileset_rebuild'
   const eligibleImports = sourceImports.filter(
     (sourceImport) =>
@@ -109,7 +110,12 @@ export function SchedulesTab({
   }
 
   async function runSchedule(id: string) {
-    await runAction(() => api.runScheduledOperation(id), 'Schedule run queued', onChanged)
+    setRunningScheduleId(id)
+    try {
+      await runAction(() => api.runScheduledOperation(id), 'Schedule run queued', onChanged)
+    } finally {
+      setRunningScheduleId(null)
+    }
   }
 
   async function deleteSchedule(id: string) {
@@ -234,7 +240,9 @@ export function SchedulesTab({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                          disabled={schedule.status !== 'active'}
+                          disabled={
+                            schedule.status !== 'active' || runningScheduleId === schedule.id
+                          }
                           onSelect={() => runSchedule(schedule.id)}
                         >
                           <Play className="mr-2 h-4 w-4" />

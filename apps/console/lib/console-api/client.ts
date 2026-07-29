@@ -25,6 +25,7 @@ import type {
   ConsoleRoutingGraphBuildDetail,
   ConsoleSavedRegion,
   ConsoleScheduledOperation,
+  ConsoleScheduledOperationRun,
   ConsoleSourceImport,
   ConsoleSpriteAsset,
   ConsoleStaleJobReconciliationRun,
@@ -78,6 +79,7 @@ export type {
   ConsoleRoutingGraphRelease,
   ConsoleSavedRegion,
   ConsoleScheduledOperation,
+  ConsoleScheduledOperationRun,
   ConsoleSourceImport,
   ConsoleSpriteAsset,
   ConsoleStaleJobReconciliationRun,
@@ -343,8 +345,16 @@ class ApiClient {
   }
 
   runScheduledOperation(id: string) {
-    return this.post<ApiEnvelope<{ schedule: ConsoleScheduledOperation; queued: boolean }>>(
-      `/operations/schedules/${id}/run`
+    return this.post<
+      ApiEnvelope<{
+        schedule: ConsoleScheduledOperation
+        run: ConsoleScheduledOperationRun
+        replayed: boolean
+      }>
+    >(
+      `/operations/schedules/${id}/run`,
+      undefined,
+      { 'Idempotency-Key': crypto.randomUUID() }
     )
   }
 

@@ -95,6 +95,14 @@ export const scheduledOperationStatusEnum = pgEnum(
   "scheduled_operation_status",
   ["active", "paused"],
 );
+export const scheduledOperationRunTriggerEnum = pgEnum(
+  "scheduled_operation_run_trigger",
+  ["manual", "scheduled"],
+);
+export const scheduledOperationRunDispositionEnum = pgEnum(
+  "scheduled_operation_run_disposition",
+  ["QUEUED", "SKIPPED", "REJECTED"],
+);
 export const artifactBackupStatusEnum = pgEnum("artifact_backup_status", [
   "pending",
   "completed",

@@ -30,6 +30,20 @@ export interface ConsoleScheduledOperation {
   updatedAt: string;
 }
 
+export interface ConsoleScheduledOperationRun {
+  id: string;
+  scheduleId: string;
+  accountId: string;
+  trigger: "manual" | "scheduled";
+  scheduledFor: string;
+  idempotencyKey: string;
+  disposition: "QUEUED" | "SKIPPED" | "REJECTED";
+  processingJobId: string | null;
+  reason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConsoleArtifactBackup {
   id: string;
   accountId: string;

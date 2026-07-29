@@ -15,6 +15,7 @@ import {
   basemapReleases,
   customDomains,
   db,
+  eventOutbox,
   geocodingArtifacts,
   geocodingBuildLogs,
   geocodingBuilds,
@@ -32,6 +33,7 @@ import {
   routingGraphBuilds,
   routingGraphReleases,
   scheduledOperations,
+  scheduledOperationRuns,
   sourceImports,
   storageObjects,
   tilesets,
@@ -67,7 +69,6 @@ import {
 import type { PlanFeature } from '@planisfy/types'
 import { requireAnyOrgPermission, requireOrgPermission, type AuthEnv } from '../../middleware/auth'
 import { env, redisConnection } from '../../env'
-import { enqueueOutboxEvent } from '../../shared/outbox/outbox'
 import {
   managedPlanFeatureDenial,
   planGateErrorPayload,
@@ -76,7 +77,10 @@ import {
 import { sendEmail } from '../email/email'
 import { buildNotificationPayload } from './notification-adapters'
 import { SourceUrlRejectedError, validateOutboundUrl } from '../imports/source-url-policy'
-import { consumeNotificationTestRateLimit } from '../../middleware/rate-limit'
+import {
+  consumeDashboardRateLimit,
+  consumeNotificationTestRateLimit,
+} from '../../middleware/rate-limit'
 
 export const operationsRoute = new Hono<AuthEnv>()
 
@@ -1002,43 +1006,107 @@ async function validateScheduleTarget(
 operationsRoute.post('/operations/schedules/:id/run', async (c) => {
   const accountId = c.get('ownerId')
   const id = c.req.param('id')
-  const [schedule] = await db
-    .select()
-    .from(scheduledOperations)
-    .where(
-      and(
-        eq(scheduledOperations.id, id),
-        eq(scheduledOperations.accountId, accountId),
-        isNull(scheduledOperations.deletedAt)
-      )
-    )
-    .limit(1)
-  if (!schedule) return notFound(c, 'Schedule not found')
-  if (
-    schedule.kind === 'custom_command' &&
-    !canUseConsoleOperatorOperation(env.DEPLOYMENT_MODE, 'custom_command_schedules')
-  ) {
-    return managedConsoleOperatorResponse(c, 'custom_command_schedules')
-  }
-  const prepared = prepareScheduledOperationRun(schedule)
-  if (!prepared.success) {
+  const idempotencyKey = c.req.header('Idempotency-Key')
+  if (!idempotencyKey || !z.string().uuid().safeParse(idempotencyKey).success) {
     return c.json(
       {
         error: {
-          code: prepared.code,
-          message: prepared.message,
+          code: 'IDEMPOTENCY_KEY_REQUIRED',
+          message: 'Idempotency-Key must be a UUID.',
         },
       },
-      409
+      400
     )
   }
-  const [updated] = await db
-    .update(scheduledOperations)
-    .set(prepared.update)
-    .where(eq(scheduledOperations.id, id))
-    .returning()
-  await enqueueOutboxEvent(prepared.outbox)
-  return c.json({ data: { schedule: updated, queued: true } })
+
+  const retryAfter = await consumeDashboardRateLimit(`schedule-run:${accountId}`)
+  if (retryAfter) {
+    c.header('Retry-After', String(retryAfter))
+    return c.json(
+      { error: { code: 'RATE_LIMITED', message: 'Too many manual schedule runs.' } },
+      429
+    )
+  }
+
+  const result = await db.transaction(async (tx) => {
+    const [schedule] = await tx
+      .select()
+      .from(scheduledOperations)
+      .where(
+        and(
+          eq(scheduledOperations.id, id),
+          eq(scheduledOperations.accountId, accountId),
+          isNull(scheduledOperations.deletedAt)
+        )
+      )
+      .limit(1)
+      .for('update')
+    if (!schedule) return { kind: 'not-found' as const }
+
+    const [existing] = await tx
+      .select()
+      .from(scheduledOperationRuns)
+      .where(
+        and(
+          eq(scheduledOperationRuns.scheduleId, schedule.id),
+          eq(scheduledOperationRuns.idempotencyKey, idempotencyKey)
+        )
+      )
+      .limit(1)
+    if (existing) {
+      return { kind: 'queued' as const, schedule, run: existing, replayed: true }
+    }
+
+    const prepared = prepareScheduledOperationRun(schedule)
+    if (!prepared.success) return { kind: 'invalid' as const, error: prepared }
+    if (schedule.kind === 'custom_command') {
+      return {
+        kind: 'invalid' as const,
+        error: {
+          code: 'UNSUPPORTED_SCHEDULE_KIND',
+          message: 'Custom command schedules are retired.',
+        },
+      }
+    }
+
+    const now = new Date()
+    const [run] = await tx
+      .insert(scheduledOperationRuns)
+      .values({
+        scheduleId: schedule.id,
+        accountId,
+        trigger: 'manual',
+        scheduledFor: now,
+        idempotencyKey,
+        disposition: 'QUEUED',
+      })
+      .returning()
+    await tx.insert(eventOutbox).values({
+      eventName: 'scheduled_operation.run_requested',
+      payload: {
+        accountId,
+        scheduleId: schedule.id,
+        runId: run!.id,
+        kind: schedule.kind,
+        payload: isObjectRecord(schedule.payload) ? schedule.payload : {},
+        requestedAt: now.toISOString(),
+      },
+      status: 'PENDING',
+      processAt: now,
+    })
+    const [updated] = await tx
+      .update(scheduledOperations)
+      .set({ lastRunAt: now, updatedAt: now })
+      .where(eq(scheduledOperations.id, schedule.id))
+      .returning()
+    return { kind: 'queued' as const, schedule: updated!, run: run!, replayed: false }
+  })
+
+  if (result.kind === 'not-found') return notFound(c, 'Schedule not found')
+  if (result.kind === 'invalid') {
+    return c.json({ error: result.error }, 409)
+  }
+  return c.json({ data: result }, result.replayed ? 200 : 202)
 })
 
 operationsRoute.delete('/operations/schedules/:id', async (c) => {
