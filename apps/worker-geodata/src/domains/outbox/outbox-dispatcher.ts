@@ -41,6 +41,7 @@ import type { SourceProcessingJob } from "../sources/source-worker";
 const DISPATCHABLE_EVENTS = [
   "tileset.build.requested",
   "source.import.requested",
+  "artifact.cleanup.requested",
 ] as const;
 const MAX_ATTEMPTS = 5;
 
@@ -155,12 +156,42 @@ async function dispatchEvent(
       case "source.import.requested":
         await dispatchSourceImportRequested(event);
         break;
+      case "artifact.cleanup.requested":
+        await dispatchArtifactCleanupRequested(event);
+        break;
       default:
         throw new Error(`Unsupported geodata outbox event: ${event.eventName}`);
     }
     await completeOutboxEvent(event.id);
   } catch (err) {
     await failOutboxEvent(event, err);
+  }
+}
+
+async function dispatchArtifactCleanupRequested(event: OutboxEvent) {
+  const payload = parseEventPayload("artifact.cleanup.requested", event.payload);
+  const objects = payload.storageObjectId
+    ? await db
+        .select()
+        .from(storageObjects)
+        .where(eq(storageObjects.id, payload.storageObjectId))
+        .limit(1)
+    : await db
+        .select()
+        .from(storageObjects)
+        .where(
+          and(
+            eq(storageObjects.resourceType, payload.resourceType!),
+            eq(storageObjects.resourceId, payload.resourceId!),
+          ),
+        );
+  const storage = getStorage();
+  for (const object of objects) {
+    await storage.delete(object.storageKey);
+    await db
+      .update(storageObjects)
+      .set({ deletedAt: object.deletedAt ?? new Date(), updatedAt: new Date() })
+      .where(eq(storageObjects.id, object.id));
   }
 }
 
@@ -176,6 +207,7 @@ async function dispatchSourceImportRequested(event: OutboxEvent) {
     throw new Error(`Processing job not found: ${payload.jobId}`);
   }
 
+  let stored: Awaited<ReturnType<typeof storeDatasetArtifact>> | undefined;
   try {
     await throwIfSourceImportCanceled(payload.jobId);
 
@@ -194,12 +226,16 @@ async function dispatchSourceImportRequested(event: OutboxEvent) {
       parquetUrlTemplate: env.OVERTURE_PARQUET_URL_TEMPLATE,
       maxFeatures: env.SOURCE_IMPORT_MAX_FEATURES,
       timeoutMs: env.SOURCE_IMPORT_TIMEOUT_MS,
+      maxOutputBytes: env.GEODATA_MAX_OUTPUT_BYTES,
+      cancellationPollMs: env.GEODATA_CANCELLATION_POLL_MS,
+      checkCanceled: () => throwIfSourceImportCanceled(payload.jobId),
     });
     await throwIfSourceImportCanceled(payload.jobId);
 
-    const stored = await storeDatasetArtifact({
+    stored = await storeDatasetArtifact({
       accountId: payload.accountId,
       datasetId: payload.datasetId,
+      processingJobId: payload.jobId,
       result,
     });
     await throwIfSourceImportCanceled(payload.jobId);
@@ -248,6 +284,14 @@ async function dispatchSourceImportRequested(event: OutboxEvent) {
       });
     }
   } catch (err) {
+    if (stored) {
+      await requestDatasetArtifactCleanup(
+        stored,
+        err instanceof SourceImportCanceledError
+          ? "source_import_canceled"
+          : "source_import_finalization_failed",
+      );
+    }
     if (err instanceof SourceImportCanceledError) {
       await markSourceImportCanceled({
         jobId: payload.jobId,
@@ -275,6 +319,23 @@ async function markSourceImportProcessing(params: {
 }) {
   const now = new Date();
   await db.transaction(async (tx) => {
+    const [job] = await tx
+      .select({
+        status: processingJobs.status,
+        cancelRequestedAt: processingJobs.cancelRequestedAt,
+      })
+      .from(processingJobs)
+      .where(eq(processingJobs.id, params.jobId))
+      .for("update")
+      .limit(1);
+    if (
+      !job ||
+      !["PENDING", "PROCESSING"].includes(job.status) ||
+      job.cancelRequestedAt
+    ) {
+      throw new SourceImportCanceledError(job?.cancelRequestedAt);
+    }
+
     await tx
       .update(processingJobs)
       .set({
@@ -307,6 +368,7 @@ async function markSourceImportProcessing(params: {
 async function storeDatasetArtifact(params: {
   accountId: string;
   datasetId: string;
+  processingJobId: string;
   result: OvertureImportResult;
 }) {
   const version = await nextDatasetVersion(params.datasetId);
@@ -323,41 +385,70 @@ async function storeDatasetArtifact(params: {
   );
   const storageInfo = storage.getInfo();
 
-  const [storageObject] = await db
-    .insert(storageObjects)
-    .values({
-      accountId: params.accountId,
-      provider: storageInfo.provider,
-      bucket: storageInfo.bucket,
-      storageKey,
-      fileName: "features.geojson",
-      contentType: stored.contentType,
-      size: stored.size,
-      resourceType: "dataset",
-      resourceId: params.datasetId,
-      artifactKind: "import",
-      version: `v${version}`,
-    })
-    .returning({ id: storageObjects.id });
+  try {
+    return await db.transaction(async (tx) => {
+      const [storageObject] = await tx
+        .insert(storageObjects)
+        .values({
+          accountId: params.accountId,
+          provider: storageInfo.provider,
+          bucket: storageInfo.bucket,
+          storageKey,
+          fileName: "features.geojson",
+          contentType: stored.contentType,
+          size: stored.size,
+          resourceType: "dataset",
+          resourceId: params.datasetId,
+          artifactKind: "import",
+          processingJobId: params.processingJobId,
+          version: `v${version}`,
+        })
+        .returning({ id: storageObjects.id });
+      if (!storageObject) throw new Error("Failed to record imported dataset");
 
-  const [datasetVersion] = await db
-    .insert(datasetVersions)
-    .values({
-      datasetId: params.datasetId,
-      version,
-      storageObjectId: storageObject!.id,
-      bounds: params.result.bounds,
-      featureCount: params.result.featureCount,
-      schemaSummary: params.result.schemaSummary,
-    })
-    .returning({ id: datasetVersions.id });
+      const [datasetVersion] = await tx
+        .insert(datasetVersions)
+        .values({
+          datasetId: params.datasetId,
+          version,
+          storageObjectId: storageObject.id,
+          bounds: params.result.bounds,
+          featureCount: params.result.featureCount,
+          schemaSummary: params.result.schemaSummary,
+        })
+        .returning({ id: datasetVersions.id });
+      if (!datasetVersion) throw new Error("Failed to create dataset version");
 
-  return {
-    storageKey,
-    storageObjectId: storageObject!.id,
-    datasetVersionId: datasetVersion!.id,
-    version,
-  };
+      return {
+        storageKey,
+        storageObjectId: storageObject.id,
+        datasetVersionId: datasetVersion.id,
+        version,
+      };
+    });
+  } catch (error) {
+    await storage.delete(storageKey).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function requestDatasetArtifactCleanup(
+  stored: Awaited<ReturnType<typeof storeDatasetArtifact>>,
+  reason: string,
+) {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(datasetVersions)
+      .where(eq(datasetVersions.id, stored.datasetVersionId));
+    await tx
+      .update(storageObjects)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(storageObjects.id, stored.storageObjectId));
+    await tx.insert(eventOutbox).values({
+      eventName: "artifact.cleanup.requested",
+      payload: { storageObjectId: stored.storageObjectId, reason },
+    });
+  });
 }
 
 async function markSourceImportSucceeded(params: {
@@ -369,6 +460,23 @@ async function markSourceImportSucceeded(params: {
 }) {
   const now = new Date();
   await db.transaction(async (tx) => {
+    const [job] = await tx
+      .select({
+        status: processingJobs.status,
+        cancelRequestedAt: processingJobs.cancelRequestedAt,
+      })
+      .from(processingJobs)
+      .where(eq(processingJobs.id, params.jobId))
+      .for("update")
+      .limit(1);
+    if (
+      !job ||
+      !["PENDING", "PROCESSING"].includes(job.status) ||
+      job.cancelRequestedAt
+    ) {
+      throw new SourceImportCanceledError(job?.cancelRequestedAt);
+    }
+
     await tx
       .update(datasets)
       .set({
@@ -390,7 +498,7 @@ async function markSourceImportSucceeded(params: {
       })
       .where(eq(sourceImports.id, params.importId));
 
-    await tx
+    const [completedJob] = await tx
       .update(processingJobs)
       .set({
         status: "SUCCEEDED",
@@ -399,7 +507,11 @@ async function markSourceImportSucceeded(params: {
         completedAt: now,
         updatedAt: now,
       })
-      .where(activeProcessingJob(params.jobId));
+      .where(activeProcessingJob(params.jobId))
+      .returning({ id: processingJobs.id });
+    if (!completedJob) {
+      throw new SourceImportCanceledError(job.cancelRequestedAt);
+    }
 
     await tx.insert(processingJobLogs).values({
       jobId: params.jobId,
@@ -663,8 +775,12 @@ async function throwIfSourceImportCanceled(jobId: string) {
     .where(eq(processingJobs.id, jobId))
     .limit(1);
 
-  if (job?.status === "CANCELED" || job?.cancelRequestedAt) {
-    throw new SourceImportCanceledError(job.cancelRequestedAt);
+  if (
+    !job ||
+    !["PENDING", "PROCESSING"].includes(job.status) ||
+    job.cancelRequestedAt
+  ) {
+    throw new SourceImportCanceledError(job?.cancelRequestedAt);
   }
 }
 

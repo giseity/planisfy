@@ -1,10 +1,7 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import { runCancellableCommand } from "../jobs/cancellable-command";
 
 export type BBox = [number, number, number, number];
 
@@ -55,6 +52,9 @@ export interface OvertureImportOptions {
   parquetUrlTemplate: string;
   maxFeatures: number;
   timeoutMs: number;
+  maxOutputBytes?: number;
+  cancellationPollMs?: number;
+  checkCanceled?: () => Promise<void>;
 }
 
 export function parseOvertureImportInput(input: unknown): OvertureImportInput {
@@ -100,10 +100,19 @@ export async function runOvertureImport(
   });
 
   try {
-    await execFileAsync(options.duckdbPath, ["-batch", ":memory:", "-c", plan.sql], {
-      timeout: options.timeoutMs,
-      maxBuffer: 1024 * 1024 * 16,
+    await runCancellableCommand({
+      file: options.duckdbPath,
+      args: ["-batch", ":memory:", "-c", plan.sql],
+      timeoutMs: options.timeoutMs,
+      cancellationPollMs: options.cancellationPollMs ?? 1_000,
+      checkCanceled: options.checkCanceled,
     });
+    const output = await stat(outputPath);
+    if (output.size > (options.maxOutputBytes ?? 1_073_741_824)) {
+      throw new Error(
+        `Overture import exceeds the ${options.maxOutputBytes ?? 1_073_741_824} byte output limit`,
+      );
+    }
 
     const [data, metadataRaw, schemaRaw] = await Promise.all([
       readFile(outputPath),

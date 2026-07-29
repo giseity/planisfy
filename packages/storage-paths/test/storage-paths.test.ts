@@ -26,6 +26,26 @@ describe("@planisfy/storage-paths", () => {
     });
   });
 
+  it("builds and parses job-scoped tileset artifact paths", () => {
+    const path = StoragePaths.tilesetBuildArtifact(
+      "acct_1",
+      "tileset_1",
+      "job_1",
+      "pmtiles",
+    );
+
+    expect(path).toBe(
+      "accounts/acct_1/tilesets/tileset_1/builds/job_1/tiles.pmtiles",
+    );
+    expect(parseStoragePath(path)).toEqual({
+      kind: "tilesetBuildArtifact",
+      accountId: "acct_1",
+      tilesetId: "tileset_1",
+      processingJobId: "job_1",
+      format: "pmtiles",
+    });
+  });
+
   it("builds and parses tileset source artifact paths", () => {
     const path = StoragePaths.tilesetSourceArtifact("acct_1", "source_1", "data.pmtiles");
 

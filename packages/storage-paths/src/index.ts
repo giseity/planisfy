@@ -49,6 +49,14 @@ export const StoragePaths = {
   ) =>
     `accounts/${safeSegment(accountId)}/tilesets/${safeSegment(tilesetId)}/v${version}/tiles.${format}`,
 
+  tilesetBuildArtifact: (
+    accountId: string,
+    tilesetId: string,
+    processingJobId: string,
+    format: TilesetArtifactFormat,
+  ) =>
+    `accounts/${safeSegment(accountId)}/tilesets/${safeSegment(tilesetId)}/builds/${safeSegment(processingJobId)}/tiles.${format}`,
+
   tilesetSourceArtifact: (
     accountId: string,
     sourceId: string,
@@ -111,6 +119,13 @@ export type ParsedStoragePath =
       format: TilesetArtifactFormat;
     }
   | {
+      kind: "tilesetBuildArtifact";
+      accountId: string;
+      tilesetId: string;
+      processingJobId: string;
+      format: TilesetArtifactFormat;
+    }
+  | {
       kind: "tilesetSourceArtifact";
       accountId: string;
       sourceId: string;
@@ -146,6 +161,19 @@ export function parseStoragePath(path: string): ParsedStoragePath | null {
       tilesetId: tileset[2]!,
       version: Number(tileset[3]),
       format: tileset[4]! as TilesetArtifactFormat,
+    };
+  }
+
+  const tilesetBuild = path.match(
+    /^accounts\/([^/]+)\/tilesets\/([^/]+)\/builds\/([^/]+)\/tiles\.(pmtiles|mbtiles|directory)$/,
+  );
+  if (tilesetBuild) {
+    return {
+      kind: "tilesetBuildArtifact",
+      accountId: tilesetBuild[1]!,
+      tilesetId: tilesetBuild[2]!,
+      processingJobId: tilesetBuild[3]!,
+      format: tilesetBuild[4]! as TilesetArtifactFormat,
     };
   }
 

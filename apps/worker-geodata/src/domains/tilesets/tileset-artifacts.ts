@@ -1,6 +1,9 @@
-import { and, eq, max } from "drizzle-orm";
+import { and, eq, inArray, isNull, max, sql } from "drizzle-orm";
 import {
   db,
+  eventOutbox,
+  processingJobLogs,
+  processingJobs,
   storageObjects,
   tilesets,
   tilesetVersions,
@@ -11,7 +14,7 @@ import {
   StoragePaths,
   type TilesetArtifactFormat,
 } from "@planisfy/storage-paths";
-import { markProcessingJobSucceeded } from "../jobs/job-lifecycle";
+import { ProcessingJobCanceledError } from "../jobs/job-lifecycle";
 import {
   UPLOAD_VECTOR_LAYER_ID,
   type SourceFormat,
@@ -26,24 +29,19 @@ export async function storeProcessedArtifact(params: {
   artifactFormat?: TilesetArtifactFormat;
   contentType: string;
 }) {
+  if (!params.processingJobId) {
+    throw new Error("Processed artifacts require a processing job id");
+  }
+  const processingJobId = params.processingJobId;
   const storage = getStorage();
-  let versionNumber: number | undefined;
   const storageFormat =
     params.artifactFormat ?? tileStorageFormat(params.format);
-  const storageKey = await (async () => {
-    const [versionState] = await db
-      .select({ latest: max(tilesetVersions.version) })
-      .from(tilesetVersions)
-      .where(eq(tilesetVersions.tilesetId, params.tilesetId));
-    versionNumber = (versionState?.latest ?? 0) + 1;
-    return StoragePaths.tilesetVersion(
-      params.ownerId,
-      params.tilesetId,
-      versionNumber,
-      storageFormat,
-    );
-  })();
-
+  const storageKey = StoragePaths.tilesetBuildArtifact(
+    params.ownerId,
+    params.tilesetId,
+    processingJobId,
+    storageFormat,
+  );
   const stored = await storage.upload(
     storageKey,
     params.data,
@@ -51,32 +49,71 @@ export async function storeProcessedArtifact(params: {
   );
   const storageInfo = storage.getInfo();
 
-  const [storageObject] = await db
-    .insert(storageObjects)
-    .values({
-      accountId: params.ownerId,
-      provider: storageInfo.provider,
-      bucket: storageInfo.bucket,
-      storageKey,
-      fileName: `tiles.${storageFormat}`,
-      contentType: stored.contentType,
-      size: stored.size,
-      resourceType: "tileset",
-      resourceId: params.tilesetId,
-      artifactKind: "processed",
-      version: versionNumber
-        ? `v${versionNumber}`
-        : (params.processingJobId ?? "current"),
-    })
-    .returning({ id: storageObjects.id });
+  try {
+    const storageObject = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`artifact:${processingJobId}`}))`,
+      );
+      const [existing] = await tx
+        .select()
+        .from(storageObjects)
+        .where(eq(storageObjects.processingJobId, processingJobId))
+        .for("update")
+        .limit(1);
 
-  return {
-    storageObjectId: storageObject!.id,
-    storageKey,
-    artifactFormat: storageFormat,
-    size: stored.size,
-    versionNumber,
-  };
+      if (existing) {
+        const [updated] = await tx
+          .update(storageObjects)
+          .set({
+            accountId: params.ownerId,
+            provider: storageInfo.provider,
+            bucket: storageInfo.bucket,
+            storageKey,
+            fileName: `tiles.${storageFormat}`,
+            contentType: stored.contentType,
+            size: stored.size,
+            resourceType: "tileset",
+            resourceId: params.tilesetId,
+            artifactKind: "processed",
+            version: `build:${processingJobId}`,
+            deletedAt: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(storageObjects.id, existing.id))
+          .returning();
+        return updated!;
+      }
+
+      const [created] = await tx
+        .insert(storageObjects)
+        .values({
+          accountId: params.ownerId,
+          provider: storageInfo.provider,
+          bucket: storageInfo.bucket,
+          storageKey,
+          fileName: `tiles.${storageFormat}`,
+          contentType: stored.contentType,
+          size: stored.size,
+          resourceType: "tileset",
+          resourceId: params.tilesetId,
+          artifactKind: "processed",
+          processingJobId,
+          version: `build:${processingJobId}`,
+        })
+        .returning();
+      return created!;
+    });
+
+    return {
+      storageObjectId: storageObject.id,
+      storageKey,
+      artifactFormat: storageFormat,
+      size: stored.size,
+    };
+  } catch (error) {
+    await storage.delete(storageKey).catch(() => undefined);
+    throw error;
+  }
 }
 
 export type StoredTilesetArtifact = Awaited<
@@ -95,105 +132,203 @@ export async function finalizeProcessedArtifact(params: {
   bounds?: [number, number, number, number] | null;
   fallback?: string;
 }) {
-  await assertCurrentTilesetBuild(params.tilesetId, params.processingJobId);
+  if (!params.processingJobId) {
+    await requestArtifactCleanup(
+      params.artifact.storageObjectId,
+      "missing_processing_job",
+    );
+    throw new Error("Processed artifact finalization requires a processing job id");
+  }
+  const jobId = params.processingJobId;
 
-  const versionNumber =
-    params.artifact.versionNumber ??
-    (await nextTilesetVersion(params.tilesetId));
-  const tilesetVersion = await db.transaction(async (tx) => {
-    const [createdVersion] = await tx
-      .insert(tilesetVersions)
-      .values({
+  try {
+    return await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`tilesetBuild:${params.tilesetId}`}))`,
+      );
+      const [job] = await tx
+        .select()
+        .from(processingJobs)
+        .where(
+          and(
+            eq(processingJobs.id, jobId),
+            eq(processingJobs.accountId, params.ownerId),
+          ),
+        )
+        .for("update")
+        .limit(1);
+      if (
+        !job ||
+        !["PENDING", "PROCESSING"].includes(job.status) ||
+        job.cancelRequestedAt
+      ) {
+        throw new ProcessingJobCanceledError(job?.cancelRequestedAt);
+      }
+
+      const [tileset] = await tx
+        .select()
+        .from(tilesets)
+        .where(
+          and(
+            eq(tilesets.id, params.tilesetId),
+            eq(tilesets.accountId, params.ownerId),
+            isNull(tilesets.deletedAt),
+          ),
+        )
+        .for("update")
+        .limit(1);
+      if (!tileset || tileset.buildJobId !== jobId) {
+        throw new ProcessingJobCanceledError();
+      }
+
+      const [artifact] = await tx
+        .select()
+        .from(storageObjects)
+        .where(
+          and(
+            eq(storageObjects.id, params.artifact.storageObjectId),
+            eq(storageObjects.accountId, params.ownerId),
+            eq(storageObjects.processingJobId, jobId),
+            isNull(storageObjects.deletedAt),
+          ),
+        )
+        .for("update")
+        .limit(1);
+      if (!artifact) {
+        throw new Error("Processed artifact ledger entry is unavailable");
+      }
+
+      const [versionState] = await tx
+        .select({ latest: max(tilesetVersions.version) })
+        .from(tilesetVersions)
+        .where(eq(tilesetVersions.tilesetId, params.tilesetId));
+      const versionNumber = (versionState?.latest ?? 0) + 1;
+      const schema = {
+        vector_layers: [
+          {
+            id: UPLOAD_VECTOR_LAYER_ID,
+            fields: {},
+            minzoom: params.minZoom,
+            maxzoom: params.maxZoom,
+          },
+        ],
+        fallback: params.fallback,
+      };
+      const [createdVersion] = await tx
+        .insert(tilesetVersions)
+        .values({
+          tilesetId: params.tilesetId,
+          version: versionNumber,
+          artifactStorageObjectId: artifact.id,
+          format: tileArtifactFormat(params.artifact.artifactFormat),
+          buildJobId: jobId,
+          schema,
+          bounds: params.bounds,
+          minZoom: params.minZoom,
+          maxZoom: params.maxZoom,
+        })
+        .returning();
+      if (!createdVersion) throw new Error("Failed to create tileset version");
+
+      const [updatedTileset] = await tx
+        .update(tilesets)
+        .set({
+          status: "READY",
+          bounds: params.bounds,
+          minZoom: params.minZoom,
+          maxZoom: params.maxZoom,
+          layerMetadata: schema,
+          buildJobId: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(tilesets.id, params.tilesetId),
+            eq(tilesets.buildJobId, jobId),
+          ),
+        )
+        .returning({ id: tilesets.id });
+      if (!updatedTileset) {
+        throw new ProcessingJobCanceledError();
+      }
+
+      if (params.uploadId) {
+        await tx
+          .update(uploads)
+          .set({
+            status: "READY",
+            linkedTilesetId: params.tilesetId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(uploads.id, params.uploadId),
+              eq(uploads.accountId, params.ownerId),
+            ),
+          );
+      }
+
+      const output = {
         tilesetId: params.tilesetId,
+        tilesetVersionId: createdVersion.id,
         version: versionNumber,
-        artifactStorageObjectId: params.artifact.storageObjectId,
-        format: tileArtifactFormat(params.artifact.artifactFormat),
-        buildJobId: params.processingJobId,
-        schema: {
-          vector_layers: [
-            {
-              id: UPLOAD_VECTOR_LAYER_ID,
-              fields: {},
-              minzoom: params.minZoom,
-              maxzoom: params.maxZoom,
-            },
-          ],
-          fallback: params.fallback,
-        },
-        bounds: params.bounds,
+        storageKey: params.artifact.storageKey,
+        size: params.artifact.size,
         minZoom: params.minZoom,
         maxZoom: params.maxZoom,
-      })
-      .returning();
+        fallback: params.fallback,
+      };
+      const [completedJob] = await tx
+        .update(processingJobs)
+        .set({
+          status: "SUCCEEDED",
+          progress: 100,
+          output,
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(processingJobs.id, jobId),
+            inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
+            isNull(processingJobs.cancelRequestedAt),
+          ),
+        )
+        .returning({ id: processingJobs.id });
+      if (!completedJob) {
+        throw new ProcessingJobCanceledError();
+      }
+      await tx.insert(processingJobLogs).values({
+        jobId,
+        level: "info",
+        message: "Geodata artifact finalized",
+        metadata: output,
+      });
 
-    const [updatedTileset] = await tx
-      .update(tilesets)
-      .set({
-        status: "READY",
-        bounds: params.bounds,
-        minZoom: params.minZoom,
-        maxZoom: params.maxZoom,
-        layerMetadata: createdVersion!.schema,
-        buildJobId: null,
-      })
-      .where(currentTilesetBuild(params.tilesetId, params.processingJobId))
-      .returning({ id: tilesets.id });
-
-    if (!updatedTileset) {
-      throw new Error("Tileset build is no longer the active processing job");
-    }
-
-    if (params.uploadId) {
-      await tx
-        .update(uploads)
-        .set({ status: "READY", linkedTilesetId: params.tilesetId })
-        .where(eq(uploads.id, params.uploadId));
-    }
-
-    return createdVersion!;
-  });
-
-  await markProcessingJobSucceeded(params.processingJobId, {
-    tilesetId: params.tilesetId,
-    tilesetVersionId: tilesetVersion!.id,
-    version: versionNumber,
-    storageKey: params.artifact.storageKey,
-    size: params.artifact.size,
-    minZoom: params.minZoom,
-    maxZoom: params.maxZoom,
-    fallback: params.fallback,
-  });
-}
-
-async function nextTilesetVersion(tilesetId: string): Promise<number> {
-  const [versionState] = await db
-    .select({ latest: max(tilesetVersions.version) })
-    .from(tilesetVersions)
-    .where(eq(tilesetVersions.tilesetId, tilesetId));
-
-  return (versionState?.latest ?? 0) + 1;
-}
-
-async function assertCurrentTilesetBuild(
-  tilesetId: string,
-  processingJobId?: string,
-) {
-  if (!processingJobId) return;
-
-  const [tileset] = await db
-    .select({ id: tilesets.id })
-    .from(tilesets)
-    .where(currentTilesetBuild(tilesetId, processingJobId))
-    .limit(1);
-
-  if (!tileset) {
-    throw new Error("Tileset build is no longer the active processing job");
+      return createdVersion;
+    });
+  } catch (error) {
+    await requestArtifactCleanup(
+      params.artifact.storageObjectId,
+      error instanceof ProcessingJobCanceledError
+        ? "build_canceled_or_superseded"
+        : "finalization_failed",
+    );
+    throw error;
   }
 }
 
-function currentTilesetBuild(tilesetId: string, processingJobId?: string) {
-  const base = eq(tilesets.id, tilesetId);
-  return processingJobId ? and(base, eq(tilesets.buildJobId, processingJobId)) : base;
+async function requestArtifactCleanup(storageObjectId: string, reason: string) {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(storageObjects)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(storageObjects.id, storageObjectId));
+    await tx.insert(eventOutbox).values({
+      eventName: "artifact.cleanup.requested",
+      payload: { storageObjectId, reason },
+    });
+  });
 }
 
 function tileStorageFormat(format: SourceFormat): TilesetArtifactFormat {

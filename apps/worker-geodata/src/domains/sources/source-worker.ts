@@ -1,12 +1,10 @@
 import type { Job } from "bullmq";
-import { execFile } from "child_process";
 import { createWriteStream } from "fs";
 import { mkdtemp, readFile, stat } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { Readable, Transform } from "stream";
 import { pipeline } from "stream/promises";
-import { promisify } from "util";
 import { eq } from "drizzle-orm";
 import { db, uploads } from "@planisfy/database";
 import { getStorage } from "@planisfy/storage";
@@ -38,8 +36,7 @@ import {
   validateGeneratedArtifact,
   validateUploadFile,
 } from "../sources/artifact-validation";
-
-const execFileAsync = promisify(execFile);
+import { runCancellableCommand } from "../jobs/cancellable-command";
 
 export interface SourceProcessingJob {
   tilesetId: string;
@@ -179,11 +176,16 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     if (format === "shapefile") {
       const convertedPath = join(tmpDir, "input.geojsonseq");
       try {
-        await execFileAsync(
-          env.OGR2OGR_PATH,
-          ["-f", "GeoJSONSeq", convertedPath, inputPath],
-          { env: process.env, timeout: toolTimeoutMs },
-        );
+        await runCancellableCommand({
+          file: env.OGR2OGR_PATH,
+          args: ["-f", "GeoJSONSeq", convertedPath, inputPath],
+          env: process.env,
+          timeoutMs: toolTimeoutMs,
+          cancellationPollMs: env.GEODATA_CANCELLATION_POLL_MS,
+          checkCanceled: processingJobId
+            ? () => throwIfCancellationRequested(processingJobId)
+            : undefined,
+        });
         if (processingJobId) {
           await throwIfCancellationRequested(processingJobId);
         }
@@ -225,9 +227,15 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         });
         await throwIfCancellationRequested(processingJobId);
       }
-      await execFileAsync(env.TIPPECANOE_PATH, tippecanoeArgs, {
+      await runCancellableCommand({
+        file: env.TIPPECANOE_PATH,
+        args: tippecanoeArgs,
         env: process.env,
-        timeout: toolTimeoutMs,
+        timeoutMs: toolTimeoutMs,
+        cancellationPollMs: env.GEODATA_CANCELLATION_POLL_MS,
+        checkCanceled: processingJobId
+          ? () => throwIfCancellationRequested(processingJobId)
+          : undefined,
       });
       if (processingJobId) {
         await throwIfCancellationRequested(processingJobId);
