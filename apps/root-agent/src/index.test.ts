@@ -59,3 +59,38 @@ test('linkFileAtomic creates parent-independent hardlink aliases', async () => {
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('agent state is owner-only even under a permissive umask', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'planisfy-root-agent-state-'))
+  const stateDir = join(root, 'state')
+  const stateFile = join(stateDir, 'agent.json')
+  const previousUmask = process.umask(0o022)
+  try {
+    await __rootAgentTest.secureStateDirectory(stateDir)
+    await __rootAgentTest.writeAgentState(stateFile, { agentToken: 'secret' })
+
+    assert.equal((await stat(stateDir)).mode & 0o777, 0o700)
+    assert.equal((await stat(stateFile)).mode & 0o777, 0o600)
+  } finally {
+    process.umask(previousUmask)
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('agent state repairs permissive existing permissions', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'planisfy-root-agent-state-repair-'))
+  const stateDir = join(root, 'state')
+  const stateFile = join(stateDir, 'agent.json')
+  try {
+    await mkdir(stateDir, { recursive: true, mode: 0o755 })
+    await writeFile(stateFile, '{"agentToken":"old"}\n', { mode: 0o644 })
+    await __rootAgentTest.secureStateDirectory(stateDir)
+    await __rootAgentTest.writeAgentState(stateFile, { agentToken: 'new' })
+
+    assert.equal((await stat(stateDir)).mode & 0o777, 0o700)
+    assert.equal((await stat(stateFile)).mode & 0o777, 0o600)
+    assert.match(await readFile(stateFile, 'utf8'), /new/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
