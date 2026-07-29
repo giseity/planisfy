@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../index";
 import { stylePublications, styles, styleVersions } from "../schema";
 
@@ -8,6 +8,165 @@ export const BLANK_STYLE = {
   sources: {},
   layers: [],
 };
+
+export class StyleRevisionError extends Error {
+  constructor(
+    readonly code: "STYLE_NOT_FOUND" | "VERSION_NOT_FOUND" | "VERSION_CONFLICT",
+    message: string,
+    readonly currentVersion?: number,
+  ) {
+    super(message);
+    this.name = "StyleRevisionError";
+  }
+}
+
+export interface StyleRevisionUpdate {
+  name?: string;
+  description?: string | null;
+  styleJson?: Record<string, unknown>;
+}
+
+export async function updateStyleRevision(params: {
+  ownerId: string;
+  styleId: string;
+  expectedVersion: number;
+  actorUserId: string;
+  updates: StyleRevisionUpdate;
+}) {
+  return mutateStyleRevision({
+    ownerId: params.ownerId,
+    styleId: params.styleId,
+    expectedVersion: params.expectedVersion,
+    actorUserId: params.actorUserId,
+    resolveUpdates: () => params.updates,
+  });
+}
+
+export async function restoreStyleRevision(params: {
+  ownerId: string;
+  styleId: string;
+  expectedVersion: number;
+  targetVersion: number;
+  actorUserId: string;
+}) {
+  return mutateStyleRevision({
+    ownerId: params.ownerId,
+    styleId: params.styleId,
+    expectedVersion: params.expectedVersion,
+    actorUserId: params.actorUserId,
+    resolveUpdates: async (tx) => {
+      const [snapshot] = await tx
+        .select({
+          styleJson: styleVersions.styleJson,
+          name: styleVersions.name,
+        })
+        .from(styleVersions)
+        .where(
+          and(
+            eq(styleVersions.styleId, params.styleId),
+            eq(styleVersions.version, params.targetVersion),
+          ),
+        )
+        .limit(1);
+
+      if (!snapshot) {
+        throw new StyleRevisionError(
+          "VERSION_NOT_FOUND",
+          "Style version not found",
+        );
+      }
+
+      return {
+        styleJson: snapshot.styleJson as Record<string, unknown>,
+        name: snapshot.name,
+      };
+    },
+  });
+}
+
+type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function mutateStyleRevision(params: {
+  ownerId: string;
+  styleId: string;
+  expectedVersion: number;
+  actorUserId: string;
+  resolveUpdates:
+    | ((tx: DatabaseTransaction) => StyleRevisionUpdate)
+    | ((tx: DatabaseTransaction) => Promise<StyleRevisionUpdate>);
+}) {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        id: styles.id,
+        version: styles.version,
+        styleJson: styles.styleJson,
+        name: styles.name,
+      })
+      .from(styles)
+      .where(
+        and(
+          eq(styles.id, params.styleId),
+          eq(styles.ownerId, params.ownerId),
+          isNull(styles.deletedAt),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!current) {
+      throw new StyleRevisionError("STYLE_NOT_FOUND", "Style not found");
+    }
+    if (current.version !== params.expectedVersion) {
+      throw new StyleRevisionError(
+        "VERSION_CONFLICT",
+        "Style was modified by another session",
+        current.version,
+      );
+    }
+
+    const updates = await params.resolveUpdates(tx);
+    await tx
+      .insert(styleVersions)
+      .values({
+        styleId: current.id,
+        version: current.version,
+        styleJson: current.styleJson,
+        name: current.name,
+        createdBy: params.actorUserId,
+      })
+      .onConflictDoNothing();
+
+    const [updated] = await tx
+      .update(styles)
+      .set({
+        ...updates,
+        version: sql`${styles.version} + 1`,
+      })
+      .where(
+        and(
+          eq(styles.id, current.id),
+          eq(styles.ownerId, params.ownerId),
+          eq(styles.version, current.version),
+          isNull(styles.deletedAt),
+        ),
+      )
+      .returning({
+        id: styles.id,
+        version: styles.version,
+        updatedAt: styles.updatedAt,
+      });
+
+    if (!updated) {
+      throw new StyleRevisionError(
+        "VERSION_CONFLICT",
+        "Style was modified by another session",
+        current.version,
+      );
+    }
+    return updated;
+  });
+}
 
 export function slugifyStyleName(name: string): string {
   return name

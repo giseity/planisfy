@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
-import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import {
   db,
   spriteAssets,
@@ -16,7 +16,10 @@ import { validateMapLibreStyle } from "@planisfy/style-spec";
 import {
   createStyleRecord,
   duplicateStyleRecord,
+  restoreStyleRevision,
   softDeleteStyleRecord,
+  StyleRevisionError,
+  updateStyleRevision,
 } from "@planisfy/database/styles/service";
 import { logAudit } from "../../shared/audit";
 import { checkResourceLimit } from "../../shared/policy/plan-check";
@@ -70,6 +73,10 @@ const updateStyleSchema = z.object({
   description: z.string().max(1000).optional(),
   styleJson: z.record(z.string(), z.unknown()).optional(),
   version: z.number().int().positive(),
+});
+
+const restoreStyleSchema = z.object({
+  expectedVersion: z.number().int().positive(),
 });
 
 const renameSpriteAssetSchema = z.object({
@@ -594,93 +601,17 @@ stylesRoute.put("/styles/:id", async (c) => {
     );
   }
 
-  // Save a version snapshot of the current state before updating
-  const [current] = await db
-    .select({
-      version: styles.version,
-      styleJson: styles.styleJson,
-      name: styles.name,
-    })
-    .from(styles)
-    .where(
-      and(
-        eq(styles.id, styleId),
-        eq(styles.ownerId, ownerId),
-        eq(styles.version, version),
-        isNull(styles.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  if (current) {
-    await db
-      .insert(styleVersions)
-      .values({
-        styleId,
-        version: current.version,
-        styleJson: current.styleJson,
-        name: current.name,
-        createdBy: userId,
-      })
-      .onConflictDoNothing();
-  }
-
-  // Optimistic locking: only update if version matches
-  const result = await db
-    .update(styles)
-    .set({
-      ...updates,
-      version: sql`${styles.version} + 1`,
-    })
-    .where(
-      and(
-        eq(styles.id, styleId),
-        eq(styles.ownerId, ownerId),
-        eq(styles.version, version),
-        isNull(styles.deletedAt),
-      ),
-    )
-    .returning({
-      id: styles.id,
-      version: styles.version,
-      updatedAt: styles.updatedAt,
+  let result;
+  try {
+    result = await updateStyleRevision({
+      ownerId,
+      styleId,
+      expectedVersion: version,
+      actorUserId: userId,
+      updates,
     });
-
-  if (result.length === 0) {
-    // Determine reason: not found, not owned, or version conflict
-    const [existing] = await db
-      .select({
-        id: styles.id,
-        ownerId: styles.ownerId,
-        version: styles.version,
-      })
-      .from(styles)
-      .where(and(eq(styles.id, styleId), isNull(styles.deletedAt)))
-      .limit(1);
-
-    if (!existing) {
-      return c.json(
-        { error: { code: "NOT_FOUND", message: "Style not found" } },
-        404,
-      );
-    }
-    if (existing.ownerId !== ownerId) {
-      return c.json(
-        { error: { code: "FORBIDDEN", message: "Access denied" } },
-        403,
-      );
-    }
-    // Version mismatch
-    return c.json(
-      {
-        error: {
-          code: "VERSION_CONFLICT",
-          message: "Style was modified by another session",
-          details: { currentVersion: existing.version },
-        },
-      },
-      409,
-    );
+  } catch (err) {
+    return styleRevisionErrorResponse(c, err);
   }
 
   await logAudit({
@@ -689,11 +620,11 @@ stylesRoute.put("/styles/:id", async (c) => {
     action: "style.updated",
     resourceType: "style",
     resourceId: styleId,
-    metadata: { version: result[0]!.version },
+    metadata: { version: result.version },
     ipAddress: getClientIp(c.req.raw),
   });
 
-  return c.json({ data: result[0] });
+  return c.json({ data: result });
 });
 
 // ── DELETE /console/styles/:id — Soft delete ────────────────────────────────
@@ -1074,8 +1005,10 @@ stylesRoute.post("/styles/:id/versions/:versionNum/restore", async (c) => {
   const versionNum = parseInt(c.req.param("versionNum"), 10);
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
+  const body = await c.req.json().catch(() => null);
+  const parsedBody = restoreStyleSchema.safeParse(body);
 
-  if (isNaN(versionNum)) {
+  if (isNaN(versionNum) || !parsedBody.success) {
     return c.json(
       {
         error: { code: "VALIDATION_ERROR", message: "Invalid version number" },
@@ -1084,76 +1017,18 @@ stylesRoute.post("/styles/:id/versions/:versionNum/restore", async (c) => {
     );
   }
 
-  // Get current style to check ownership and get current version
-  const [current] = await db
-    .select({
-      id: styles.id,
-      version: styles.version,
-      styleJson: styles.styleJson,
-      name: styles.name,
-    })
-    .from(styles)
-    .where(
-      and(
-        eq(styles.id, styleId),
-        eq(styles.ownerId, ownerId),
-        isNull(styles.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  if (!current) {
-    return c.json(
-      { error: { code: "NOT_FOUND", message: "Style not found" } },
-      404,
-    );
-  }
-
-  // Get the version to restore
-  const [snapshot] = await db
-    .select()
-    .from(styleVersions)
-    .where(
-      and(
-        eq(styleVersions.styleId, styleId),
-        eq(styleVersions.version, versionNum),
-      ),
-    )
-    .limit(1);
-
-  if (!snapshot) {
-    return c.json(
-      { error: { code: "NOT_FOUND", message: "Version not found" } },
-      404,
-    );
-  }
-
-  // Save the current state as a version before restoring
-  await db
-    .insert(styleVersions)
-    .values({
+  let updated;
+  try {
+    updated = await restoreStyleRevision({
+      ownerId,
       styleId,
-      version: current.version,
-      styleJson: current.styleJson,
-      name: current.name,
-      createdBy: userId,
-    })
-    .onConflictDoNothing();
-
-  // Restore: update the style with the snapshot's data
-  const [updated] = await db
-    .update(styles)
-    .set({
-      styleJson: snapshot.styleJson,
-      name: snapshot.name,
-      version: sql`${styles.version} + 1`,
-    })
-    .where(eq(styles.id, styleId))
-    .returning({
-      id: styles.id,
-      version: styles.version,
-      updatedAt: styles.updatedAt,
+      expectedVersion: parsedBody.data.expectedVersion,
+      targetVersion: versionNum,
+      actorUserId: userId,
     });
+  } catch (err) {
+    return styleRevisionErrorResponse(c, err);
+  }
 
   await logAudit({
     accountId: ownerId,
@@ -1161,12 +1036,41 @@ stylesRoute.post("/styles/:id/versions/:versionNum/restore", async (c) => {
     action: "style.restored",
     resourceType: "style",
     resourceId: styleId,
-    metadata: { restoredVersion: versionNum, newVersion: updated!.version },
+    metadata: { restoredVersion: versionNum, newVersion: updated.version },
     ipAddress: getClientIp(c.req.raw),
   });
 
   return c.json({ data: updated });
 });
+
+function styleRevisionErrorResponse(
+  c: Context<AuthEnv>,
+  err: unknown,
+) {
+  if (!(err instanceof StyleRevisionError)) throw err;
+  if (err.code === "VERSION_CONFLICT") {
+    return c.json(
+      {
+        error: {
+          code: "VERSION_CONFLICT",
+          message: err.message,
+          details: { currentVersion: err.currentVersion },
+        },
+      },
+      409,
+    );
+  }
+  return c.json(
+    {
+      error: {
+        code: "NOT_FOUND",
+        message:
+          err.code === "VERSION_NOT_FOUND" ? "Version not found" : "Style not found",
+      },
+    },
+    404,
+  );
+}
 
 async function publishStyleSnapshot({
   styleId,
