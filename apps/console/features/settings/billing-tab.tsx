@@ -1,7 +1,7 @@
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { useEffect, useRef, useState } from 'react'
+import { api } from '@/lib/api'
 import {
   billingStatusLabel,
   billingStatusVariant,
@@ -9,16 +9,11 @@ import {
   type BillingInfo,
   type BillingTransaction,
   type PlanInfo,
-} from "@/features/settings/model";
-import { Badge } from "@planisfy/ui/components/badge";
-import { Button } from "@planisfy/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@planisfy/ui/components/card";
-import { Skeleton } from "@planisfy/ui/components/skeleton";
+} from '@/features/settings/model'
+import { Badge } from '@planisfy/ui/components/badge'
+import { Button } from '@planisfy/ui/components/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
+import { Skeleton } from '@planisfy/ui/components/skeleton'
 import {
   Table,
   TableBody,
@@ -26,33 +21,33 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@planisfy/ui/components/table";
-import { Check } from "lucide-react";
-import { toast } from "sonner";
+} from '@planisfy/ui/components/table'
+import { Check } from 'lucide-react'
+import { toast } from 'sonner'
 
 export function BillingTab() {
-  const [billing, setBilling] = useState<BillingInfo | null>(null);
-  const [plans, setPlans] = useState<PlanInfo[]>([]);
-  const [transactions, setTransactions] = useState<BillingTransaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">(
-    "monthly",
-  );
+  const [billing, setBilling] = useState<BillingInfo | null>(null)
+  const [plans, setPlans] = useState<PlanInfo[]>([])
+  const [transactions, setTransactions] = useState<BillingTransaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [billingAction, setBillingAction] = useState<string | null>(null)
+  const mutationKeyRef = useRef<{ fingerprint: string; key: string } | null>(null)
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
 
   useEffect(() => {
     Promise.all([
-      api.get<BillingInfo>("/billing"),
-      api.get<PlanInfo[]>("/billing/plans"),
-      api.get<{ data: BillingTransaction[] }>("/billing/transactions"),
+      api.get<BillingInfo>('/billing'),
+      api.get<PlanInfo[]>('/billing/plans'),
+      api.get<{ data: BillingTransaction[] }>('/billing/transactions'),
     ])
       .then(([b, p, t]) => {
-        setBilling(b);
-        setPlans(p);
-        setTransactions(t.data);
+        setBilling(b)
+        setPlans(p)
+        setTransactions(t.data)
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => setLoading(false))
+  }, [])
 
   if (loading || !billing) {
     return (
@@ -61,16 +56,16 @@ export function BillingTab() {
           <Skeleton key={i} className="h-24 rounded-lg" />
         ))}
       </div>
-    );
+    )
   }
 
   const quotaColor =
     billing.quotaPercent >= 90
-      ? "bg-red-500"
+      ? 'bg-red-500'
       : billing.quotaPercent >= 70
-        ? "bg-yellow-500"
-        : "bg-green-500";
-  const isSelfHosted = billing.deploymentMode === "self_host";
+        ? 'bg-yellow-500'
+        : 'bg-green-500'
+  const isSelfHosted = billing.deploymentMode === 'self_host'
 
   return (
     <div className="space-y-6">
@@ -81,11 +76,11 @@ export function BillingTab() {
             <CardTitle className="text-lg">Current Plan</CardTitle>
             <Badge
               variant={
-                billing.plan === "free"
-                  ? "secondary"
-                  : billing.plan === "platform"
-                    ? "warning"
-                    : "success"
+                billing.plan === 'free'
+                  ? 'secondary'
+                  : billing.plan === 'platform'
+                    ? 'warning'
+                    : 'success'
               }
             >
               {billing.planName}
@@ -94,12 +89,8 @@ export function BillingTab() {
         </CardHeader>
         <CardContent>
           <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <Badge
-              variant={
-                billing.deploymentMode === "managed" ? "success" : "secondary"
-              }
-            >
-              {billing.deploymentMode === "managed" ? "Managed" : "Self-host"}
+            <Badge variant={billing.deploymentMode === 'managed' ? 'success' : 'secondary'}>
+              {billing.deploymentMode === 'managed' ? 'Managed' : 'Self-host'}
             </Badge>
             <Badge variant={billingStatusVariant(billing.billingStatus)}>
               {billingStatusLabel(billing.billingStatus)}
@@ -112,7 +103,7 @@ export function BillingTab() {
               <p className="text-lg font-semibold">
                 {billing.usage.monthlyUnits.toLocaleString()}
                 <span className="text-sm font-normal text-muted-foreground">
-                  {" "}
+                  {' '}
                   / {formatLimit(billing.limits.monthlyUnits)}
                 </span>
               </p>
@@ -130,7 +121,7 @@ export function BillingTab() {
               <p className="text-lg font-semibold">
                 {billing.usage.styles}
                 <span className="text-sm font-normal text-muted-foreground">
-                  {" "}
+                  {' '}
                   / {formatLimit(billing.limits.maxStyles)}
                 </span>
               </p>
@@ -140,7 +131,7 @@ export function BillingTab() {
               <p className="text-lg font-semibold">
                 {billing.usage.sources}
                 <span className="text-sm font-normal text-muted-foreground">
-                  {" "}
+                  {' '}
                   / {formatLimit(billing.limits.maxSources)}
                 </span>
               </p>
@@ -150,7 +141,7 @@ export function BillingTab() {
               <p className="text-lg font-semibold">
                 {billing.usage.apiKeys}
                 <span className="text-sm font-normal text-muted-foreground">
-                  {" "}
+                  {' '}
                   / {formatLimit(billing.limits.maxApiKeys)}
                 </span>
               </p>
@@ -159,33 +150,36 @@ export function BillingTab() {
 
           {isSelfHosted && (
             <div className="rounded-md border bg-muted/30 px-4 py-3 text-sm text-muted-foreground mb-4">
-              Hosted billing is disabled in self-host mode. Usage and limits are
-              shown for operational visibility only.
+              Hosted billing is disabled in self-host mode. Usage and limits are shown for
+              operational visibility only.
             </div>
           )}
 
           {!isSelfHosted && billing.quotaPercent >= 80 && (
             <div className="rounded-md border border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-800 px-4 py-3 text-sm mb-4">
-              You&apos;ve used {billing.quotaPercent}% of your monthly quota.
-              Consider upgrading to avoid service interruptions.
+              You&apos;ve used {billing.quotaPercent}% of your monthly quota. Consider upgrading to
+              avoid service interruptions.
             </div>
           )}
 
-          {!isSelfHosted && billing.portalAvailable && billing.plan !== "free" && (
+          {!isSelfHosted && billing.portalAvailable && billing.plan !== 'free' && (
             <Button
               variant="outline"
+              disabled={billingAction !== null}
               onClick={async () => {
+                if (billingAction) return
+                setBillingAction('portal')
                 try {
-                  const { url } = await api.get<{ url: string }>(
-                    "/billing/portal",
-                  );
-                  window.open(url, "_blank");
+                  const { url } = await api.get<{ url: string }>('/billing/portal')
+                  window.open(url, '_blank')
                 } catch {
-                  toast.error("Billing portal is not available");
+                  toast.error('Billing portal is not available')
+                } finally {
+                  setBillingAction(null)
                 }
               }}
             >
-              Manage Subscription
+              {billingAction === 'portal' ? 'Opening portal…' : 'Manage Subscription'}
             </Button>
           )}
         </CardContent>
@@ -196,43 +190,40 @@ export function BillingTab() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Plans</h2>
             <div className="flex rounded-md border p-1">
-              {(["monthly", "yearly"] as const).map((interval) => (
+              {(['monthly', 'yearly'] as const).map((interval) => (
                 <Button
                   key={interval}
                   size="sm"
-                  variant={billingInterval === interval ? "default" : "ghost"}
+                  variant={billingInterval === interval ? 'default' : 'ghost'}
+                  disabled={billingAction !== null}
                   onClick={() => setBillingInterval(interval)}
                 >
-                  {interval === "monthly" ? "Monthly" : "Yearly"}
+                  {interval === 'monthly' ? 'Monthly' : 'Yearly'}
                 </Button>
               ))}
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {plans.map((plan) => {
-              const isCurrent = plan.id === billing.plan;
-              const intervalPrice =
-                plan.pricing[billingInterval] ?? plan.pricing.monthly;
-              const paidSubscription = isPaidPlan(billing.plan);
-              const sameInterval =
-                billing.subscriptionInterval === billingInterval;
-              const canUsePortal = paidSubscription && billing.portalAvailable;
+              const isCurrent = plan.id === billing.plan
+              const intervalPrice = plan.pricing[billingInterval] ?? plan.pricing.monthly
+              const paidSubscription = isPaidPlan(billing.plan)
+              const sameInterval = billing.subscriptionInterval === billingInterval
+              const canUsePortal = paidSubscription && billing.portalAvailable
               const canChangePlan =
-                paidSubscription &&
-                sameInterval &&
-                isPlanUpgrade(billing.plan, plan.id);
-              const canStartCheckout = !paidSubscription;
+                paidSubscription && sameInterval && isPlanUpgrade(billing.plan, plan.id)
+              const canStartCheckout = !paidSubscription
               const actionEnabled =
                 Boolean(intervalPrice) &&
                 plan.checkoutAvailable &&
-                (canStartCheckout || canChangePlan || canUsePortal);
+                (canStartCheckout || canChangePlan || canUsePortal)
               const actionLabel = !plan.checkoutAvailable
-                ? "Coming soon"
+                ? 'Coming soon'
                 : canStartCheckout || canChangePlan
                   ? `Upgrade to ${plan.name}`
-                  : "Manage in portal";
+                  : 'Manage in portal'
               return (
-                <Card key={plan.id} className={isCurrent ? "border-primary" : ""}>
+                <Card key={plan.id} className={isCurrent ? 'border-primary' : ''}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base">{plan.name}</CardTitle>
@@ -251,9 +242,9 @@ export function BillingTab() {
                     <ul className="space-y-2 text-sm">
                       <li className="flex items-center gap-2">
                         <Check className="h-4 w-4 text-green-500 shrink-0" />
-                        {plan.monthlyUnits === "Unlimited"
-                          ? "Unlimited"
-                          : Number(plan.monthlyUnits).toLocaleString()}{" "}
+                        {plan.monthlyUnits === 'Unlimited'
+                          ? 'Unlimited'
+                          : Number(plan.monthlyUnits).toLocaleString()}{' '}
                         Planisfy credits/month
                       </li>
                       <li className="flex items-center gap-2">
@@ -262,75 +253,95 @@ export function BillingTab() {
                       </li>
                       <li className="flex items-center gap-2">
                         <Check className="h-4 w-4 text-green-500 shrink-0" />
-                        {plan.maxStyles === "Unlimited"
-                          ? "Unlimited"
-                          : plan.maxStyles}{" "}
-                        styles
+                        {plan.maxStyles === 'Unlimited' ? 'Unlimited' : plan.maxStyles} styles
                       </li>
                       <li className="flex items-center gap-2">
                         <Check className="h-4 w-4 text-green-500 shrink-0" />
-                        {plan.maxSources === "Unlimited"
-                          ? "Unlimited"
-                          : plan.maxSources}{" "}
-                        tilesets
+                        {plan.maxSources === 'Unlimited' ? 'Unlimited' : plan.maxSources} tilesets
                       </li>
                       <li className="flex items-center gap-2">
                         <Check className="h-4 w-4 text-green-500 shrink-0" />
-                        {plan.maxApiKeys === "Unlimited"
-                          ? "Unlimited"
-                          : plan.maxApiKeys}{" "}
-                        API keys
+                        {plan.maxApiKeys === 'Unlimited' ? 'Unlimited' : plan.maxApiKeys} API keys
                       </li>
                     </ul>
 
                     {!isCurrent && plan.price > 0 && (
                       <Button
                         className="w-full mt-4"
-                        variant={plan.id === "starter" ? "default" : "outline"}
-                        disabled={!actionEnabled}
+                        variant={plan.id === 'starter' ? 'default' : 'outline'}
+                        disabled={!actionEnabled || billingAction !== null}
                         onClick={async () => {
+                          if (billingAction) return
                           if (!actionEnabled || !intervalPrice) {
                             toast.info(
                               canUsePortal
-                                ? "Billing portal is not available"
-                                : "Billing is not configured yet. Set Dodo Payments credentials to enable payments.",
-                            );
-                            return;
+                                ? 'Billing portal is not available'
+                                : 'Billing is not configured yet. Set Dodo Payments credentials to enable payments.'
+                            )
+                            return
                           }
+                          const operation = canChangePlan
+                            ? 'change-plan'
+                            : canStartCheckout
+                              ? 'checkout'
+                              : 'portal'
+                          const fingerprint = `${operation}:${plan.id}:${billingInterval}`
+                          const existing = mutationKeyRef.current
+                          const idempotencyKey =
+                            existing?.fingerprint === fingerprint
+                              ? existing.key
+                              : crypto.randomUUID()
+                          if (operation !== 'portal') {
+                            mutationKeyRef.current = {
+                              fingerprint,
+                              key: idempotencyKey,
+                            }
+                          }
+                          setBillingAction(fingerprint)
                           try {
                             if (canChangePlan) {
                               await api.post<{ changed: true }>(
-                                "/billing/subscription/change-plan",
+                                '/billing/subscription/change-plan',
                                 { planId: plan.id, interval: billingInterval },
-                              );
-                              toast.success("Subscription change requested");
-                              return;
+                                { 'Idempotency-Key': idempotencyKey }
+                              )
+                              mutationKeyRef.current = null
+                              toast.success('Subscription change requested')
+                              window.setTimeout(() => window.location.reload(), 500)
+                              return
                             }
 
                             if (canStartCheckout) {
                               const { url } = await api.post<{ url: string }>(
-                                "/billing/checkout",
+                                '/billing/checkout',
                                 { planId: plan.id, interval: billingInterval },
-                              );
-                              window.open(url, "_blank");
-                              return;
+                                { 'Idempotency-Key': idempotencyKey }
+                              )
+                              mutationKeyRef.current = null
+                              window.open(url, '_blank')
+                              return
                             }
 
-                            const { url } = await api.post<{ url: string }>(
-                              "/billing/portal",
-                            );
-                            window.open(url, "_blank");
+                            const { url } = await api.post<{ url: string }>('/billing/portal')
+                            window.open(url, '_blank')
                           } catch {
-                            toast.error("Unable to update billing");
+                            toast.error('Unable to update billing')
+                          } finally {
+                            setBillingAction(null)
                           }
                         }}
                       >
-                        {actionLabel}
+                        {billingAction
+                          ? billingAction ===
+                            `${canChangePlan ? 'change-plan' : canStartCheckout ? 'checkout' : 'portal'}:${plan.id}:${billingInterval}`
+                            ? 'Processing…'
+                            : actionLabel
+                          : actionLabel}
                       </Button>
                     )}
                   </CardContent>
                 </Card>
-              );
+              )
             })}
           </div>
         </>
@@ -372,22 +383,15 @@ export function BillingTab() {
                       </TableCell>
                       <TableCell>{transaction.productLabel}</TableCell>
                       <TableCell className="font-medium">
-                        {formatAmount(
-                          transaction.amountCents,
-                          transaction.currency,
-                        )}
+                        {formatAmount(transaction.amountCents, transaction.currency)}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={transactionStatusVariant(transaction.status)}
-                        >
-                          {transaction.status.replaceAll("_", " ").toLowerCase()}
+                        <Badge variant={transactionStatusVariant(transaction.status)}>
+                          {transaction.status.replaceAll('_', ' ').toLowerCase()}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {new Date(
-                          transaction.paidAt ?? transaction.createdAt,
-                        ).toLocaleDateString()}
+                        {new Date(transaction.paidAt ?? transaction.createdAt).toLocaleDateString()}
                       </TableCell>
                     </TableRow>
                   ))
@@ -398,35 +402,39 @@ export function BillingTab() {
         </Card>
       )}
     </div>
-  );
+  )
 }
 
 function formatAmount(amountCents: number | null, currency: string | null) {
-  if (amountCents === null) return "Pending";
+  if (amountCents === null) return 'Pending'
+  const normalized = currency?.toUpperCase() ?? 'XXX'
+  if (normalized === 'XXX' || !Intl.supportedValuesOf('currency').includes(normalized)) {
+    return `${(amountCents / 100).toLocaleString()} ${normalized}`
+  }
   return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: currency ?? "USD",
-  }).format(amountCents / 100);
+    style: 'currency',
+    currency: normalized,
+  }).format(amountCents / 100)
 }
 
 function transactionStatusVariant(status: string) {
-  if (status === "PAID") return "success";
-  if (status === "FAILED" || status === "REFUNDED") return "destructive";
-  return "secondary";
+  if (status === 'PAID') return 'success'
+  if (status === 'FAILED' || status === 'REFUNDED') return 'destructive'
+  return 'secondary'
 }
 
 function isPaidPlan(planId: string) {
-  return planId !== "free" && planId !== "platform";
+  return planId !== 'free' && planId !== 'platform'
 }
 
 function isPlanUpgrade(currentPlanId: string, nextPlanId: string) {
-  return planRank(nextPlanId) > planRank(currentPlanId);
+  return planRank(nextPlanId) > planRank(currentPlanId)
 }
 
 function planRank(planId: string) {
-  if (planId === "free") return 0;
-  if (planId === "starter") return 1;
-  if (planId === "scale") return 2;
-  if (planId === "platform") return 3;
-  return -1;
+  if (planId === 'free') return 0
+  if (planId === 'starter') return 1
+  if (planId === 'scale') return 2
+  if (planId === 'platform') return 3
+  return -1
 }
