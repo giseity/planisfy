@@ -605,8 +605,11 @@ operationsRoute.get('/operations/events', async (c) => {
 })
 
 async function buildOperationsOverview(accountId: string) {
+  const summaryWindowStartedAt = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const [
     recentJobs,
+    activeJobRows,
+    jobSummaryRows,
     channels,
     schedules,
     backups,
@@ -627,6 +630,38 @@ async function buildOperationsOverview(accountId: string) {
       .where(eq(processingJobs.accountId, accountId))
       .orderBy(desc(processingJobs.updatedAt))
       .limit(10),
+    db
+      .select()
+      .from(processingJobs)
+      .where(
+        and(
+          eq(processingJobs.accountId, accountId),
+          inArray(processingJobs.status, ['PENDING', 'PROCESSING'])
+        )
+      )
+      .orderBy(desc(processingJobs.updatedAt))
+      .limit(1),
+    db
+      .select({
+        active: sql<number>`count(*) filter (where ${processingJobs.status} in ('PENDING', 'PROCESSING'))`,
+        completed24h: sql<number>`count(*) filter (
+          where ${processingJobs.status} = 'SUCCEEDED'
+            and ${processingJobs.completedAt} >= ${summaryWindowStartedAt}
+        )`,
+        failed24h: sql<number>`count(*) filter (
+          where ${processingJobs.status} = 'FAILED'
+            and ${processingJobs.completedAt} >= ${summaryWindowStartedAt}
+        )`,
+        averageDurationMs24h: sql<number | null>`avg(
+          extract(epoch from (${processingJobs.completedAt} - ${processingJobs.startedAt})) * 1000
+        ) filter (
+          where ${processingJobs.status} in ('SUCCEEDED', 'FAILED', 'CANCELED')
+            and ${processingJobs.completedAt} >= ${summaryWindowStartedAt}
+            and ${processingJobs.startedAt} is not null
+        )`,
+      })
+      .from(processingJobs)
+      .where(eq(processingJobs.accountId, accountId)),
     db
       .select()
       .from(notificationChannels)
@@ -692,10 +727,23 @@ async function buildOperationsOverview(accountId: string) {
   ])
 
   const managed = env.DEPLOYMENT_MODE === 'managed'
+  const summary = jobSummaryRows[0]
 
   return {
     deploymentMode: env.DEPLOYMENT_MODE,
     recentJobs,
+    jobSummary: {
+      active: Number(summary?.active ?? 0),
+      completed24h: Number(summary?.completed24h ?? 0),
+      failed24h: Number(summary?.failed24h ?? 0),
+      averageDurationMs24h:
+        summary?.averageDurationMs24h === null ||
+        summary?.averageDurationMs24h === undefined
+          ? null
+          : Number(summary.averageDurationMs24h),
+      windowStartedAt: summaryWindowStartedAt.toISOString(),
+      latestActiveJob: activeJobRows[0] ?? null,
+    },
     notificationChannels: channels.map(stripNotificationSecrets),
     scheduledOperations: managed
       ? schedules.filter((schedule) => schedule.kind !== 'custom_command')
@@ -754,6 +802,20 @@ export function operationsOverviewSignature(overview: OperationsOverview) {
       completedAt: job.completedAt,
       errorCode: job.errorCode,
     })),
+    jobSummary: {
+      active: overview.jobSummary.active,
+      completed24h: overview.jobSummary.completed24h,
+      failed24h: overview.jobSummary.failed24h,
+      averageDurationMs24h: overview.jobSummary.averageDurationMs24h,
+      latestActiveJob: overview.jobSummary.latestActiveJob
+        ? {
+            id: overview.jobSummary.latestActiveJob.id,
+            status: overview.jobSummary.latestActiveJob.status,
+            progress: overview.jobSummary.latestActiveJob.progress,
+            updatedAt: overview.jobSummary.latestActiveJob.updatedAt,
+          }
+        : null,
+    },
     notificationChannels: overview.notificationChannels.map((channel) => ({
       id: channel.id,
       enabled: channel.enabled,

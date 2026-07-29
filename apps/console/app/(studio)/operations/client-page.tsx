@@ -30,10 +30,8 @@ export default function OperationsPage() {
   const { overview, openTimeline, load } = useOperations()
   const [controllingJobId, setControllingJobId] = useState<string | null>(null)
   const jobs = overview.recentJobs
-  const activeJobs = jobs.filter((job) => isActiveJob(job.status))
-  const completed24h = jobs.filter((job) => job.status === "SUCCEEDED").length
-  const failed24h = jobs.filter((job) => job.status === "FAILED").length
-  const activeJob = activeJobs[0] ?? jobs.find((job) => job.progress > 0 && job.progress < 100)
+  const { jobSummary } = overview
+  const activeJob = jobSummary.latestActiveJob
   const failedJob = jobs.find((job) => job.status === "FAILED")
 
   async function runJobAction(
@@ -56,10 +54,15 @@ export default function OperationsPage() {
   return (
     <div className="space-y-5">
       <div className="grid gap-4 md:grid-cols-4">
-        <SummaryCard icon={<Loader2 className="h-4 w-4" />} label="Active jobs" value={activeJobs.length} detail="processing" />
-        <SummaryCard icon={<CheckCircle2 className="h-4 w-4" />} label="Completed (24h)" value={completed24h} />
-        <SummaryCard icon={<XCircle className="h-4 w-4" />} label="Failed (24h)" value={failed24h} tone="destructive" />
-        <SummaryCard icon={<ClipboardList className="h-4 w-4" />} label="Avg duration" value="14m" detail="last 10 jobs" />
+        <SummaryCard icon={<Loader2 className="h-4 w-4" />} label="Active jobs" value={jobSummary.active} detail="pending or processing" />
+        <SummaryCard icon={<CheckCircle2 className="h-4 w-4" />} label="Completed (24h)" value={jobSummary.completed24h} />
+        <SummaryCard icon={<XCircle className="h-4 w-4" />} label="Failed (24h)" value={jobSummary.failed24h} tone="destructive" />
+        <SummaryCard
+          icon={<ClipboardList className="h-4 w-4" />}
+          label="Avg duration"
+          value={formatDuration(jobSummary.averageDurationMs24h)}
+          detail="terminal jobs in 24h"
+        />
       </div>
 
       {activeJob && (
@@ -100,7 +103,7 @@ export default function OperationsPage() {
             <Progress value={activeJob.progress} className="h-1.5" />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{activeJob.progress}% complete</span>
-              <span>ETA calculated by worker profile</span>
+              <span>{activeJob.status.toLowerCase()}</span>
             </div>
           </CardContent>
         </Card>
@@ -231,10 +234,6 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant={variant}>{status}</Badge>
 }
 
-function isActiveJob(status: string) {
-  return ["RUNNING", "PROCESSING", "QUEUED"].includes(status)
-}
-
 function formatDate(value: string | null) {
   if (!value) return "-"
   return new Intl.DateTimeFormat(undefined, {
@@ -243,4 +242,11 @@ function formatDate(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value))
+}
+
+function formatDuration(value: number | null) {
+  if (value === null) return "-"
+  if (value < 60_000) return `${Math.round(value / 1000)}s`
+  if (value < 3_600_000) return `${Math.round(value / 60_000)}m`
+  return `${(value / 3_600_000).toFixed(1)}h`
 }

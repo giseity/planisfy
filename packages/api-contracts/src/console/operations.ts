@@ -402,6 +402,14 @@ export interface ConsoleStaleJobReconciliationRun {
 export interface ConsoleOperationsOverview {
   deploymentMode: DeploymentMode;
   recentJobs: ConsoleProcessingJob[];
+  jobSummary: {
+    active: number;
+    completed24h: number;
+    failed24h: number;
+    averageDurationMs24h: number | null;
+    windowStartedAt: string;
+    latestActiveJob: ConsoleProcessingJob | null;
+  };
   notificationChannels: ConsoleNotificationChannel[];
   scheduledOperations: ConsoleScheduledOperation[];
   artifactBackups: ConsoleArtifactBackup[];

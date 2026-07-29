@@ -77,6 +77,13 @@ test('operationsOverviewSignature ignores volatile display-only fields', () => {
         updatedAt: new Date('2026-06-12T12:00:00Z'),
       },
     ],
+    jobSummary: {
+      active: 1,
+      completed24h: 0,
+      failed24h: 0,
+      averageDurationMs24h: null,
+      latestActiveJob: null,
+    },
     notificationChannels: [],
     scheduledOperations: [],
     artifactBackups: [],
@@ -130,6 +137,13 @@ test('operationsOverviewSignature tracks basemap build and release state', () =>
   const overview = {
     deploymentMode: 'self_host',
     recentJobs: [],
+    jobSummary: {
+      active: 0,
+      completed24h: 0,
+      failed24h: 0,
+      averageDurationMs24h: null,
+      latestActiveJob: null,
+    },
     notificationChannels: [],
     scheduledOperations: [],
     artifactBackups: [],

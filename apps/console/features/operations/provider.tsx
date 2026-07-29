@@ -40,6 +40,14 @@ import type { DeploymentMode } from '@/lib/deployment-mode'
 const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
   deploymentMode: 'self_host',
   recentJobs: [],
+  jobSummary: {
+    active: 0,
+    completed24h: 0,
+    failed24h: 0,
+    averageDurationMs24h: null,
+    windowStartedAt: new Date(0).toISOString(),
+    latestActiveJob: null,
+  },
   notificationChannels: [],
   scheduledOperations: [],
   artifactBackups: [],
