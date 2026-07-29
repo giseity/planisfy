@@ -7,7 +7,7 @@ import { clientEnv } from '@/env.client'
 export default function SignInPage() {
   return (
     <SignInForm
-      defaultCallbackUrl={clientEnv.NEXT_PUBLIC_CONSOLE_URL}
+      defaultCallbackUrl={`${clientEnv.NEXT_PUBLIC_CONSOLE_URL}/auth/complete`}
       verificationPageUrl={`${clientEnv.NEXT_PUBLIC_CONSOLE_URL}/verify-email`}
     />
   )

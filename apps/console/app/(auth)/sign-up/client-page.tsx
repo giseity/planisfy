@@ -7,7 +7,7 @@ import { clientEnv } from "@/env.client"
 export default function SignUpPage() {
   return (
     <SignUpForm
-      defaultCallbackUrl={`${clientEnv.NEXT_PUBLIC_APP_URL}/styles`}
+      defaultCallbackUrl={`${clientEnv.NEXT_PUBLIC_APP_URL}/auth/complete`}
       verificationPageUrl="/verify-email"
     />
   )

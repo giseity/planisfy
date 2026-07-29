@@ -7,6 +7,10 @@ export interface ProfileData {
   email: string;
   emailVerified: boolean;
   createdAt: string;
+  preferences: {
+    emailNotificationsEnabled: boolean;
+    defaultView: "dashboard" | "styles" | "operations";
+  };
 }
 
 export interface BillingInfo {

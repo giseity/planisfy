@@ -4,9 +4,9 @@ import { FileDropzone } from "@/components/file-upload/file-dropzone";
 import { dispatchProfileAvatarUpdated } from "@/lib/profile-avatar-events";
 import type React from "react";
 import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import { api } from "@/lib/api";
 import { type ProfileData } from "@/features/settings/model";
-import { Badge } from "@planisfy/ui/components/badge";
 import { Button } from "@planisfy/ui/components/button";
 import {
   Card,
@@ -26,13 +26,14 @@ import {
 import { Skeleton } from "@planisfy/ui/components/skeleton";
 import { Switch } from "@planisfy/ui/components/switch";
 import { Textarea } from "@planisfy/ui/components/textarea";
-import { Camera, Chrome, Github, Mail, Trash2 } from "lucide-react";
+import { Camera, Trash2 } from "lucide-react";
 
 const AVATAR_ACCEPT = "image/png,image/jpeg,image/webp";
 const AVATAR_ACCEPTED_LABEL = "PNG, JPEG, or WebP";
 const MAX_AVATAR_UPLOAD_SIZE_BYTES = 2 * 1024 * 1024;
 
 export function ProfileTab() {
+  const { setTheme, theme } = useTheme();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,6 +41,8 @@ export function ProfileTab() {
   const [avatarDeleting, setAvatarDeleting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const [preferencesError, setPreferencesError] = useState("");
 
   const [displayName, setDisplayName] = useState("");
   const [handle, setHandle] = useState("");
@@ -119,6 +122,25 @@ export function ProfileTab() {
       setError(message);
     } finally {
       setAvatarDeleting(false);
+    }
+  };
+
+  const updatePreferences = async (
+    preferences: Partial<ProfileData["preferences"]>,
+  ) => {
+    if (!profile) return;
+    setPreferencesSaving(true);
+    setPreferencesError("");
+
+    try {
+      const response = await api.updateProfilePreferences(preferences);
+      setProfile(response.data);
+    } catch (err: unknown) {
+      setPreferencesError(
+        err instanceof Error ? err.message : "Failed to update preferences",
+      );
+    } finally {
+      setPreferencesSaving(false);
     }
   };
 
@@ -274,9 +296,12 @@ export function ProfileTab() {
                   <Button
                     key={label}
                     type="button"
-                    variant={label === "System" ? "secondary" : "ghost"}
+                    variant={
+                      theme === label.toLowerCase() ? "secondary" : "ghost"
+                    }
                     size="sm"
                     className="rounded-none"
+                    onClick={() => setTheme(label.toLowerCase())}
                   >
                     {label}
                   </Button>
@@ -286,16 +311,33 @@ export function ProfileTab() {
           />
           <PreferenceRow
             title="Email notifications"
-            description="Receive alerts about quota, failures, and team activity."
+            description="Receive quota warning emails. Transactional account and invitation emails are unaffected."
             control={
-              <Switch checked aria-label="Email notifications enabled" />
+              <Switch
+                checked={profile.preferences.emailNotificationsEnabled}
+                disabled={preferencesSaving}
+                aria-label="Email notifications enabled"
+                onCheckedChange={(checked) =>
+                  void updatePreferences({
+                    emailNotificationsEnabled: checked,
+                  })
+                }
+              />
             }
           />
           <PreferenceRow
             title="Default view"
             description="Landing page after sign-in."
             control={
-              <Select defaultValue="dashboard">
+              <Select
+                value={profile.preferences.defaultView}
+                disabled={preferencesSaving}
+                onValueChange={(defaultView) =>
+                  void updatePreferences({
+                    defaultView: defaultView as ProfileData["preferences"]["defaultView"],
+                  })
+                }
+              >
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
@@ -307,54 +349,9 @@ export function ProfileTab() {
               </Select>
             }
           />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Connected accounts</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {[
-            {
-              provider: "Email / Password",
-              icon: Mail,
-              connected: true,
-              detail: profile.email,
-            },
-            {
-              provider: "GitHub",
-              icon: Github,
-              connected: false,
-              detail: "Not connected",
-            },
-            {
-              provider: "Google",
-              icon: Chrome,
-              connected: true,
-              detail: "Connected via OAuth",
-            },
-          ].map((account) => (
-            <div
-              key={account.provider}
-              className="flex items-center gap-3 rounded-md border p-3"
-            >
-              <account.icon className="h-4 w-4 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{account.provider}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {account.detail}
-                </p>
-              </div>
-              {account.connected ? (
-                <Badge variant="success">Connected</Badge>
-              ) : (
-                <Button variant="outline" size="sm">
-                  Connect
-                </Button>
-              )}
-            </div>
-          ))}
+          {preferencesError && (
+            <p className="text-sm text-destructive">{preferencesError}</p>
+          )}
         </CardContent>
       </Card>
     </div>

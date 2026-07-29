@@ -8,6 +8,7 @@ import {
   sessions,
   oauthAccounts,
   twoFactors,
+  userPreferences,
   styles,
   styleVersions,
   stylePublications,
@@ -129,6 +130,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     fields: [users.id],
     references: [twoFactors.userId],
   }),
+  preferences: one(userPreferences, {
+    fields: [users.id],
+    references: [userPreferences.userId],
+  }),
   sentInvitations: many(invitations),
 }))
 
@@ -184,6 +189,13 @@ export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
 export const twoFactorsRelations = relations(twoFactors, ({ one }) => ({
   user: one(users, {
     fields: [twoFactors.userId],
+    references: [users.id],
+  }),
+}))
+
+export const userPreferencesRelations = relations(userPreferences, ({ one }) => ({
+  user: one(users, {
+    fields: [userPreferences.userId],
     references: [users.id],
   }),
 }))

@@ -48,6 +48,24 @@ describe("settings placeholder removal", () => {
     expect(challengeSource).toContain("useState(false)");
   });
 
+  it("persists profile preferences and removes duplicate provider placeholders", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../features/settings/profile-tab.tsx"),
+      "utf8",
+    );
+    const completionSource = readFileSync(
+      resolve(__dirname, "../app/(auth)/auth/complete/client-page.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("api.updateProfilePreferences");
+    expect(source).toContain("setTheme(label.toLowerCase())");
+    expect(source).not.toContain('provider: "GitHub"');
+    expect(completionSource).toContain(
+      "DEFAULT_VIEW_PATHS[response.data.preferences.defaultView]",
+    );
+  });
+
   it("operations tabs do not render adapter placeholder copy", () => {
     const templatesSource = readFileSync(
       resolve(__dirname, "../features/operations/templates-tab.tsx"),

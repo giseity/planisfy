@@ -98,5 +98,6 @@ describe('Console auth middleware helpers', () => {
     const { config } = await loadMiddleware()
 
     expect(config.matcher).toContain('/onboarding/:path*')
+    expect(config.matcher).toContain('/auth/complete')
   })
 })

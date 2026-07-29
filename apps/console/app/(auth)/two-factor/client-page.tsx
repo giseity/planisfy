@@ -30,10 +30,10 @@ function TwoFactorChallenge() {
   const [error, setError] = useState('')
 
   const callbackUrl = useMemo(() => {
-    if (typeof window === 'undefined') return '/'
+    if (typeof window === 'undefined') return '/auth/complete'
     const stored = consumeTwoFactorCallback()
     const requested = searchParams.get('callbackUrl') ?? stored
-    return sanitizeCallbackUrl(requested, '/', window.location.origin)
+    return sanitizeCallbackUrl(requested, '/auth/complete', window.location.origin)
   }, [searchParams])
 
   const verify = async () => {

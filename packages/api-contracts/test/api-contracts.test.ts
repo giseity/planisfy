@@ -3,6 +3,7 @@ import {
   apiEnvelopeSchema,
   auditQuerySchema,
   updateConsoleProfileSchema,
+  updateConsolePreferencesSchema,
   usageDaysQuerySchema,
 } from "../src";
 
@@ -23,6 +24,22 @@ describe("api contracts", () => {
     expect(() =>
       updateConsoleProfileSchema.parse({ handle: "Bad Handle" }),
     ).toThrow();
+  });
+
+  it("requires known, non-empty console preference updates", () => {
+    expect(() => updateConsolePreferencesSchema.parse({})).toThrow();
+    expect(() =>
+      updateConsolePreferencesSchema.parse({ defaultView: "billing" }),
+    ).toThrow();
+    expect(
+      updateConsolePreferencesSchema.parse({
+        emailNotificationsEnabled: false,
+        defaultView: "operations",
+      }),
+    ).toEqual({
+      emailNotificationsEnabled: false,
+      defaultView: "operations",
+    });
   });
 
   it("coerces audit pagination query values", () => {

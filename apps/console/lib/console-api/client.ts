@@ -43,6 +43,7 @@ import type {
   StylePublishResponse,
   TilesetUploadOptions,
   TilesetUploadResult,
+  UpdateConsolePreferencesInput,
 } from '@planisfy/api-contracts'
 import { CONSOLE_API_BASE } from './config'
 import { ApiRequestError, type ApiError } from './errors'
@@ -239,6 +240,12 @@ class ApiClient {
 
   updateProfile(options: { displayName?: string; handle?: string; bio?: string }) {
     return this.put<ApiEnvelope<ConsoleProfile>>('/profile', options).then((res) => ({
+      data: normalizeProfileAvatarUrl(res.data),
+    }))
+  }
+
+  updateProfilePreferences(options: UpdateConsolePreferencesInput) {
+    return this.patch<ApiEnvelope<ConsoleProfile>>('/profile/preferences', options).then((res) => ({
       data: normalizeProfileAvatarUrl(res.data),
     }))
   }

@@ -32,8 +32,12 @@ function VerifyEmailContent() {
   const [requested, setRequested] = useState(false)
 
   const callbackUrl = useMemo(() => {
-    if (typeof window === 'undefined') return '/styles'
-    return sanitizeCallbackUrl(searchParams.get('callbackUrl'), '/styles', window.location.origin)
+    if (typeof window === 'undefined') return '/auth/complete'
+    return sanitizeCallbackUrl(
+      searchParams.get('callbackUrl'),
+      '/auth/complete',
+      window.location.origin
+    )
   }, [searchParams])
 
   const checkVerification = useCallback(async () => {

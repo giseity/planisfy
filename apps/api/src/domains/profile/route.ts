@@ -1,9 +1,20 @@
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { eq, and, desc, isNull } from 'drizzle-orm'
-import { db, eventOutbox, profiles, storageObjects, users } from '@planisfy/database'
+import {
+  db,
+  eventOutbox,
+  profiles,
+  storageObjects,
+  userPreferences,
+  users,
+} from '@planisfy/database'
 import { deactivateAccount } from '@planisfy/database/accounts/lifecycle'
-import { deleteConsoleProfileSchema, updateConsoleProfileSchema } from '@planisfy/api-contracts'
+import {
+  deleteConsoleProfileSchema,
+  updateConsolePreferencesSchema,
+  updateConsoleProfileSchema,
+} from '@planisfy/api-contracts'
 import { getStorage } from '@planisfy/storage'
 import { StoragePaths } from '@planisfy/storage-paths'
 import { parseEventPayload } from '@planisfy/events'
@@ -43,6 +54,42 @@ export const profileRoute = profileBaseRoute
 
     return c.json({ data: profile })
   })
+  .patch(
+    '/profile/preferences',
+    jsonValidator(updateConsolePreferencesSchema),
+    async (c) => {
+      const userId = c.get('userId')
+      const preferences = c.req.valid('json')
+      const now = new Date()
+
+      await db
+        .insert(userPreferences)
+        .values({
+          userId,
+          ...preferences,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: userPreferences.userId,
+          set: {
+            ...preferences,
+            updatedAt: now,
+          },
+        })
+
+      await logAudit({
+        accountId: userId,
+        actorUserId: userId,
+        action: 'profile.preferences_updated',
+        resourceType: 'profile',
+        resourceId: userId,
+        metadata: { fields: Object.keys(preferences) },
+        ipAddress: getClientIp(c.req.raw),
+      })
+
+      return c.json({ data: await getProfile(userId) })
+    }
+  )
   // ── GET /console/profile/avatar - Serve current profile avatar ──────────────
   .get('/profile/avatar', async (c) => {
     const userId = c.get('userId')
@@ -443,13 +490,25 @@ async function getProfile(userId: string, database: DatabaseExecutor = db) {
       email: users.email,
       emailVerified: users.emailVerified,
       createdAt: profiles.createdAt,
+      emailNotificationsEnabled: userPreferences.emailNotificationsEnabled,
+      defaultView: userPreferences.defaultView,
     })
     .from(profiles)
     .innerJoin(users, eq(profiles.id, users.id))
+    .leftJoin(userPreferences, eq(userPreferences.userId, users.id))
     .where(eq(profiles.id, userId))
     .limit(1)
 
-  return profile ?? null
+  if (!profile) return null
+
+  const { emailNotificationsEnabled, defaultView, ...profileData } = profile
+  return {
+    ...profileData,
+    preferences: {
+      emailNotificationsEnabled: emailNotificationsEnabled ?? true,
+      defaultView: defaultView ?? 'dashboard',
+    },
+  }
 }
 
 class AvatarValidationError extends Error {

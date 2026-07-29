@@ -11,7 +11,12 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-import { accountLifecycleStatusEnum, accountTypeEnum, systemRoleEnum } from "./primitives";
+import {
+  accountLifecycleStatusEnum,
+  accountTypeEnum,
+  consoleDefaultViewEnum,
+  systemRoleEnum,
+} from "./primitives";
 
 // ============================================================================
 // Accounts (shared identity anchor for users and organizations)
@@ -258,3 +263,22 @@ export const twoFactors = pgTable(
     index("two_factors_secret_idx").on(table.secret),
   ],
 );
+
+export const userPreferences = pgTable("user_preferences", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  emailNotificationsEnabled: boolean("email_notifications_enabled")
+    .notNull()
+    .default(true),
+  defaultView: consoleDefaultViewEnum("default_view")
+    .notNull()
+    .default("dashboard"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});

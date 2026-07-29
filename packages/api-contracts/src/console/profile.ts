@@ -1,6 +1,17 @@
 import { z } from "zod";
 import { apiEnvelopeSchema, nullableStringSchema } from "../primitives";
 
+export const consoleDefaultViewSchema = z.enum([
+  "dashboard",
+  "styles",
+  "operations",
+]);
+
+export const consolePreferencesSchema = z.object({
+  emailNotificationsEnabled: z.boolean(),
+  defaultView: consoleDefaultViewSchema,
+});
+
 export const consoleProfileSchema = z.object({
   id: z.string(),
   handle: z.string(),
@@ -10,6 +21,7 @@ export const consoleProfileSchema = z.object({
   email: z.string(),
   emailVerified: z.boolean(),
   createdAt: z.string(),
+  preferences: consolePreferencesSchema,
 });
 
 export type ConsoleProfile = z.infer<typeof consoleProfileSchema>;
@@ -30,6 +42,17 @@ export const updateConsoleProfileSchema = z.object({
 
 export type UpdateConsoleProfileInput = z.infer<
   typeof updateConsoleProfileSchema
+>;
+
+export const updateConsolePreferencesSchema = consolePreferencesSchema
+  .partial()
+  .refine(
+    (preferences) => Object.keys(preferences).length > 0,
+    "At least one preference is required",
+  );
+
+export type UpdateConsolePreferencesInput = z.infer<
+  typeof updateConsolePreferencesSchema
 >;
 
 export const deleteConsoleProfileSchema = z.object({

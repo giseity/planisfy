@@ -16,6 +16,11 @@ export const systemRoleEnum = pgEnum("system_role", [
   "SUPER",
   "OWNER",
 ]);
+export const consoleDefaultViewEnum = pgEnum("console_default_view", [
+  "dashboard",
+  "styles",
+  "operations",
+]);
 
 export const sourceStatusEnum = pgEnum("source_status", [
   "PENDING",
