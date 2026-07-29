@@ -6,6 +6,7 @@ import { api, type ConsoleTileset } from '@/lib/api'
 import { ScrollArea } from '@planisfy/ui/components/scroll-area'
 import { Button } from '@planisfy/ui/components/button'
 import { Input } from '@planisfy/ui/components/input'
+import { Textarea } from '@planisfy/ui/components/textarea'
 import { Label } from '@planisfy/ui/components/label'
 import { Badge } from '@planisfy/ui/components/badge'
 import {
@@ -16,7 +17,11 @@ import {
   SelectValue,
 } from '@planisfy/ui/components/select'
 import { Plus, Trash2, Database, Layers, RefreshCw } from 'lucide-react'
-import { SOURCE_TYPES, type SourceType } from '@/features/style-editor/style-spec/source'
+import {
+  SOURCE_TYPES,
+  type SourceInsertResult,
+  type SourceType,
+} from '@/features/style-editor/style-spec/source'
 import type { SourceSpecification } from 'maplibre-gl'
 import { clientEnv } from '@/env.client'
 import { isManagedDeploymentMode, managedPlatformSources } from '@/lib/managed-defaults'
@@ -69,8 +74,9 @@ export function SourcePanel() {
         {showAdd && (
           <AddSourceForm
             onAdd={(id, source) => {
-              addSource(id, source)
-              setShowAdd(false)
+              const result = addSource(id, source)
+              if (result.ok) setShowAdd(false)
+              return result
             }}
             onCancel={() => setShowAdd(false)}
           />
@@ -97,7 +103,7 @@ function SourceBrowser({
   onAddLayer,
 }: {
   existingSourceIds: Set<string>
-  onAdd: (id: string, source: SourceSpecification) => void
+  onAdd: (id: string, source: SourceSpecification) => SourceInsertResult
   onAddLayer: (sourceId: string, options?: SourceLayerOptions) => void
 }) {
   const [tilesets, setTilesets] = useState<ConsoleTileset[]>([])
@@ -212,8 +218,10 @@ function SourceBrowser({
                     size="sm"
                     className="h-6 flex-1 gap-1 text-xs"
                     onClick={() => {
-                      if (!inStyle) onAdd(source.sourceId, source.source)
-                      onAddLayer(source.sourceId, {
+                      const inserted = inStyle
+                        ? true
+                        : onAdd(source.sourceId, source.source).ok
+                      if (inserted) onAddLayer(source.sourceId, {
                         layerType: inferLayerType(selectedSourceLayer),
                         sourceLayer: selectedSourceLayer,
                       })
@@ -313,8 +321,8 @@ function SourceBrowser({
                     disabled={!canAdd}
                     onClick={() => {
                       if (!spec) return
-                      if (!inStyle) onAdd(sourceId, spec)
-                      onAddLayer(
+                      const inserted = inStyle ? true : onAdd(sourceId, spec).ok
+                      if (inserted) onAddLayer(
                         sourceId,
                         defaultLayerOptionsForTileset(tileset, selectedSourceLayer)
                       )
@@ -401,58 +409,72 @@ function SourceItem({
         )}
       </div>
 
-      {source.type === 'vector' && 'url' in source && (
+      {(source.type === 'vector' || source.type === 'raster' || source.type === 'raster-dem') && (
+        <>
         <div className="space-y-1">
-          <Label className="text-[10px] text-muted-foreground">URL</Label>
+            <Label className="text-[10px] text-muted-foreground">TileJSON URL</Label>
           <Input
             value={(source as { url?: string }).url ?? ''}
             onChange={(e) =>
-              onUpdate({
-                ...source,
-                url: e.target.value,
-              } as SourceSpecification)
+                onUpdate(
+                  setSourceField(source, 'url', e.target.value || undefined)
+                )
             }
             className="h-6 text-xs font-mono"
             placeholder="https://tiles.example.com/data"
           />
         </div>
+          <JsonSourceField
+            key={`${sourceId}:tiles:${JSON.stringify((source as { tiles?: unknown }).tiles)}`}
+            label="Tile URL templates"
+            value={(source as { tiles?: unknown }).tiles ?? []}
+            validate={(value) =>
+              Array.isArray(value) && value.every((item) => typeof item === 'string')
+            }
+            onCommit={(value) => onUpdate(setSourceField(source, 'tiles', value))}
+          />
+        </>
       )}
 
       {source.type === 'geojson' && (
-        <div className="space-y-1">
-          <Label className="text-[10px] text-muted-foreground">Data URL or inline</Label>
-          <Input
-            value={
-              typeof (source as { data?: unknown }).data === 'string'
-                ? String((source as { data?: unknown }).data)
-                : ''
-            }
-            onChange={(e) =>
-              onUpdate({
-                ...source,
-                data: e.target.value,
-              } as SourceSpecification)
-            }
-            className="h-6 text-xs font-mono"
-            placeholder="https://example.com/data.geojson"
-          />
-        </div>
+        <JsonSourceField
+          key={`${sourceId}:data:${JSON.stringify((source as { data?: unknown }).data)}`}
+          label="Data URL or inline GeoJSON"
+          value={(source as { data?: unknown }).data}
+          validate={(value) => typeof value === 'string' || isGeoJsonValue(value)}
+          onCommit={(value) => onUpdate(setSourceField(source, 'data', value))}
+        />
       )}
 
-      {(source.type === 'raster' || source.type === 'raster-dem') && 'url' in source && (
-        <div className="space-y-1">
-          <Label className="text-[10px] text-muted-foreground">TileJSON URL</Label>
+      {source.type === 'image' && (
+        <>
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">Image URL</Label>
           <Input
             value={(source as { url?: string }).url ?? ''}
             onChange={(e) =>
-              onUpdate({
-                ...source,
-                url: e.target.value,
-              } as SourceSpecification)
+                onUpdate(setSourceField(source, 'url', e.target.value))
             }
             className="h-6 text-xs font-mono"
           />
-        </div>
+          </div>
+          <CoordinatesField sourceId={sourceId} source={source} onUpdate={onUpdate} />
+        </>
+      )}
+
+      {source.type === 'video' && (
+        <>
+          <JsonSourceField
+            key={`${sourceId}:urls:${JSON.stringify((source as { urls?: unknown }).urls)}`}
+            label="Video URLs"
+            value={(source as { urls?: unknown }).urls ?? []}
+            validate={(value) =>
+              Array.isArray(value) && value.every((item) => typeof item === 'string')
+            }
+            onCommit={(value) => onUpdate(setSourceField(source, 'urls', value))}
+          />
+          <CoordinatesField sourceId={sourceId} source={source} onUpdate={onUpdate} />
+        </>
       )}
     </div>
   )
@@ -462,16 +484,23 @@ function AddSourceForm({
   onAdd,
   onCancel,
 }: {
-  onAdd: (id: string, source: SourceSpecification) => void
+  onAdd: (id: string, source: SourceSpecification) => SourceInsertResult
   onCancel: () => void
 }) {
   const [sourceId, setSourceId] = useState('')
   const [sourceType, setSourceType] = useState<SourceType>('vector')
   const [url, setUrl] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   const handleAdd = () => {
-    if (!sourceId.trim()) return
-    onAdd(sourceId, buildSource(sourceType, url))
+    const result = onAdd(sourceId, buildSource(sourceType, url))
+    if (!result.ok) {
+      setError(
+        result.code === 'SOURCE_EXISTS'
+          ? 'A source with that ID already exists.'
+          : 'Use 1-128 letters, numbers, dots, underscores, or dashes.'
+      )
+    }
   }
 
   return (
@@ -517,7 +546,103 @@ function AddSourceForm({
           Cancel
         </Button>
       </div>
+      {error && <p className="text-[10px] text-destructive">{error}</p>}
     </div>
+  )
+}
+
+function CoordinatesField({
+  sourceId,
+  source,
+  onUpdate,
+}: {
+  sourceId: string
+  source: SourceSpecification
+  onUpdate: (source: SourceSpecification) => void
+}) {
+  const coordinates = (source as { coordinates?: unknown }).coordinates ?? []
+  return (
+    <JsonSourceField
+      key={`${sourceId}:coordinates:${JSON.stringify(coordinates)}`}
+      label="Coordinates"
+      value={coordinates}
+      validate={isCoordinates}
+      onCommit={(value) => onUpdate(setSourceField(source, 'coordinates', value))}
+    />
+  )
+}
+
+function JsonSourceField({
+  label,
+  value,
+  validate,
+  onCommit,
+}: {
+  label: string
+  value: unknown
+  validate: (value: unknown) => boolean
+  onCommit: (value: unknown) => void
+}) {
+  const [text, setText] = useState(JSON.stringify(value, null, 2) ?? '')
+  const [error, setError] = useState(false)
+
+  const commit = () => {
+    try {
+      const parsed: unknown = JSON.parse(text)
+      if (!validate(parsed)) {
+        setError(true)
+        return
+      }
+      setError(false)
+      onCommit(parsed)
+    } catch {
+      setError(true)
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-[10px] text-muted-foreground">{label}</Label>
+      <Textarea
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value)
+          setError(false)
+        }}
+        onBlur={commit}
+        aria-invalid={error}
+        className="min-h-16 text-[10px] font-mono"
+      />
+      {error && <p className="text-[10px] text-destructive">Enter valid JSON for this field.</p>}
+    </div>
+  )
+}
+
+function setSourceField(
+  source: SourceSpecification,
+  key: string,
+  value: unknown
+) {
+  const next = { ...source } as SourceSpecification & Record<string, unknown>
+  if (value === undefined) delete next[key]
+  else next[key] = value
+  return next as SourceSpecification
+}
+
+function isGeoJsonValue(value: unknown) {
+  return typeof value === 'object' && value !== null && 'type' in value
+}
+
+function isCoordinates(value: unknown) {
+  return (
+    Array.isArray(value) &&
+    value.length === 4 &&
+    value.every(
+      (coordinate) =>
+        Array.isArray(coordinate) &&
+        coordinate.length === 2 &&
+        coordinate.every((number) => typeof number === 'number' && Number.isFinite(number))
+    )
   )
 }
 

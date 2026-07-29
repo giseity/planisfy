@@ -6,6 +6,10 @@ import type {
   SourceSpecification,
 } from "maplibre-gl";
 import { changeLayerType } from "@/features/style-editor/style-spec/layer";
+import {
+  insertSource,
+  type SourceInsertResult,
+} from "@/features/style-editor/style-spec/source";
 import { api, ApiRequestError } from "@/lib/api";
 import type { ApiEnvelope } from "@/lib/api";
 import { fetchStyleDetail } from "@/features/style-editor/workflow/style-api";
@@ -77,7 +81,10 @@ export interface StyleStore {
   addLayerFromSource: (sourceId: string, options?: SourceLayerOptions) => void;
 
   // Source mutations
-  addSource: (sourceId: string, source: SourceSpecification) => void;
+  addSource: (
+    sourceId: string,
+    source: SourceSpecification,
+  ) => SourceInsertResult;
   updateSource: (sourceId: string, source: SourceSpecification) => void;
   deleteSource: (sourceId: string) => void;
 
@@ -485,10 +492,16 @@ export const useStyleStore = create<StyleStore>()((set, get) => {
 
     // Source mutations
     addSource: (sourceId, source) =>
-      tracked((state) => {
-        if (!state.style) return;
-        state.style.sources[sourceId] = source;
-      }),
+      (() => {
+        const style = get().style;
+        if (!style) return { ok: false, code: "INVALID_SOURCE_ID" };
+        const result = insertSource(style, sourceId, source);
+        if (!result.ok) return result;
+        tracked((state) => {
+          state.style = result.style;
+        });
+        return result;
+      })(),
 
     updateSource: (sourceId, source) =>
       tracked((state) => {
