@@ -1100,6 +1100,24 @@ importers:
 
   packages/map-styles: {}
 
+  packages/outbound:
+    devDependencies:
+      '@planisfy/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@planisfy/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.2
+      tsx:
+        specifier: ^4.19.4
+        version: 4.21.0
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+
   packages/platform-policy:
     devDependencies:
       '@planisfy/eslint-config':

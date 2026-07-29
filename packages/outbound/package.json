@@ -1,0 +1,22 @@
+{
+  "name": "@planisfy/outbound",
+  "version": "0.0.1",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "node ../eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
+    "check-types": "tsc --noEmit",
+    "test": "tsx --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@planisfy/eslint-config": "workspace:*",
+    "@planisfy/typescript-config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "5.9.2"
+  }
+}
