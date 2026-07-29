@@ -17,6 +17,17 @@ const schema = z.object({
     .int()
     .positive()
     .default(60 * 60 * 1000),
+  GEODATA_MAX_SOURCE_BYTES: z.coerce.number().int().positive().default(262_144_000),
+  GEODATA_MAX_OUTPUT_BYTES: z.coerce.number().int().positive().default(1_073_741_824),
+  GEODATA_ZIP_MAX_ENTRIES: z.coerce.number().int().positive().default(256),
+  GEODATA_ZIP_MAX_ENTRY_BYTES: z.coerce.number().int().positive().default(536_870_912),
+  GEODATA_ZIP_MAX_EXPANDED_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(1_073_741_824),
+  GEODATA_ZIP_MAX_COMPRESSION_RATIO: z.coerce.number().positive().default(200),
+  GEODATA_CANCELLATION_POLL_MS: z.coerce.number().int().positive().default(1_000),
   DUCKDB_PATH: z.string().min(1),
   TIPPECANOE_PATH: z.string().min(1),
   OGR2OGR_PATH: z.string().min(1),

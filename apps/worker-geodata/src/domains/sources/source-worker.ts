@@ -1,8 +1,11 @@
 import type { Job } from "bullmq";
 import { execFile } from "child_process";
-import { mkdtemp, readFile, writeFile } from "fs/promises";
+import { createWriteStream } from "fs";
+import { mkdtemp, readFile, stat } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+import { Readable, Transform } from "stream";
+import { pipeline } from "stream/promises";
 import { promisify } from "util";
 import { eq } from "drizzle-orm";
 import { db, uploads } from "@planisfy/database";
@@ -29,9 +32,12 @@ import {
   buildTippecanoeArgs,
   missingTippecanoeMessage,
   shouldStoreRawFallback,
-  validateUpload,
   type SourceFormat,
 } from "../sources/upload-tiling";
+import {
+  validateGeneratedArtifact,
+  validateUploadFile,
+} from "../sources/artifact-validation";
 
 const execFileAsync = promisify(execFile);
 
@@ -98,12 +104,19 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
       await throwIfCancellationRequested(processingJobId);
     }
 
-    const rawData = await storage.download(uploadKey);
+    const sourcePath = join(tmpDir, `input.${inputExtension(format)}`);
+    let inputPath = sourcePath;
+    const sourceBytes = await downloadToBoundedFile({
+      storage,
+      storageKey: uploadKey,
+      outputPath: inputPath,
+      maxBytes: env.GEODATA_MAX_SOURCE_BYTES,
+    });
     if (processingJobId) {
       await throwIfCancellationRequested(processingJobId);
     }
 
-    const validation = validateUpload(rawData, format, job.data.csv);
+    const validation = await validateUploadFile(inputPath, format, job.data.csv);
     if (uploadId) {
       await db
         .update(uploads)
@@ -113,11 +126,11 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
     if (processingJobId) {
       await updateProgress(processingJobId, 20, {
         stage: "downloaded",
-        bytes: rawData.byteLength,
+        bytes: sourceBytes,
         validation,
       });
       await logProcessingJob(processingJobId, "Upload downloaded", {
-        bytes: rawData.byteLength,
+        bytes: sourceBytes,
         validation,
       });
       await throwIfCancellationRequested(processingJobId);
@@ -127,6 +140,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
       if (processingJobId) {
         await throwIfCancellationRequested(processingJobId);
       }
+      const rawData = await readFile(inputPath);
       const result = await storeProcessedArtifact({
         ownerId,
         tilesetId,
@@ -161,9 +175,6 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
       return;
     }
 
-    let inputPath = join(tmpDir, `input.${inputExtension(format)}`);
-    await writeFile(inputPath, rawData);
-
     const bounds = validation.bounds;
     if (format === "shapefile") {
       const convertedPath = join(tmpDir, "input.geojsonseq");
@@ -175,6 +186,12 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         );
         if (processingJobId) {
           await throwIfCancellationRequested(processingJobId);
+        }
+        const converted = await stat(convertedPath);
+        if (converted.size > env.GEODATA_MAX_OUTPUT_BYTES) {
+          throw new Error(
+            `Converted Shapefile exceeds the ${env.GEODATA_MAX_OUTPUT_BYTES} byte output limit`,
+          );
         }
       } catch (err) {
         if (isMissingExecutableError(err)) {
@@ -228,6 +245,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
         if (processingJobId) {
           await throwIfCancellationRequested(processingJobId);
         }
+        const rawData = await readFile(sourcePath);
         const result = await storeProcessedArtifact({
           ownerId,
           tilesetId,
@@ -275,6 +293,7 @@ export async function processSourceJob(job: Job<SourceProcessingJob>) {
       throw err;
     }
 
+    await validateGeneratedArtifact(outputPath, "pmtiles");
     const pmtilesData = await readFile(outputPath);
     if (processingJobId) {
       await throwIfCancellationRequested(processingJobId);
@@ -352,6 +371,45 @@ function inputExtension(format: SourceFormat) {
   if (format === "shapefile") return "zip";
   if (format === "geojson") return "geojson";
   return format;
+}
+
+async function downloadToBoundedFile(params: {
+  storage: ReturnType<typeof getStorage>;
+  storageKey: string;
+  outputPath: string;
+  maxBytes: number;
+}) {
+  const metadata = await params.storage.getMetadata(params.storageKey);
+  if (metadata && metadata.size > params.maxBytes) {
+    throw new Error(
+      `Source artifact exceeds the ${params.maxBytes} byte source limit`,
+    );
+  }
+
+  const source = params.storage.downloadStream
+    ? await params.storage.downloadStream(params.storageKey)
+    : Readable.from(await params.storage.download(params.storageKey));
+  let bytes = 0;
+  const limiter = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      bytes += chunk.byteLength;
+      if (bytes > params.maxBytes) {
+        callback(
+          new Error(
+            `Source artifact exceeds the ${params.maxBytes} byte source limit`,
+          ),
+        );
+        return;
+      }
+      callback(null, chunk);
+    },
+  });
+  await pipeline(
+    source,
+    limiter,
+    createWriteStream(params.outputPath, { mode: 0o600 }),
+  );
+  return bytes;
 }
 
 function isMissingExecutableError(err: unknown): boolean {

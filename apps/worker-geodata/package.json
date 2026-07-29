@@ -20,15 +20,21 @@
     "@planisfy/geodata-contracts": "workspace:*",
     "@planisfy/storage": "workspace:*",
     "@planisfy/storage-paths": "workspace:*",
+    "better-sqlite3": "^13.0.2",
     "bullmq": "^5.71.0",
+    "csv-parse": "^7.0.1",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.45.2",
-    "ioredis": "^5.5.0"
+    "ioredis": "^5.5.0",
+    "pmtiles": "4.4.1",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@planisfy/eslint-config": "workspace:*",
     "@planisfy/typescript-config": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
+    "@types/yauzl": "^3.4.0",
     "eslint": "^9.39.2",
     "tsup": "^8.4.0",
     "tsx": "^4.19.4",
