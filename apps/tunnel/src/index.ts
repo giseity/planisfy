@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { env } from "./env";
+import { createTunnelLifecycle, type ShutdownSignal } from "./lifecycle";
 
 const originUrl = `http://localhost:${env.PORT}`;
 
@@ -59,33 +60,36 @@ function main(): void {
     handleOutput(chunk, process.stderr);
   });
 
-  tunnel.on("error", (err) => {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      console.error(
-        `Failed to start Cloudflare tunnel: ${env.CLOUDFLARED_BIN} was not found.`,
-      );
-      console.error(
-        "Install cloudflared from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/",
-      );
-    } else {
-      console.error("Failed to start Cloudflare tunnel:", err);
-    }
-    process.exit(1);
+  const lifecycle = createTunnelLifecycle({
+    kill: (signal) => {
+      tunnel.kill(signal);
+    },
+    exit: (code) => {
+      process.exit(code);
+    },
+    reportSpawnError: (err) => {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        console.error(
+          `Failed to start Cloudflare tunnel: ${env.CLOUDFLARED_BIN} was not found.`,
+        );
+        console.error(
+          "Install cloudflared from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/",
+        );
+      } else {
+        console.error("Failed to start Cloudflare tunnel:", err);
+      }
+    },
   });
 
-  tunnel.on("exit", (code, signal) => {
-    if (signal) {
-      process.exit(0);
-    }
-    process.exit(code ?? 0);
-  });
+  tunnel.once("error", lifecycle.handleError);
+  tunnel.once("exit", lifecycle.handleExit);
 
-  const stop = () => {
-    tunnel.kill("SIGINT");
+  const stop = (signal: ShutdownSignal) => {
+    lifecycle.stop(signal);
   };
 
-  process.on("SIGINT", stop);
-  process.on("SIGTERM", stop);
+  process.once("SIGINT", () => stop("SIGINT"));
+  process.once("SIGTERM", () => stop("SIGTERM"));
 }
 
 main();
