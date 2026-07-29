@@ -2,12 +2,13 @@
 
 import * as React from 'react'
 import { useTheme } from 'next-themes'
+import {
+  buildThemeCookieWrites,
+  isSharedTheme,
+  parseThemeCookie,
+} from '../lib/theme-cookie'
 
-export const SHARED_THEME_STORAGE_KEY = 'planisfy-theme'
-
-const THEME_COOKIE = SHARED_THEME_STORAGE_KEY
-const VALID_THEMES = new Set(['light', 'dark', 'system'])
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+export { SHARED_THEME_STORAGE_KEY } from '../lib/theme-cookie'
 
 export function ThemeCookieSync() {
   const { setTheme, theme } = useTheme()
@@ -31,7 +32,7 @@ export function ThemeCookieSync() {
       }
     }
 
-    if (isTheme(theme)) {
+    if (isSharedTheme(theme)) {
       writeThemeCookie(theme)
     }
   }, [setTheme, theme])
@@ -59,44 +60,16 @@ export function ThemeCookieSync() {
 }
 
 function readThemeCookie() {
-  const cookies = document.cookie
-    .split('; ')
-    .filter((part) => part.startsWith(`${THEME_COOKIE}=`))
-    .map((part) => part.split('=')[1])
-
-  const cookie = cookies.at(-1)
-  const theme = cookie ? decodeURIComponent(cookie) : undefined
-  return isTheme(theme) ? theme : undefined
+  return parseThemeCookie(document.cookie)
 }
 
-function writeThemeCookie(theme: string) {
-  const encoded = encodeURIComponent(theme)
-  const attributes = [
-    'Path=/',
-    `Max-Age=${COOKIE_MAX_AGE}`,
-    'SameSite=Lax',
-    window.location.protocol === 'https:' ? 'Secure' : '',
-  ]
-    .filter(Boolean)
-    .join('; ')
-
-  const domain = sharedCookieDomain(window.location.hostname)
-  if (domain) {
-    document.cookie = `${THEME_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`
-    document.cookie = `${THEME_COOKIE}=${encoded}; Domain=${domain}; ${attributes}`
-    return
+function writeThemeCookie(theme: 'light' | 'dark' | 'system') {
+  const writes = buildThemeCookieWrites(
+    theme,
+    window.location.hostname,
+    window.location.protocol === 'https:'
+  )
+  for (const cookie of writes) {
+    document.cookie = cookie
   }
-
-  document.cookie = `${THEME_COOKIE}=${encoded}; ${attributes}`
-}
-
-function sharedCookieDomain(hostname: string) {
-  if (!hostname.includes('.') || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return undefined
-
-  const parts = hostname.split('.')
-  return `.${parts.slice(-2).join('.')}`
-}
-
-function isTheme(theme: unknown): theme is 'light' | 'dark' | 'system' {
-  return typeof theme === 'string' && VALID_THEMES.has(theme)
 }
