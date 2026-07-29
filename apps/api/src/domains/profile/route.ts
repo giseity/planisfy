@@ -1,15 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { eq, and, desc, isNull } from 'drizzle-orm'
-import { db, profiles, storageObjects, users } from '@planisfy/database'
+import { db, eventOutbox, profiles, storageObjects, users } from '@planisfy/database'
 import { deactivateAccount } from '@planisfy/database/accounts/lifecycle'
 import { deleteConsoleProfileSchema, updateConsoleProfileSchema } from '@planisfy/api-contracts'
 import { getStorage } from '@planisfy/storage'
 import { StoragePaths } from '@planisfy/storage-paths'
+import { parseEventPayload } from '@planisfy/events'
 import sharp from 'sharp'
 import { logAudit } from '../../shared/audit'
 import { jsonValidator } from '../../shared/validation/validation'
 import type { AuthEnv } from '../../middleware/auth'
+import { consumeMultipartRequest, MultipartRequestError } from '../../shared/http/multipart'
+import { consumeAvatarRateLimit } from '../../middleware/rate-limit'
 
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024
 const AVATAR_SIZE = 256
@@ -88,10 +91,68 @@ export const profileRoute = profileBaseRoute
   // ── POST /console/profile/avatar - Upload profile avatar ───────────────────
   .post('/profile/avatar', async (c) => {
     const userId = c.get('userId')
-    const body = await c.req.parseBody()
-    const file = body.file
+    const retryAfter = await consumeAvatarRateLimit(userId, getClientIp(c.req.raw) ?? 'unknown')
+    if (retryAfter) {
+      c.header('Retry-After', String(retryAfter))
+      return c.json(
+        {
+          error: {
+            code: 'RATE_LIMITED',
+            message: `Avatar upload limit exceeded. Retry after ${retryAfter} seconds.`,
+          },
+        },
+        429
+      )
+    }
+    let uploadedFile:
+      | { data: Buffer; contentType: string | null; fileName: string; size: number }
+      | undefined
+    try {
+      await consumeMultipartRequest({
+        request: c.req.raw,
+        maxTotalBytes: AVATAR_MAX_BYTES + 64 * 1024,
+        maxFileBytes: AVATAR_MAX_BYTES,
+        maxFiles: 1,
+        maxFields: 0,
+        onFile: async (file) => {
+          if (file.fieldName !== 'file' || uploadedFile) {
+            throw new MultipartRequestError(
+              'INVALID_MULTIPART',
+              "Avatar multipart body must contain one 'file' part"
+            )
+          }
+          const chunks: Buffer[] = []
+          let size = 0
+          for await (const chunk of file.stream) {
+            const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+            size += buffer.byteLength
+            chunks.push(buffer)
+          }
+          uploadedFile = {
+            data: Buffer.concat(chunks, size),
+            contentType: file.contentType || null,
+            fileName: file.fileName,
+            size,
+          }
+        },
+      })
+    } catch (error) {
+      if (error instanceof MultipartRequestError) {
+        const tooLarge = error.code === 'MULTIPART_LIMIT'
+        return c.json(
+          {
+            error: {
+              code: tooLarge ? 'AVATAR_TOO_LARGE' : 'INVALID_MULTIPART',
+              message: error.message,
+            },
+          },
+          tooLarge ? 413 : 400
+        )
+      }
+      throw error
+    }
 
-    if (!(file instanceof File)) {
+    if (!uploadedFile) {
       return c.json(
         {
           error: {
@@ -103,7 +164,7 @@ export const profileRoute = profileBaseRoute
       )
     }
 
-    if (file.size <= 0 || file.size > AVATAR_MAX_BYTES) {
+    if (uploadedFile.size <= 0 || uploadedFile.size > AVATAR_MAX_BYTES) {
       return c.json(
         {
           error: {
@@ -115,14 +176,13 @@ export const profileRoute = profileBaseRoute
       )
     }
 
-    const source = Buffer.from(await file.arrayBuffer())
     let avatar: NormalizedAvatarUpload
     try {
       avatar = await normalizeAvatarUpload({
-        buffer: source,
-        contentType: file.type || null,
-        fileName: file.name,
-        size: file.size,
+        buffer: uploadedFile.data,
+        contentType: uploadedFile.contentType,
+        fileName: uploadedFile.fileName,
+        size: uploadedFile.size,
       })
     } catch (err) {
       if (err instanceof AvatarValidationError) {
@@ -139,46 +199,74 @@ export const profileRoute = profileBaseRoute
     const stored = await storage.upload(storageKey, avatar.buffer, avatar.contentType)
 
     const now = new Date()
-    const updated = await db.transaction(async (tx) => {
-      await tx
-        .update(storageObjects)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            eq(storageObjects.accountId, userId),
-            eq(storageObjects.resourceType, AVATAR_RESOURCE_TYPE),
-            eq(storageObjects.resourceId, userId),
-            isNull(storageObjects.deletedAt)
+    let updated: Awaited<ReturnType<typeof getProfile>>
+    try {
+      updated = await db.transaction(async (tx) => {
+        const replacedObjects = await tx
+          .select({ id: storageObjects.id })
+          .from(storageObjects)
+          .where(
+            and(
+              eq(storageObjects.accountId, userId),
+              eq(storageObjects.resourceType, AVATAR_RESOURCE_TYPE),
+              eq(storageObjects.resourceId, userId),
+              isNull(storageObjects.deletedAt)
+            )
           )
-        )
+        await tx
+          .update(storageObjects)
+          .set({ deletedAt: now })
+          .where(
+            and(
+              eq(storageObjects.accountId, userId),
+              eq(storageObjects.resourceType, AVATAR_RESOURCE_TYPE),
+              eq(storageObjects.resourceId, userId),
+              isNull(storageObjects.deletedAt)
+            )
+          )
 
-      const [object] = await tx
-        .insert(storageObjects)
-        .values({
-          accountId: userId,
-          provider: storageInfo.provider,
-          bucket: storageInfo.bucket,
-          storageKey,
-          fileName,
-          contentType: stored.contentType,
-          size: stored.size,
-          resourceType: AVATAR_RESOURCE_TYPE,
-          resourceId: userId,
-          artifactKind: 'avatar',
-          metadata: {
-            width: avatar.width,
-            height: avatar.height,
-            sourceContentType: avatar.sourceContentType,
-          },
-        })
-        .returning()
+        const [object] = await tx
+          .insert(storageObjects)
+          .values({
+            accountId: userId,
+            provider: storageInfo.provider,
+            bucket: storageInfo.bucket,
+            storageKey,
+            fileName,
+            contentType: stored.contentType,
+            size: stored.size,
+            resourceType: AVATAR_RESOURCE_TYPE,
+            resourceId: userId,
+            artifactKind: 'avatar',
+            metadata: {
+              width: avatar.width,
+              height: avatar.height,
+              sourceContentType: avatar.sourceContentType,
+            },
+          })
+          .returning()
 
-      const avatarUrl = `${AVATAR_URL_BASE}?object=${object!.id}`
-      await tx.update(profiles).set({ avatarUrl }).where(eq(profiles.id, userId))
-      await tx.update(users).set({ image: avatarUrl }).where(eq(users.id, userId))
+        const avatarUrl = `${AVATAR_URL_BASE}?object=${object!.id}`
+        await tx.update(profiles).set({ avatarUrl }).where(eq(profiles.id, userId))
+        await tx.update(users).set({ image: avatarUrl }).where(eq(users.id, userId))
+        if (replacedObjects.length > 0) {
+          await tx.insert(eventOutbox).values(
+            replacedObjects.map((replaced) => ({
+              eventName: 'artifact.cleanup.requested',
+              payload: parseEventPayload('artifact.cleanup.requested', {
+                storageObjectId: replaced.id,
+                reason: 'profile avatar replaced',
+              }),
+            }))
+          )
+        }
 
-      return getProfile(userId, tx)
-    })
+        return getProfile(userId, tx)
+      })
+    } catch (error) {
+      await storage.delete(storageKey).catch(() => undefined)
+      throw error
+    }
 
     await logAudit({
       accountId: userId,
@@ -198,6 +286,17 @@ export const profileRoute = profileBaseRoute
     const now = new Date()
 
     const updated = await db.transaction(async (tx) => {
+      const deletedObjects = await tx
+        .select({ id: storageObjects.id })
+        .from(storageObjects)
+        .where(
+          and(
+            eq(storageObjects.accountId, userId),
+            eq(storageObjects.resourceType, AVATAR_RESOURCE_TYPE),
+            eq(storageObjects.resourceId, userId),
+            isNull(storageObjects.deletedAt)
+          )
+        )
       await tx
         .update(storageObjects)
         .set({ deletedAt: now })
@@ -211,6 +310,17 @@ export const profileRoute = profileBaseRoute
         )
       await tx.update(profiles).set({ avatarUrl: null }).where(eq(profiles.id, userId))
       await tx.update(users).set({ image: null }).where(eq(users.id, userId))
+      if (deletedObjects.length > 0) {
+        await tx.insert(eventOutbox).values(
+          deletedObjects.map((deleted) => ({
+            eventName: 'artifact.cleanup.requested',
+            payload: parseEventPayload('artifact.cleanup.requested', {
+              storageObjectId: deleted.id,
+              reason: 'profile avatar deleted',
+            }),
+          }))
+        )
+      }
       return getProfile(userId, tx)
     })
 

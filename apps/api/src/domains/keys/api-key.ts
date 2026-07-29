@@ -77,6 +77,33 @@ export function getEndpointCost(path: string): number {
   return baseCost
 }
 
+export function getPostEndpointCost(path: string, body: unknown): number {
+  const category = getEndpointCategory(path)
+  const baseCost = ENDPOINT_COSTS[category] ?? 1
+  if (!isRecord(body)) return baseCost
+
+  if (category === 'geocoding' && Array.isArray(body.queries)) {
+    return baseCost * boundedArrayLength(body.queries, 50)
+  }
+  if (category === 'directions' && Array.isArray(body.locations)) {
+    return baseCost + Math.max(0, boundedArrayLength(body.locations, 25) - 2)
+  }
+  if (category === 'matching' && Array.isArray(body.shape)) {
+    const points = boundedArrayLength(body.shape, 100)
+    return baseCost + Math.max(0, Math.ceil(points / 10) - 1)
+  }
+  if (category === 'matrix' && Array.isArray(body.sources) && Array.isArray(body.targets)) {
+    const cells = boundedArrayLength(body.sources, 25) * boundedArrayLength(body.targets, 25)
+    return baseCost + Math.ceil(Math.max(0, Math.min(cells, 100) - 4) / 10)
+  }
+  if (category === 'optimized-trips' && Array.isArray(body.locations)) {
+    const points = boundedArrayLength(body.locations, 12)
+    return baseCost + Math.max(0, points - 3) * 2
+  }
+
+  return baseCost
+}
+
 /** All available API key scopes */
 export const ALL_SCOPES = [
   'tiles:read',
@@ -270,6 +297,14 @@ function routeCoordinateCount(path: string): number | null {
   if (!match) return null
   const coords = decodeURIComponent(match[1]!)
   return coords.split(';').filter(Boolean).length
+}
+
+function boundedArrayLength(values: unknown[], maximum: number) {
+  return Math.max(1, Math.min(maximum, values.length))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isValidHostname(host: string) {

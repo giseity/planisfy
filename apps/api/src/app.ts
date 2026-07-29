@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { cors } from 'hono/cors'
+import { bodyLimit } from 'hono/body-limit'
 import { ZodError } from 'zod'
 import { randomUUID } from 'crypto'
 import { env } from './env'
@@ -92,8 +93,28 @@ const publicApiPaths = [
   '/elevation/*',
   '/static/*',
 ]
+const boundedPublicApiBody = bodyLimit({
+  maxSize: 256 * 1024,
+  onError: (c) =>
+    c.json(
+      {
+        error: {
+          code: 'PAYLOAD_TOO_LARGE',
+          message: 'Request body exceeds 256 KiB',
+        },
+      },
+      413
+    ),
+})
 for (const path of publicApiPaths) {
-  app.use(path, apiKeyMiddleware, dualAuthMiddleware, rateLimitMiddleware, usageLogMiddleware)
+  app.use(
+    path,
+    apiKeyMiddleware,
+    dualAuthMiddleware,
+    boundedPublicApiBody,
+    rateLimitMiddleware,
+    usageLogMiddleware
+  )
 }
 
 // ── Public API route handlers ────────────────────────────────────────────────

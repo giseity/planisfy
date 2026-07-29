@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono";
+import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -20,7 +21,6 @@ import {
   createProcessingJob,
   logProcessingJob,
 } from "./processing-jobs";
-import { recordStorageObject } from "../../shared/storage/storage-ledger";
 import { logAudit } from "../../shared/audit";
 import { registerPublishedTileAliases } from "./martin-sources";
 import {
@@ -40,8 +40,11 @@ import {
   toStorageFileName,
   unsupportedUploadFormatMessage,
 } from "./upload-policy";
-import { isRequestBodyTooLarge } from "./request-size";
 import { requireOrgMutationPermission } from "../../middleware/auth";
+import {
+  consumeMultipartRequest,
+  MultipartRequestError,
+} from "../../shared/http/multipart";
 
 export const resourcesRoute = new Hono<AuthEnv>();
 
@@ -229,70 +232,6 @@ resourcesRoute.post("/tilesets/:id/uploads", async (c) => {
   const accountId = c.get("ownerId");
   const userId = c.get("userId");
   const tilesetId = c.req.param("id");
-  if (isRequestBodyTooLarge(c.req.raw.headers, MAX_MULTIPART_UPLOAD_SIZE)) {
-    return c.json(
-      {
-        error: {
-          code: "PAYLOAD_TOO_LARGE",
-          message: `Upload request too large (max ${MAX_UPLOAD_SIZE / 1024 / 1024}MB file)`,
-        },
-      },
-      413,
-    );
-  }
-
-  const formData = await c.req.formData();
-  const file = formData.get("file") as File | null;
-  const optionsRaw = formData.get("options");
-  const parsedOptions =
-    typeof optionsRaw === "string" && optionsRaw
-      ? (JSON.parse(optionsRaw) as unknown)
-      : {};
-  const parsed = uploadTilesetSchema.safeParse(parsedOptions);
-
-  if (!parsed.success) {
-    return c.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Invalid upload options",
-          details: parsed.error.flatten(),
-        },
-      },
-      400,
-    );
-  }
-
-  if (!file) {
-    return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "No file provided" } },
-      400,
-    );
-  }
-  if (file.size > MAX_UPLOAD_SIZE) {
-    return c.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: `File too large (max ${MAX_UPLOAD_SIZE / 1024 / 1024}MB)`,
-        },
-      },
-      400,
-    );
-  }
-
-  const format = detectUploadFormat(file.name, file.type);
-  if (!format) {
-    return c.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: unsupportedUploadFormatMessage(),
-        },
-      },
-      400,
-    );
-  }
 
   const [tileset] = await db
     .select()
@@ -312,60 +251,179 @@ resourcesRoute.post("/tilesets/:id/uploads", async (c) => {
     );
   }
 
-  const [upload] = await db
-    .insert(uploads)
-    .values({
-      accountId,
-      originalFileName: file.name || "upload",
-      contentType: file.type || null,
-      size: file.size,
-      status: "PENDING",
-    })
-    .returning();
+  const uploadId = randomUUID();
+  const storage = getStorage();
+  let attemptedUploadKey: string | undefined;
+  let uploaded:
+    | {
+        originalFileName: string;
+        contentType: string;
+        storageFileName: string;
+        uploadKey: string;
+        format: NonNullable<ReturnType<typeof detectUploadFormat>>;
+        size: number;
+      }
+    | undefined;
+  let fields: Record<string, string>;
+  try {
+    fields = await consumeMultipartRequest({
+      request: c.req.raw,
+      maxTotalBytes: MAX_MULTIPART_UPLOAD_SIZE,
+      maxFileBytes: MAX_UPLOAD_SIZE,
+      maxFiles: 1,
+      maxFields: 8,
+      onFile: async (multipartFile) => {
+        if (multipartFile.fieldName !== "file" || uploaded) {
+          throw new MultipartRequestError(
+            "INVALID_MULTIPART",
+            "Tileset upload must contain exactly one 'file' part",
+          );
+        }
+        const originalFileName = multipartFile.fileName || "upload";
+        const format = detectUploadFormat(
+          originalFileName,
+          multipartFile.contentType,
+        );
+        if (!format) {
+          throw new MultipartRequestError(
+            "INVALID_MULTIPART",
+            unsupportedUploadFormatMessage(),
+          );
+        }
+        const storageFileName = toStorageFileName(originalFileName);
+        const uploadKey = StoragePaths.uploadOriginal(
+          accountId,
+          uploadId,
+          storageFileName,
+        );
+        attemptedUploadKey = uploadKey;
+        const stored = await storage.upload(
+          uploadKey,
+          multipartFile.stream,
+          multipartFile.contentType || undefined,
+        );
+        uploaded = {
+          originalFileName,
+          contentType: multipartFile.contentType,
+          storageFileName,
+          uploadKey,
+          format,
+          size: stored.size,
+        };
+      },
+    });
+  } catch (error) {
+    if (attemptedUploadKey) {
+      await storage.delete(attemptedUploadKey).catch(() => undefined);
+    }
+    if (error instanceof MultipartRequestError) {
+      const tooLarge = error.code === "MULTIPART_LIMIT";
+      return c.json(
+        {
+          error: {
+            code: tooLarge ? "PAYLOAD_TOO_LARGE" : "VALIDATION_ERROR",
+            message: error.message,
+          },
+        },
+        tooLarge ? 413 : 400,
+      );
+    }
+    throw error;
+  }
 
-  if (!upload) {
+  if (!uploaded) {
     return c.json(
-      { error: { code: "INTERNAL_ERROR", message: "Failed to create upload" } },
-      500,
+      { error: { code: "VALIDATION_ERROR", message: "No file provided" } },
+      400,
+    );
+  }
+  const completedUpload = uploaded;
+  let parsedOptions: unknown = {};
+  try {
+    parsedOptions = fields.options ? JSON.parse(fields.options) : {};
+  } catch {
+    await storage.delete(completedUpload.uploadKey).catch(() => undefined);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Upload options must be valid JSON",
+        },
+      },
+      400,
+    );
+  }
+  const parsed = uploadTilesetSchema.safeParse(parsedOptions);
+  if (!parsed.success) {
+    await storage.delete(completedUpload.uploadKey).catch(() => undefined);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid upload options",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
     );
   }
 
-  const storage = getStorage();
-  const storageFileName = toStorageFileName(file.name || "upload");
-  const uploadKey = StoragePaths.uploadOriginal(
-    accountId,
-    upload.id,
-    storageFileName,
-  );
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const stored = await storage.upload(
-    uploadKey,
-    buffer,
-    file.type || undefined,
-  );
   const storageInfo = storage.getInfo();
-  const storageObject = await recordStorageObject({
-    accountId,
-    provider: storageInfo.provider,
-    bucket: storageInfo.bucket,
-    storageKey: uploadKey,
-    fileName: storageFileName,
-    contentType: stored.contentType,
-    size: stored.size,
-    resourceType: "upload",
-    resourceId: upload.id,
-    artifactKind: "original",
-    metadata: { originalFileName: file.name, format },
-  });
-
-  await db
-    .update(uploads)
-    .set({
-      status: "UPLOADED",
-      storageObjectId: storageObject.id,
-      linkedTilesetId: tileset.id,
-    })
-    .where(eq(uploads.id, upload.id));
+  let persisted: {
+    upload: typeof uploads.$inferSelect;
+    storageObject: typeof storageObjects.$inferSelect;
+  };
+  try {
+    persisted = await db.transaction(async (tx) => {
+      const [createdUpload] = await tx
+        .insert(uploads)
+        .values({
+          id: uploadId,
+          accountId,
+          originalFileName: completedUpload.originalFileName,
+          contentType: completedUpload.contentType || null,
+          size: completedUpload.size,
+          status: "UPLOADED",
+          linkedTilesetId: tileset.id,
+        })
+        .returning();
+      const [createdObject] = await tx
+        .insert(storageObjects)
+        .values({
+          accountId,
+          provider: storageInfo.provider,
+          bucket: storageInfo.bucket,
+          storageKey: completedUpload.uploadKey,
+          fileName: completedUpload.storageFileName,
+          contentType: completedUpload.contentType,
+          size: completedUpload.size,
+          resourceType: "upload",
+          resourceId: uploadId,
+          artifactKind: "original",
+          metadata: {
+            originalFileName: completedUpload.originalFileName,
+            format: completedUpload.format,
+          },
+        })
+        .returning();
+      await tx
+        .update(uploads)
+        .set({ storageObjectId: createdObject!.id })
+        .where(eq(uploads.id, uploadId));
+      return {
+        upload: {
+          ...createdUpload!,
+          storageObjectId: createdObject!.id,
+        },
+        storageObject: createdObject!,
+      };
+    });
+  } catch (error) {
+    await storage.delete(completedUpload.uploadKey).catch(() => undefined);
+    throw error;
+  }
+  const { upload, storageObject } = persisted;
+  const { format, uploadKey } = completedUpload;
 
   let processingJob: typeof processingJobs.$inferSelect;
   try {

@@ -119,9 +119,43 @@ elevationRoute.get('/elevation/v1/along/:coords', async (c) => {
       400
     )
   }
+  if (
+    points.length > 100 ||
+    points.some(
+      (point) =>
+        !Number.isFinite(point.longitude) ||
+        !Number.isFinite(point.latitude) ||
+        point.longitude < -180 ||
+        point.longitude > 180 ||
+        point.latitude < -90 ||
+        point.latitude > 90
+    )
+  ) {
+    return c.json(
+      {
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Profile coordinates must contain 2–100 valid longitude,latitude pairs.',
+        },
+      },
+      400
+    )
+  }
 
   // Interpolate points along the route for a smooth profile
-  const numSamples = Math.min(Number(c.req.query('samples')) || 100, 500)
+  const samplesRaw = c.req.query('samples')
+  const numSamples = samplesRaw === undefined ? 100 : Number(samplesRaw)
+  if (!Number.isInteger(numSamples) || numSamples < 2 || numSamples > 500) {
+    return c.json(
+      {
+        error: {
+          code: 'BAD_REQUEST',
+          message: "'samples' must be an integer between 2 and 500.",
+        },
+      },
+      400
+    )
+  }
   const interpolated = interpolateAlongRoute(points, numSamples)
 
   try {

@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm'
 import type { AuthEnv } from '../../middleware/auth'
 import { env } from '../../env'
 import { isPeliasConfigured } from '../setup/geocoding-config'
+import { getEndpointCost } from '../keys/api-key'
 
 export const geocodingRoute = new Hono<AuthEnv>()
 
@@ -206,8 +207,18 @@ geocodingRoute.post('/geocoding/v1/batch', async (c) => {
     )
   }
 
+  const batchController = new AbortController()
+  let attemptedQueries = 0
   try {
-    const results = await mapWithConcurrency(parsed.queries, BATCH_CONCURRENCY, executeBatchQuery)
+    const results = await mapWithConcurrency(
+      parsed.queries,
+      BATCH_CONCURRENCY,
+      async (query) => {
+        attemptedQueries += 1
+        return executeBatchQuery(query, batchController.signal)
+      },
+      batchController
+    )
     const responseBody = { data: { results } }
     await db
       .update(billableRequests)
@@ -222,20 +233,40 @@ geocodingRoute.post('/geocoding/v1/batch', async (c) => {
     c.header('Cache-Control', 'private, no-store')
     return c.json(responseBody)
   } catch (error) {
-    await db.delete(billableRequests).where(eq(billableRequests.id, reservation.id))
+    const failure = peliasFailure(error)
+    const attemptedCost = getEndpointCost(c.req.path) * attemptedQueries
+    const responseBody = { error: failure.error }
+    await db
+      .update(billableRequests)
+      .set({
+        units: attemptedCost,
+        statusCode: failure.status,
+        responseBody,
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(billableRequests.id, reservation.id))
+    c.set('requestCost', attemptedCost)
+    c.set('chargeUsageOnFailure', attemptedQueries > 0)
     console.error('[geocoding] Batch error:', error)
-    return peliasError(c, error)
+    return c.json(responseBody, failure.status)
   }
 })
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function requestPelias(endpoint: string, params: Record<string, string>): Promise<unknown> {
+async function requestPelias(
+  endpoint: string,
+  params: Record<string, string>,
+  signal?: AbortSignal
+): Promise<unknown> {
   const url = new URL(`/v1/${endpoint}`, env.PELIAS_INTERNAL_URL)
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 3000)
+  const abortFromCaller = () => controller.abort(signal?.reason)
+  signal?.addEventListener('abort', abortFromCaller, { once: true })
 
   try {
     const res = await fetch(url.toString(), { signal: controller.signal })
@@ -246,6 +277,7 @@ async function requestPelias(endpoint: string, params: Record<string, string>): 
     return await res.json()
   } finally {
     clearTimeout(timeout)
+    signal?.removeEventListener('abort', abortFromCaller)
   }
 }
 
@@ -290,21 +322,29 @@ export function parseBatchGeocodingRequest(
       return { ok: false, message: `Query ${index} must be an object.` }
     }
     const query = item as Record<string, unknown>
-    const language =
-      typeof query.language === 'string' && query.language ? query.language.slice(0, 16) : 'en'
+    const language = normalizeLanguage(query.language)
+    if (!language) {
+      return { ok: false, message: `Query ${index} has an invalid 'language'.` }
+    }
     if (query.type === 'forward') {
       if (typeof query.q !== 'string' || !query.q.trim() || query.q.length > 500) {
         return { ok: false, message: `Query ${index} has an invalid 'q'.` }
+      }
+      const country = normalizeCountry(query.country)
+      if (query.country !== undefined && !country) {
+        return { ok: false, message: `Query ${index} has an invalid 'country'.` }
+      }
+      const bbox = normalizeBbox(query.bbox)
+      if (query.bbox !== undefined && !bbox) {
+        return { ok: false, message: `Query ${index} has an invalid 'bbox'.` }
       }
       queries.push({
         type: 'forward',
         q: query.q,
         limit: boundedInteger(query.limit, 5, 1, 25),
         language,
-        ...(typeof query.country === 'string' && query.country
-          ? { country: query.country.slice(0, 8) }
-          : {}),
-        ...(typeof query.bbox === 'string' && query.bbox ? { bbox: query.bbox.slice(0, 128) } : {}),
+        ...(country ? { country } : {}),
+        ...(bbox ? { bbox } : {}),
       })
       continue
     }
@@ -336,39 +376,55 @@ export function parseBatchGeocodingRequest(
   return { ok: true, queries }
 }
 
-async function executeBatchQuery(query: BatchGeocodingQuery) {
+async function executeBatchQuery(query: BatchGeocodingQuery, signal: AbortSignal) {
   if (query.type === 'forward') {
-    return requestPelias('search', {
-      text: query.q,
+    return requestPelias(
+      'search',
+      {
+        text: query.q,
+        size: String(query.limit),
+        lang: query.language,
+        ...(query.bbox ? { 'boundary.rect': query.bbox } : {}),
+        ...(query.country ? { 'boundary.country': query.country } : {}),
+      },
+      signal
+    )
+  }
+  return requestPelias(
+    'reverse',
+    {
+      'point.lon': String(query.lon),
+      'point.lat': String(query.lat),
       size: String(query.limit),
       lang: query.language,
-      ...(query.bbox ? { 'boundary.rect': query.bbox } : {}),
-      ...(query.country ? { 'boundary.country': query.country } : {}),
-    })
-  }
-  return requestPelias('reverse', {
-    'point.lon': String(query.lon),
-    'point.lat': String(query.lat),
-    size: String(query.limit),
-    lang: query.language,
-  })
+    },
+    signal
+  )
 }
 
 async function mapWithConcurrency<T, R>(
   values: T[],
   concurrency: number,
-  mapper: (value: T) => Promise<R>
+  mapper: (value: T) => Promise<R>,
+  controller = new AbortController()
 ) {
   const results = new Array<R>(values.length)
   let nextIndex = 0
+  let firstError: unknown
   await Promise.all(
     Array.from({ length: Math.min(concurrency, values.length) }, async () => {
-      while (nextIndex < values.length) {
+      while (nextIndex < values.length && !controller.signal.aborted) {
         const index = nextIndex++
-        results[index] = await mapper(values[index]!)
+        try {
+          results[index] = await mapper(values[index]!)
+        } catch (error) {
+          firstError ??= error
+          controller.abort(error)
+        }
       }
     })
   )
+  if (firstError) throw firstError
   return results
 }
 
@@ -376,6 +432,38 @@ function boundedInteger(value: unknown, fallback: number, minimum: number, maxim
   const parsed = Number(value)
   if (!Number.isInteger(parsed)) return fallback
   return Math.max(minimum, Math.min(maximum, parsed))
+}
+
+function normalizeLanguage(value: unknown): string | null {
+  if (value === undefined) return 'en'
+  if (typeof value !== 'string' || !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/.test(value)) {
+    return null
+  }
+  return value
+}
+
+function normalizeCountry(value: unknown): string | null {
+  if (value === undefined) return null
+  return typeof value === 'string' && /^[A-Za-z]{2}$/.test(value) ? value.toLowerCase() : null
+}
+
+function normalizeBbox(value: unknown): string | null {
+  if (value === undefined) return null
+  if (typeof value !== 'string') return null
+  const parts = value.split(',').map(Number)
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isFinite(part)) ||
+    parts[0]! < -180 ||
+    parts[2]! > 180 ||
+    parts[1]! < -90 ||
+    parts[3]! > 90 ||
+    parts[0]! >= parts[2]! ||
+    parts[1]! >= parts[3]!
+  ) {
+    return null
+  }
+  return parts.join(',')
 }
 
 async function findBillableRequest(accountId: string, idempotencyKey: string) {
@@ -454,27 +542,29 @@ function geocoderNotConfigured(c: Context<AuthEnv>) {
 }
 
 function peliasError(c: Context<AuthEnv>, err: unknown) {
-  if (err instanceof PeliasUpstreamError) {
-    return c.json(
-      {
+  const failure = peliasFailure(err)
+  return c.json({ error: failure.error }, failure.status)
+}
+
+function peliasFailure(err: unknown): {
+  status: 502 | 503
+  error: { code: string; message: string }
+} {
+  return err instanceof PeliasUpstreamError
+    ? {
+        status: 502,
         error: {
           code: 'UPSTREAM_ERROR',
           message: `Pelias geocoding service returned HTTP ${err.status}.`,
         },
-      },
-      502
-    )
-  }
-
-  return c.json(
-    {
-      error: {
-        code: 'GEOCODER_UNAVAILABLE',
-        message: 'Pelias geocoding service unavailable.',
-      },
-    },
-    503
-  )
+      }
+    : {
+        status: 503,
+        error: {
+          code: 'GEOCODER_UNAVAILABLE',
+          message: 'Pelias geocoding service unavailable.',
+        },
+      }
 }
 
 class PeliasUpstreamError extends Error {

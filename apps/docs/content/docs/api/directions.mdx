@@ -12,7 +12,7 @@ Directions proxy to Valhalla's `route` action.
 | Method | Route | Description |
 | --- | --- | --- |
 | `GET` | `/directions/v1/{profile}/{lon,lat;lon,lat}` | Route from URL coordinates. |
-| `POST` | `/directions/v1/{profile}` | Route from a Valhalla-like JSON body. |
+| `POST` | `/directions/v1/{profile}` | Route from a bounded Planisfy JSON body. |
 
 GET supports 2 to 25 coordinates.
 
@@ -56,6 +56,9 @@ curl "https://api.example.com/directions/v1/driving/9.1829,48.7758;9.2000,48.780
   "alternates": 0
 }
 ```
+
+The POST body accepts only `locations`, `units`, `language`, and `alternates`.
+The URL profile determines Valhalla costing; unknown fields are rejected.
 
 ## Auth, caching, and errors
 

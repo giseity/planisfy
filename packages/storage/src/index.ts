@@ -11,6 +11,7 @@ import {
   S3Client,
   type CompletedPart,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
   chmodSync,
@@ -22,7 +23,7 @@ import {
   unlinkSync,
 } from "fs";
 import { dirname, join } from "path";
-import { Readable } from "stream";
+import { Readable, Transform } from "stream";
 import { pipeline } from "stream/promises";
 import { env } from "./env";
 
@@ -129,17 +130,41 @@ export class S3Storage implements StorageProvider {
     contentLength?: number
   ): Promise<StoredObject> {
     const resolvedContentType = contentType || "application/octet-stream";
-    const contentLengthBytes = Buffer.isBuffer(data) ? data.length : contentLength;
+    let contentLengthBytes = Buffer.isBuffer(data) ? data.length : contentLength;
 
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: data,
-        ContentType: resolvedContentType,
-        ContentLength: contentLengthBytes,
-      }),
-    );
+    if (Buffer.isBuffer(data) || contentLengthBytes !== undefined) {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: data,
+          ContentType: resolvedContentType,
+          ContentLength: contentLengthBytes,
+        }),
+      );
+    } else {
+      let streamedBytes = 0;
+      const counter = new Transform({
+        transform(chunk: Buffer, _encoding, callback) {
+          streamedBytes += chunk.byteLength;
+          callback(null, chunk);
+        },
+      });
+      const upload = new Upload({
+        client: this.client,
+        params: {
+          Bucket: this.bucket,
+          Key: key,
+          Body: data.pipe(counter),
+          ContentType: resolvedContentType,
+        },
+        leavePartsOnError: false,
+        queueSize: 2,
+        partSize: 8 * 1024 * 1024,
+      });
+      await upload.done();
+      contentLengthBytes = streamedBytes;
+    }
 
     return {
       key,

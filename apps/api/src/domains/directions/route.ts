@@ -27,13 +27,11 @@ const directionsBodySchema = z
       )
       .min(2)
       .max(MAX_ROUTE_COORDINATES),
-    costing: z.string().optional(),
     units: z.enum(['kilometers', 'miles']).optional(),
     language: z.string().max(8).optional(),
     alternates: z.number().int().min(0).max(3).optional(),
-    directions_options: z.record(z.string(), z.unknown()).optional(),
   })
-  .passthrough()
+  .strict()
 
 const isochroneBodySchema = z
   .object({
@@ -269,7 +267,8 @@ directionsRoute.post('/directions/v1/:profile', async (c) => {
 
   const result = await valhallaProxy('route', {
     ...body,
-    costing: body.costing || costing,
+    costing,
+    directions_options: { units: body.units ?? 'kilometers' },
   })
 
   if (!result.ok) {

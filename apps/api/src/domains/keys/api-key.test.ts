@@ -4,6 +4,7 @@ import {
   evaluateApiKeyPolicy,
   getEndpointCategory,
   getEndpointCost,
+  getPostEndpointCost,
   isRequestOriginAllowed,
   normalizeAllowedDomains,
   requiredScopeForPath,
@@ -90,4 +91,32 @@ test('endpoint cost scales bounded routing workloads', () => {
   assert.equal(getEndpointCost('/directions/v1/driving/0,0;1,1;2,2'), 11)
   assert.equal(getEndpointCost('/matrix/v1/driving/0,0;1,1;2,2;3,3'), 12)
   assert.equal(getEndpointCost('/optimized-trips/v1/driving/0,0;1,1;2,2;3,3'), 17)
+})
+
+test('POST endpoint cost uses body workload instead of the coordinate-free path', () => {
+  assert.equal(
+    getPostEndpointCost('/directions/v1/driving', {
+      locations: Array.from({ length: 25 }, () => ({ lon: 0, lat: 0 })),
+    }),
+    33
+  )
+  assert.equal(
+    getPostEndpointCost('/matching/v1/driving', {
+      shape: Array.from({ length: 100 }, () => ({ lon: 0, lat: 0 })),
+    }),
+    14
+  )
+  assert.equal(
+    getPostEndpointCost('/matrix/v1/driving', {
+      sources: Array.from({ length: 10 }, () => ({ lon: 0, lat: 0 })),
+      targets: Array.from({ length: 10 }, () => ({ lon: 0, lat: 0 })),
+    }),
+    20
+  )
+  assert.equal(
+    getPostEndpointCost('/geocoding/v1/batch', {
+      queries: Array.from({ length: 50 }, () => ({ type: 'forward' })),
+    }),
+    250
+  )
 })

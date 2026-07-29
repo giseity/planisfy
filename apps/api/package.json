@@ -36,6 +36,7 @@
     "@planisfy/upgrade-manifest": "workspace:*",
     "@planisfy/utils": "workspace:*",
     "better-auth": "1.6.11",
+    "busboy": "^1.6.0",
     "bullmq": "^5.71.0",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.45.2",
@@ -52,6 +53,7 @@
   "devDependencies": {
     "@planisfy/eslint-config": "workspace:*",
     "@planisfy/typescript-config": "workspace:*",
+    "@types/busboy": "^1.5.4",
     "@types/node": "^24.0.0",
     "@types/pngjs": "^6.0.5",
     "eslint": "^9.39.2",

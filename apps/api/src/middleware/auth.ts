@@ -35,6 +35,7 @@ export type AuthEnv = {
     requestId: string
     requestCost: number
     billableUsage: boolean
+    chargeUsageOnFailure: boolean
   }
 }
 

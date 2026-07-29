@@ -2,7 +2,7 @@ import { createMiddleware } from 'hono/factory'
 import type { Context } from 'hono'
 import { RateLimiterMemory, RateLimiterRedis, RateLimiterRes } from 'rate-limiter-flexible'
 import Redis from 'ioredis'
-import { getEndpointCost } from '../domains/keys/api-key'
+import { getEndpointCost, getPostEndpointCost } from '../domains/keys/api-key'
 import { getAccountPlanLimits } from '../domains/billing/billing'
 import { normalizeRequestsPerMinute } from '../shared/policy/rate-limit-policy'
 import {
@@ -60,9 +60,11 @@ const redis = new Redis({
 redis.on('error', () => {
   // Connection failures are handled through each limiter's in-memory insurance store.
 })
-redis.connect().catch((err) => {
-  console.warn('[rate-limit] Redis connection failed, using memory fallback:', err.message)
-})
+if (process.env.NODE_ENV !== 'test') {
+  redis.connect().catch((err) => {
+    console.warn('[rate-limit] Redis connection failed, using memory fallback:', err.message)
+  })
+}
 
 const requestLimiters = new Map<number, RateLimiterRedis>()
 
@@ -71,6 +73,22 @@ const blockLimiter = new RateLimiterMemory({
   duration: 300,
   blockDuration: 600,
 })
+const dashboardLimiter = createOperationalLimiter('dashboard', 30, 60)
+const preflightLimiter = createOperationalLimiter('preflight', 12, 60)
+const avatarUserLimiter = createOperationalLimiter('avatar:user', 6, 60 * 60)
+const avatarIpLimiter = createOperationalLimiter('avatar:ip', 30, 60 * 60)
+const notificationChannelLimiter = createOperationalLimiter('notification:channel', 1, 60)
+const notificationAccountLimiter = createOperationalLimiter('notification:account', 10, 60 * 60)
+
+function createOperationalLimiter(prefix: string, points: number, duration: number) {
+  return new RateLimiterRedis({
+    storeClient: redis,
+    keyPrefix: `rl:${prefix}`,
+    points,
+    duration,
+    insuranceLimiter: new RateLimiterMemory({ points, duration }),
+  })
+}
 
 function getMonthlyQuotaKey(ownerId: string, periodKey: string): string {
   return `quota:${ownerId}:${periodKey}`
@@ -185,6 +203,7 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
   const cost = await getRequestCost(c)
   c.set('requestCost', cost)
   c.set('billableUsage', true)
+  c.set('chargeUsageOnFailure', false)
   const clientIp =
     c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'unknown'
 
@@ -310,22 +329,52 @@ export const rateLimitMiddleware = createMiddleware<AuthEnv>(async (c, next) => 
     await next()
     successful = c.res.status >= 200 && c.res.status < 400
   } finally {
-    if (!successful || c.get('billableUsage') === false) {
-      await releaseMonthlyQuota(quota.reservationKey, cost)
-    }
+    const billable =
+      c.get('billableUsage') !== false && (successful || c.get('chargeUsageOnFailure') === true)
+    const finalCost = billable ? Math.max(0, Math.min(cost, c.get('requestCost') ?? cost)) : 0
+    await releaseMonthlyQuota(quota.reservationKey, cost - finalCost)
   }
 })
 
+export const consumeDashboardRateLimit = (accountId: string) =>
+  consumeOperationalLimiters([[dashboardLimiter, accountId]])
+
+export const consumePreflightRateLimit = (identity: string) =>
+  consumeOperationalLimiters([[preflightLimiter, identity]])
+
+export const consumeAvatarRateLimit = (userId: string, clientIp: string) =>
+  consumeOperationalLimiters([
+    [avatarUserLimiter, userId],
+    [avatarIpLimiter, clientIp],
+  ])
+
+export const consumeNotificationTestRateLimit = (accountId: string, channelId: string) =>
+  consumeOperationalLimiters([
+    [notificationChannelLimiter, channelId],
+    [notificationAccountLimiter, accountId],
+  ])
+
+async function consumeOperationalLimiters(
+  entries: Array<[RateLimiterRedis, string]>
+): Promise<number | null> {
+  try {
+    await Promise.all(entries.map(([limiter, key]) => limiter.consume(key)))
+    return null
+  } catch (error) {
+    return error instanceof RateLimiterRes
+      ? Math.max(1, Math.ceil(error.msBeforeNext / 1000))
+      : null
+  }
+}
+
 async function getRequestCost(c: Context<AuthEnv>) {
   const baseCost = getEndpointCost(c.req.path)
-  if (c.req.method !== 'POST' || c.req.path !== '/geocoding/v1/batch') {
+  if (c.req.method !== 'POST') {
     return baseCost
   }
 
   try {
-    const body = (await c.req.raw.clone().json()) as { queries?: unknown }
-    const count = Array.isArray(body.queries) ? Math.max(1, Math.min(50, body.queries.length)) : 1
-    return baseCost * count
+    return getPostEndpointCost(c.req.path, await c.req.raw.clone().json())
   } catch {
     return baseCost
   }
