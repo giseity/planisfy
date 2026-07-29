@@ -61,18 +61,6 @@ function requireTemplateString(values: Record<string, unknown>, key: string) {
   return value
 }
 
-function scheduleKindValue(value: unknown) {
-  return value === "tileset_rebuild" ||
-    value === "source_import" ||
-    value === "custom_command"
-    ? value
-    : "source_import"
-}
-
-function scheduleStatusValue(value: unknown) {
-  return value === "paused" ? "paused" : "active"
-}
-
 async function loadStorage() {
   const { getStorage } = await import("@planisfy/storage")
   return getStorage()
@@ -208,15 +196,7 @@ export async function applyWorkflowTemplateAction(formData: FormData) {
 
   const values = objectRecord(template.template)
   if (template.category === "schedule") {
-    await db.insert(scheduledOperations).values({
-      accountId: template.accountId,
-      name: stringValue(values.name) ?? template.name,
-      kind: scheduleKindValue(values.kind),
-      status: scheduleStatusValue(values.status),
-      cron: stringValue(values.cron) ?? "0 2 * * *",
-      timezone: stringValue(values.timezone) ?? "UTC",
-      payload: objectRecord(values.payload),
-    })
+    throw new Error("Schedule templates must be applied from the tenant console")
   } else if (template.category === "preview") {
     await db.insert(previewLinks).values({
       accountId: template.accountId,
@@ -232,68 +212,6 @@ export async function applyWorkflowTemplateAction(formData: FormData) {
   }
 
   revalidateOpsPaths("/workflow-templates", "/schedules")
-}
-
-export async function createCustomCommandScheduleAction(formData: FormData) {
-  await requireAdmin()
-  const accountId = requireString(formData, "accountId")
-  const name = requireString(formData, "name")
-  const cron = requireString(formData, "cron")
-  const timezone = optionalString(formData, "timezone") ?? "UTC"
-  const payload = requireJsonObject(formData, "payload")
-
-  await db.insert(scheduledOperations).values({
-    accountId,
-    name,
-    kind: "custom_command",
-    status: "active",
-    cron,
-    timezone,
-    payload,
-  })
-
-  revalidateOpsPaths("/schedules")
-}
-
-export async function runCustomCommandScheduleAction(formData: FormData) {
-  await requireAdmin()
-  const id = requireString(formData, "id")
-  const now = new Date()
-
-  const [schedule] = await db
-    .select()
-    .from(scheduledOperations)
-    .where(
-      and(
-        eq(scheduledOperations.id, id),
-        eq(scheduledOperations.kind, "custom_command"),
-        isNull(scheduledOperations.deletedAt),
-      ),
-    )
-    .limit(1)
-
-  if (!schedule) throw new Error("Custom command schedule not found")
-
-  await db
-    .update(scheduledOperations)
-    .set({ lastRunAt: now, updatedAt: now })
-    .where(eq(scheduledOperations.id, id))
-
-  await db.insert(eventOutbox).values({
-    eventName: "scheduled_operation.run_requested",
-    payload: {
-      accountId: schedule.accountId,
-      scheduleId: schedule.id,
-      kind: schedule.kind,
-      payload: objectRecord(schedule.payload),
-      requestedAt: now.toISOString(),
-      requestedBy: "admin",
-    },
-    status: "PENDING",
-    processAt: now,
-  })
-
-  revalidateOpsPaths("/schedules", "/outbox")
 }
 
 export async function deleteCustomCommandScheduleAction(formData: FormData) {

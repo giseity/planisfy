@@ -2,7 +2,7 @@ import { adminMetadata } from "../../lib/metadata";
 
 export const metadata = adminMetadata({
   title: "Schedules",
-  description: "Manage custom command schedules for platform operations.",
+  description: "Review retired custom command schedules.",
   path: "/schedules",
 });
 
@@ -21,9 +21,7 @@ import {
 } from "@planisfy/ui/components/table"
 import { requireAdmin } from "@/features/auth/admin-auth"
 import {
-  createCustomCommandScheduleAction,
   deleteCustomCommandScheduleAction,
-  runCustomCommandScheduleAction,
 } from "@/features/operations/ops-actions"
 import { formatDate, shortId, statusBadgeVariant, truncate } from "@/features/operations/ops"
 
@@ -41,71 +39,15 @@ export default async function SchedulesPage() {
   return (
     <div className="space-y-5 p-6">
       <div>
-        <h1 className="text-2xl font-bold">Custom Command Schedules</h1>
+        <h1 className="text-2xl font-bold">Legacy Command Schedules</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Create, run, and delete operator-only custom command schedules.
+          Arbitrary command execution is retired. Existing definitions are paused and may only be deleted.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Create custom command schedule</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form action={createCustomCommandScheduleAction} className="grid gap-3 lg:grid-cols-2">
-            <label className="grid gap-1 text-sm">
-              <span className="font-medium">Account ID</span>
-              <input
-                name="accountId"
-                required
-                className="h-8 rounded-md border border-input bg-background px-3 py-1 text-sm"
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="font-medium">Name</span>
-              <input
-                name="name"
-                required
-                className="h-8 rounded-md border border-input bg-background px-3 py-1 text-sm"
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="font-medium">Cron</span>
-              <input
-                name="cron"
-                required
-                defaultValue="0 2 * * *"
-                className="h-8 rounded-md border border-input bg-background px-3 py-1 text-sm"
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              <span className="font-medium">Timezone</span>
-              <input
-                name="timezone"
-                defaultValue="UTC"
-                className="h-8 rounded-md border border-input bg-background px-3 py-1 text-sm"
-              />
-            </label>
-            <label className="grid gap-1 text-sm lg:col-span-2">
-              <span className="font-medium">Payload JSON</span>
-              <textarea
-                name="payload"
-                required
-                rows={7}
-                defaultValue={'{\n  "command": "example:maintenance"\n}'}
-                className="rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
-              />
-            </label>
-            <div className="lg:col-span-2">
-              <Button type="submit" size="sm">Create schedule</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Custom command schedules</CardTitle>
+          <CardTitle className="text-base">Retired custom command schedules</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -142,10 +84,6 @@ export default async function SchedulesPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
-                      <form action={runCustomCommandScheduleAction}>
-                        <input type="hidden" name="id" value={schedule.id} />
-                        <Button type="submit" size="xs" variant="outline">Run</Button>
-                      </form>
                       <form action={deleteCustomCommandScheduleAction}>
                         <input type="hidden" name="id" value={schedule.id} />
                         <Button type="submit" size="xs" variant="destructive">Delete</Button>

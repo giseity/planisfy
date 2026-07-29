@@ -32,7 +32,9 @@ import {
   routingGraphBuilds,
   routingGraphReleases,
   scheduledOperations,
+  sourceImports,
   storageObjects,
+  tilesets,
   workerNodes,
   workflowTemplates,
 } from '@planisfy/database'
@@ -205,15 +207,25 @@ const notificationConfigSchema = z
   })
   .passthrough()
 
-const scheduleSchema = z
-  .object({
+const scheduleCommonSchema = z.object({
     name: z.string().min(1).max(128),
-    kind: z.enum(['tileset_rebuild', 'source_import', 'custom_command']),
     status: z.enum(['active', 'paused']).default('active'),
     cron: z.string().min(3).max(128),
     timezone: z.string().min(1).max(64).default('UTC'),
-    payload: z.record(z.string(), z.unknown()).default({}),
   })
+
+const scheduleSchema = z
+  .discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('tileset_rebuild'),
+      payload: z.object({ tilesetId: z.string().uuid() }).strict(),
+    }),
+    z.object({
+      kind: z.literal('source_import'),
+      payload: z.object({ sourceImportId: z.string().uuid() }).strict(),
+    }),
+  ])
+  .and(scheduleCommonSchema)
   .superRefine((schedule, ctx) => {
     const cronValidation = parseCronExpression(schedule.cron)
     if (!cronValidation.ok) {
@@ -228,13 +240,6 @@ const scheduleSchema = z
         code: z.ZodIssueCode.custom,
         message: 'Schedule timezone must be a valid IANA time zone',
         path: ['timezone'],
-      })
-    }
-    if (schedule.kind === 'tileset_rebuild' && typeof schedule.payload.tilesetId !== 'string') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Tileset rebuild schedules require a tilesetId payload value',
-        path: ['payload', 'tilesetId'],
       })
     }
   })
@@ -499,7 +504,7 @@ export function validateScheduleInput(input: unknown) {
 }
 
 type DeploymentMode = 'self_host' | 'managed'
-type ScheduledOperationKind = z.infer<typeof scheduleSchema>['kind']
+type ScheduledOperationKind = (typeof scheduledOperations.$inferSelect)['kind']
 type ManagedConsoleOperatorOperation =
   | 'artifact_backups'
   | 'workflow_templates'
@@ -521,10 +526,10 @@ const MANAGED_CONSOLE_OPERATOR_OPERATIONS: ManagedConsoleOperatorOperation[] = [
 ]
 
 export function canConsoleCreateScheduleKind(
-  deploymentMode: DeploymentMode,
+  _deploymentMode: DeploymentMode,
   kind: ScheduledOperationKind
 ) {
-  return deploymentMode !== 'managed' || kind !== 'custom_command'
+  return kind === 'tileset_rebuild' || kind === 'source_import'
 }
 
 operationsRoute.get('/operations/events', async (c) => {
@@ -931,9 +936,8 @@ operationsRoute.post('/operations/schedules', async (c) => {
   const accountId = c.get('ownerId')
   const parsed = scheduleSchema.safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
-  if (!canConsoleCreateScheduleKind(env.DEPLOYMENT_MODE, parsed.data.kind)) {
-    return managedConsoleOperatorResponse(c, 'custom_command_schedules')
-  }
+  const targetError = await validateScheduleTarget(accountId, parsed.data)
+  if (targetError) return c.json({ error: targetError }, 400)
   const [created] = await db
     .insert(scheduledOperations)
     .values({
@@ -944,6 +948,56 @@ operationsRoute.post('/operations/schedules', async (c) => {
     .returning()
   return c.json({ data: created }, 201)
 })
+
+async function validateScheduleTarget(
+  accountId: string,
+  schedule: z.infer<typeof scheduleSchema>
+) {
+  if (schedule.kind === 'tileset_rebuild') {
+    const [tileset] = await db
+      .select({ id: tilesets.id })
+      .from(tilesets)
+      .where(
+        and(
+          eq(tilesets.id, schedule.payload.tilesetId),
+          eq(tilesets.accountId, accountId),
+          isNull(tilesets.deletedAt)
+        )
+      )
+      .limit(1)
+    return tileset
+      ? null
+      : { code: 'INVALID_SCHEDULE_TARGET', message: 'Tileset was not found for this account.' }
+  }
+
+  const [sourceImport] = await db
+    .select({
+      id: sourceImports.id,
+      provider: sourceImports.provider,
+      regionId: sourceImports.regionId,
+      datasetId: sourceImports.datasetId,
+      input: sourceImports.input,
+    })
+    .from(sourceImports)
+    .where(
+      and(
+        eq(sourceImports.id, schedule.payload.sourceImportId),
+        eq(sourceImports.accountId, accountId)
+      )
+    )
+    .limit(1)
+  const input = sourceImport && isObjectRecord(sourceImport.input) ? sourceImport.input : {}
+  return sourceImport?.provider === 'OVERTURE' &&
+    sourceImport.regionId &&
+    sourceImport.datasetId &&
+    typeof input.theme === 'string' &&
+    typeof input.type === 'string'
+    ? null
+    : {
+        code: 'INVALID_SCHEDULE_TARGET',
+        message: 'Select an Overture import with a saved region and dataset.',
+      }
+}
 
 operationsRoute.post('/operations/schedules/:id/run', async (c) => {
   const accountId = c.get('ownerId')
@@ -2117,7 +2171,6 @@ function builtInTemplates() {
       template: {
         kind: 'source_import',
         cron: '0 2 * * *',
-        payload: { provider: 'OVERTURE' },
       },
       builtIn: true,
       createdAt: now,

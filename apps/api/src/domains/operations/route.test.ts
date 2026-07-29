@@ -244,7 +244,7 @@ test('validateScheduleInput requires tilesetId for rebuild schedules', () => {
   assert.equal(
     validateScheduleInput({
       ...baseSchedule,
-      payload: { tilesetId: 'tileset-1' },
+      payload: { tilesetId: '11111111-1111-4111-8111-111111111111' },
     }).success,
     true
   )
@@ -261,7 +261,7 @@ test('managed console allows only tenant-safe schedule creation kinds', () => {
   assert.equal(canConsoleCreateScheduleKind('managed', 'tileset_rebuild'), true)
   assert.equal(canConsoleCreateScheduleKind('managed', 'source_import'), true)
   assert.equal(canConsoleCreateScheduleKind('managed', 'custom_command'), false)
-  assert.equal(canConsoleCreateScheduleKind('self_host', 'custom_command'), true)
+  assert.equal(canConsoleCreateScheduleKind('self_host', 'custom_command'), false)
 })
 
 test('validateScheduleInput rejects invalid cron and timezone values', () => {
@@ -270,7 +270,7 @@ test('validateScheduleInput rejects invalid cron and timezone values', () => {
     kind: 'source_import',
     cron: '0 2 * * *',
     timezone: 'UTC',
-    payload: {},
+    payload: { sourceImportId: '11111111-1111-4111-8111-111111111111' },
   }
 
   assert.equal(validateScheduleInput({ ...baseSchedule, cron: 'whenever' }).success, false)
@@ -327,7 +327,7 @@ test('prepareScheduledOperationRun blocks inactive schedules and shapes outbox',
       status: 'active',
       cron: '0 * * * *',
       timezone: 'UTC',
-      payload: { provider: 'OVERTURE' },
+      payload: { sourceImportId: '11111111-1111-4111-8111-111111111111' },
       deletedAt: null,
     },
     now
@@ -342,7 +342,7 @@ test('prepareScheduledOperationRun blocks inactive schedules and shapes outbox',
         accountId: 'account-1',
         scheduleId: 'schedule-1',
         kind: 'source_import',
-        payload: { provider: 'OVERTURE' },
+        payload: { sourceImportId: '11111111-1111-4111-8111-111111111111' },
         requestedAt: '2026-06-18T16:46:30.000Z',
       },
     })
@@ -358,7 +358,7 @@ test('applying schedule template prepares a schedule payload', () => {
       template: {
         kind: 'source_import',
         cron: '0 2 * * *',
-        payload: { provider: 'OVERTURE' },
+        payload: { sourceImportId: '11111111-1111-4111-8111-111111111111' },
       },
     },
     {}
@@ -369,7 +369,9 @@ test('applying schedule template prepares a schedule payload', () => {
     assert.equal(prepared.data.category, 'schedule')
     assert.equal(prepared.data.values.name, 'Nightly import')
     assert.equal(prepared.data.values.kind, 'source_import')
-    assert.deepEqual(prepared.data.values.payload, { provider: 'OVERTURE' })
+    assert.deepEqual(prepared.data.values.payload, {
+      sourceImportId: '11111111-1111-4111-8111-111111111111',
+    })
   }
 })
 
@@ -390,7 +392,7 @@ test('applying invalid template returns validation error', () => {
 
   assert.equal(prepared.success, false)
   if (!prepared.success) {
-    assert.match(JSON.stringify(prepared.error.flatten()), /tilesetId payload value/)
+    assert.match(JSON.stringify(prepared.error.flatten()), /tilesetId/)
   }
 })
 

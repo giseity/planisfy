@@ -10,16 +10,12 @@ export function parseJsonObject(value: string) {
 
 export function schedulePayload(options: {
   kind: ConsoleScheduledOperation["kind"];
-  payload: string;
   tilesetId: string;
+  sourceImportId: string;
 }) {
-  const parsed = parseJsonObject(options.payload);
-  const guided: Record<string, unknown> = {};
-  if (options.tilesetId) guided.tilesetId = options.tilesetId;
-  if (options.kind === "tileset_rebuild" && options.tilesetId) {
-    guided.resourceType = "tileset";
-  }
-  return { ...guided, ...parsed };
+  return options.kind === "tileset_rebuild"
+    ? { tilesetId: options.tilesetId }
+    : { sourceImportId: options.sourceImportId };
 }
 
 export function splitList(value: string) {

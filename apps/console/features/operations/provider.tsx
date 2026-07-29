@@ -31,6 +31,7 @@ import {
   api,
   type ConsoleJobTimeline,
   type ConsoleOperationsOverview,
+  type ConsoleSourceImport,
   type ConsoleTileset,
 } from '@/lib/api'
 import { clientEnv } from '@/env.client'
@@ -100,6 +101,7 @@ interface OperationsContextValue {
   overview: ConsoleOperationsOverview
   timeline: ConsoleJobTimeline | null
   tilesets: ConsoleTileset[]
+  sourceImports: ConsoleSourceImport[]
   loading: boolean
   load: (options?: { silent?: boolean }) => void
   openTimeline: (jobId: string) => void
@@ -112,16 +114,19 @@ export function OperationsProvider({ children }: { children: React.ReactNode }) 
   const [overview, setOverview] = React.useState<ConsoleOperationsOverview>(EMPTY_OVERVIEW)
   const [timeline, setTimeline] = React.useState<ConsoleJobTimeline | null>(null)
   const [tilesets, setTilesets] = React.useState<ConsoleTileset[]>([])
+  const [sourceImports, setSourceImports] = React.useState<ConsoleSourceImport[]>([])
   const [loading, setLoading] = React.useState(true)
 
   const load = React.useCallback(async (options: { silent?: boolean } = {}) => {
     try {
-      const [operationsRes, tilesetsRes] = await Promise.all([
+      const [operationsRes, tilesetsRes, sourceImportsRes] = await Promise.all([
         api.getOperations(),
         api.listTilesets(),
+        api.listSourceImports(),
       ])
       setOverview(operationsRes.data)
       setTilesets(tilesetsRes.data)
+      setSourceImports(sourceImportsRes.data)
     } catch (err) {
       if (!options.silent) {
         toast.error(err instanceof Error ? err.message : 'Failed to load operations')
@@ -202,12 +207,13 @@ export function OperationsProvider({ children }: { children: React.ReactNode }) 
       overview,
       timeline,
       tilesets,
+      sourceImports,
       loading,
       load,
       openTimeline,
       reconcileStaleJobs,
     }),
-    [load, loading, openTimeline, reconcileStaleJobs, overview, tilesets, timeline]
+    [load, loading, openTimeline, reconcileStaleJobs, overview, sourceImports, tilesets, timeline]
   )
 
   return (

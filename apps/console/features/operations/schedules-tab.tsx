@@ -1,7 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { api, type ConsoleScheduledOperation, type ConsoleTileset } from '@/lib/api'
+import {
+  api,
+  type ConsoleScheduledOperation,
+  type ConsoleSourceImport,
+  type ConsoleTileset,
+} from '@/lib/api'
 import { formatDate, schedulePayload } from '@/features/operations/model'
 import { EmptyRow, Field, runAction, StatusBadge } from '@/features/operations/ui'
 import { Button } from '@planisfy/ui/components/button'
@@ -34,7 +39,6 @@ import {
   TableHeader,
   TableRow,
 } from '@planisfy/ui/components/table'
-import { Textarea } from '@planisfy/ui/components/textarea'
 import { CalendarClock, MoreHorizontal, Play, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -46,10 +50,12 @@ type CustomerScheduleKind = Extract<
 export function SchedulesTab({
   schedules,
   tilesets,
+  sourceImports,
   onChanged,
 }: {
   schedules: ConsoleScheduledOperation[]
   tilesets: ConsoleTileset[]
+  sourceImports: ConsoleSourceImport[]
   onChanged: () => void
 }) {
   const [name, setName] = useState('')
@@ -57,15 +63,26 @@ export function SchedulesTab({
   const [cron, setCron] = useState('0 2 * * *')
   const [timezone, setTimezone] = useState('UTC')
   const [tilesetId, setTilesetId] = useState('')
-  const [payload, setPayload] = useState('{}')
+  const [sourceImportId, setSourceImportId] = useState('')
   const [saving, setSaving] = useState(false)
   const requiresTileset = kind === 'tileset_rebuild'
+  const eligibleImports = sourceImports.filter(
+    (sourceImport) =>
+      sourceImport.provider === 'OVERTURE' &&
+      Boolean(sourceImport.regionId && sourceImport.datasetId && sourceImport.input?.theme && sourceImport.input?.type)
+  )
   const canCreateSchedule =
-    name.trim().length > 0 && !saving && (!requiresTileset || Boolean(tilesetId))
+    name.trim().length > 0 &&
+    !saving &&
+    (requiresTileset ? Boolean(tilesetId) : Boolean(sourceImportId))
 
   async function createSchedule() {
     if (requiresTileset && !tilesetId) {
       toast.error('Select a tileset before creating a rebuild schedule')
+      return
+    }
+    if (!requiresTileset && !sourceImportId) {
+      toast.error('Select an Overture import to refresh')
       return
     }
     setSaving(true)
@@ -77,12 +94,11 @@ export function SchedulesTab({
         timezone,
         payload: schedulePayload({
           kind,
-          payload,
           tilesetId,
+          sourceImportId,
         }),
       })
       setName('')
-      setPayload('{}')
       toast.success('Schedule created')
       onChanged()
     } catch (err) {
@@ -106,8 +122,7 @@ export function SchedulesTab({
         <CardHeader>
           <CardTitle>Create Schedule</CardTitle>
           <CardDescription>
-            Store recurring import, rebuild, or command requests. Runs enqueue operational events
-            for workers to process.
+            Schedule owned tileset rebuilds or refresh an existing Overture dataset.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -136,7 +151,7 @@ export function SchedulesTab({
               <Input value={timezone} onChange={(e) => setTimezone(e.target.value)} />
             </Field>
           </div>
-          <Field label="Tileset">
+          {requiresTileset ? <Field label="Tileset">
             <Select
               value={tilesetId || 'none'}
               onValueChange={(value) => setTilesetId(value === 'none' ? '' : value)}
@@ -158,10 +173,24 @@ export function SchedulesTab({
                 Required for tileset rebuild schedules.
               </p>
             )}
-          </Field>
-          <Field label="Advanced payload JSON">
-            <Textarea rows={5} value={payload} onChange={(e) => setPayload(e.target.value)} />
-          </Field>
+          </Field> : <Field label="Overture import">
+            <Select
+              value={sourceImportId || 'none'}
+              onValueChange={(value) => setSourceImportId(value === 'none' ? '' : value)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Select an import</SelectItem>
+                {eligibleImports.map((sourceImport) => (
+                  <SelectItem key={sourceImport.id} value={sourceImport.id}>
+                    {sourceImport.sourceName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>}
           <Button onClick={createSchedule} disabled={!canCreateSchedule}>
             <CalendarClock className="mr-1.5 h-4 w-4" />
             Create
@@ -204,7 +233,10 @@ export function SchedulesTab({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => runSchedule(schedule.id)}>
+                        <DropdownMenuItem
+                          disabled={schedule.status !== 'active'}
+                          onSelect={() => runSchedule(schedule.id)}
+                        >
                           <Play className="mr-2 h-4 w-4" />
                           Run schedule
                         </DropdownMenuItem>
