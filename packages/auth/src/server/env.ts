@@ -13,6 +13,7 @@ const optionalStringSchema = z.preprocess(
 
 const authEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).optional(),
+  DEPLOYMENT_MODE: z.enum(['managed', 'self_host']).default('self_host'),
   NEXT_PUBLIC_API_URL: optionalUrlSchema,
   NEXT_PUBLIC_AUTH_ORIGIN: optionalUrlSchema,
   NEXT_PUBLIC_APP_URL: optionalUrlSchema,
@@ -95,6 +96,10 @@ export function getAuthCookieDomainOverride() {
 
 export function isProductionEnvironment() {
   return getAuthEnv().NODE_ENV === 'production'
+}
+
+export function getDeploymentMode() {
+  return getAuthEnv().DEPLOYMENT_MODE
 }
 
 export function getAuthTrustedOrigins() {

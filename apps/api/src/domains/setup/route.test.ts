@@ -9,7 +9,13 @@ import { setupRoute } from './route'
 const app = new Hono()
 app.route('/', setupRoute)
 const consoleApp = new Hono()
+consoleApp.use('*', async (c, next) => {
+  c.set('platformRole', 'ADMIN')
+  await next()
+})
 consoleApp.route('/console', setupRoute)
+const regularConsoleApp = new Hono()
+regularConsoleApp.route('/console', setupRoute)
 
 test('production setup preflight requires internal authorization outside console', async () => {
   const previousNodeEnv = process.env.NODE_ENV
@@ -64,6 +70,11 @@ test('production setup preflight remains available from the console route', asyn
       process.env.INTERNAL_API_SECRET = previousInternalSecret
     }
   }
+})
+
+test('console setup preflight rejects non-platform users', async () => {
+  const response = await regularConsoleApp.request('/console/setup/preflight')
+  assert.equal(response.status, 403)
 })
 
 test('setup preflight reports self-host product loop fixture readiness', async () => {

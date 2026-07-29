@@ -18,6 +18,7 @@
     "@better-auth/api-key": "1.6.11",
     "@planisfy/database": "workspace:*",
     "@planisfy/env": "workspace:*",
+    "@planisfy/types": "workspace:*",
     "@planisfy/ui": "workspace:*",
     "@planisfy/utils": "workspace:*",
     "bcrypt": "^5.1.1",

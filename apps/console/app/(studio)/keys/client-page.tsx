@@ -133,11 +133,13 @@ export default function ApiKeysPage() {
   }, [fetchKeys])
 
   useEffect(() => {
-    Promise.all([api.getProfile(), api.getPlatformPreflight()])
-      .then(([profileRes, preflightRes]) => {
-        setProfile(profileRes.data)
-        setPreflight(preflightRes.data)
-      })
+    api
+      .getProfile()
+      .then((response) => setProfile(response.data))
+      .catch(() => {})
+    api
+      .getPlatformPreflight()
+      .then((response) => setPreflight(response.data))
       .catch(() => {})
   }, [])
 

@@ -17,6 +17,7 @@ import {
   isEmailPasswordAuthEnabled,
   isProductionEnvironment,
 } from './env'
+import { requireAccountFeature } from './entitlements'
 import {
   PLANISFY_ACCOUNT_ANCHOR_FIELD,
   planisfyAuthAdapter,
@@ -261,7 +262,8 @@ export const auth = betterAuth({
         }
       },
       organizationHooks: {
-        beforeCreateOrganization: async ({ organization }) => {
+        beforeCreateOrganization: async ({ organization, user }) => {
+          await requireAccountFeature(user.id, 'team')
           if (!organization.slug || !organization.name) {
             throw new Error('Organization slug and name are required')
           }
@@ -284,6 +286,22 @@ export const auth = betterAuth({
               [PLANISFY_ACCOUNT_ANCHOR_FIELD]: anchor,
             },
           }
+        },
+        beforeCreateInvitation: async ({ invitation }) => {
+          await requireAccountFeature(invitation.organizationId, 'team')
+        },
+        beforeAcceptInvitation: async ({ invitation }) => {
+          await requireAccountFeature(invitation.organizationId, 'team')
+        },
+        beforeAddMember: async ({ member }) => {
+          // Better Auth adds the creator as the initial owner. Organization
+          // creation was already gated against the creator's personal plan.
+          if (member.role !== 'owner') {
+            await requireAccountFeature(member.organizationId, 'team')
+          }
+        },
+        beforeUpdateMemberRole: async ({ member }) => {
+          await requireAccountFeature(member.organizationId, 'team')
         },
       },
     }),

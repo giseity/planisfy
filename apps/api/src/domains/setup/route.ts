@@ -13,7 +13,7 @@ import {
   getDeploymentPolicy,
   parseDeploymentMode,
 } from '@planisfy/platform-policy'
-import { canOrg } from '@planisfy/utils'
+import { canPlatform } from '@planisfy/utils'
 import type { AuthEnv } from '../../middleware/auth'
 import { env } from '../../env'
 import { isPeliasConfigured } from './geocoding-config'
@@ -98,14 +98,12 @@ function isPublicSetupPreflightAllowed(path: string, headers: Headers) {
 
 function consoleOrgPermissionDenied(c: Context<AuthEnv>) {
   if (!c.req.path.startsWith('/console/')) return null
-  const session = c.get('session')
-  if (!session?.activeOrganizationId) return null
-  if (canOrg(c.get('orgRole'), 'platform.readiness.view')) return null
+  if (canPlatform(c.get('platformRole'), 'platform.access')) return null
   return c.json(
     {
       error: {
         code: 'FORBIDDEN',
-        message: 'Requires platform.readiness.view permission for this organization.',
+        message: 'Setup diagnostics are restricted to platform administrators.',
       },
     },
     403

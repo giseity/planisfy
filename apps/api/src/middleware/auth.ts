@@ -1,15 +1,23 @@
 import { createMiddleware } from 'hono/factory'
 import type { Context } from 'hono'
-import { accounts, db, members, sessions } from '@planisfy/database'
+import { accounts, db, members, sessions, users } from '@planisfy/database'
 import { eq, and, gt, isNull } from 'drizzle-orm'
 import { getCookie } from 'hono/cookie'
-import { canOrg, hasMinOrgRole, type OrgPermission, type OrgRole } from '@planisfy/utils'
+import {
+  canOrg,
+  canPlatform,
+  hasMinOrgRole,
+  type OrgPermission,
+  type OrgRole,
+  type PlatformPermission,
+} from '@planisfy/utils'
 
 type SessionContext = {
   id: string
   userId: string
   token: string
   activeOrganizationId: string | null
+  platformRole?: string | null
 }
 
 export type AuthEnv = {
@@ -17,6 +25,7 @@ export type AuthEnv = {
     userId: string
     ownerId: string
     orgRole: string | null
+    platformRole: string | null
     session: SessionContext
     // API key context (set by apiKeyMiddleware, may be null)
     apiKeyId: string | null
@@ -92,6 +101,7 @@ export const dualAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
       activeOrganizationId: null,
     })
     c.set('orgRole', null)
+    c.set('platformRole', null)
     await next()
     return
   }
@@ -154,6 +164,7 @@ export const optionalAuthMiddleware = createMiddleware<AuthEnv>(async (c, next) 
       activeOrganizationId: null,
     })
     c.set('orgRole', null)
+    c.set('platformRole', null)
     await next()
     return
   }
@@ -234,6 +245,23 @@ export function requireOrgPermission(permission: OrgPermission) {
   })
 }
 
+export function requirePlatformPermission(permission: PlatformPermission) {
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    if (!canPlatform(c.get('platformRole'), permission)) {
+      return c.json(
+        {
+          error: {
+            code: 'FORBIDDEN',
+            message: `Requires ${permission} platform permission.`,
+          },
+        },
+        403
+      )
+    }
+    await next()
+  })
+}
+
 export function requireAnyOrgPermission(permissions: OrgPermission[]) {
   return createMiddleware<AuthEnv>(async (c, next) => {
     const session = c.get('session')
@@ -310,9 +338,11 @@ async function findValidSession(rawToken: string) {
       token: sessions.token,
       expiresAt: sessions.expiresAt,
       activeOrganizationId: sessions.activeOrganizationId,
+      platformRole: users.role,
     })
     .from(sessions)
     .innerJoin(accounts, eq(accounts.id, sessions.userId))
+    .innerJoin(users, eq(users.id, sessions.userId))
     .where(
       and(
         eq(sessions.token, token),
@@ -376,4 +406,5 @@ function setSessionContext(
   c.set('session', session)
   c.set('ownerId', ownerContext.ownerId)
   c.set('orgRole', ownerContext.orgRole)
+  c.set('platformRole', session.platformRole ?? null)
 }

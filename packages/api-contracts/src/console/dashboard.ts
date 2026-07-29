@@ -15,6 +15,12 @@ export type DashboardEndpointCategory =
 
 export interface ConsoleDashboard {
   generatedAt: string;
+  access: {
+    apiKeys: boolean;
+    audit: boolean;
+    operations: boolean;
+    diagnostics: boolean;
+  };
   account: {
     id: string;
     handle: string;

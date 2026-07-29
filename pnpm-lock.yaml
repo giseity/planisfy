@@ -865,6 +865,9 @@ importers:
       '@planisfy/env':
         specifier: workspace:*
         version: link:../env
+      '@planisfy/types':
+        specifier: workspace:*
+        version: link:../types
       '@planisfy/ui':
         specifier: workspace:*
         version: link:../ui

@@ -15,6 +15,8 @@ import {
   usageLogs,
   users,
 } from '@planisfy/database'
+import { planIncludesFeature } from '@planisfy/types'
+import { canOrg, canPlatform } from '@planisfy/utils'
 import {
   WORKER_GEODATA_HEARTBEAT_KEY,
   WORKER_GEODATA_HEARTBEAT_STALE_MS,
@@ -85,6 +87,15 @@ dashboardRoute.get('/dashboard', async (c) => {
     .limit(1)
 
   const plan = await getAccountPlan(accountId)
+  const personal = account.type !== 'ORGANIZATION'
+  const access = {
+    apiKeys: personal || canOrg(c.get('orgRole'), 'api_key.manage'),
+    audit:
+      personal ||
+      (canOrg(c.get('orgRole'), 'members.manage') && planIncludesFeature(plan, 'audit')),
+    operations: personal || canOrg(c.get('orgRole'), 'operations.jobs.manage'),
+    diagnostics: canPlatform(c.get('platformRole'), 'platform.access'),
+  }
   const quotaLimit = serializePlanLimits(await getAccountPlanLimits(accountId)).monthlyUnits
 
   const [
@@ -99,17 +110,17 @@ dashboardRoute.get('/dashboard', async (c) => {
     topKeyRows,
   ] = await Promise.all([
     fetchStyles(accountId, account.handle),
-    fetchApiKeys(accountId),
+    access.apiKeys ? fetchApiKeys(accountId) : Promise.resolve([]),
     fetchTilesets(accountId, account.handle),
-    fetchJobs(accountId),
-    fetchAudit(accountId),
+    access.operations ? fetchJobs(accountId) : Promise.resolve([]),
+    access.audit ? fetchAudit(accountId) : Promise.resolve([]),
     fetchMonthlyUsage(accountId, period.start),
     fetchUsageRows(accountId, usageStart),
     fetchEndpointBreakdown(accountId, usageStart),
-    fetchTopApiKeys(accountId, usageStart),
+    access.apiKeys ? fetchTopApiKeys(accountId, usageStart) : Promise.resolve([]),
   ])
 
-  const health = await fetchDashboardHealth(now)
+  const health = access.diagnostics ? await fetchDashboardHealth(now) : []
   const runningJobs = jobRows.filter((job) => ['PENDING', 'PROCESSING'].includes(job.status)).length
   const failedJobs = jobRows.filter((job) => job.status === 'FAILED').length
   const publishedTilesets = tilesetRows.filter((tileset) => tileset.isPublished).length
@@ -118,6 +129,7 @@ dashboardRoute.get('/dashboard', async (c) => {
   return c.json({
     data: buildDashboardPayload({
       generatedAt: now,
+      access,
       account: {
         id: account.id,
         handle: account.handle,

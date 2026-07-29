@@ -149,6 +149,12 @@ export interface DashboardJobSignal {
 
 export interface ConsoleDashboard {
   generatedAt: string;
+  access: {
+    apiKeys: boolean;
+    audit: boolean;
+    operations: boolean;
+    diagnostics: boolean;
+  };
   account: {
     id: string;
     handle: string;
@@ -215,6 +221,7 @@ type DateLike = Date | string | null | undefined;
 
 export interface BuildDashboardPayloadInput {
   generatedAt?: DateLike;
+  access?: ConsoleDashboard["access"];
   account: ConsoleDashboard["account"];
   user: ConsoleDashboard["user"];
   plan: PlanSlug;
@@ -324,6 +331,12 @@ export function buildDashboardPayload(
 
   return {
     generatedAt: toIso(input.generatedAt) ?? new Date().toISOString(),
+    access: input.access ?? {
+      apiKeys: true,
+      audit: true,
+      operations: true,
+      diagnostics: true,
+    },
     account: input.account,
     user: input.user,
     billing: {

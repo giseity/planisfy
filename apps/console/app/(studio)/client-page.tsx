@@ -189,11 +189,11 @@ export default function StudioDashboardPage() {
           <UsageChart dashboard={dashboard} hasUsage={hasUsage} />
           <div className="grid gap-5 xl:grid-cols-2">
             <EndpointBreakdown dashboard={dashboard} />
-            <TopApiKeys dashboard={dashboard} />
+            {dashboard.access.apiKeys && <TopApiKeys dashboard={dashboard} />}
           </div>
           <div className="grid gap-5 xl:grid-cols-2">
-            <RecentJobs dashboard={dashboard} />
-            <RecentActivity dashboard={dashboard} />
+            {dashboard.access.operations && <RecentJobs dashboard={dashboard} />}
+            {dashboard.access.audit && <RecentActivity dashboard={dashboard} />}
           </div>
           <div className="grid gap-5 xl:grid-cols-2">
             <RecentStyles dashboard={dashboard} />
@@ -202,10 +202,10 @@ export default function StudioDashboardPage() {
         </div>
 
         <div className="space-y-5">
-          <OperationsAlerts dashboard={dashboard} />
-          <HealthRail dashboard={dashboard} />
+          {dashboard.access.operations && <OperationsAlerts dashboard={dashboard} />}
+          {dashboard.access.diagnostics && <HealthRail dashboard={dashboard} />}
           <QuickActions />
-          <SetupReadiness dashboard={dashboard} />
+          {dashboard.access.diagnostics && <SetupReadiness dashboard={dashboard} />}
           <IntegrationPanel dashboard={dashboard} />
         </div>
       </div>
