@@ -1,5 +1,16 @@
 import { Queue } from "bullmq";
-import { and, asc, eq, inArray, isNull, lte, max, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  inArray,
+  isNull,
+  lte,
+  max,
+  or,
+  sql,
+} from "drizzle-orm";
 import { env, redisConnection } from "../../env";
 import {
   SOURCE_PROCESSING_QUEUE_NAME,
@@ -449,19 +460,63 @@ async function queueTargetTilesetBuildFromImport(params: {
     options: { minZoom, maxZoom },
   });
 
-  const [processingJob] = await db
-    .insert(processingJobs)
-    .values({
-      accountId: params.accountId,
-      type: "tileset.process_dataset",
-      input: jobInput,
-    })
-    .returning();
-  if (!processingJob) {
-    throw new Error("Failed to create automatic tileset build job");
-  }
-
   await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`processingJobs:${params.accountId}`}))`,
+    );
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`tilesetBuild:${tileset.id}`}))`,
+    );
+    const [activeCount] = await tx
+      .select({ count: count() })
+      .from(processingJobs)
+      .where(
+        and(
+          eq(processingJobs.accountId, params.accountId),
+          inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
+        ),
+      );
+    const limit = activeProcessingJobLimit();
+    if ((activeCount?.count ?? 0) >= limit) {
+      throw new Error(
+        `Active processing job limit reached (${activeCount?.count ?? 0}/${limit})`,
+      );
+    }
+    const [activeTargetJob] = await tx
+      .select({ id: processingJobs.id })
+      .from(processingJobs)
+      .where(
+        and(
+          eq(processingJobs.accountId, params.accountId),
+          inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
+          or(
+            tileset.buildJobId
+              ? eq(processingJobs.id, tileset.buildJobId)
+              : undefined,
+            sql`${processingJobs.input}->>'tilesetId' = ${tileset.id}`,
+            sql`${processingJobs.input}->>'targetTilesetId' = ${tileset.id}`,
+          ),
+        ),
+      )
+      .limit(1);
+    if (activeTargetJob) {
+      throw new Error(
+        `Target tileset already has active job ${activeTargetJob.id}`,
+      );
+    }
+
+    const [processingJob] = await tx
+      .insert(processingJobs)
+      .values({
+        accountId: params.accountId,
+        type: "tileset.process_dataset",
+        input: jobInput,
+      })
+      .returning();
+    if (!processingJob) {
+      throw new Error("Failed to create automatic tileset build job");
+    }
+
     await tx
       .update(tilesets)
       .set({
@@ -495,6 +550,11 @@ async function queueTargetTilesetBuildFromImport(params: {
       },
     });
   });
+}
+
+function activeProcessingJobLimit() {
+  const configured = Number(process.env.PROCESSING_ACTIVE_JOB_LIMIT);
+  return Number.isInteger(configured) && configured > 0 ? configured : 5;
 }
 
 async function markSourceImportFailed(params: {

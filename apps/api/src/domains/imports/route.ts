@@ -22,7 +22,8 @@ import {
 import type { AuthEnv } from "../../middleware/auth";
 import {
   ActiveProcessingJobLimitError,
-  createProcessingJob,
+  ActiveTilesetBuildError,
+  createProcessingJobInTransaction,
   logProcessingJob,
 } from "../resources/processing-jobs";
 import { enqueueOutboxEvent } from "../../shared/outbox/outbox";
@@ -37,7 +38,6 @@ import {
   assertOvertureReleaseConfigured,
   parseOvertureImportRequest,
   sourceImportHandleSchema,
-  type OvertureImportRequest,
 } from "./source-import-requests";
 import { buildDatasetTilesetProcessingInput } from "@planisfy/geodata-contracts";
 import { requireOrgMutationPermission } from "../../middleware/auth";
@@ -105,12 +105,21 @@ const sourceConnectionSchema = z.object({
   config: z.record(z.string(), z.unknown()).default({}),
 });
 
-const datasetTilesetSchema = z.object({
-  datasetId: z.string().uuid(),
-  datasetVersionId: z.string().uuid().optional(),
-  minZoom: z.number().int().min(0).max(24).optional(),
-  maxZoom: z.number().int().min(0).max(24).optional(),
-});
+const datasetTilesetSchema = z
+  .object({
+    datasetId: z.string().uuid(),
+    datasetVersionId: z.string().uuid().optional(),
+    minZoom: z.number().int().min(0).max(24).optional(),
+    maxZoom: z.number().int().min(0).max(24).optional(),
+  })
+  .refine(
+    ({ minZoom, maxZoom }) =>
+      minZoom === undefined || maxZoom === undefined || minZoom <= maxZoom,
+    {
+      message: "minZoom must be less than or equal to maxZoom",
+      path: ["maxZoom"],
+    },
+  );
 
 importsRoute.get("/regions", async (c) => {
   const accountId = c.get("ownerId");
@@ -342,6 +351,31 @@ importsRoute.post("/source-imports/overture", async (c) => {
     }
     targetTileset = row;
   }
+  if (parsed.data.sourceConnectionId) {
+    const [connection] = await db
+      .select({ id: sourceConnections.id })
+      .from(sourceConnections)
+      .where(
+        and(
+          eq(sourceConnections.id, parsed.data.sourceConnectionId),
+          eq(sourceConnections.accountId, accountId),
+          eq(sourceConnections.provider, "OVERTURE"),
+          isNull(sourceConnections.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!connection) {
+      return c.json(
+        {
+          error: {
+            code: "NOT_FOUND",
+            message: "Active Overture source connection not found",
+          },
+        },
+        404,
+      );
+    }
+  }
 
   const [existing] = await db
     .select({ id: datasets.id })
@@ -398,90 +432,131 @@ importsRoute.post("/source-imports/overture", async (c) => {
     );
   }
 
-  const dataset = await createDataset(accountId, parsed.data);
-  let job;
+  let queued: {
+    dataset: typeof datasets.$inferSelect;
+    sourceImport: typeof sourceImports.$inferSelect;
+    job: Awaited<ReturnType<typeof createProcessingJobInTransaction>>;
+  };
   try {
-    job = await createProcessingJob({
-      accountId,
-      type: "source.import_overture",
-      input: {
-        provider: "OVERTURE",
-        datasetId: dataset.id,
-        targetTilesetId: targetTileset?.id,
-        regionId: region.id,
-        bbox: region.bbox,
-        estimate: importEstimate,
-        sourceConnectionId: parsed.data.sourceConnectionId,
-        theme: parsed.data.theme,
-        type: parsed.data.type,
-        catalog: catalogEntry
-          ? {
-              label: catalogEntry.label,
-              geometry: catalogEntry.geometry,
-              defaultLayerId: catalogEntry.defaultLayerId,
-            }
-          : undefined,
-      },
+    queued = await db.transaction(async (tx) => {
+      const [dataset] = await tx
+        .insert(datasets)
+        .values({
+          accountId,
+          handle: parsed.data.handle,
+          name: parsed.data.name,
+          description: parsed.data.description ?? null,
+          status: "DRAFT",
+        })
+        .returning();
+      if (!dataset) throw new Error("Failed to create import dataset");
+
+      const job = await createProcessingJobInTransaction(
+        {
+          accountId,
+          type: "source.import_overture",
+          targetTilesetId: targetTileset?.id,
+          input: {
+            provider: "OVERTURE",
+            datasetId: dataset.id,
+            targetTilesetId: targetTileset?.id,
+            regionId: region.id,
+            bbox: region.bbox,
+            estimate: importEstimate,
+            sourceConnectionId: parsed.data.sourceConnectionId,
+            theme: parsed.data.theme,
+            type: parsed.data.type,
+            catalog: catalogEntry
+              ? {
+                  label: catalogEntry.label,
+                  geometry: catalogEntry.geometry,
+                  defaultLayerId: catalogEntry.defaultLayerId,
+                }
+              : undefined,
+          },
+        },
+        tx,
+      );
+      const [sourceImport] = await tx
+        .insert(sourceImports)
+        .values({
+          accountId,
+          provider: "OVERTURE",
+          sourceName: parsed.data.theme,
+          sourceConnectionId: parsed.data.sourceConnectionId ?? null,
+          regionId: region.id,
+          datasetId: dataset.id,
+          targetTilesetId: targetTileset?.id ?? null,
+          processingJobId: job.id,
+          input: job.input,
+        })
+        .returning();
+      if (!sourceImport) throw new Error("Failed to create source import");
+
+      await logProcessingJob(
+        job.id,
+        "Overture import queued",
+        {
+          metadata: {
+            importId: sourceImport.id,
+            datasetId: dataset.id,
+            targetTilesetId: targetTileset?.id,
+            regionId: region.id,
+            theme: parsed.data.theme,
+            type: parsed.data.type,
+            catalog: catalogEntry,
+            estimate: importEstimate,
+          },
+        },
+        tx,
+      );
+      await enqueueOutboxEvent(
+        {
+          eventName: "source.import.requested",
+          payload: {
+            importId: sourceImport.id,
+            accountId,
+            jobId: job.id,
+            datasetId: dataset.id,
+            targetTilesetId: targetTileset?.id,
+            provider: "OVERTURE",
+          },
+        },
+        tx,
+      );
+      await logAudit(
+        {
+          accountId,
+          actorUserId: userId,
+          action: "source.import_requested",
+          resourceType: "dataset",
+          resourceId: dataset.id,
+          metadata: {
+            importId: sourceImport.id,
+            jobId: job.id,
+            targetTilesetId: targetTileset?.id,
+            estimate: importEstimate,
+          },
+        },
+        tx,
+      );
+      return { dataset, sourceImport, job };
     });
   } catch (err) {
     const response = processingJobLimitResponse(c, err);
     if (response) return response;
     throw err;
   }
-  const [sourceImport] = await db
-    .insert(sourceImports)
-    .values({
-      accountId,
-      provider: "OVERTURE",
-      sourceName: parsed.data.theme,
-      sourceConnectionId: parsed.data.sourceConnectionId ?? null,
-      regionId: region.id,
-      datasetId: dataset.id,
-      targetTilesetId: targetTileset?.id ?? null,
-      processingJobId: job.id,
-      input: job.input,
-    })
-    .returning();
-
-  await logProcessingJob(job.id, "Overture import queued", {
-    metadata: {
-      importId: sourceImport?.id,
-      datasetId: dataset.id,
-      targetTilesetId: targetTileset?.id,
-      regionId: region.id,
-      theme: parsed.data.theme,
-      type: parsed.data.type,
-      catalog: catalogEntry,
-      estimate: importEstimate,
-    },
-  });
-  await enqueueOutboxEvent({
-    eventName: "source.import.requested",
-    payload: {
-      importId: sourceImport!.id,
-      accountId,
-      jobId: job.id,
-      datasetId: dataset.id,
-      targetTilesetId: targetTileset?.id,
-      provider: "OVERTURE",
-    },
-  });
-  await logAudit({
-    accountId,
-    actorUserId: userId,
-    action: "source.import_requested",
-    resourceType: "dataset",
-    resourceId: dataset.id,
-    metadata: {
-      importId: sourceImport?.id,
-      jobId: job.id,
-      targetTilesetId: targetTileset?.id,
-      estimate: importEstimate,
-    },
-  });
 
   return c.json(
-    { data: { dataset, sourceImport, processingJob: job, importEstimate } },
+    {
+      data: {
+        dataset: queued.dataset,
+        sourceImport: queued.sourceImport,
+        processingJob: queued.job,
+        importEstimate,
+      },
+    },
     202,
   );
 });
@@ -614,6 +689,17 @@ async function queueExistingDatasetTilesetBuild(params: {
 
   const minZoom = params.minZoom ?? tileset.minZoom ?? 0;
   const maxZoom = params.maxZoom ?? tileset.maxZoom ?? 14;
+  if (minZoom > maxZoom) {
+    return params.c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "minZoom must be less than or equal to maxZoom",
+        },
+      },
+      400,
+    );
+  }
 
   const jobInput = buildDatasetTilesetProcessingInput({
     tilesetId: tileset.id,
@@ -623,12 +709,84 @@ async function queueExistingDatasetTilesetBuild(params: {
     storageKey: storageObject.storageKey,
     options: { minZoom, maxZoom },
   });
-  let processingJob;
+  let queued: {
+    processingJob: Awaited<
+      ReturnType<typeof createProcessingJobInTransaction>
+    >;
+    tileset: typeof tilesets.$inferSelect;
+  };
   try {
-    processingJob = await createProcessingJob({
-      accountId: params.accountId,
-      type: "tileset.process_dataset",
-      input: jobInput,
+    queued = await db.transaction(async (tx) => {
+      const processingJob = await createProcessingJobInTransaction(
+        {
+          accountId: params.accountId,
+          type: "tileset.process_dataset",
+          targetTilesetId: tileset.id,
+          input: jobInput,
+        },
+        tx,
+      );
+      const [updatedTileset] = await tx
+        .update(tilesets)
+        .set({
+          status: "BUILDING",
+          buildJobId: processingJob.id,
+          bounds: version.bounds ?? dataset.bounds,
+          minZoom,
+          maxZoom,
+          layerMetadata: dataset.schemaSummary,
+          updatedAt: new Date(),
+        })
+        .where(eq(tilesets.id, tileset.id))
+        .returning();
+      if (!updatedTileset) {
+        throw new Error("Tileset disappeared while queueing dataset build");
+      }
+
+      await logProcessingJob(
+        processingJob.id,
+        "Dataset tiling queued",
+        {
+          metadata: {
+            datasetId: dataset.id,
+            datasetVersionId: version.id,
+            storageObjectId: storageObject.id,
+            tilesetId: tileset.id,
+          },
+        },
+        tx,
+      );
+      await enqueueOutboxEvent(
+        {
+          eventName: "tileset.build.requested",
+          payload: {
+            accountId: params.accountId,
+            tilesetId: tileset.id,
+            jobId: processingJob.id,
+            sourceResourceType: "dataset",
+            sourceResourceId: version.id,
+            options: { minZoom, maxZoom },
+          },
+        },
+        tx,
+      );
+      await logAudit(
+        {
+          accountId: params.accountId,
+          actorUserId: params.userId,
+          action: "tileset.dataset_build_requested",
+          resourceType: "tileset",
+          resourceId: tileset.id,
+          metadata: {
+            datasetId: dataset.id,
+            datasetVersionId: version.id,
+            processingJobId: processingJob.id,
+          },
+        },
+        tx,
+      );
+
+      return { processingJob, tileset: updatedTileset };
     });
   } catch (err) {
     const response = processingJobLimitResponse(params.c, err);
@@ -636,72 +794,12 @@ async function queueExistingDatasetTilesetBuild(params: {
     throw err;
   }
 
-  const [updatedTileset] = await db
-    .update(tilesets)
-    .set({
-      status: "BUILDING",
-      buildJobId: processingJob.id,
-      bounds: version.bounds ?? dataset.bounds,
-      minZoom,
-      maxZoom,
-      layerMetadata: dataset.schemaSummary,
-      updatedAt: new Date(),
-    })
-    .where(eq(tilesets.id, tileset.id))
-    .returning();
-
-  await logProcessingJob(processingJob.id, "Dataset tiling queued", {
-    metadata: {
-      datasetId: dataset.id,
-      datasetVersionId: version.id,
-      storageObjectId: storageObject.id,
-      tilesetId: tileset.id,
-    },
-  });
-  await enqueueOutboxEvent({
-    eventName: "tileset.build.requested",
-    payload: {
-      accountId: params.accountId,
-      tilesetId: tileset.id,
-      jobId: processingJob.id,
-      sourceResourceType: "dataset",
-      sourceResourceId: version.id,
-      options: { minZoom, maxZoom },
-    },
-  });
-  await logAudit({
-    accountId: params.accountId,
-    actorUserId: params.userId,
-    action: "tileset.dataset_build_requested",
-    resourceType: "tileset",
-    resourceId: tileset.id,
-    metadata: {
-      datasetId: dataset.id,
-      datasetVersionId: version.id,
-      processingJobId: processingJob.id,
-    },
-  });
-
   return {
     dataset,
     datasetVersion: version,
-    tileset: updatedTileset ?? tileset,
-    processingJob,
+    tileset: queued.tileset,
+    processingJob: queued.processingJob,
   };
-}
-
-async function createDataset(accountId: string, data: OvertureImportRequest) {
-  const [dataset] = await db
-    .insert(datasets)
-    .values({
-      accountId,
-      handle: data.handle,
-      name: data.name,
-      description: data.description ?? null,
-      status: "DRAFT",
-    })
-    .returning();
-  return dataset!;
 }
 
 function validationError(c: Context, error: z.ZodError) {
@@ -718,6 +816,18 @@ function validationError(c: Context, error: z.ZodError) {
 }
 
 function processingJobLimitResponse(c: Context, err: unknown) {
+  if (err instanceof ActiveTilesetBuildError) {
+    return c.json(
+      {
+        error: {
+          code: err.code,
+          message: "This tileset already has an active build or import",
+          details: { jobId: err.jobId },
+        },
+      },
+      409,
+    );
+  }
   if (!(err instanceof ActiveProcessingJobLimitError)) return null;
   return c.json(
     {

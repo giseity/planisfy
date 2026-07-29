@@ -239,6 +239,13 @@
       "when": 1785294000000,
       "tag": "0033_billing_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1785326400000,
+      "tag": "0034_geodata_admission_integrity",
+      "breakpoints": true
     }
   ]
 }

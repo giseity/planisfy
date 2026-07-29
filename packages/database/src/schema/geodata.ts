@@ -194,6 +194,10 @@ export const tilesets = pgTable(
   (table) => [
     index('tilesets_account_idx').on(table.accountId),
     index('tilesets_build_job_idx').on(table.buildJobId),
+    check(
+      'tilesets_zoom_range_check',
+      sql`${table.minZoom} BETWEEN 0 AND 24 AND ${table.maxZoom} BETWEEN 0 AND 24 AND ${table.minZoom} <= ${table.maxZoom}`
+    ),
     uniqueIndex('tilesets_account_handle_unique')
       .on(table.accountId, table.handle)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -221,6 +225,13 @@ export const tilesetVersions = pgTable(
   (table) => [
     index('tileset_versions_tileset_idx').on(table.tilesetId),
     uniqueIndex('tileset_versions_tileset_version_unique').on(table.tilesetId, table.version),
+    uniqueIndex('tileset_versions_build_job_unique')
+      .on(table.buildJobId)
+      .where(sql`${table.buildJobId} IS NOT NULL`),
+    check(
+      'tileset_versions_zoom_range_check',
+      sql`${table.minZoom} BETWEEN 0 AND 24 AND ${table.maxZoom} BETWEEN 0 AND 24 AND ${table.minZoom} <= ${table.maxZoom}`
+    ),
   ]
 )
 
@@ -753,6 +764,9 @@ export const storageObjects = pgTable(
     resourceType: varchar('resource_type', { length: 64 }),
     resourceId: uuid('resource_id'),
     artifactKind: varchar('artifact_kind', { length: 64 }),
+    processingJobId: uuid('processing_job_id').references(() => processingJobs.id, {
+      onDelete: 'set null',
+    }),
     version: varchar('version', { length: 64 }),
     metadata: jsonb('metadata'),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -764,7 +778,11 @@ export const storageObjects = pgTable(
   (table) => [
     index('storage_objects_account_idx').on(table.accountId),
     index('storage_objects_resource_idx').on(table.resourceType, table.resourceId),
+    index('storage_objects_processing_job_idx').on(table.processingJobId),
     uniqueIndex('storage_objects_id_account_unique').on(table.id, table.accountId),
+    uniqueIndex('storage_objects_processing_job_unique')
+      .on(table.processingJobId)
+      .where(sql`${table.processingJobId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
     uniqueIndex('storage_objects_key_unique')
       .on(table.provider, table.bucket, table.storageKey)
       .where(sql`${table.deletedAt} IS NULL`),

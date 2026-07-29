@@ -18,7 +18,9 @@ import { StoragePaths } from "@planisfy/storage-paths";
 import type { AuthEnv } from "../../middleware/auth";
 import {
   ActiveProcessingJobLimitError,
-  createProcessingJob,
+  ActiveTilesetBuildError,
+  createProcessingJobInTransaction,
+  lockProcessingJobAdmission,
   logProcessingJob,
 } from "./processing-jobs";
 import { logAudit } from "../../shared/audit";
@@ -63,17 +65,26 @@ const MAX_UPLOAD_SIZE = 250 * 1024 * 1024;
 const MAX_MULTIPART_UPLOAD_SIZE = MAX_UPLOAD_SIZE + 1024 * 1024;
 const CONSOLE_ARTIFACT_DOWNLOAD_EXPIRES_SECONDS = 10 * 60;
 
-const createTilesetSchema = z.object({
-  name: z.string().min(1).max(128),
-  handle: z
-    .string()
-    .min(1)
-    .max(64)
-    .regex(/^[a-z0-9][a-z0-9-]*$/),
-  description: z.string().max(1000).optional(),
-  minZoom: z.number().int().min(0).max(24).optional(),
-  maxZoom: z.number().int().min(0).max(24).optional(),
-});
+const createTilesetSchema = z
+  .object({
+    name: z.string().min(1).max(128),
+    handle: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(/^[a-z0-9][a-z0-9-]*$/),
+    description: z.string().max(1000).optional(),
+    minZoom: z.number().int().min(0).max(24).optional(),
+    maxZoom: z.number().int().min(0).max(24).optional(),
+  })
+  .refine(
+    ({ minZoom, maxZoom }) =>
+      minZoom === undefined || maxZoom === undefined || minZoom <= maxZoom,
+    {
+      message: "minZoom must be less than or equal to maxZoom",
+      path: ["maxZoom"],
+    },
+  );
 
 const uploadTilesetSchema = z.object({
   csvLatitude: z.string().max(128).optional(),
@@ -112,18 +123,61 @@ resourcesRoute.post(
       );
     }
 
-    const [existing] = await db
-      .select({ id: tilesets.id })
-      .from(tilesets)
-      .where(
-        and(
-          eq(tilesets.accountId, accountId),
-          eq(tilesets.handle, parsed.data.handle),
-          isNull(tilesets.deletedAt),
-        ),
-      )
-      .limit(1);
-    if (existing) {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`tilesetQuota:${accountId}`}))`,
+      );
+      const planCheck = await checkResourceLimit(
+        userId,
+        accountId,
+        "tilesets",
+        tx,
+      );
+      if (!planCheck.allowed) return { planCheck };
+
+      const [existing] = await tx
+        .select({ id: tilesets.id })
+        .from(tilesets)
+        .where(
+          and(
+            eq(tilesets.accountId, accountId),
+            eq(tilesets.handle, parsed.data.handle),
+            isNull(tilesets.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (existing) return { existing };
+
+      const [created] = await tx
+        .insert(tilesets)
+        .values({
+          accountId,
+          name: parsed.data.name,
+          handle: parsed.data.handle,
+          description: parsed.data.description ?? null,
+          status: "DRAFT",
+          minZoom: parsed.data.minZoom ?? 0,
+          maxZoom: parsed.data.maxZoom ?? 14,
+        })
+        .returning();
+
+      if (!created) throw new Error("Failed to create tileset");
+
+      await logAudit(
+        {
+          accountId,
+          actorUserId: userId,
+          action: "tileset.created",
+          resourceType: "tileset",
+          resourceId: created.id,
+          metadata: { handle: created.handle },
+        },
+        tx,
+      );
+      return { created };
+    });
+
+    if ("existing" in result) {
       return c.json(
         {
           error: { code: "CONFLICT", message: "Tileset handle already exists" },
@@ -132,52 +186,19 @@ resourcesRoute.post(
       );
     }
 
-    const planCheck = await checkResourceLimit(userId, accountId, "tilesets");
-    if (!planCheck.allowed) {
+    if (result.planCheck) {
       return c.json(
         {
           error: {
             code: "PLAN_LIMIT",
-            message: `You've reached the maximum of ${planCheck.limit} tilesets on your current plan. Please upgrade to create more.`,
+            message: `You've reached the maximum of ${result.planCheck.limit} tilesets on your current plan. Please upgrade to create more.`,
           },
         },
         403,
       );
     }
 
-    const [created] = await db
-      .insert(tilesets)
-      .values({
-        accountId,
-        name: parsed.data.name,
-        handle: parsed.data.handle,
-        description: parsed.data.description ?? null,
-        status: "DRAFT",
-        minZoom: parsed.data.minZoom ?? 0,
-        maxZoom: parsed.data.maxZoom ?? 14,
-      })
-      .returning();
-
-    if (!created) {
-      return c.json(
-        {
-          error: {
-            code: "INTERNAL_ERROR",
-            message: "Failed to create tileset",
-          },
-        },
-        500,
-      );
-    }
-
-    await logAudit({
-      accountId,
-      actorUserId: userId,
-      action: "tileset.created",
-      resourceType: "tileset",
-      resourceId: created.id,
-      metadata: { handle: created.handle },
-    });
+    const { created } = result;
 
     return c.json(
       { data: toConsoleTileset(created, await getOwnerHandle(accountId), []) },
@@ -369,12 +390,13 @@ resourcesRoute.post("/tilesets/:id/uploads", async (c) => {
   }
 
   const storageInfo = storage.getInfo();
-  let persisted: {
+  let queued: {
     upload: typeof uploads.$inferSelect;
-    storageObject: typeof storageObjects.$inferSelect;
+    processingJob: typeof processingJobs.$inferSelect;
+    tileset: typeof tilesets.$inferSelect;
   };
   try {
-    persisted = await db.transaction(async (tx) => {
+    queued = await db.transaction(async (tx) => {
       const [createdUpload] = await tx
         .insert(uploads)
         .values({
@@ -406,106 +428,120 @@ resourcesRoute.post("/tilesets/:id/uploads", async (c) => {
           },
         })
         .returning();
+      if (!createdUpload || !createdObject) {
+        throw new Error("Failed to persist uploaded artifact");
+      }
       await tx
         .update(uploads)
-        .set({ storageObjectId: createdObject!.id })
+        .set({ storageObjectId: createdObject.id })
         .where(eq(uploads.id, uploadId));
+
+      const processingJob = await createProcessingJobInTransaction(
+        {
+          accountId,
+          type: "tileset.process_upload",
+          targetTilesetId: tileset.id,
+          input: {
+            tilesetId: tileset.id,
+            uploadId: createdUpload.id,
+            storageObjectId: createdObject.id,
+            uploadKey: completedUpload.uploadKey,
+            format: completedUpload.format,
+            csv: {
+              latitude: parsed.data.csvLatitude,
+              longitude: parsed.data.csvLongitude,
+            },
+            options: {
+              minZoom: tileset.minZoom ?? 0,
+              maxZoom: tileset.maxZoom ?? 14,
+            },
+          },
+        },
+        tx,
+      );
+      const [updatedTileset] = await tx
+        .update(tilesets)
+        .set({
+          status: "BUILDING",
+          buildJobId: processingJob.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(tilesets.id, tileset.id))
+        .returning();
+      if (!updatedTileset) {
+        throw new Error("Tileset disappeared while queueing its upload");
+      }
+
+      await logProcessingJob(
+        processingJob.id,
+        "Upload received and queued",
+        {
+          metadata: {
+            uploadId: createdUpload.id,
+            tilesetId: tileset.id,
+            uploadKey: completedUpload.uploadKey,
+            format: completedUpload.format,
+          },
+        },
+        tx,
+      );
+      await enqueueOutboxEvent(
+        {
+          eventName: "tileset.build.requested",
+          payload: {
+            accountId,
+            tilesetId: tileset.id,
+            jobId: processingJob.id,
+            sourceResourceType: "upload",
+            sourceResourceId: createdUpload.id,
+            options: {
+              minZoom: tileset.minZoom ?? 0,
+              maxZoom: tileset.maxZoom ?? 14,
+            },
+          },
+        },
+        tx,
+      );
+      await logAudit(
+        {
+          accountId,
+          actorUserId: userId,
+          action: "tileset.uploaded",
+          resourceType: "tileset",
+          resourceId: tileset.id,
+          metadata: {
+            uploadId: createdUpload.id,
+            processingJobId: processingJob.id,
+            format: completedUpload.format,
+          },
+        },
+        tx,
+      );
+
       return {
         upload: {
-          ...createdUpload!,
-          storageObjectId: createdObject!.id,
+          ...createdUpload,
+          storageObjectId: createdObject.id,
         },
-        storageObject: createdObject!,
+        processingJob,
+        tileset: updatedTileset,
       };
     });
   } catch (error) {
     await storage.delete(completedUpload.uploadKey).catch(() => undefined);
+    const response = processingJobLimitResponse(c, error);
+    if (response) return response;
     throw error;
   }
-  const { upload, storageObject } = persisted;
-  const { format, uploadKey } = completedUpload;
-
-  let processingJob: typeof processingJobs.$inferSelect;
-  try {
-    processingJob = await createProcessingJob({
-      accountId,
-      type: "tileset.process_upload",
-      input: {
-        tilesetId: tileset.id,
-        uploadId: upload.id,
-        storageObjectId: storageObject.id,
-        uploadKey,
-        format,
-        csv: {
-          latitude: parsed.data.csvLatitude,
-          longitude: parsed.data.csvLongitude,
-        },
-        options: {
-          minZoom: tileset.minZoom ?? 0,
-          maxZoom: tileset.maxZoom ?? 14,
-        },
-      },
-    });
-  } catch (err) {
-    const response = processingJobLimitResponse(c, err);
-    if (response) return response;
-    throw err;
-  }
-
-  await db
-    .update(tilesets)
-    .set({
-      status: "BUILDING",
-      buildJobId: processingJob.id,
-      updatedAt: new Date(),
-    })
-    .where(eq(tilesets.id, tileset.id));
-
-  await logProcessingJob(processingJob.id, "Upload received and queued", {
-    metadata: {
-      uploadId: upload.id,
-      tilesetId: tileset.id,
-      uploadKey,
-      format,
-    },
-  });
-
-  await enqueueOutboxEvent({
-    eventName: "tileset.build.requested",
-    payload: {
-      accountId,
-      tilesetId: tileset.id,
-      jobId: processingJob.id,
-      sourceResourceType: "upload",
-      sourceResourceId: upload.id,
-      options: {
-        minZoom: tileset.minZoom ?? 0,
-        maxZoom: tileset.maxZoom ?? 14,
-      },
-    },
-  });
-
-  await logAudit({
-    accountId,
-    actorUserId: userId,
-    action: "tileset.uploaded",
-    resourceType: "tileset",
-    resourceId: tileset.id,
-    metadata: {
-      uploadId: upload.id,
-      processingJobId: processingJob.id,
-      format,
-    },
-  });
-
-  const [updatedTileset] = await db
-    .select()
-    .from(tilesets)
-    .where(eq(tilesets.id, tileset.id))
-    .limit(1);
 
   return c.json(
-    { data: { upload, tileset: updatedTileset ?? tileset, processingJob } },
+    {
+      data: {
+        upload: queued.upload,
+        tileset: queued.tileset,
+        processingJob: queued.processingJob,
+      },
+    },
     201,
   );
 });
@@ -904,92 +940,87 @@ resourcesRoute.post("/tilesets/:id/rebuild", async (c) => {
     );
   }
 
-  const [activeRebuild] = await db
-    .select()
-    .from(processingJobs)
-    .where(
-      and(
-        eq(processingJobs.accountId, accountId),
-        eq(processingJobs.type, "tileset.process_upload"),
-        inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
-        sql`${processingJobs.input}->>'tilesetId' = ${tileset.id}`,
-      ),
-    )
-    .limit(1);
-
-  if (activeRebuild) {
-    return c.json({ data: activeRebuild }, 202);
-  }
-
   let processingJob: typeof processingJobs.$inferSelect;
   try {
-    processingJob = await createProcessingJob({
-      accountId,
-      type: "tileset.process_upload",
-      input: {
-        tilesetId: tileset.id,
-        uploadId: upload.id,
-        storageObjectId: storageObject.id,
-        uploadKey: storageObject.storageKey,
-        format,
-        options: {
-          minZoom: tileset.minZoom ?? 0,
-          maxZoom: tileset.maxZoom ?? 14,
+    processingJob = await db.transaction(async (tx) => {
+      const created = await createProcessingJobInTransaction(
+        {
+          accountId,
+          type: "tileset.process_upload",
+          targetTilesetId: tileset.id,
+          input: {
+            tilesetId: tileset.id,
+            uploadId: upload.id,
+            storageObjectId: storageObject.id,
+            uploadKey: storageObject.storageKey,
+            format,
+            options: {
+              minZoom: tileset.minZoom ?? 0,
+              maxZoom: tileset.maxZoom ?? 14,
+            },
+          },
         },
-      },
+        tx,
+      );
+      await tx
+        .update(tilesets)
+        .set({
+          status: "BUILDING",
+          buildJobId: created.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(tilesets.id, tileset.id));
+      await tx
+        .update(uploads)
+        .set({ status: "VALIDATING", linkedTilesetId: tileset.id })
+        .where(eq(uploads.id, upload.id));
+      await logProcessingJob(
+        created.id,
+        "Console rebuild requested",
+        {
+          metadata: { uploadId: upload.id, tilesetId: tileset.id, format },
+        },
+        tx,
+      );
+      await enqueueOutboxEvent(
+        {
+          eventName: "tileset.build.requested",
+          payload: {
+            accountId,
+            tilesetId: tileset.id,
+            jobId: created.id,
+            sourceResourceType: "upload",
+            sourceResourceId: upload.id,
+            options: {
+              minZoom: tileset.minZoom ?? 0,
+              maxZoom: tileset.maxZoom ?? 14,
+            },
+          },
+        },
+        tx,
+      );
+      await logAudit(
+        {
+          accountId,
+          actorUserId: userId,
+          action: "tileset.rebuild_requested",
+          resourceType: "tileset",
+          resourceId: tileset.id,
+          metadata: {
+            uploadId: upload.id,
+            processingJobId: created.id,
+            format,
+          },
+        },
+        tx,
+      );
+      return created;
     });
   } catch (err) {
     const response = processingJobLimitResponse(c, err);
     if (response) return response;
     throw err;
   }
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(tilesets)
-      .set({
-        status: "BUILDING",
-        buildJobId: processingJob.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(tilesets.id, tileset.id));
-    await tx
-      .update(uploads)
-      .set({ status: "VALIDATING", linkedTilesetId: tileset.id })
-      .where(eq(uploads.id, upload.id));
-  });
-
-  await logProcessingJob(processingJob.id, "Console rebuild requested", {
-    metadata: { uploadId: upload.id, tilesetId: tileset.id, format },
-  });
-
-  await enqueueOutboxEvent({
-    eventName: "tileset.build.requested",
-    payload: {
-      accountId,
-      tilesetId: tileset.id,
-      jobId: processingJob.id,
-      sourceResourceType: "upload",
-      sourceResourceId: upload.id,
-      options: {
-        minZoom: tileset.minZoom ?? 0,
-        maxZoom: tileset.maxZoom ?? 14,
-      },
-    },
-  });
-
-  await logAudit({
-    accountId,
-    actorUserId: userId,
-    action: "tileset.rebuild_requested",
-    resourceType: "tileset",
-    resourceId: tileset.id,
-    metadata: {
-      uploadId: upload.id,
-      processingJobId: processingJob.id,
-      format,
-    },
-  });
 
   return c.json({ data: processingJob }, 202);
 });
@@ -1030,6 +1061,7 @@ resourcesRoute.get("/jobs/:id", async (c) => {
 
 resourcesRoute.post("/jobs/:id/retry", async (c) => {
   const accountId = c.get("ownerId");
+  const userId = c.get("userId");
   const id = c.req.param("id");
   const [job] = await db
     .select()
@@ -1071,61 +1103,111 @@ resourcesRoute.post("/jobs/:id/retry", async (c) => {
     );
   }
   const now = new Date();
+  const retrySource = buildRetrySourceResource(input);
 
-  const updatedJob = await db.transaction(async (tx) => {
-    const [transitioned] = await tx
-      .update(processingJobs)
-      .set({
-        status: "PENDING",
-        progress: 0,
-        output: null,
-        errorCode: null,
-        errorMessage: null,
-        retryCount: sql<number>`${processingJobs.retryCount} + 1`,
-        cancelRequestedAt: null,
-        startedAt: null,
-        completedAt: null,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(processingJobs.id, job.id),
-          eq(processingJobs.accountId, accountId),
-          inArray(processingJobs.status, ["FAILED", "CANCELED"]),
-        ),
-      )
-      .returning();
-
-    if (!transitioned) return null;
-
-    await tx.insert(processingJobLogs).values({
-      jobId: job.id,
-      level: "info",
-      message: "Console retry requested",
-      metadata: { previousStatus: job.status },
-    });
-
-    await tx
-      .update(tilesets)
-      .set({ status: "BUILDING", buildJobId: job.id, updatedAt: now })
-      .where(
-        and(
-          eq(tilesets.id, input.tilesetId),
-          eq(tilesets.accountId, accountId),
-        ),
+  let updatedJob: typeof processingJobs.$inferSelect | null;
+  try {
+    updatedJob = await db.transaction(async (tx) => {
+      await lockProcessingJobAdmission(
+        {
+          accountId,
+          targetTilesetId: input.tilesetId,
+          excludeJobId: job.id,
+        },
+        tx,
       );
 
-    if (input.uploadId) {
-      await tx
-        .update(uploads)
-        .set({ status: "VALIDATING", linkedTilesetId: input.tilesetId })
+      const [transitioned] = await tx
+        .update(processingJobs)
+        .set({
+          status: "PENDING",
+          progress: 0,
+          output: null,
+          errorCode: null,
+          errorMessage: null,
+          retryCount: sql<number>`${processingJobs.retryCount} + 1`,
+          cancelRequestedAt: null,
+          startedAt: null,
+          completedAt: null,
+          updatedAt: now,
+        })
         .where(
-          and(eq(uploads.id, input.uploadId), eq(uploads.accountId, accountId)),
-        );
-    }
+          and(
+            eq(processingJobs.id, job.id),
+            eq(processingJobs.accountId, accountId),
+            inArray(processingJobs.status, ["FAILED", "CANCELED"]),
+          ),
+        )
+        .returning();
 
-    return transitioned;
-  });
+      if (!transitioned) return null;
+
+      await tx
+        .update(tilesets)
+        .set({ status: "BUILDING", buildJobId: job.id, updatedAt: now })
+        .where(
+          and(
+            eq(tilesets.id, input.tilesetId),
+            eq(tilesets.accountId, accountId),
+          ),
+        );
+
+      if (input.uploadId) {
+        await tx
+          .update(uploads)
+          .set({ status: "VALIDATING", linkedTilesetId: input.tilesetId })
+          .where(
+            and(
+              eq(uploads.id, input.uploadId),
+              eq(uploads.accountId, accountId),
+            ),
+          );
+      }
+
+      await logProcessingJob(
+        job.id,
+        "Console retry requested",
+        {
+          metadata: { previousStatus: job.status },
+        },
+        tx,
+      );
+      await enqueueOutboxEvent(
+        {
+          eventName: "tileset.build.requested",
+          payload: {
+            accountId,
+            tilesetId: input.tilesetId,
+            jobId: job.id,
+            sourceResourceType: retrySource.sourceResourceType,
+            sourceResourceId: retrySource.sourceResourceId,
+            options: input.options,
+          },
+        },
+        tx,
+      );
+      await logAudit(
+        {
+          accountId,
+          actorUserId: userId,
+          action: "processing_job.retry_requested",
+          resourceType: "processing_job",
+          resourceId: job.id,
+          metadata: {
+            tilesetId: input.tilesetId,
+            previousStatus: job.status,
+          },
+        },
+        tx,
+      );
+
+      return transitioned;
+    });
+  } catch (err) {
+    const response = processingJobLimitResponse(c, err);
+    if (response) return response;
+    throw err;
+  }
 
   if (!updatedJob) {
     return c.json(
@@ -1139,28 +1221,12 @@ resourcesRoute.post("/jobs/:id/retry", async (c) => {
     );
   }
 
-  const retrySource = buildRetrySourceResource(input);
-  await enqueueOutboxEvent({
-    eventName: "tileset.build.requested",
-    payload: {
-      accountId,
-      tilesetId: input.tilesetId,
-      jobId: job.id,
-      sourceResourceType: retrySource.sourceResourceType,
-      sourceResourceId: retrySource.sourceResourceId,
-      options: input.options,
-    },
-  });
-
-  await logProcessingJob(job.id, "Tileset build retry queued", {
-    metadata: { requestedBy: "console", previousStatus: job.status },
-  });
-
   return c.json({ data: updatedJob });
 });
 
 resourcesRoute.post("/jobs/:id/cancel", async (c) => {
   const accountId = c.get("ownerId");
+  const userId = c.get("userId");
   const id = c.req.param("id");
   const now = new Date();
   const [job] = await db
@@ -1188,26 +1254,98 @@ resourcesRoute.post("/jobs/:id/cancel", async (c) => {
     );
   }
 
-  const [updated] = await db
-    .update(processingJobs)
-    .set({
-      status: sql<
-        typeof processingJobs.status
-      >`case when ${processingJobs.status} = 'PENDING' then 'CANCELED' else ${processingJobs.status} end`,
-      cancelRequestedAt: now,
-      completedAt: sql<
-        Date | null
-      >`case when ${processingJobs.status} = 'PENDING' then ${now} else ${processingJobs.completedAt} end`,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(processingJobs.id, id),
-        eq(processingJobs.accountId, accountId),
-        inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
-      ),
-    )
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(processingJobs)
+      .where(
+        and(
+          eq(processingJobs.id, id),
+          eq(processingJobs.accountId, accountId),
+          inArray(processingJobs.status, ["PENDING", "PROCESSING"]),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!locked) return null;
+
+    const [transitioned] = await tx
+      .update(processingJobs)
+      .set({
+        status: locked.status === "PENDING" ? "CANCELED" : locked.status,
+        cancelRequestedAt: now,
+        completedAt: locked.status === "PENDING" ? now : locked.completedAt,
+        updatedAt: now,
+      })
+      .where(eq(processingJobs.id, locked.id))
+      .returning();
+    if (!transitioned) return null;
+
+    if (locked.status === "PENDING") {
+      let sourceInput: SourceProcessingJobInput | null = null;
+      try {
+        sourceInput = parseSourceProcessingJobInput(locked.input);
+      } catch {
+        // Source import jobs restore their own resource state in the worker.
+      }
+      if (sourceInput) {
+        await tx
+          .update(tilesets)
+          .set({
+            status: sql<
+              typeof tilesets.status
+            >`case when ${tilesets.currentVersionId} is null then 'DRAFT' else 'READY' end`,
+            buildJobId: null,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(tilesets.id, sourceInput.tilesetId),
+              eq(tilesets.accountId, accountId),
+              eq(tilesets.buildJobId, locked.id),
+            ),
+          );
+        if (sourceInput.uploadId) {
+          await tx
+            .update(uploads)
+            .set({ status: "UPLOADED", updatedAt: now })
+            .where(
+              and(
+                eq(uploads.id, sourceInput.uploadId),
+                eq(uploads.accountId, accountId),
+              ),
+            );
+        }
+      }
+    }
+
+    await logProcessingJob(
+      id,
+      locked.status === "PENDING"
+        ? "Console canceled pending job"
+        : "Console cancellation requested",
+      {
+        level: "warn",
+        metadata: { previousStatus: locked.status },
+      },
+      tx,
+    );
+    await logAudit(
+      {
+        accountId,
+        actorUserId: userId,
+        action:
+          locked.status === "PENDING"
+            ? "processing_job.canceled"
+            : "processing_job.cancel_requested",
+        resourceType: "processing_job",
+        resourceId: locked.id,
+        metadata: { previousStatus: locked.status },
+      },
+      tx,
+    );
+    return transitioned;
+  });
 
   if (!updated) {
     return c.json(
@@ -1220,19 +1358,6 @@ resourcesRoute.post("/jobs/:id/cancel", async (c) => {
       409,
     );
   }
-
-  const previousStatus =
-    updated.status === "CANCELED" ? "PENDING" : updated.status;
-  await logProcessingJob(
-    id,
-    previousStatus === "PENDING"
-      ? "Console canceled pending job"
-      : "Console cancellation requested",
-    {
-      level: "warn",
-      metadata: { previousStatus },
-    },
-  );
 
   return c.json({ data: updated });
 });
@@ -1542,6 +1667,18 @@ function toConsoleTilesetVersion(
 }
 
 function processingJobLimitResponse(c: Context, err: unknown) {
+  if (err instanceof ActiveTilesetBuildError) {
+    return c.json(
+      {
+        error: {
+          code: err.code,
+          message: "This tileset already has an active build or import",
+          details: { jobId: err.jobId },
+        },
+      },
+      409,
+    );
+  }
   if (!(err instanceof ActiveProcessingJobLimitError)) return null;
   return c.json(
     {

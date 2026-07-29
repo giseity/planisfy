@@ -346,6 +346,7 @@ export const processingJobsRelations = relations(processingJobs, ({ one, many })
     references: [accounts.id],
   }),
   logs: many(processingJobLogs),
+  storageObjects: many(storageObjects),
 }))
 
 export const notificationChannelsRelations = relations(notificationChannels, ({ one }) => ({
@@ -473,6 +474,10 @@ export const storageObjectsRelations = relations(storageObjects, ({ one }) => ({
   account: one(accounts, {
     fields: [storageObjects.accountId],
     references: [accounts.id],
+  }),
+  processingJob: one(processingJobs, {
+    fields: [storageObjects.processingJobId],
+    references: [processingJobs.id],
   }),
 }))
 

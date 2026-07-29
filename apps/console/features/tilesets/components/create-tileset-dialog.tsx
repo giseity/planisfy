@@ -34,9 +34,15 @@ export function CreateTilesetDialog({
   const [minZoom, setMinZoom] = useState(0);
   const [maxZoom, setMaxZoom] = useState(14);
   const [creating, setCreating] = useState(false);
+  const zoomRangeValid =
+    Number.isInteger(minZoom) &&
+    Number.isInteger(maxZoom) &&
+    minZoom >= 0 &&
+    maxZoom <= 24 &&
+    minZoom <= maxZoom;
 
   async function handleCreate() {
-    if (!name || !handle) return;
+    if (!name || !handle || !zoomRangeValid) return;
 
     setCreating(true);
     try {
@@ -135,6 +141,12 @@ export function CreateTilesetDialog({
               />
             </div>
           </div>
+          {!zoomRangeValid && (
+            <p className="text-sm text-destructive">
+              Zooms must be whole numbers from 0 to 24, with min zoom no
+              greater than max zoom.
+            </p>
+          )}
           <div className="flex justify-end gap-2">
             <Button
               variant="outline"
@@ -147,7 +159,7 @@ export function CreateTilesetDialog({
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={!name || !handle || creating}
+              disabled={!name || !handle || !zoomRangeValid || creating}
               data-testid="create-tileset-submit"
             >
               {creating ? (

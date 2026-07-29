@@ -112,4 +112,26 @@ describe('geodata contracts', () => {
       })
     ).toThrow(/missing an upload or dataset version source/)
   })
+
+  it('rejects invalid or inverted worker zoom ranges', () => {
+    const input = {
+      tilesetId: 'tileset-1',
+      uploadId: 'upload-1',
+      uploadKey: 'accounts/a/uploads/u/original/data.csv',
+      format: 'csv',
+    }
+
+    expect(() =>
+      parseSourceProcessingJobInput({
+        ...input,
+        options: { minZoom: 12, maxZoom: 4 },
+      })
+    ).toThrow(/minZoom must be less than or equal/)
+    expect(() =>
+      parseSourceProcessingJobInput({
+        ...input,
+        options: { minZoom: -1, maxZoom: 4 },
+      })
+    ).toThrow(/integer from 0 to 24/)
+  })
 })

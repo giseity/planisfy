@@ -7,6 +7,7 @@ import {
 } from "@planisfy/events";
 
 type DatabaseClient = typeof db;
+type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export async function enqueueOutboxEvent<N extends EventName>(
   params: {
@@ -14,7 +15,7 @@ export async function enqueueOutboxEvent<N extends EventName>(
     payload: EventPayload<N>;
     processAt?: Date;
   },
-  database: DatabaseClient = db
+  database: DatabaseClient | DatabaseTransaction = db,
 ) {
   const payload = parseEventPayload(params.eventName, params.payload);
   const [event] = await database

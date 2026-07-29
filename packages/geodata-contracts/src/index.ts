@@ -149,8 +149,11 @@ function parseCsvOptions(value: unknown): SourceProcessingJobInput['csv'] {
 
 function parseTilesetBuildOptions(value: unknown): TilesetBuildOptions | undefined {
   if (!isRecord(value)) return undefined
-  const minZoom = optionalNumber(value.minZoom)
-  const maxZoom = optionalNumber(value.maxZoom)
+  const minZoom = optionalZoom(value.minZoom, 'minZoom')
+  const maxZoom = optionalZoom(value.maxZoom, 'maxZoom')
+  if (minZoom !== undefined && maxZoom !== undefined && minZoom > maxZoom) {
+    throw new Error('Processing job minZoom must be less than or equal to maxZoom')
+  }
   const dropDensest = optionalBoolean(value.dropDensest)
   const simplification = optionalNumber(value.simplification)
   return {
@@ -159,6 +162,14 @@ function parseTilesetBuildOptions(value: unknown): TilesetBuildOptions | undefin
     ...(dropDensest !== undefined ? { dropDensest } : {}),
     ...(simplification !== undefined ? { simplification } : {}),
   }
+}
+
+function optionalZoom(value: unknown, label: string) {
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 24) {
+    throw new Error(`Processing job ${label} must be an integer from 0 to 24`)
+  }
+  return value
 }
 
 function optionalString(value: unknown) {
