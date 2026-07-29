@@ -26,6 +26,9 @@ test("serializeSecurityActivity returns persisted audit activity", () => {
     resourceId: null,
     metadata: { method: "password" },
     ipAddress: null,
+    actorUserId: "actor-1",
+    requestId: "request-1",
+    outcome: "SUCCESS",
     timestamp: timestamp.toISOString(),
   });
 });
