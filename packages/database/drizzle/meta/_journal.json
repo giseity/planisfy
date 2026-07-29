@@ -232,6 +232,13 @@
       "when": 1785289956000,
       "tag": "0032_builder_image_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1785294000000,
+      "tag": "0033_billing_integrity",
+      "breakpoints": true
     }
   ]
 }

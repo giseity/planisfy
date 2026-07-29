@@ -40,6 +40,7 @@ export async function assignManagedContractAction(formData: FormData) {
   const hardMonthlySpendCapCents = overageEnabled
     ? nonNegativeInteger(formData, 'hardMonthlySpendCapCents', 2_000_000_000)
     : null
+  const currency = normalizeBillingCurrency(stringValue(formData, 'currency') || 'USD')
 
   if (!accountId || !planId || !assignmentReason) {
     throw new Error('Account, plan, and assignment reason are required')
@@ -80,7 +81,7 @@ export async function assignManagedContractAction(formData: FormData) {
         overageEnabled,
         overageUnitPriceMicros,
         hardMonthlySpendCapCents,
-        currency: stringValue(formData, 'currency') || 'USD',
+        currency,
         providerSubscriptionId: stringValue(formData, 'providerSubscriptionId') || null,
         effectiveAt,
         assignedByAccountId: admin.userId,
@@ -101,12 +102,22 @@ export async function assignManagedContractAction(formData: FormData) {
         overageEnabled,
         overageUnitPriceMicros,
         hardMonthlySpendCapCents,
+        currency,
         assignmentReason,
       },
     })
   })
 
   revalidatePath('/billing-contracts')
+}
+
+function normalizeBillingCurrency(value: string) {
+  const currency = value.trim().toUpperCase()
+  const supported = new Set(Intl.supportedValuesOf('currency'))
+  if (currency === 'XXX' || !supported.has(currency)) {
+    throw new Error('Currency must be a supported three-letter ISO 4217 code')
+  }
+  return currency
 }
 
 export async function grantUsageAllowanceAction(formData: FormData) {

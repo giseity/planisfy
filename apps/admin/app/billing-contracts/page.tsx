@@ -4,9 +4,10 @@ import {
   db,
   managedContracts,
   usageAllowanceGrants,
+  usageBillingPeriodSegments,
   usageBillingPeriods,
 } from '@planisfy/database'
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { desc, eq, isNull } from 'drizzle-orm'
 import { Badge } from '@planisfy/ui/components/badge'
 import { Button } from '@planisfy/ui/components/button'
 import {
@@ -88,26 +89,23 @@ export default async function BillingContractsPage() {
       .limit(50),
     db
       .select({
-        id: usageBillingPeriods.id,
+        id: usageBillingPeriodSegments.id,
         handle: accounts.handle,
-        periodStart: usageBillingPeriods.periodStart,
-        usedUnits: usageBillingPeriods.usedUnits,
-        includedUnits: usageBillingPeriods.includedUnits,
-        grantedUnits: usageBillingPeriods.grantedUnits,
-        overageUnits: usageBillingPeriods.overageUnits,
-        overageAmountMicros: usageBillingPeriods.overageAmountMicros,
-        currency: managedContracts.currency,
+        periodStart: usageBillingPeriodSegments.segmentStart,
+        usedUnits: usageBillingPeriodSegments.usedUnits,
+        includedUnits: usageBillingPeriodSegments.includedUnits,
+        grantedUnits: usageBillingPeriodSegments.grantedUnits,
+        overageUnits: usageBillingPeriodSegments.overageUnits,
+        overageAmountMicros: usageBillingPeriodSegments.overageAmountMicros,
+        currency: usageBillingPeriodSegments.currency,
       })
-      .from(usageBillingPeriods)
-      .innerJoin(accounts, eq(accounts.id, usageBillingPeriods.accountId))
-      .leftJoin(
-        managedContracts,
-        and(
-          eq(managedContracts.accountId, usageBillingPeriods.accountId),
-          eq(managedContracts.status, 'ACTIVE')
-        )
+      .from(usageBillingPeriodSegments)
+      .innerJoin(
+        usageBillingPeriods,
+        eq(usageBillingPeriods.id, usageBillingPeriodSegments.periodId)
       )
-      .orderBy(desc(usageBillingPeriods.periodStart))
+      .innerJoin(accounts, eq(accounts.id, usageBillingPeriods.accountId))
+      .orderBy(desc(usageBillingPeriodSegments.segmentStart))
       .limit(50),
   ])
 
@@ -159,7 +157,7 @@ export default async function BillingContractsPage() {
                 />
               </Field>
               <Field label="Currency">
-                <Input name="currency" defaultValue="USD" maxLength={8} />
+                <Input name="currency" defaultValue="USD" minLength={3} maxLength={3} />
               </Field>
               <Field label="Overage price (micros/unit)">
                 <Input name="overageUnitPriceMicros" type="number" min={1} defaultValue={10} />
@@ -358,8 +356,12 @@ function formatDate(value: Date | string) {
 }
 
 function formatMoneyMicros(value: number, currency: string | null) {
+  const normalized = currency?.toUpperCase() ?? 'XXX'
+  if (normalized === 'XXX' || !Intl.supportedValuesOf('currency').includes(normalized)) {
+    return `${(value / 1_000_000).toLocaleString()} ${normalized}`
+  }
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
-    currency: currency ?? 'USD',
+    currency: normalized,
   }).format(value / 1_000_000)
 }
