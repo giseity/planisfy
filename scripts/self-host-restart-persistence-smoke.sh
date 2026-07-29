@@ -61,7 +61,7 @@ cleanup() {
   local status=$?
   if [[ "$status" -ne 0 ]]; then
     mkdir -p "$LOG_DIR"
-    compose logs --no-color postgres redis minio minio-init api console worker-geodata >"$LOG_DIR/compose.log" 2>&1 || true
+    compose logs --no-color postgres redis minio minio-init api console worker-geodata worker-billing >"$LOG_DIR/compose.log" 2>&1 || true
   fi
   compose down -v --remove-orphans >/dev/null 2>&1 || true
 }
@@ -121,7 +121,7 @@ echo "Running database migrations"
 wait_for_postgres
 (cd "$ROOT_DIR" && pnpm db:migrate)
 
-compose up -d api console worker-geodata
+compose up -d api console worker-geodata worker-billing
 
 wait_for_http "$API_URL/health" "API"
 wait_for_http "$CONSOLE_URL" "Console"
@@ -139,7 +139,7 @@ STYLE_URL="$API_URL/styles/v1/${SEED_HANDLE}/${STYLE_HANDLE}"
 TILEJSON_URL="$API_URL/tiles/v1/${SEED_HANDLE}.${TILESET_HANDLE}.json"
 
 echo "Restarting core services without resetting volumes"
-compose restart postgres redis worker-geodata api console
+compose restart postgres redis worker-geodata worker-billing api console
 
 wait_for_http "$API_URL/health" "Restarted API"
 wait_for_http "$CONSOLE_URL" "Restarted Console"

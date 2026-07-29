@@ -1,51 +1,52 @@
-import { Hono } from "hono";
-import { HTTPException } from "hono/http-exception";
-import { cors } from "hono/cors";
-import { ZodError } from "zod";
-import { randomUUID } from "crypto";
-import { env } from "./env";
-import { requestLogger } from "./shared/logging/logger";
-import { metricsMiddleware } from "./shared/metrics/metrics";
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
+import { cors } from 'hono/cors'
+import { ZodError } from 'zod'
+import { randomUUID } from 'crypto'
+import { env } from './env'
+import { requestLogger } from './shared/logging/logger'
+import { metricsMiddleware } from './shared/metrics/metrics'
 import {
   authMiddleware,
   dualAuthMiddleware,
   optionalAuthMiddleware,
   type AuthEnv,
-} from "./middleware/auth";
-import { apiKeyMiddleware } from "./middleware/api-key";
-import { internalAuthMiddleware } from "./middleware/internal-auth";
-import { rateLimitMiddleware } from "./middleware/rate-limit";
-import { usageLogMiddleware } from "./middleware/usage-log";
-import { healthRoute } from "./domains/health/route";
-import { tilesRoute } from "./domains/tiles/route";
-import { publicStylesRoute } from "./domains/public-styles/route";
-import { fontsRoute } from "./domains/fonts/route";
-import { directionsRoute } from "./domains/directions/route";
-import { geocodingRoute } from "./domains/geocoding/route";
-import { elevationRoute } from "./domains/elevation/route";
-import { staticMapRoute } from "./domains/static-map/route";
-import { storageRoute } from "./domains/storage/route";
-import { emailRoute } from "./domains/email/route";
-import { internalSmokeRoute } from "./domains/internal-smoke/route";
-import { billingWebhookRoute } from "./domains/billing/route";
-import { consoleRoute } from "./domains/console/route";
-import { rootAgentRoute } from "./domains/root-agent/route";
-import { setupRoute } from "./domains/setup/route";
-import { auth } from "@planisfy/auth/server";
-import { apiCorsOrigins } from "./shared/http/cors-origins";
-import { buildPublicOpenApiDocument } from "./openapi/public";
+} from './middleware/auth'
+import { apiKeyMiddleware } from './middleware/api-key'
+import { internalAuthMiddleware } from './middleware/internal-auth'
+import { rateLimitMiddleware } from './middleware/rate-limit'
+import { usageLogMiddleware } from './middleware/usage-log'
+import { healthRoute } from './domains/health/route'
+import { tilesRoute } from './domains/tiles/route'
+import { publicStylesRoute } from './domains/public-styles/route'
+import { fontsRoute } from './domains/fonts/route'
+import { directionsRoute } from './domains/directions/route'
+import { geocodingRoute } from './domains/geocoding/route'
+import { elevationRoute } from './domains/elevation/route'
+import { staticMapRoute } from './domains/static-map/route'
+import { storageRoute } from './domains/storage/route'
+import { emailRoute } from './domains/email/route'
+import { internalSmokeRoute } from './domains/internal-smoke/route'
+import { billingWebhookRoute } from './domains/billing/route'
+import { billingInternalRoute } from './domains/billing/internal-route'
+import { consoleRoute } from './domains/console/route'
+import { rootAgentRoute } from './domains/root-agent/route'
+import { setupRoute } from './domains/setup/route'
+import { auth } from '@planisfy/auth/server'
+import { apiCorsOrigins } from './shared/http/cors-origins'
+import { buildPublicOpenApiDocument } from './openapi/public'
 
-const app = new Hono<AuthEnv>();
+const app = new Hono<AuthEnv>()
 
 // ── Global middleware ───────────────────────────────────────────────────────
-app.use("*", async (c, next) => {
-  const requestId = c.req.header("x-request-id") || randomUUID();
-  c.set("requestId", requestId);
-  c.header("X-Request-Id", requestId);
-  await next();
-});
+app.use('*', async (c, next) => {
+  const requestId = c.req.header('x-request-id') || randomUUID()
+  c.set('requestId', requestId)
+  c.header('X-Request-Id', requestId)
+  await next()
+})
 app.use(
-  "*",
+  '*',
   cors({
     origin: apiCorsOrigins({
       apiUrl: env.NEXT_PUBLIC_API_URL,
@@ -55,86 +56,69 @@ app.use(
       docsUrl: env.NEXT_PUBLIC_DOCS_URL,
     }),
     credentials: true,
-  }),
-);
-app.use("*", requestLogger());
-app.use("*", metricsMiddleware());
+  })
+)
+app.use('*', requestLogger())
+app.use('*', metricsMiddleware())
 
 // ── better-auth handler (signup, login, session, org endpoints) ─────────
 // better-auth's handler accepts a standard Request and returns a Response,
 // which maps directly to Hono's fetch-based API.
-app.on(["GET", "POST"], "/api/auth/*", (c) => {
-  return auth.handler(c.req.raw);
-});
+app.on(['GET', 'POST'], '/api/auth/*', (c) => {
+  return auth.handler(c.req.raw)
+})
 
 // ── Public routes ───────────────────────────────────────────────────────────
-app.get("/openapi.json", (c) => c.json(buildPublicOpenApiDocument()));
-app.route("/", healthRoute);
-app.route("/", setupRoute);
+app.get('/openapi.json', (c) => c.json(buildPublicOpenApiDocument()))
+app.route('/', healthRoute)
+app.route('/', setupRoute)
 
 // ── Published map assets (anonymous public, optional API key/session) ───────
 // Pipeline: API key extraction → optional auth → rate limit → usage log
-const publishedAssetPaths = [
-  "/tiles/*",
-  "/v4/*",
-  "/styles/v1/*",
-  "/fonts/*",
-  "/storage/*",
-];
+const publishedAssetPaths = ['/tiles/*', '/v4/*', '/styles/v1/*', '/fonts/*', '/storage/*']
 for (const path of publishedAssetPaths) {
-  app.use(
-    path,
-    apiKeyMiddleware,
-    optionalAuthMiddleware,
-    rateLimitMiddleware,
-    usageLogMiddleware,
-  );
+  app.use(path, apiKeyMiddleware, optionalAuthMiddleware, rateLimitMiddleware, usageLogMiddleware)
 }
 
 // ── Public API routes (require API key or session) ──────────────────────────
 // Pipeline: API key extraction → auth → rate limit → usage log
 const publicApiPaths = [
-  "/geocoding/*",
-  "/directions/*",
-  "/isochrone/*",
-  "/matching/*",
-  "/matrix/*",
-  "/optimized-trips/*",
-  "/elevation/*",
-  "/static/*",
-];
+  '/geocoding/*',
+  '/directions/*',
+  '/isochrone/*',
+  '/matching/*',
+  '/matrix/*',
+  '/optimized-trips/*',
+  '/elevation/*',
+  '/static/*',
+]
 for (const path of publicApiPaths) {
-  app.use(
-    path,
-    apiKeyMiddleware,
-    dualAuthMiddleware,
-    rateLimitMiddleware,
-    usageLogMiddleware,
-  );
+  app.use(path, apiKeyMiddleware, dualAuthMiddleware, rateLimitMiddleware, usageLogMiddleware)
 }
 
 // ── Public API route handlers ────────────────────────────────────────────────
-app.route("/", tilesRoute);
-app.route("/", publicStylesRoute);
-app.route("/", fontsRoute);
-app.route("/", storageRoute);
-app.route("/", directionsRoute);
-app.route("/", geocodingRoute);
-app.route("/", elevationRoute);
-app.route("/", staticMapRoute);
+app.route('/', tilesRoute)
+app.route('/', publicStylesRoute)
+app.route('/', fontsRoute)
+app.route('/', storageRoute)
+app.route('/', directionsRoute)
+app.route('/', geocodingRoute)
+app.route('/', elevationRoute)
+app.route('/', staticMapRoute)
 
 // ── Internal routes (called by platform services only) ───────────────────────
-app.use("/internal/*", internalAuthMiddleware);
-app.route("/", emailRoute);
-app.route("/", internalSmokeRoute);
-app.route("/", billingWebhookRoute);
+app.use('/internal/*', internalAuthMiddleware)
+app.route('/', emailRoute)
+app.route('/', internalSmokeRoute)
+app.route('/', billingInternalRoute)
+app.route('/', billingWebhookRoute)
 
 // ── Root agent routes (registration token / node token auth) ───────────────
-app.route("/", rootAgentRoute);
+app.route('/', rootAgentRoute)
 
 // ── Protected routes (require session cookie) ───────────────────────────────
-app.use("/console/*", authMiddleware);
-app.route("/console", consoleRoute);
+app.use('/console/*', authMiddleware)
+app.route('/console', consoleRoute)
 
 // ── Centralized error handler ─────────────────────────────────────────────
 app.onError((err, c) => {
@@ -143,16 +127,16 @@ app.onError((err, c) => {
     return c.json(
       {
         error: {
-          code: "VALIDATION_ERROR",
-          message: "Invalid request data",
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request data',
           issues: err.issues.map((i) => ({
-            path: i.path.join("."),
+            path: i.path.join('.'),
             message: i.message,
           })),
         },
       },
-      400,
-    );
+      400
+    )
   }
 
   // Hono HTTP exceptions (thrown by middleware etc.)
@@ -160,47 +144,47 @@ app.onError((err, c) => {
     return c.json(
       {
         error: {
-          code: "HTTP_ERROR",
+          code: 'HTTP_ERROR',
           message: err.message,
         },
       },
-      err.status,
-    );
+      err.status
+    )
   }
 
   // JSON parse errors from malformed request bodies
-  if (err instanceof SyntaxError && err.message.includes("JSON")) {
+  if (err instanceof SyntaxError && err.message.includes('JSON')) {
     return c.json(
       {
         error: {
-          code: "BAD_REQUEST",
-          message: "Invalid JSON in request body",
+          code: 'BAD_REQUEST',
+          message: 'Invalid JSON in request body',
         },
       },
-      400,
-    );
+      400
+    )
   }
 
   // Everything else → 500
-  const requestId = c.get("requestId");
-  console.error("[unhandled]", {
+  const requestId = c.get('requestId')
+  console.error('[unhandled]', {
     requestId,
     error: err.message,
     stack: err.stack,
-  });
+  })
   return c.json(
     {
       error: {
-        code: "INTERNAL_ERROR",
+        code: 'INTERNAL_ERROR',
         message:
-          env.NODE_ENV === "production"
-            ? "An unexpected error occurred"
-            : err.message || "Unknown error",
+          env.NODE_ENV === 'production'
+            ? 'An unexpected error occurred'
+            : err.message || 'Unknown error',
         requestId,
       },
     },
-    500,
-  );
-});
+    500
+  )
+})
 
-export { app };
+export { app }

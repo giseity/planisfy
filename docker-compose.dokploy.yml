@@ -165,6 +165,24 @@ services:
     networks:
       - planisfy-internal
 
+  worker-billing:
+    build:
+      context: .
+      dockerfile: apps/worker-billing/Dockerfile
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:4000
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
+      BILLING_WEBHOOK_POLL_INTERVAL_MS: ${BILLING_WEBHOOK_POLL_INTERVAL_MS:-5000}
+      BILLING_RECONCILE_INTERVAL_MS: ${BILLING_RECONCILE_INTERVAL_MS:-3600000}
+      BILLING_CLEANUP_INTERVAL_MS: ${BILLING_CLEANUP_INTERVAL_MS:-86400000}
+      NODE_ENV: production
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - planisfy-internal
+
   console:
     build:
       context: .

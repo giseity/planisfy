@@ -30,6 +30,7 @@ This repository contains the open-source Planisfy platform implementation:
 | `apps/docs`                 | Fumadocs public documentation site.                                                                           |
 | `apps/marketing`            | Public website and managed-mode auth entry pages.                                                             |
 | `apps/worker-geodata`       | BullMQ/outbox worker for uploads, imports, tiling, and artifact ledger updates.                               |
+| `apps/worker-billing`       | Scheduled managed-billing reconciliation, cleanup, and durable webhook processing.                            |
 | `apps/elevation`            | Local SRTM HGT elevation lookup service used by the API in Docker Compose.                                    |
 | `apps/static-renderer`      | Local MapLibre PNG renderer used by the static map API route.                                                 |
 | `apps/self-host-supervisor` | Optional local-only supervisor for guarded backup, upgrade, and rollback actions.                             |

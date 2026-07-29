@@ -90,6 +90,8 @@ jobs:
             dockerfile: apps/marketing/Dockerfile
           - app: worker-geodata
             dockerfile: apps/worker-geodata/Dockerfile
+          - app: worker-billing
+            dockerfile: apps/worker-billing/Dockerfile
           - app: elevation
             dockerfile: apps/elevation/Dockerfile
           - app: static-renderer
@@ -137,6 +139,8 @@ jobs:
             dockerfile: apps/marketing/Dockerfile
           - app: worker-geodata
             dockerfile: apps/worker-geodata/Dockerfile
+          - app: worker-billing
+            dockerfile: apps/worker-billing/Dockerfile
           - app: elevation
             dockerfile: apps/elevation/Dockerfile
           - app: static-renderer

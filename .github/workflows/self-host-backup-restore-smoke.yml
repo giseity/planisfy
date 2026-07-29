@@ -10,6 +10,7 @@ on:
       - 'apps/api/**'
       - 'apps/console/**'
       - 'apps/worker-geodata/**'
+      - 'apps/worker-billing/**'
       - 'infra/docker/**'
       - 'packages/database/**'
       - 'packages/storage/**'
