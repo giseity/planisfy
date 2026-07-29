@@ -421,6 +421,7 @@ export interface ConsoleOperationsOverview {
   previewLinks: ConsolePreviewLink[];
   customDomains: ConsoleCustomDomain[];
   workflowTemplates: ConsoleWorkflowTemplate[];
+  truncatedCollections: string[];
   workerHealth: ConsoleWorkerHealth;
   staleJobReconciliation: ConsoleStaleJobReconciliation;
 }

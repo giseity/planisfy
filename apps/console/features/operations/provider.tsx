@@ -34,7 +34,6 @@ import {
   type ConsoleSourceImport,
   type ConsoleTileset,
 } from '@/lib/api'
-import { clientEnv } from '@/env.client'
 import type { DeploymentMode } from '@/lib/deployment-mode'
 
 const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
@@ -59,6 +58,7 @@ const EMPTY_OVERVIEW: ConsoleOperationsOverview = {
   previewLinks: [],
   customDomains: [],
   workflowTemplates: [],
+  truncatedCollections: [],
   workerHealth: { status: 'offline', message: 'Not checked', latencyMs: null },
   staleJobReconciliation: { reconciled: 0, latest: [] },
 }
@@ -149,43 +149,35 @@ export function OperationsProvider({ children }: { children: React.ReactNode }) 
   }, [load])
 
   React.useEffect(() => {
-    let closed = false
-    let reconnectTimer: number | undefined
-    let source: EventSource | undefined
-
-    const connect = () => {
-      source?.close()
-      source = new EventSource(operationsEventsUrl(), {
-        withCredentials: true,
-      })
-
-      source.addEventListener('operations', (event) => {
-        try {
-          setOverview(JSON.parse((event as MessageEvent<string>).data) as ConsoleOperationsOverview)
-          setLoading(false)
-        } catch {
-          window.setTimeout(() => load({ silent: true }), 0)
-        }
-      })
-
-      source.addEventListener('operations-error', () => {
-        window.setTimeout(() => load({ silent: true }), 0)
-      })
-
-      source.onerror = () => {
-        source?.close()
-        if (closed) return
-        window.setTimeout(() => load({ silent: true }), 0)
-        reconnectTimer = window.setTimeout(connect, 5_000)
+    let requestInFlight = false
+    const refresh = async () => {
+      if (
+        requestInFlight ||
+        document.visibilityState !== 'visible' ||
+        !navigator.onLine
+      ) {
+        return
+      }
+      requestInFlight = true
+      try {
+        await load({ silent: true })
+      } finally {
+        requestInFlight = false
       }
     }
-
-    connect()
+    const onAvailabilityChange = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) void refresh()
+    }
+    const timer = window.setInterval(() => void refresh(), 10_000)
+    document.addEventListener('visibilitychange', onAvailabilityChange)
+    window.addEventListener('focus', onAvailabilityChange)
+    window.addEventListener('online', onAvailabilityChange)
 
     return () => {
-      closed = true
-      source?.close()
-      if (reconnectTimer) window.clearTimeout(reconnectTimer)
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onAvailabilityChange)
+      window.removeEventListener('focus', onAvailabilityChange)
+      window.removeEventListener('online', onAvailabilityChange)
     }
   }, [load])
 
@@ -229,10 +221,6 @@ export function OperationsProvider({ children }: { children: React.ReactNode }) 
       <OperationsShell>{children}</OperationsShell>
     </OperationsContext.Provider>
   )
-}
-
-function operationsEventsUrl() {
-  return `${clientEnv.NEXT_PUBLIC_CONSOLE_API_PATH.replace(/\/$/, '')}/operations/events`
 }
 
 export function useOperations() {
@@ -320,6 +308,13 @@ function OperationsShell({ children }: { children: React.ReactNode }) {
           icon={<Globe className="h-4 w-4" />}
         />
       </div>
+
+      {overview.truncatedCollections.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Some operational lists are limited to the newest 100 entries. Open the resource page for
+          complete history.
+        </p>
+      )}
 
       <nav className="flex flex-wrap gap-1 rounded-md bg-muted/20 p-1">
         {visibleRoutes.map((route) => {

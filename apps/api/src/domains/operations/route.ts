@@ -104,7 +104,6 @@ const OPERATIONS_PERMISSIONS = [
 ] as const
 
 operationsRoute.use('/operations', requireAnyOrgPermission([...OPERATIONS_PERMISSIONS]))
-operationsRoute.use('/operations/events', requireAnyOrgPermission([...OPERATIONS_PERMISSIONS]))
 operationsRoute.use('/operations', requireManagedPlanFeature('operations'))
 operationsRoute.use('/operations/*', requireManagedPlanFeature('operations'))
 operationsRoute.use('/operations/jobs/*', requireOrgPermission('operations.jobs.manage'))
@@ -506,9 +505,32 @@ export type WorkflowTemplateApplication =
   | { category: 'preview'; values: z.infer<typeof previewLinkSchema> }
   | { category: 'storage'; values: Record<string, unknown> }
 
+const OPERATIONS_COLLECTION_LIMIT = 100
+const OPERATIONS_CACHE_TTL_MS = 5_000
+const OPERATIONS_CACHE_MAX_ACCOUNTS = 250
+type CachedOperationsOverview = Awaited<ReturnType<typeof buildOperationsOverview>>
+const operationsOverviewCache = new Map<
+  string,
+  {
+    expiresAt: number
+    lastAccessedAt: number
+    value?: CachedOperationsOverview
+    promise?: Promise<CachedOperationsOverview>
+  }
+>()
+
 operationsRoute.get('/operations', async (c) => {
   const accountId = c.get('ownerId')
-  return c.json({ data: await buildOperationsOverview(accountId) })
+  const retryAfter = await consumeDashboardRateLimit(`operations-read:${accountId}`)
+  if (retryAfter) {
+    c.header('Retry-After', String(retryAfter))
+    return c.json(
+      { error: { code: 'RATE_LIMITED', message: 'Operations refresh limit exceeded.' } },
+      429
+    )
+  }
+  c.header('Cache-Control', 'private, no-store')
+  return c.json({ data: await cachedOperationsOverview(accountId) })
 })
 
 export function validateScheduleInput(input: unknown) {
@@ -543,66 +565,6 @@ export function canConsoleCreateScheduleKind(
 ) {
   return kind === 'tileset_rebuild' || kind === 'source_import'
 }
-
-operationsRoute.get('/operations/events', async (c) => {
-  const accountId = c.get('ownerId')
-  const encoder = new TextEncoder()
-  const signal = c.req.raw.signal
-  let closed = false
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const send = (event: string, data: unknown) => {
-        if (closed) return
-        controller.enqueue(encoder.encode(formatSseEvent(event, data)))
-      }
-
-      try {
-        let lastSignature = ''
-        let lastHeartbeat = Date.now()
-
-        while (!closed && !signal.aborted) {
-          const overview = await buildOperationsOverview(accountId)
-          const signature = operationsOverviewSignature(overview)
-          if (signature !== lastSignature) {
-            send('operations', overview)
-            lastSignature = signature
-          } else if (Date.now() - lastHeartbeat > 25_000) {
-            send('heartbeat', { at: new Date().toISOString() })
-            lastHeartbeat = Date.now()
-          }
-
-          await abortableDelay(2_000, signal)
-        }
-      } catch (err) {
-        if (!signal.aborted && !closed) {
-          send('operations-error', {
-            message: err instanceof Error ? err.message : 'Operations stream failed',
-          })
-        }
-      } finally {
-        closed = true
-        try {
-          controller.close()
-        } catch {
-          // The client may already have closed the stream.
-        }
-      }
-    },
-    cancel() {
-      closed = true
-    },
-  })
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    },
-  })
-})
 
 async function buildOperationsOverview(accountId: string) {
   const summaryWindowStartedAt = new Date(Date.now() - 24 * 60 * 60 * 1000)
@@ -668,14 +630,16 @@ async function buildOperationsOverview(accountId: string) {
       .where(
         and(eq(notificationChannels.accountId, accountId), isNull(notificationChannels.deletedAt))
       )
-      .orderBy(desc(notificationChannels.createdAt)),
+      .orderBy(desc(notificationChannels.createdAt))
+      .limit(OPERATIONS_COLLECTION_LIMIT + 1),
     db
       .select()
       .from(scheduledOperations)
       .where(
         and(eq(scheduledOperations.accountId, accountId), isNull(scheduledOperations.deletedAt))
       )
-      .orderBy(desc(scheduledOperations.createdAt)),
+      .orderBy(desc(scheduledOperations.createdAt))
+      .limit(OPERATIONS_COLLECTION_LIMIT + 1),
     db
       .select()
       .from(artifactBackups)
@@ -686,7 +650,8 @@ async function buildOperationsOverview(accountId: string) {
       .select()
       .from(workerNodes)
       .where(and(eq(workerNodes.accountId, accountId), isNull(workerNodes.deletedAt)))
-      .orderBy(desc(workerNodes.updatedAt)),
+      .orderBy(desc(workerNodes.updatedAt))
+      .limit(OPERATIONS_COLLECTION_LIMIT + 1),
     db
       .select()
       .from(routingGraphBuilds)
@@ -715,12 +680,14 @@ async function buildOperationsOverview(accountId: string) {
       .select()
       .from(previewLinks)
       .where(and(eq(previewLinks.accountId, accountId), isNull(previewLinks.deletedAt)))
-      .orderBy(desc(previewLinks.createdAt)),
+      .orderBy(desc(previewLinks.createdAt))
+      .limit(OPERATIONS_COLLECTION_LIMIT + 1),
     db
       .select()
       .from(customDomains)
       .where(and(eq(customDomains.accountId, accountId), isNull(customDomains.deletedAt)))
-      .orderBy(desc(customDomains.createdAt)),
+      .orderBy(desc(customDomains.createdAt))
+      .limit(OPERATIONS_COLLECTION_LIMIT + 1),
     listTemplates(accountId),
     fetchWorkerHealth(),
     fetchStaleJobReconciliationSummary(accountId),
@@ -728,6 +695,10 @@ async function buildOperationsOverview(accountId: string) {
 
   const managed = env.DEPLOYMENT_MODE === 'managed'
   const summary = jobSummaryRows[0]
+  const visibleSchedules = managed
+    ? schedules.filter((schedule) => schedule.kind !== 'custom_command')
+    : schedules
+  const visibleTemplates = managed ? [] : templates
 
   return {
     deploymentMode: env.DEPLOYMENT_MODE,
@@ -744,23 +715,74 @@ async function buildOperationsOverview(accountId: string) {
       windowStartedAt: summaryWindowStartedAt.toISOString(),
       latestActiveJob: activeJobRows[0] ?? null,
     },
-    notificationChannels: channels.map(stripNotificationSecrets),
-    scheduledOperations: managed
-      ? schedules.filter((schedule) => schedule.kind !== 'custom_command')
-      : schedules,
+    notificationChannels: channels.slice(0, OPERATIONS_COLLECTION_LIMIT).map(stripNotificationSecrets),
+    scheduledOperations: visibleSchedules.slice(0, OPERATIONS_COLLECTION_LIMIT),
     artifactBackups: managed ? [] : backups,
-    workerNodes: managed ? [] : nodes,
+    workerNodes: managed ? [] : nodes.slice(0, OPERATIONS_COLLECTION_LIMIT),
     routingGraphBuilds: managed ? [] : routingBuilds.map(serializeRoutingGraphBuild),
     basemapBuilds: managed ? [] : basemapBuildRows.map(serializeBasemapBuild),
     basemapReleases: managed ? [] : basemapReleaseRows,
     runtimeInstallations: managed ? [] : runtimeInstallationRows,
-    previewLinks: previews,
-    customDomains: domains.map(serializeCustomDomain),
-    workflowTemplates: managed ? [] : templates,
+    previewLinks: previews.slice(0, OPERATIONS_COLLECTION_LIMIT),
+    customDomains: domains.slice(0, OPERATIONS_COLLECTION_LIMIT).map(serializeCustomDomain),
+    workflowTemplates: visibleTemplates.slice(0, OPERATIONS_COLLECTION_LIMIT),
+    truncatedCollections: [
+      channels.length > OPERATIONS_COLLECTION_LIMIT ? 'notificationChannels' : null,
+      visibleSchedules.length > OPERATIONS_COLLECTION_LIMIT ? 'scheduledOperations' : null,
+      !managed && nodes.length > OPERATIONS_COLLECTION_LIMIT ? 'workerNodes' : null,
+      previews.length > OPERATIONS_COLLECTION_LIMIT ? 'previewLinks' : null,
+      domains.length > OPERATIONS_COLLECTION_LIMIT ? 'customDomains' : null,
+      visibleTemplates.length > OPERATIONS_COLLECTION_LIMIT ? 'workflowTemplates' : null,
+    ].filter((name): name is string => name !== null),
     workerHealth: managed
       ? { status: 'managed' as const, message: 'Platform-operated runtime', latencyMs: null }
       : workerHealth,
     staleJobReconciliation,
+  }
+}
+
+async function cachedOperationsOverview(accountId: string) {
+  const now = Date.now()
+  const cached = operationsOverviewCache.get(accountId)
+  if (cached?.value && cached.expiresAt > now) {
+    cached.lastAccessedAt = now
+    return cached.value
+  }
+  if (cached?.promise) {
+    cached.lastAccessedAt = now
+    return cached.promise
+  }
+
+  const entry = cached ?? { expiresAt: 0, lastAccessedAt: now }
+  entry.lastAccessedAt = now
+  entry.promise = buildOperationsOverview(accountId)
+    .then((value) => {
+      entry.value = value
+      entry.expiresAt = Date.now() + OPERATIONS_CACHE_TTL_MS
+      return value
+    })
+    .finally(() => {
+      entry.promise = undefined
+      evictOperationsOverviewCache()
+    })
+  operationsOverviewCache.set(accountId, entry)
+  return entry.promise
+}
+
+function evictOperationsOverviewCache() {
+  const now = Date.now()
+  for (const [accountId, entry] of operationsOverviewCache) {
+    if (!entry.promise && entry.expiresAt <= now) operationsOverviewCache.delete(accountId)
+  }
+  if (operationsOverviewCache.size <= OPERATIONS_CACHE_MAX_ACCOUNTS) return
+  const oldest = [...operationsOverviewCache.entries()]
+    .filter(([, entry]) => !entry.promise)
+    .sort((left, right) => left[1].lastAccessedAt - right[1].lastAccessedAt)
+  while (
+    operationsOverviewCache.size > OPERATIONS_CACHE_MAX_ACCOUNTS &&
+    oldest.length > 0
+  ) {
+    operationsOverviewCache.delete(oldest.shift()![0])
   }
 }
 
@@ -2210,6 +2232,7 @@ async function listTemplates(accountId: string) {
     .from(workflowTemplates)
     .where(and(isNull(workflowTemplates.deletedAt), eq(workflowTemplates.accountId, accountId)))
     .orderBy(desc(workflowTemplates.createdAt))
+    .limit(OPERATIONS_COLLECTION_LIMIT + 1)
   return [...builtInTemplates(), ...rows]
 }
 
@@ -4059,25 +4082,6 @@ async function lockArtifactOperation(tx: AdvisoryLockExecutor, storageObjectId: 
 
 export function formatSseEvent(event: string, data: unknown) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
-}
-
-function abortableDelay(ms: number, signal: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new DOMException('Aborted', 'AbortError'))
-      return
-    }
-
-    const timeout = setTimeout(resolve, ms)
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timeout)
-        reject(new DOMException('Aborted', 'AbortError'))
-      },
-      { once: true }
-    )
-  })
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
