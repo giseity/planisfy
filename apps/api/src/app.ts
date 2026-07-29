@@ -70,12 +70,17 @@ app.on(["GET", "POST"], "/api/auth/*", (c) => {
 // ── Public routes ───────────────────────────────────────────────────────────
 app.get("/openapi.json", (c) => c.json(buildPublicOpenApiDocument()));
 app.route("/", healthRoute);
-app.route("/", storageRoute);
 app.route("/", setupRoute);
 
 // ── Published map assets (anonymous public, optional API key/session) ───────
 // Pipeline: API key extraction → optional auth → rate limit → usage log
-const publishedAssetPaths = ["/tiles/*", "/v4/*", "/styles/v1/*", "/fonts/*"];
+const publishedAssetPaths = [
+  "/tiles/*",
+  "/v4/*",
+  "/styles/v1/*",
+  "/fonts/*",
+  "/storage/*",
+];
 for (const path of publishedAssetPaths) {
   app.use(
     path,
@@ -112,6 +117,7 @@ for (const path of publicApiPaths) {
 app.route("/", tilesRoute);
 app.route("/", publicStylesRoute);
 app.route("/", fontsRoute);
+app.route("/", storageRoute);
 app.route("/", directionsRoute);
 app.route("/", geocodingRoute);
 app.route("/", elevationRoute);

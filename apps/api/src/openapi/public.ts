@@ -177,6 +177,7 @@ const routeConfigs = [
     path: '/styles/v1/{owner}/{handle}',
     request: { params: ownerStyleParamsSchema },
     responses: { 200: jsonResponse('Published style JSON'), 404: errorResponse },
+    security: [],
     tags: ['Styles'],
   }),
   createRoute({
@@ -184,6 +185,7 @@ const routeConfigs = [
     path: '/styles/v1/{owner}/{handle}/sprite.json',
     request: { params: ownerStyleParamsSchema },
     responses: { 200: jsonResponse('Style sprite metadata'), 404: errorResponse },
+    security: [],
     tags: ['Styles'],
   }),
   createRoute({
@@ -191,6 +193,7 @@ const routeConfigs = [
     path: '/styles/v1/{owner}/{handle}/sprite.png',
     request: { params: ownerStyleParamsSchema },
     responses: { 200: pngResponse, 404: errorResponse },
+    security: [],
     tags: ['Styles'],
   }),
   createRoute({
@@ -201,6 +204,7 @@ const routeConfigs = [
       200: jsonResponse('TileJSON for the current tileset version'),
       404: errorResponse,
     },
+    security: [],
     tags: ['Tiles'],
   }),
   createRoute({
@@ -221,6 +225,7 @@ const routeConfigs = [
       200: jsonResponse('TileJSON for an immutable tileset version'),
       404: errorResponse,
     },
+    security: [],
     tags: ['Tiles'],
   }),
   createRoute({
@@ -242,6 +247,7 @@ const routeConfigs = [
       }),
     },
     responses: { 200: pbfResponse, 400: errorResponse, 404: errorResponse },
+    security: [],
     tags: ['Tiles'],
   }),
   createRoute({
@@ -254,6 +260,7 @@ const routeConfigs = [
       }),
     },
     responses: { 200: pbfResponse, 400: errorResponse },
+    security: [],
     tags: ['Fonts'],
   }),
   createRoute({
@@ -418,7 +425,12 @@ export function buildPublicOpenApiDocument(): PublicOpenApiDocument {
       { name: 'Elevation' },
       { name: 'Static Maps' },
     ],
-    security: [{ ApiKeyAuth: [] }, { CookieAuth: [] }],
+    security: [
+      { ApiKeyAuth: [] },
+      { BearerAuth: [] },
+      { SecureSessionCookie: [] },
+      { SessionCookie: [] },
+    ],
   })
 
   const mutableDocument = document as unknown as PublicOpenApiDocument
@@ -430,10 +442,19 @@ export function buildPublicOpenApiDocument(): PublicOpenApiDocument {
       in: 'header',
       name: 'x-api-key',
     },
-    CookieAuth: {
+    BearerAuth: {
+      type: 'http',
+      scheme: 'bearer',
+    },
+    SecureSessionCookie: {
       type: 'apiKey',
       in: 'cookie',
-      name: 'planisfy.session_token',
+      name: '__Secure-better-auth.session_token',
+    },
+    SessionCookie: {
+      type: 'apiKey',
+      in: 'cookie',
+      name: 'better-auth.session_token',
     },
   }
 

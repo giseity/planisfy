@@ -22,6 +22,7 @@ import {
   buildMartinTileUrl,
   martinTileResponseHeaders,
   tileWorkerUrlForPath,
+  toTileJson,
 } from "./route";
 
 test("parsePublicTilesetSlug accepts stable and immutable dotted aliases", () => {
@@ -99,6 +100,42 @@ test("publicTilesetBaseUrl preserves stable and immutable URL contracts", () => 
   assert.equal(
     publicTilesetBaseUrl({ ...params, mode: "dotted-version" }),
     "https://api.example.com/tiles/v1/acme.roads@3",
+  );
+});
+
+test("public TileJSON omits internal artifact locators", () => {
+  const tileJson = toTileJson(
+    {
+      owner: "acme",
+      tileset: {
+        handle: "roads",
+        name: "Roads",
+        description: null,
+        minZoom: 0,
+        maxZoom: 14,
+        bounds: null,
+        layerMetadata: null,
+      },
+      version: {
+        version: 3,
+        minZoom: 0,
+        maxZoom: 14,
+        bounds: null,
+        schema: null,
+      },
+      artifact: {
+        provider: "local",
+        bucket: "private",
+        storageKey: "accounts/secret/tilesets/internal.pmtiles",
+      },
+    } as Parameters<typeof toTileJson>[0],
+    "stable",
+  );
+
+  assert.equal("artifact" in tileJson, false);
+  assert.match(
+    tileJson.tiles[0] ?? "",
+    /\/tiles\/v1\/acme\/roads\/\{z\}\/\{x\}\/\{y\}$/,
   );
 });
 

@@ -7,6 +7,7 @@ import {
   tilesets,
 } from "@planisfy/database";
 import { getStorage } from "../../shared/storage/storage";
+import { createPublishedStorageResponse } from "./stream-response";
 
 export const storageRoute = new Hono();
 
@@ -20,6 +21,7 @@ storageRoute.get("/storage/*", async (c) => {
   const [object] = await db
     .select({
       contentType: storageObjects.contentType,
+      size: storageObjects.size,
     })
     .from(storageObjects)
     .innerJoin(
@@ -45,12 +47,11 @@ storageRoute.get("/storage/*", async (c) => {
   }
 
   try {
-    const data = await getStorage().download(key);
-    return new Response(new Uint8Array(data), {
-      headers: {
-        "Content-Type": object.contentType || "application/octet-stream",
-        "Cache-Control": "public, max-age=31536000, immutable",
-      },
+    return createPublishedStorageResponse({
+      storage: getStorage(),
+      key,
+      contentType: object.contentType,
+      size: object.size,
     });
   } catch {
     return c.json({ error: { code: "NOT_FOUND" } }, 404);

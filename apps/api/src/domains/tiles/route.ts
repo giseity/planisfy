@@ -327,7 +327,7 @@ async function serveResolvedTile(
   return new Response(toResponseArrayBuffer(result.data), { headers })
 }
 
-function toTileJson(
+export function toTileJson(
   resolved: ResolvedTileset,
   mode: 'stable' | 'version' | 'dotted-stable' | 'dotted-version'
 ) {
@@ -351,7 +351,6 @@ function toTileJson(
     maxzoom: resolved.version!.maxZoom ?? resolved.tileset.maxZoom ?? 14,
     bounds: resolved.version!.bounds ?? resolved.tileset.bounds ?? undefined,
     vector_layers: extractVectorLayers(resolved.version!.schema ?? resolved.tileset.layerMetadata),
-    artifact: resolved.artifact?.storageKey,
   }
 }
 

@@ -71,8 +71,10 @@ staticMapRoute.get('/static/v1/:owner/:style/:center/:size{.+\\.png$}', async (c
       }
 
       const body = await res.arrayBuffer()
-      c.header('Content-Type', 'image/png')
-      c.header('Cache-Control', 'public, max-age=3600')
+      const responseHeaders = staticMapResponseHeaders(res.headers, headers)
+      c.header('Content-Type', responseHeaders.contentType)
+      c.header('Cache-Control', responseHeaders.cacheControl)
+      c.header('Vary', responseHeaders.vary)
       return c.body(body)
     } catch (err) {
       console.error('[static] Render error:', err)
@@ -103,4 +105,23 @@ function forwardedRenderHeaders(headers: Headers) {
   }
 
   return forwarded
+}
+
+export function staticMapResponseHeaders(
+  upstreamHeaders: Headers,
+  forwardedHeaders: Record<string, string>
+) {
+  const authenticated = Object.keys(forwardedHeaders).length > 0
+  const upstreamCacheControl = upstreamHeaders.get('cache-control')
+  const cacheControl = authenticated
+    ? 'private, no-store'
+    : upstreamCacheControl?.toLowerCase().includes('public')
+      ? upstreamCacheControl
+      : 'private, no-store'
+
+  return {
+    contentType: upstreamHeaders.get('content-type') || 'image/png',
+    cacheControl,
+    vary: 'Authorization, Cookie, X-API-Key',
+  }
 }
