@@ -83,7 +83,7 @@ export function Pricing({ signUpHref }: PricingProps) {
                   size="marketing"
                   variant={plan.highlighted ? 'default' : 'outline'}
                 >
-                  <Link href={signUpHref}>{plan.cta}</Link>
+                  <Link href={plan.id === 'platform' ? '/contact' : signUpHref}>{plan.cta}</Link>
                 </Button>
               </CardFooter>
             </Card>
