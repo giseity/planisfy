@@ -74,6 +74,7 @@ import {
 import { sendEmail } from '../email/email'
 import { buildNotificationPayload } from './notification-adapters'
 import { SourceUrlRejectedError, validateOutboundUrl } from '../imports/source-url-policy'
+import { consumeNotificationTestRateLimit } from '../../middleware/rate-limit'
 
 export const operationsRoute = new Hono<AuthEnv>()
 
@@ -321,9 +322,7 @@ const basemapBuildConfigSchema = z
   .strict()
   .refine(
     (value) =>
-      value.minZoom === undefined ||
-      value.maxZoom === undefined ||
-      value.minZoom <= value.maxZoom,
+      value.minZoom === undefined || value.maxZoom === undefined || value.minZoom <= value.maxZoom,
     { message: 'minZoom must be less than or equal to maxZoom' }
   )
 
@@ -438,17 +437,21 @@ const previewLinkSchema = z.object({
 const customDomainSchema = z.object({
   resourceType: z.string().min(1).max(64),
   resourceId: z.string().uuid().optional(),
-  host: z.string().min(1).max(255).transform((value, ctx) => {
-    try {
-      return normalizeCustomDomainHost(value)
-    } catch (err) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: err instanceof Error ? err.message : 'Host is not a valid public domain name',
-      })
-      return z.NEVER
-    }
-  }),
+  host: z
+    .string()
+    .min(1)
+    .max(255)
+    .transform((value, ctx) => {
+      try {
+        return normalizeCustomDomainHost(value)
+      } catch (err) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: err instanceof Error ? err.message : 'Host is not a valid public domain name',
+        })
+        return z.NEVER
+      }
+    }),
   path: z.string().min(1).max(255).default('/'),
   tlsEnabled: z.boolean().default(true),
   metadata: z.record(z.string(), z.unknown()).default({}),
@@ -895,6 +898,20 @@ operationsRoute.post('/operations/notification-channels/:id/test', async (c) => 
     )
     .limit(1)
   if (!channel) return notFound(c, 'Notification channel not found')
+
+  const retryAfter = await consumeNotificationTestRateLimit(accountId, channel.id)
+  if (retryAfter) {
+    c.header('Retry-After', String(retryAfter))
+    return c.json(
+      {
+        error: {
+          code: 'RATE_LIMITED',
+          message: `Notification test limit exceeded. Retry after ${retryAfter} seconds.`,
+        },
+      },
+      429
+    )
+  }
 
   const result = await sendTestNotification(channel)
   const proof = buildNotificationDeliveryProof(result)
@@ -2464,9 +2481,7 @@ async function sendOutboundNotification(
     async (response) => {
       response.resume()
       return {
-        ok: Boolean(
-          response.statusCode && response.statusCode >= 200 && response.statusCode < 300
-        ),
+        ok: Boolean(response.statusCode && response.statusCode >= 200 && response.statusCode < 300),
         status: response.statusCode ?? 502,
         statusText: response.statusMessage ?? '',
       }
@@ -2563,12 +2578,7 @@ async function verifyDomainDns(host: string, token: string) {
 
 export function normalizeCustomDomainHost(value: string) {
   const input = value.trim().replace(/\.$/, '')
-  if (
-    input.includes('/') ||
-    input.includes(':') ||
-    input.includes('@') ||
-    input.includes('\\')
-  ) {
+  if (input.includes('/') || input.includes(':') || input.includes('@') || input.includes('\\')) {
     throw new Error('Host must be a domain name without protocol, port, credentials, or path')
   }
   const host = domainToASCII(input).toLowerCase()
@@ -2579,10 +2589,7 @@ export function normalizeCustomDomainHost(value: string) {
     isIP(host) ||
     labels.length < 2 ||
     labels.some(
-      (label) =>
-        !label ||
-        label.length > 63 ||
-        !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(label)
+      (label) => !label || label.length > 63 || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(label)
     )
   ) {
     throw new Error('Host must be a valid multi-label domain name')

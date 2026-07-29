@@ -48,6 +48,8 @@ export function NotificationsTab({
   const [provider, setProvider] = useState<ConsoleNotificationChannel['provider']>('webhook')
   const [target, setTarget] = useState('')
   const [events, setEvents] = useState('job.failed,job.succeeded,schedule.due')
+  const [testingChannelId, setTestingChannelId] = useState<string | null>(null)
+  const [cooldownChannelIds, setCooldownChannelIds] = useState<string[]>([])
 
   async function createChannel() {
     await runAction(
@@ -65,6 +67,28 @@ export function NotificationsTab({
         onChanged()
       }
     )
+  }
+
+  async function testChannel(id: string) {
+    if (testingChannelId || cooldownChannelIds.includes(id)) return
+    setTestingChannelId(id)
+    try {
+      const result = await api.testNotificationChannel(id)
+      if (result.data.delivered) {
+        toast.success(result.data.message || 'Test delivered')
+      } else {
+        toast.error(result.data.message || 'Test delivery failed')
+      }
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Test delivery failed')
+    } finally {
+      setTestingChannelId(null)
+      setCooldownChannelIds((current) => (current.includes(id) ? current : [...current, id]))
+      window.setTimeout(() => {
+        setCooldownChannelIds((current) => current.filter((channelId) => channelId !== id))
+      }, 60_000)
+    }
   }
 
   return (
@@ -147,7 +171,12 @@ export function NotificationsTab({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => testChannel(channel.id, onChanged)}>
+                        <DropdownMenuItem
+                          disabled={
+                            testingChannelId !== null || cooldownChannelIds.includes(channel.id)
+                          }
+                          onSelect={() => testChannel(channel.id)}
+                        >
                           <CheckCircle2 className="mr-2 h-4 w-4" />
                           Send test
                         </DropdownMenuItem>
@@ -178,18 +207,4 @@ export function NotificationsTab({
       </Card>
     </div>
   )
-}
-
-async function testChannel(id: string, onChanged: () => void) {
-  try {
-    const result = await api.testNotificationChannel(id)
-    if (result.data.delivered) {
-      toast.success(result.data.message || 'Test delivered')
-    } else {
-      toast.error(result.data.message || 'Test delivery failed')
-    }
-    onChanged()
-  } catch (err) {
-    toast.error(err instanceof Error ? err.message : 'Test delivery failed')
-  }
 }

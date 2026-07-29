@@ -19,6 +19,7 @@ import { env } from '../../env'
 import { isPeliasConfigured } from './geocoding-config'
 import { probeValhallaReadiness } from './valhalla-readiness'
 import { isInternalRequestAuthorized } from '../../middleware/internal-auth'
+import { consumePreflightRateLimit } from '../../middleware/rate-limit'
 
 export const setupRoute = new Hono<AuthEnv>()
 
@@ -49,6 +50,9 @@ const LOCAL_DEMO_STYLE_FIXTURES = [
   'styles/planisfy-streets-light-v1.json',
   'styles/planisfy-streets-dark-v1.json',
 ]
+const PREFLIGHT_CACHE_TTL_MS = 15_000
+const preflightCache = new Map<DeploymentMode, { expiresAt: number; value: PreflightCheck[] }>()
+const preflightInFlight = new Map<DeploymentMode, Promise<PreflightCheck[]>>()
 
 setupRoute.get('/setup/preflight', async (c) => {
   if (!isPublicSetupPreflightAllowed(c.req.path, c.req.raw.headers)) {
@@ -60,8 +64,27 @@ setupRoute.get('/setup/preflight', async (c) => {
   const orgDenial = consoleOrgPermissionDenied(c)
   if (orgDenial) return orgDenial
 
+  const identity =
+    c.get('ownerId') ||
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'unknown'
+  const retryAfter = await consumePreflightRateLimit(identity)
+  if (retryAfter) {
+    c.header('Retry-After', String(retryAfter))
+    return c.json(
+      {
+        error: {
+          code: 'RATE_LIMITED',
+          message: `Setup preflight limit exceeded. Retry after ${retryAfter} seconds.`,
+        },
+      },
+      429
+    )
+  }
+
   const deploymentMode = activeDeploymentMode()
-  const checks = await buildPreflightChecks(deploymentMode)
+  const checks = await cachedPreflightChecks(deploymentMode)
   const capabilities = buildCapabilityStates(deploymentMode, checks)
   const summary = checks.reduce(
     (acc, check) => {
@@ -87,6 +110,31 @@ setupRoute.get('/setup/preflight', async (c) => {
     },
   })
 })
+
+async function cachedPreflightChecks(deploymentMode: DeploymentMode): Promise<PreflightCheck[]> {
+  if (process.env.NODE_ENV === 'test') {
+    return buildPreflightChecks(deploymentMode)
+  }
+  const cached = preflightCache.get(deploymentMode)
+  if (cached && cached.expiresAt > Date.now()) return cached.value
+
+  const active = preflightInFlight.get(deploymentMode)
+  if (active) return active
+
+  const pending = buildPreflightChecks(deploymentMode)
+    .then((value) => {
+      preflightCache.set(deploymentMode, {
+        expiresAt: Date.now() + PREFLIGHT_CACHE_TTL_MS,
+        value,
+      })
+      return value
+    })
+    .finally(() => {
+      preflightInFlight.delete(deploymentMode)
+    })
+  preflightInFlight.set(deploymentMode, pending)
+  return pending
+}
 
 function isPublicSetupPreflightAllowed(path: string, headers: Headers) {
   return (
@@ -761,11 +809,32 @@ async function pmtilesFixtureCheck(path: string): Promise<PreflightCheck> {
     })
   }
 
-  const file = await open(path, 'r')
-  const buffer = Buffer.alloc(7)
-  await file.read(buffer, 0, 7, 0)
-  await file.close()
-  const header = buffer.toString('utf8')
+  let header: string
+  try {
+    const file = await open(path, 'r')
+    try {
+      const buffer = Buffer.alloc(7)
+      await file.read(buffer, 0, 7, 0)
+      header = buffer.toString('utf8')
+    } finally {
+      await file.close()
+    }
+  } catch (error) {
+    return check({
+      id: 'demo-pmtiles',
+      group: 'Self-host product loop',
+      label: 'Default PMTiles fixture',
+      severity: 'recommended',
+      ok: false,
+      warnWhenMissing: true,
+      message: `Default PMTiles fixture could not be read: ${
+        error instanceof Error ? error.message : String(error)
+      }.`,
+      action:
+        'Check DEMO_PMTILES_PATH permissions or replace the file with a compatible PMTiles archive.',
+      value: path,
+    })
+  }
 
   return check({
     id: 'demo-pmtiles',

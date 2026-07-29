@@ -62,3 +62,23 @@ test("renderPrometheusMetrics collapses unbounded route labels", () => {
   );
   assert.doesNotMatch(metrics, new RegExp(path.slice(1, 80)));
 });
+
+test("metrics middleware records unmatched paths under one fixed route", async () => {
+  const { Hono } = await import("hono");
+  const { metricsMiddleware } = await import("./metrics");
+  const app = new Hono();
+  app.use("*", metricsMiddleware());
+
+  await Promise.all(
+    Array.from({ length: 250 }, (_, index) =>
+      app.request(`/attacker-selected-${index}`),
+    ),
+  );
+  const metrics = renderPrometheusMetrics({
+    service: "api",
+    version: "test",
+  });
+
+  assert.match(metrics, /route="\/:not-found",status="404"} 250/);
+  assert.doesNotMatch(metrics, /attacker-selected-/);
+});

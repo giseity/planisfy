@@ -9,6 +9,7 @@ const maxRouteLabelLength = 160;
 const maxRouteSegments = 12;
 const maxLabelValueLength = 240;
 const unknownRoute = "/:other";
+const notFoundRoute = "/:not-found";
 const overflowRoute = "/:overflow";
 
 type RequestKey = `${string}\u0000${string}\u0000${number}`;
@@ -32,7 +33,10 @@ export function metricsMiddleware() {
 
     recordRequest({
       method: c.req.method,
-      path: c.req.path,
+      path:
+        c.res.status === 404
+          ? notFoundRoute
+          : c.req.routePath || notFoundRoute,
       status: c.res.status,
       durationSeconds: (performance.now() - start) / 1000,
     });

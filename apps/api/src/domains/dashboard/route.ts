@@ -48,12 +48,29 @@ import { isPeliasConfigured } from '../setup/geocoding-config'
 import { probeValhallaReadiness } from '../setup/valhalla-readiness'
 import type { AuthEnv } from '../../middleware/auth'
 import { env, redisConnection } from '../../env'
+import { consumeDashboardRateLimit } from '../../middleware/rate-limit'
 
 export const dashboardRoute = new Hono<AuthEnv>()
+const DASHBOARD_HEALTH_TTL_MS = 15_000
+let dashboardHealthCache: { expiresAt: number; value: DashboardHealthEntry[] } | undefined
+let dashboardHealthInFlight: Promise<DashboardHealthEntry[]> | undefined
 
 dashboardRoute.get('/dashboard', async (c) => {
   const accountId = c.get('ownerId')
   const userId = c.get('userId')
+  const retryAfter = await consumeDashboardRateLimit(accountId)
+  if (retryAfter) {
+    c.header('Retry-After', String(retryAfter))
+    return c.json(
+      {
+        error: {
+          code: 'RATE_LIMITED',
+          message: `Dashboard refresh limit exceeded. Retry after ${retryAfter} seconds.`,
+        },
+      },
+      429
+    )
+  }
   const now = new Date()
   const period = getMonthlyUsagePeriod(now)
   const usageStart = new Date(now)
@@ -120,7 +137,7 @@ dashboardRoute.get('/dashboard', async (c) => {
     access.apiKeys ? fetchTopApiKeys(accountId, usageStart) : Promise.resolve([]),
   ])
 
-  const health = access.diagnostics ? await fetchDashboardHealth(now) : []
+  const health = access.diagnostics ? await cachedDashboardHealth(now) : []
   const runningJobs = jobRows.filter((job) => ['PENDING', 'PROCESSING'].includes(job.status)).length
   const failedJobs = jobRows.filter((job) => job.status === 'FAILED').length
   const publishedTilesets = tilesetRows.filter((tileset) => tileset.isPublished).length
@@ -489,6 +506,26 @@ async function fetchDashboardHealth(now: Date): Promise<DashboardHealthEntry[]> 
   ]
 }
 
+async function cachedDashboardHealth(now: Date): Promise<DashboardHealthEntry[]> {
+  if (dashboardHealthCache && dashboardHealthCache.expiresAt > Date.now()) {
+    return dashboardHealthCache.value
+  }
+  if (dashboardHealthInFlight) return dashboardHealthInFlight
+
+  dashboardHealthInFlight = fetchDashboardHealth(now)
+    .then((value) => {
+      dashboardHealthCache = {
+        expiresAt: Date.now() + DASHBOARD_HEALTH_TTL_MS,
+        value,
+      }
+      return value
+    })
+    .finally(() => {
+      dashboardHealthInFlight = undefined
+    })
+  return dashboardHealthInFlight
+}
+
 async function probeValhalla(checkedAt: string) {
   const result = await probeValhallaReadiness(env.VALHALLA_INTERNAL_URL)
   return makeHealthEntry({
@@ -527,11 +564,10 @@ async function probePostgres(checkedAt: string) {
 
 async function probeRedis(checkedAt: string) {
   const startedAt = Date.now()
+  const redis = createRedisClient()
   try {
-    const redis = createRedisClient()
     await redis.connect()
     await redis.ping()
-    await redis.quit()
     return makeHealthEntry({
       id: 'redis',
       label: 'Redis',
@@ -548,16 +584,17 @@ async function probeRedis(checkedAt: string) {
       message: errorMessage(error),
       checkedAt,
     })
+  } finally {
+    redis.disconnect()
   }
 }
 
 async function probeWorker(checkedAt: string) {
   const startedAt = Date.now()
+  const redis = createRedisClient()
   try {
-    const redis = createRedisClient()
     await redis.connect()
     const heartbeat = await redis.get(WORKER_GEODATA_HEARTBEAT_KEY)
-    await redis.quit()
     if (!heartbeat) {
       return makeHealthEntry({
         id: 'worker-geodata',
@@ -588,6 +625,8 @@ async function probeWorker(checkedAt: string) {
       message: errorMessage(error),
       checkedAt,
     })
+  } finally {
+    redis.disconnect()
   }
 }
 
