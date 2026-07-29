@@ -682,7 +682,12 @@ async function markSourceImportFailed(params: {
     await tx
       .update(datasets)
       .set({ status: "ERROR", updatedAt: now })
-      .where(eq(datasets.id, params.datasetId));
+      .where(
+        and(
+          eq(datasets.id, params.datasetId),
+          isNull(datasets.currentVersionId),
+        ),
+      );
 
     await tx
       .update(sourceImports)

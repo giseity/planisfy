@@ -5,7 +5,7 @@ import { domainToASCII } from 'node:url'
 import { Queue } from 'bullmq'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { and, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, lte, sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   artifactBackups,
@@ -14,6 +14,7 @@ import {
   basemapBuilds,
   basemapReleases,
   customDomains,
+  datasets,
   db,
   eventOutbox,
   geocodingArtifacts,
@@ -34,9 +35,11 @@ import {
   routingGraphReleases,
   scheduledOperations,
   scheduledOperationRuns,
+  savedRegions,
   sourceImports,
   storageObjects,
   tilesets,
+  uploads,
   workerNodes,
   workflowTemplates,
 } from '@planisfy/database'
@@ -77,6 +80,11 @@ import {
 import { sendEmail } from '../email/email'
 import { buildNotificationPayload } from './notification-adapters'
 import { SourceUrlRejectedError, validateOutboundUrl } from '../imports/source-url-policy'
+import { buildOvertureImportEstimate } from '../imports/import-estimates'
+import { findOvertureType } from '../imports/overture-catalog'
+import { createProcessingJobInTransaction, logProcessingJob } from '../resources/processing-jobs'
+import { detectUploadFormat } from '../resources/upload-policy'
+import { enqueueOutboxEvent } from '../../shared/outbox/outbox'
 import {
   consumeDashboardRateLimit,
   consumeNotificationTestRateLimit,
@@ -1028,78 +1036,11 @@ operationsRoute.post('/operations/schedules/:id/run', async (c) => {
     )
   }
 
-  const result = await db.transaction(async (tx) => {
-    const [schedule] = await tx
-      .select()
-      .from(scheduledOperations)
-      .where(
-        and(
-          eq(scheduledOperations.id, id),
-          eq(scheduledOperations.accountId, accountId),
-          isNull(scheduledOperations.deletedAt)
-        )
-      )
-      .limit(1)
-      .for('update')
-    if (!schedule) return { kind: 'not-found' as const }
-
-    const [existing] = await tx
-      .select()
-      .from(scheduledOperationRuns)
-      .where(
-        and(
-          eq(scheduledOperationRuns.scheduleId, schedule.id),
-          eq(scheduledOperationRuns.idempotencyKey, idempotencyKey)
-        )
-      )
-      .limit(1)
-    if (existing) {
-      return { kind: 'queued' as const, schedule, run: existing, replayed: true }
-    }
-
-    const prepared = prepareScheduledOperationRun(schedule)
-    if (!prepared.success) return { kind: 'invalid' as const, error: prepared }
-    if (schedule.kind === 'custom_command') {
-      return {
-        kind: 'invalid' as const,
-        error: {
-          code: 'UNSUPPORTED_SCHEDULE_KIND',
-          message: 'Custom command schedules are retired.',
-        },
-      }
-    }
-
-    const now = new Date()
-    const [run] = await tx
-      .insert(scheduledOperationRuns)
-      .values({
-        scheduleId: schedule.id,
-        accountId,
-        trigger: 'manual',
-        scheduledFor: now,
-        idempotencyKey,
-        disposition: 'QUEUED',
-      })
-      .returning()
-    await tx.insert(eventOutbox).values({
-      eventName: 'scheduled_operation.run_requested',
-      payload: {
-        accountId,
-        scheduleId: schedule.id,
-        runId: run!.id,
-        kind: schedule.kind,
-        payload: isObjectRecord(schedule.payload) ? schedule.payload : {},
-        requestedAt: now.toISOString(),
-      },
-      status: 'PENDING',
-      processAt: now,
-    })
-    const [updated] = await tx
-      .update(scheduledOperations)
-      .set({ lastRunAt: now, updatedAt: now })
-      .where(eq(scheduledOperations.id, schedule.id))
-      .returning()
-    return { kind: 'queued' as const, schedule: updated!, run: run!, replayed: false }
+  const result = await admitScheduledOperationRun({
+    scheduleId: id,
+    accountId,
+    trigger: 'manual',
+    idempotencyKey,
   })
 
   if (result.kind === 'not-found') return notFound(c, 'Schedule not found')
@@ -2975,6 +2916,576 @@ export function prepareScheduledOperationRun(schedule: ScheduledOperationForRun,
       },
     },
   }
+}
+
+type OperationsTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+type ScheduleAdmissionResult =
+  | { kind: 'not-found' }
+  | { kind: 'invalid'; error: { code: string; message: string } }
+  | {
+      kind: 'queued'
+      schedule: typeof scheduledOperations.$inferSelect
+      run: typeof scheduledOperationRuns.$inferSelect
+      job: typeof processingJobs.$inferSelect | null
+      replayed: boolean
+    }
+
+export async function admitScheduledOperationRun(params: {
+  scheduleId: string
+  accountId?: string
+  trigger: 'manual' | 'scheduled'
+  idempotencyKey?: string
+  now?: Date
+}): Promise<ScheduleAdmissionResult> {
+  const now = params.now ?? new Date()
+  return db.transaction(async (tx) => {
+    const [schedule] = await tx
+      .select()
+      .from(scheduledOperations)
+      .where(
+        and(
+          eq(scheduledOperations.id, params.scheduleId),
+          params.accountId ? eq(scheduledOperations.accountId, params.accountId) : undefined,
+          isNull(scheduledOperations.deletedAt)
+        )
+      )
+      .limit(1)
+      .for('update')
+    if (!schedule) return { kind: 'not-found' as const }
+    if (schedule.status !== 'active') {
+      return {
+        kind: 'invalid' as const,
+        error: { code: 'SCHEDULE_PAUSED', message: 'Paused schedules cannot be run.' },
+      }
+    }
+    if (schedule.kind === 'custom_command') {
+      return {
+        kind: 'invalid' as const,
+        error: {
+          code: 'UNSUPPORTED_SCHEDULE_KIND',
+          message: 'Custom command schedules are retired.',
+        },
+      }
+    }
+
+    const scheduledFor =
+      params.trigger === 'scheduled'
+        ? schedule.nextRunAt && schedule.nextRunAt <= now
+          ? schedule.nextRunAt
+          : null
+        : now
+    if (!scheduledFor) {
+      return {
+        kind: 'invalid' as const,
+        error: { code: 'SCHEDULE_NOT_DUE', message: 'Schedule is not due.' },
+      }
+    }
+    const idempotencyKey =
+      params.idempotencyKey ?? `scheduled:${scheduledFor.toISOString()}`
+    const [existing] = await tx
+      .select()
+      .from(scheduledOperationRuns)
+      .where(
+        and(
+          eq(scheduledOperationRuns.scheduleId, schedule.id),
+          eq(scheduledOperationRuns.idempotencyKey, idempotencyKey)
+        )
+      )
+      .limit(1)
+    if (existing) {
+      const [job] = existing.processingJobId
+        ? await tx
+            .select()
+            .from(processingJobs)
+            .where(eq(processingJobs.id, existing.processingJobId))
+            .limit(1)
+        : []
+      return {
+        kind: 'queued' as const,
+        schedule,
+        run: existing,
+        job: job ?? null,
+        replayed: true,
+      }
+    }
+
+    const [active] = await tx
+      .select({ id: processingJobs.id })
+      .from(scheduledOperationRuns)
+      .innerJoin(processingJobs, eq(scheduledOperationRuns.processingJobId, processingJobs.id))
+      .where(
+        and(
+          eq(scheduledOperationRuns.scheduleId, schedule.id),
+          inArray(processingJobs.status, ['PENDING', 'PROCESSING'])
+        )
+      )
+      .limit(1)
+    if (active) {
+      if (params.trigger === 'manual') {
+        return {
+          kind: 'invalid' as const,
+          error: { code: 'SCHEDULE_RUN_ACTIVE', message: 'This schedule already has an active run.' },
+        }
+      }
+      const [run] = await tx
+        .insert(scheduledOperationRuns)
+        .values({
+          scheduleId: schedule.id,
+          accountId: schedule.accountId,
+          trigger: 'scheduled',
+          scheduledFor,
+          idempotencyKey,
+          disposition: 'SKIPPED',
+          reason: 'previous_run_active',
+        })
+        .returning()
+      const [updated] = await tx
+        .update(scheduledOperations)
+        .set({
+          nextRunAt: nextScheduleRunAt('active', schedule.cron, schedule.timezone, now),
+          updatedAt: now,
+        })
+        .where(eq(scheduledOperations.id, schedule.id))
+        .returning()
+      return {
+        kind: 'queued' as const,
+        schedule: updated!,
+        run: run!,
+        job: null,
+        replayed: false,
+      }
+    }
+
+    let job: typeof processingJobs.$inferSelect
+    try {
+      job = await queueScheduledTenantAction(tx, schedule)
+    } catch (error) {
+      if (!isScheduleAdmissionError(error)) throw error
+      const code = scheduleAdmissionCode(error)
+      if (params.trigger === 'manual') {
+        return {
+          kind: 'invalid' as const,
+          error: { code, message: errorMessage(error) },
+        }
+      }
+      const [run] = await tx
+        .insert(scheduledOperationRuns)
+        .values({
+          scheduleId: schedule.id,
+          accountId: schedule.accountId,
+          trigger: 'scheduled',
+          scheduledFor,
+          idempotencyKey,
+          disposition: 'REJECTED',
+          reason: code.slice(0, 128),
+        })
+        .returning()
+      const [updated] = await tx
+        .update(scheduledOperations)
+        .set({
+          nextRunAt: nextScheduleRunAt('active', schedule.cron, schedule.timezone, now),
+          updatedAt: now,
+        })
+        .where(eq(scheduledOperations.id, schedule.id))
+        .returning()
+      return {
+        kind: 'queued' as const,
+        schedule: updated!,
+        run: run!,
+        job: null,
+        replayed: false,
+      }
+    }
+
+    const [run] = await tx
+      .insert(scheduledOperationRuns)
+      .values({
+        scheduleId: schedule.id,
+        accountId: schedule.accountId,
+        trigger: params.trigger,
+        scheduledFor,
+        idempotencyKey,
+        disposition: 'QUEUED',
+        processingJobId: job.id,
+      })
+      .returning()
+    const [updated] = await tx
+      .update(scheduledOperations)
+      .set({
+        lastRunAt: now,
+        nextRunAt:
+          params.trigger === 'scheduled'
+            ? nextScheduleRunAt('active', schedule.cron, schedule.timezone, now)
+            : schedule.nextRunAt,
+        updatedAt: now,
+      })
+      .where(eq(scheduledOperations.id, schedule.id))
+      .returning()
+    return {
+      kind: 'queued' as const,
+      schedule: updated!,
+      run: run!,
+      job,
+      replayed: false,
+    }
+  })
+}
+
+export async function dispatchDueScheduledOperations(params: {
+  now?: Date
+  limit?: number
+} = {}) {
+  const now = params.now ?? new Date()
+  const limit = Math.max(1, Math.min(params.limit ?? 25, 100))
+  await repairUninitializedSchedules(now, limit)
+  await db
+    .update(eventOutbox)
+    .set({
+      status: 'ARCHIVED',
+      lastError: 'Generic schedule events are retired; actions are admitted directly.',
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(eventOutbox.eventName, 'scheduled_operation.run_requested'),
+        inArray(eventOutbox.status, ['PENDING', 'FAILED'])
+      )
+    )
+
+  const due = await db
+    .select({ id: scheduledOperations.id })
+    .from(scheduledOperations)
+    .where(
+      and(
+        eq(scheduledOperations.status, 'active'),
+        isNull(scheduledOperations.deletedAt),
+        inArray(scheduledOperations.kind, ['tileset_rebuild', 'source_import']),
+        lte(scheduledOperations.nextRunAt, now)
+      )
+    )
+    .orderBy(asc(scheduledOperations.nextRunAt), asc(scheduledOperations.id))
+    .limit(limit)
+
+  const results = []
+  for (const schedule of due) {
+    results.push(
+      await admitScheduledOperationRun({
+        scheduleId: schedule.id,
+        trigger: 'scheduled',
+        now,
+      })
+    )
+  }
+  return {
+    considered: due.length,
+    queued: results.filter(
+      (result) => result.kind === 'queued' && result.run.disposition === 'QUEUED'
+    ).length,
+    skipped: results.filter(
+      (result) => result.kind === 'queued' && result.run.disposition === 'SKIPPED'
+    ).length,
+    rejected: results.filter(
+      (result) => result.kind === 'queued' && result.run.disposition === 'REJECTED'
+    ).length,
+  }
+}
+
+async function repairUninitializedSchedules(now: Date, limit: number) {
+  const rows = await db
+    .select()
+    .from(scheduledOperations)
+    .where(
+      and(
+        eq(scheduledOperations.status, 'active'),
+        isNull(scheduledOperations.nextRunAt),
+        isNull(scheduledOperations.deletedAt)
+      )
+    )
+    .limit(limit)
+  for (const schedule of rows) {
+    const nextRunAt =
+      schedule.kind === 'custom_command'
+        ? null
+        : nextScheduleRunAt('active', schedule.cron, schedule.timezone, now)
+    await db
+      .update(scheduledOperations)
+      .set({
+        status: nextRunAt ? 'active' : 'paused',
+        nextRunAt,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(scheduledOperations.id, schedule.id),
+          isNull(scheduledOperations.nextRunAt)
+        )
+      )
+  }
+}
+
+class ScheduleActionError extends Error {
+  constructor(
+    readonly code: string,
+    message: string
+  ) {
+    super(message)
+  }
+}
+
+function isScheduleAdmissionError(error: unknown) {
+  if (error instanceof ScheduleActionError) return true
+  if (!error || typeof error !== 'object') return false
+  return (
+    'code' in error &&
+    (error.code === 'ACTIVE_JOB_LIMIT' || error.code === 'ACTIVE_TILESET_BUILD')
+  )
+}
+
+function scheduleAdmissionCode(error: unknown) {
+  return error instanceof ScheduleActionError
+    ? error.code
+    : error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : 'SCHEDULE_ADMISSION_REJECTED'
+}
+
+async function queueScheduledTenantAction(
+  tx: OperationsTransaction,
+  schedule: typeof scheduledOperations.$inferSelect
+) {
+  return schedule.kind === 'tileset_rebuild'
+    ? queueScheduledTilesetRebuild(tx, schedule)
+    : queueScheduledSourceImport(tx, schedule)
+}
+
+async function queueScheduledTilesetRebuild(
+  tx: OperationsTransaction,
+  schedule: typeof scheduledOperations.$inferSelect
+) {
+  const payload = isObjectRecord(schedule.payload) ? schedule.payload : {}
+  const tilesetId = typeof payload.tilesetId === 'string' ? payload.tilesetId : ''
+  const [tileset] = await tx
+    .select()
+    .from(tilesets)
+    .where(
+      and(
+        eq(tilesets.id, tilesetId),
+        eq(tilesets.accountId, schedule.accountId),
+        isNull(tilesets.deletedAt)
+      )
+    )
+    .limit(1)
+  if (!tileset) throw new ScheduleActionError('INVALID_SCHEDULE_TARGET', 'Tileset not found.')
+  const [upload] = await tx
+    .select()
+    .from(uploads)
+    .where(
+      and(
+        eq(uploads.accountId, schedule.accountId),
+        eq(uploads.linkedTilesetId, tileset.id),
+        isNull(uploads.deletedAt)
+      )
+    )
+    .orderBy(desc(uploads.createdAt))
+    .limit(1)
+  if (!upload?.storageObjectId) {
+    throw new ScheduleActionError('UPLOAD_NOT_FOUND', 'No original upload is available.')
+  }
+  const [storageObject] = await tx
+    .select()
+    .from(storageObjects)
+    .where(
+      and(
+        eq(storageObjects.id, upload.storageObjectId),
+        eq(storageObjects.accountId, schedule.accountId),
+        isNull(storageObjects.deletedAt)
+      )
+    )
+    .limit(1)
+  if (!storageObject) {
+    throw new ScheduleActionError('UPLOAD_ARTIFACT_NOT_FOUND', 'Upload artifact was not found.')
+  }
+  const format = detectUploadFormat(
+    storageObject.fileName ?? upload.originalFileName,
+    upload.contentType ?? storageObject.contentType ?? ''
+  )
+  if (!format) {
+    throw new ScheduleActionError('UNSUPPORTED_UPLOAD', 'Original upload format is unsupported.')
+  }
+  const job = await createProcessingJobInTransaction(
+    {
+      accountId: schedule.accountId,
+      type: 'tileset.process_upload',
+      targetTilesetId: tileset.id,
+      input: {
+        tilesetId: tileset.id,
+        uploadId: upload.id,
+        storageObjectId: storageObject.id,
+        uploadKey: storageObject.storageKey,
+        format,
+        options: {
+          minZoom: tileset.minZoom ?? 0,
+          maxZoom: tileset.maxZoom ?? 14,
+        },
+      },
+    },
+    tx
+  )
+  await tx
+    .update(tilesets)
+    .set({ status: 'BUILDING', buildJobId: job.id, updatedAt: new Date() })
+    .where(eq(tilesets.id, tileset.id))
+  await tx
+    .update(uploads)
+    .set({ status: 'VALIDATING', linkedTilesetId: tileset.id })
+    .where(eq(uploads.id, upload.id))
+  await logProcessingJob(job.id, 'Scheduled tileset rebuild queued', {}, tx)
+  await enqueueOutboxEvent(
+    {
+      eventName: 'tileset.build.requested',
+      payload: {
+        accountId: schedule.accountId,
+        tilesetId: tileset.id,
+        jobId: job.id,
+        sourceResourceType: 'upload',
+        sourceResourceId: upload.id,
+        options: {
+          minZoom: tileset.minZoom ?? 0,
+          maxZoom: tileset.maxZoom ?? 14,
+        },
+      },
+    },
+    tx
+  )
+  return job
+}
+
+async function queueScheduledSourceImport(
+  tx: OperationsTransaction,
+  schedule: typeof scheduledOperations.$inferSelect
+) {
+  const payload = isObjectRecord(schedule.payload) ? schedule.payload : {}
+  const sourceImportId =
+    typeof payload.sourceImportId === 'string' ? payload.sourceImportId : ''
+  const [reference] = await tx
+    .select()
+    .from(sourceImports)
+    .where(
+      and(
+        eq(sourceImports.id, sourceImportId),
+        eq(sourceImports.accountId, schedule.accountId)
+      )
+    )
+    .limit(1)
+  if (
+    !reference ||
+    reference.provider !== 'OVERTURE' ||
+    !reference.datasetId ||
+    !reference.regionId
+  ) {
+    throw new ScheduleActionError(
+      'INVALID_SCHEDULE_TARGET',
+      'Overture import reference is incomplete.'
+    )
+  }
+  const input = isObjectRecord(reference.input) ? reference.input : {}
+  const theme = typeof input.theme === 'string' ? input.theme : ''
+  const type = typeof input.type === 'string' ? input.type : ''
+  const catalogEntry = findOvertureType(theme, type)
+  if (!catalogEntry) {
+    throw new ScheduleActionError('INVALID_IMPORT_TYPE', 'Overture import type is unsupported.')
+  }
+  const [region] = await tx
+    .select()
+    .from(savedRegions)
+    .where(
+      and(
+        eq(savedRegions.id, reference.regionId),
+        eq(savedRegions.accountId, schedule.accountId),
+        isNull(savedRegions.deletedAt)
+      )
+    )
+    .limit(1)
+  const [dataset] = await tx
+    .select({ id: datasets.id })
+    .from(datasets)
+    .where(
+      and(
+        eq(datasets.id, reference.datasetId),
+        eq(datasets.accountId, schedule.accountId),
+        isNull(datasets.deletedAt)
+      )
+    )
+    .limit(1)
+  if (!region || !dataset) {
+    throw new ScheduleActionError('INVALID_SCHEDULE_TARGET', 'Import region or dataset was removed.')
+  }
+  const estimate = buildOvertureImportEstimate({
+    bbox: region.bbox,
+    maxFeatures: Number(process.env.SOURCE_IMPORT_MAX_FEATURES ?? 50_000),
+    timeoutMs: Number(process.env.SOURCE_IMPORT_TIMEOUT_MS ?? 900_000),
+  })
+  const job = await createProcessingJobInTransaction(
+    {
+      accountId: schedule.accountId,
+      type: 'source.import_overture',
+      targetTilesetId: reference.targetTilesetId ?? undefined,
+      input: {
+        provider: 'OVERTURE',
+        datasetId: dataset.id,
+        targetTilesetId: reference.targetTilesetId ?? undefined,
+        regionId: region.id,
+        bbox: region.bbox,
+        estimate,
+        sourceConnectionId: reference.sourceConnectionId ?? undefined,
+        theme,
+        type,
+        catalog: {
+          label: catalogEntry.label,
+          geometry: catalogEntry.geometry,
+          defaultLayerId: catalogEntry.defaultLayerId,
+        },
+        refresh: true,
+      },
+    },
+    tx
+  )
+  const [sourceImport] = await tx
+    .insert(sourceImports)
+    .values({
+      accountId: schedule.accountId,
+      provider: 'OVERTURE',
+      sourceName: reference.sourceName,
+      sourceConnectionId: reference.sourceConnectionId,
+      regionId: region.id,
+      datasetId: dataset.id,
+      targetTilesetId: reference.targetTilesetId,
+      processingJobId: job.id,
+      input: job.input,
+    })
+    .returning()
+  await logProcessingJob(
+    job.id,
+    'Scheduled Overture dataset refresh queued',
+    { metadata: { importId: sourceImport!.id, datasetId: dataset.id, regionId: region.id } },
+    tx
+  )
+  await enqueueOutboxEvent(
+    {
+      eventName: 'source.import.requested',
+      payload: {
+        importId: sourceImport!.id,
+        accountId: schedule.accountId,
+        jobId: job.id,
+        datasetId: dataset.id,
+        targetTilesetId: reference.targetTilesetId ?? undefined,
+        provider: 'OVERTURE',
+      },
+    },
+    tx
+  )
+  return job
 }
 
 export function nextScheduleRunAt(

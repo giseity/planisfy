@@ -184,6 +184,23 @@ services:
     networks:
       - planisfy-internal
 
+  worker-operations:
+    build:
+      context: .
+      dockerfile: apps/worker-operations/Dockerfile
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:4000
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
+      OPERATIONS_SCHEDULE_POLL_INTERVAL_MS: ${OPERATIONS_SCHEDULE_POLL_INTERVAL_MS:-15000}
+      OPERATIONS_SCHEDULE_BATCH_SIZE: ${OPERATIONS_SCHEDULE_BATCH_SIZE:-25}
+      NODE_ENV: production
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - planisfy-internal
+
   console:
     build:
       context: .

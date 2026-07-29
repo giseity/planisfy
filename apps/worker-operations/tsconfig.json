@@ -1,0 +1,10 @@
+{
+  "extends": "@planisfy/typescript-config/node-service.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["."],
+  "exclude": ["node_modules", "dist"]
+}

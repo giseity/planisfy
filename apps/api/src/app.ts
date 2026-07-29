@@ -30,6 +30,7 @@ import { emailRoute } from './domains/email/route'
 import { internalSmokeRoute } from './domains/internal-smoke/route'
 import { billingWebhookRoute } from './domains/billing/route'
 import { billingInternalRoute } from './domains/billing/internal-route'
+import { operationsInternalRoute } from './domains/operations/internal-route'
 import { consoleRoute } from './domains/console/route'
 import { rootAgentRoute } from './domains/root-agent/route'
 import { setupRoute } from './domains/setup/route'
@@ -132,6 +133,7 @@ app.use('/internal/*', internalAuthMiddleware)
 app.route('/', emailRoute)
 app.route('/', internalSmokeRoute)
 app.route('/', billingInternalRoute)
+app.route('/', operationsInternalRoute)
 app.route('/', billingWebhookRoute)
 
 // ── Root agent routes (registration token / node token auth) ───────────────
