@@ -52,8 +52,6 @@ import {
   MANAGED_PELIAS_PROFILE,
   MANAGED_PELIAS_PROFILE_VERSION,
   SOURCE_PROCESSING_QUEUE_NAME,
-  WORKER_GEODATA_HEARTBEAT_KEY,
-  WORKER_GEODATA_HEARTBEAT_STALE_MS,
 } from '@planisfy/geodata-contracts'
 import { getStorage } from '@planisfy/storage'
 import {
@@ -80,6 +78,7 @@ import {
 import { sendEmail } from '../email/email'
 import { buildNotificationPayload } from './notification-adapters'
 import { SourceUrlRejectedError, validateOutboundUrl } from '../imports/source-url-policy'
+import { evaluateWorkerHeartbeat, probeRedisHealth } from '../health/route'
 import { buildOvertureImportEstimate } from '../imports/import-estimates'
 import { findOvertureType } from '../imports/overture-catalog'
 import { createProcessingJobInTransaction, logProcessingJob } from '../resources/processing-jobs'
@@ -2341,43 +2340,37 @@ export function prepareWorkflowTemplateApplication(
 }
 
 async function fetchWorkerHealth() {
-  const startedAt = Date.now()
-  try {
-    const Redis = await import('ioredis').then((m) => m.default)
-    const redis = new Redis({
-      ...redisConnection,
-      maxRetriesPerRequest: 1,
-      connectTimeout: 3000,
-      lazyConnect: true,
-    })
-    await redis.connect()
-    const heartbeat = await redis.get(WORKER_GEODATA_HEARTBEAT_KEY)
-    await redis.quit()
-    if (!heartbeat) {
-      return {
-        status: 'offline',
-        message: 'No geodata worker heartbeat',
-        latencyMs: Date.now() - startedAt,
-      }
-    }
-    const parsed = JSON.parse(heartbeat) as {
-      timestamp?: string
-      toolchain?: unknown
-    }
-    const timestamp = parsed.timestamp ? Date.parse(parsed.timestamp) : NaN
-    const ageMs = Number.isFinite(timestamp) ? Date.now() - timestamp : null
-    return {
-      status: ageMs !== null && ageMs <= WORKER_GEODATA_HEARTBEAT_STALE_MS ? 'healthy' : 'degraded',
-      message: ageMs === null ? 'Invalid heartbeat' : `Heartbeat ${Math.round(ageMs / 1000)}s ago`,
-      latencyMs: ageMs,
-      toolchain: parsed.toolchain,
-    }
-  } catch (err) {
+  const probe = await probeRedisHealth()
+  if (probe.check.status !== 'ok') {
     return {
       status: 'offline',
-      message: errorMessage(err),
-      latencyMs: Date.now() - startedAt,
+      message: probe.check.error ?? 'Redis unavailable',
+      latencyMs: probe.check.latency ?? null,
     }
+  }
+  if (!probe.heartbeat) {
+    return {
+      status: 'offline',
+      message: 'No geodata worker heartbeat',
+      latencyMs: probe.check.latency ?? null,
+    }
+  }
+
+  const health = evaluateWorkerHeartbeat(probe.heartbeat)
+  let toolchain: unknown
+  try {
+    const parsed = JSON.parse(probe.heartbeat) as { toolchain?: unknown }
+    toolchain = parsed.toolchain
+  } catch {
+    // Heartbeat validation already reports malformed JSON.
+  }
+  return {
+    status: health.status === 'ok' ? 'healthy' : 'degraded',
+    message:
+      health.error ??
+      `Heartbeat ${Math.round((health.latency ?? 0) / 1000)}s ago`,
+    latencyMs: health.latency ?? null,
+    toolchain,
   }
 }
 
@@ -3505,6 +3498,27 @@ async function queueScheduledSourceImport(
     .limit(1)
   if (!region || !dataset) {
     throw new ScheduleActionError('INVALID_SCHEDULE_TARGET', 'Import region or dataset was removed.')
+  }
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`sourceImport:${schedule.accountId}:${dataset.id}`}))`
+  )
+  const [activeImport] = await tx
+    .select({ id: sourceImports.id })
+    .from(sourceImports)
+    .innerJoin(processingJobs, eq(sourceImports.processingJobId, processingJobs.id))
+    .where(
+      and(
+        eq(sourceImports.accountId, schedule.accountId),
+        eq(sourceImports.datasetId, dataset.id),
+        inArray(processingJobs.status, ['PENDING', 'PROCESSING'])
+      )
+    )
+    .limit(1)
+  if (activeImport) {
+    throw new ScheduleActionError(
+      'ACTIVE_SOURCE_IMPORT',
+      'This dataset already has an active source import.'
+    )
   }
   const estimate = buildOvertureImportEstimate({
     bbox: region.bbox,

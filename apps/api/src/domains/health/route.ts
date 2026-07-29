@@ -1,6 +1,9 @@
 import { Hono } from 'hono'
 import { db } from '@planisfy/database'
-import { WORKER_GEODATA_HEARTBEAT_KEY } from '@planisfy/geodata-contracts'
+import {
+  WORKER_GEODATA_HEARTBEAT_KEY,
+  WORKER_GEODATA_HEARTBEAT_STALE_MS,
+} from '@planisfy/geodata-contracts'
 import { sql } from 'drizzle-orm'
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -25,6 +28,7 @@ type RedisProbeClient = {
   quit(): Promise<unknown>
   disconnect(): void
 }
+const WORKER_HEARTBEAT_FUTURE_SKEW_MS = 5_000
 
 // ── GET /health — Basic readiness check ─────────────────────────────────────
 
@@ -73,17 +77,7 @@ healthRoute.get('/health/detailed', async (c) => {
   if (redisProbe.check.status === 'ok') {
     const heartbeat = redisProbe.heartbeat
     if (heartbeat) {
-      try {
-        const parsed = JSON.parse(heartbeat) as { timestamp?: string }
-        const timestamp = parsed.timestamp ? Date.parse(parsed.timestamp) : NaN
-        const ageMs = Number.isFinite(timestamp) ? Date.now() - timestamp : null
-        checks.workerGeodata = {
-          status: ageMs !== null && ageMs <= 60_000 ? 'ok' : 'degraded',
-          latency: ageMs ?? undefined,
-        }
-      } catch {
-        checks.workerGeodata = { status: 'degraded', error: 'Invalid heartbeat payload' }
-      }
+      checks.workerGeodata = evaluateWorkerHeartbeat(heartbeat)
     } else {
       checks.workerGeodata = { status: 'unavailable' }
     }
@@ -185,6 +179,42 @@ export async function probeRedisHealth(
       }
     }
   }
+}
+
+export function evaluateWorkerHeartbeat(
+  heartbeat: string,
+  now = Date.now()
+): HealthCheck {
+  let timestampValue: unknown
+  try {
+    const parsed = JSON.parse(heartbeat) as unknown
+    timestampValue =
+      parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as { timestamp?: unknown }).timestamp
+        : undefined
+  } catch {
+    return { status: 'degraded', error: 'Invalid heartbeat payload' }
+  }
+  if (typeof timestampValue !== 'string') {
+    return { status: 'degraded', error: 'Heartbeat timestamp is missing' }
+  }
+  const timestamp = Date.parse(timestampValue)
+  if (!Number.isFinite(timestamp)) {
+    return { status: 'degraded', error: 'Heartbeat timestamp is invalid' }
+  }
+
+  const ageMs = now - timestamp
+  if (ageMs < -WORKER_HEARTBEAT_FUTURE_SKEW_MS) {
+    return {
+      status: 'degraded',
+      latency: 0,
+      error: 'Heartbeat timestamp is too far in the future',
+    }
+  }
+  if (ageMs > WORKER_GEODATA_HEARTBEAT_STALE_MS) {
+    return { status: 'degraded', latency: ageMs, error: 'Worker heartbeat is stale' }
+  }
+  return { status: 'ok', latency: Math.max(0, ageMs) }
 }
 
 async function createRedisProbeClient(): Promise<RedisProbeClient> {

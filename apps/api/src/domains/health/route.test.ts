@@ -3,7 +3,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { checkStorageHealth, probeRedisHealth } from "./route";
+import {
+  checkStorageHealth,
+  evaluateWorkerHeartbeat,
+  probeRedisHealth,
+} from "./route";
 
 test("storage health reports reachable local storage", async () => {
   const previousProvider = process.env.STORAGE_PROVIDER;
@@ -89,6 +93,48 @@ test("Redis health probes disconnect when commands and graceful cleanup fail", a
   assert.equal(result.check.status, "error");
   assert.match(result.check.error ?? "", /ping failed/);
   assert.deepEqual(calls, ["connect", "ping", "quit", "disconnect"]);
+});
+
+test("worker heartbeat freshness accepts bounded clock skew without negative latency", () => {
+  const now = Date.parse("2026-07-29T10:00:00.000Z");
+  assert.deepEqual(
+    evaluateWorkerHeartbeat(
+      JSON.stringify({ timestamp: "2026-07-29T10:00:04.000Z" }),
+      now,
+    ),
+    { status: "ok", latency: 0 },
+  );
+  assert.deepEqual(
+    evaluateWorkerHeartbeat(
+      JSON.stringify({ timestamp: "2026-07-29T10:00:06.000Z" }),
+      now,
+    ),
+    {
+      status: "degraded",
+      latency: 0,
+      error: "Heartbeat timestamp is too far in the future",
+    },
+  );
+});
+
+test("worker heartbeat freshness rejects malformed and stale timestamps", () => {
+  const now = Date.parse("2026-07-29T10:02:00.000Z");
+  assert.equal(evaluateWorkerHeartbeat("{", now).status, "degraded");
+  assert.equal(
+    evaluateWorkerHeartbeat(JSON.stringify({ timestamp: "not-a-date" }), now).status,
+    "degraded",
+  );
+  assert.deepEqual(
+    evaluateWorkerHeartbeat(
+      JSON.stringify({ timestamp: "2026-07-29T10:00:00.000Z" }),
+      now,
+    ),
+    {
+      status: "degraded",
+      latency: 120_000,
+      error: "Worker heartbeat is stale",
+    },
+  );
 });
 
 function restoreEnv(name: string, value: string | undefined) {
