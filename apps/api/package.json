@@ -26,6 +26,7 @@
     "@planisfy/env": "workspace:*",
     "@planisfy/events": "workspace:*",
     "@planisfy/geodata-contracts": "workspace:*",
+    "@planisfy/outbound": "workspace:*",
     "@planisfy/platform-policy": "workspace:*",
     "@planisfy/storage": "workspace:*",
     "@planisfy/storage-paths": "workspace:*",

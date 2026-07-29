@@ -15,6 +15,13 @@ Start from `.env.example` and keep production secrets out of source control.
 | Deployment            | `DEPLOYMENT_MODE`, `APP_VERSION`, public `NEXT_PUBLIC_*` URLs                                                                                          |
 | Geospatial services   | `MARTIN_INTERNAL_URL`, `VALHALLA_INTERNAL_URL`, `PELIAS_INTERNAL_URL`, `GLYPHS_INTERNAL_URL`, `ELEVATION_INTERNAL_URL`, `STATIC_RENDERER_INTERNAL_URL` |
 | Storage               | `STORAGE_PROVIDER`, local storage paths, S3 settings, R2 settings                                                                                      |
+
+Outbound URLs resolve and pin DNS before the connection is opened. Private
+destinations are denied unless their exact hostname, IP address, or CIDR is
+listed in the comma-separated `OUTBOUND_PRIVATE_ALLOWLIST`. Configure the same
+allowlist independently on external root agents that must download from private
+sources. The legacy broad `ALLOW_PRIVATE_SOURCE_URLS=true` setting now requires
+an explicit allowlist and otherwise prevents startup.
 | Worker processing     | concurrency, outbox polling, DuckDB, Tippecanoe, ogr2ogr, Overture release settings                                                                    |
 | Managed providers     | Dodo Payments and ZeptoMail settings                                                                                                                   |
 

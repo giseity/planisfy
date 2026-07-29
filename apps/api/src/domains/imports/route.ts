@@ -14,6 +14,11 @@ import {
   tilesets,
 } from "@planisfy/database";
 import { encryptCredentialPayload } from "@planisfy/credentials";
+import {
+  normalizeOutboundUrl,
+  OutboundRequestError,
+  resolveOutboundTarget,
+} from "@planisfy/outbound";
 import type { AuthEnv } from "../../middleware/auth";
 import {
   ActiveProcessingJobLimitError,
@@ -23,10 +28,6 @@ import {
 import { enqueueOutboxEvent } from "../../shared/outbox/outbox";
 import { logAudit } from "../../shared/audit";
 import { env } from "../../env";
-import {
-  SourceUrlRejectedError,
-  validateRemoteSourceUrl,
-} from "./source-url-policy";
 import { buildOvertureImportEstimate } from "./import-estimates";
 import {
   UnsupportedOvertureTypeError,
@@ -232,7 +233,7 @@ importsRoute.post("/source-connections", async (c) => {
   const accountId = c.get("ownerId");
   const parsed = sourceConnectionSchema.safeParse(await c.req.json());
   if (!parsed.success) return validationError(c, parsed.error);
-  const urlResult = validateSourceUrl(parsed.data.url);
+  const urlResult = await validateSourceUrl(parsed.data.url);
   if (urlResult instanceof Response) return urlResult;
   if (parsed.data.credentialId) {
     const [credential] = await db
@@ -737,14 +738,18 @@ function credentialSecret() {
   );
 }
 
-function validateSourceUrl(url: string | undefined): string | Response | null {
+async function validateSourceUrl(
+  url: string | undefined,
+): Promise<string | Response | null> {
   if (!url) return null;
   try {
-    return validateRemoteSourceUrl(url, {
-      allowPrivateUrls: env.ALLOW_PRIVATE_SOURCE_URLS,
+    const normalized = normalizeOutboundUrl(url);
+    await resolveOutboundTarget(normalized, {
+      privateAllowlist: env.OUTBOUND_PRIVATE_ALLOWLIST,
     });
+    return normalized.href;
   } catch (err) {
-    if (err instanceof SourceUrlRejectedError) {
+    if (err instanceof OutboundRequestError) {
       return Response.json(
         { error: { code: "SOURCE_URL_REJECTED", message: err.message } },
         { status: 400 },

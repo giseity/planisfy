@@ -58,6 +58,7 @@ const schema = z.object({
     (value) => value === 'true' || value === true,
     z.boolean()
   ),
+  OUTBOUND_PRIVATE_ALLOWLIST: optionalEmptyableString,
   OVERTURE_ALLOW_EXPERIMENTAL_TYPES: z.preprocess(
     (value) => value === 'true' || value === true,
     z.boolean()
@@ -84,8 +85,17 @@ export const env = createEnv(schema, process.env, { appName: 'api' })
 
 assertProductionSecrets(env)
 assertManagedProductionEnv(env)
+assertOutboundPrivatePolicy(env)
 
 export const redisConnection = redisConnectionFromEnv(env)
+
+function assertOutboundPrivatePolicy(value: typeof env) {
+  if (value.ALLOW_PRIVATE_SOURCE_URLS && !value.OUTBOUND_PRIVATE_ALLOWLIST) {
+    throw new Error(
+      'ALLOW_PRIVATE_SOURCE_URLS=true is no longer supported without OUTBOUND_PRIVATE_ALLOWLIST. Configure exact private hostnames, IPs, or CIDRs.'
+    )
+  }
+}
 
 function assertProductionSecrets(value: typeof env) {
   if (value.NODE_ENV !== 'production') {

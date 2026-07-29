@@ -165,6 +165,9 @@ importers:
       '@planisfy/geodata-contracts':
         specifier: workspace:*
         version: link:../../packages/geodata-contracts
+      '@planisfy/outbound':
+        specifier: workspace:*
+        version: link:../../packages/outbound
       '@planisfy/platform-policy':
         specifier: workspace:*
         version: link:../../packages/platform-policy

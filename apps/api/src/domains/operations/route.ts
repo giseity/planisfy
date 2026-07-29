@@ -1,5 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { resolveTxt } from 'node:dns/promises'
+import { isIP } from 'node:net'
+import { domainToASCII } from 'node:url'
 import { Queue } from 'bullmq'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
@@ -47,6 +49,13 @@ import {
   WORKER_GEODATA_HEARTBEAT_STALE_MS,
 } from '@planisfy/geodata-contracts'
 import { getStorage } from '@planisfy/storage'
+import {
+  normalizeOutboundUrl,
+  OutboundRequestError,
+  resolveOutboundTarget,
+  withOutboundResponse,
+  type OutboundRequestOptions,
+} from '@planisfy/outbound'
 import { renderGenericNotificationEmail } from '@planisfy/email'
 import {
   areaOfInterestToBBox,
@@ -279,7 +288,7 @@ const routingGraphBuildSchema = z.object({
     .url()
     .transform((value, ctx) => {
       try {
-        return validateOutboundUrl(value)
+        return normalizeOutboundUrl(value).href
       } catch (err) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -310,7 +319,7 @@ const basemapBuildSchema = z.object({
     .url()
     .transform((value, ctx) => {
       try {
-        return validateOutboundUrl(value)
+        return normalizeOutboundUrl(value).href
       } catch (err) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -414,11 +423,17 @@ const previewLinkSchema = z.object({
 const customDomainSchema = z.object({
   resourceType: z.string().min(1).max(64),
   resourceId: z.string().uuid().optional(),
-  host: z
-    .string()
-    .min(1)
-    .max(255)
-    .regex(/^[a-z0-9.-]+$/i, 'Host must be a domain name without protocol or path'),
+  host: z.string().min(1).max(255).transform((value, ctx) => {
+    try {
+      return normalizeCustomDomainHost(value)
+    } catch (err) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: err instanceof Error ? err.message : 'Host is not a valid public domain name',
+      })
+      return z.NEVER
+    }
+  }),
   path: z.string().min(1).max(255).default('/'),
   tlsEnabled: z.boolean().default(true),
   metadata: z.record(z.string(), z.unknown()).default({}),
@@ -657,7 +672,7 @@ async function buildOperationsOverview(accountId: string) {
     basemapReleases: managed ? [] : basemapReleaseRows,
     runtimeInstallations: managed ? [] : runtimeInstallationRows,
     previewLinks: previews,
-    customDomains: domains,
+    customDomains: domains.map(serializeCustomDomain),
     workflowTemplates: managed ? [] : templates,
     workerHealth: managed
       ? { status: 'managed' as const, message: 'Platform-operated runtime', latencyMs: null }
@@ -1176,6 +1191,8 @@ operationsRoute.post('/operations/routing-graphs', async (c) => {
   const accountId = c.get('ownerId')
   const parsed = routingGraphBuildSchema.safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
+  const sourceDenial = await resolvedSourceDenial(c, parsed.data.sourceUrl)
+  if (sourceDenial) return sourceDenial
   const routingDenial = await managedPlanGateResponse(c, 'routingBuilds')
   if (routingDenial) return routingDenial
   if (isPlanetScaleRoutingBuild(parsed.data)) {
@@ -1319,6 +1336,8 @@ operationsRoute.post('/operations/basemap-builds', async (c) => {
   const accountId = c.get('ownerId')
   const parsed = basemapBuildSchema.safeParse(await c.req.json())
   if (!parsed.success) return validationError(c, parsed.error)
+  const sourceDenial = await resolvedSourceDenial(c, parsed.data.sourceUrl)
+  if (sourceDenial) return sourceDenial
   const routingDenial = await managedPlanGateResponse(c, 'routingBuilds')
   if (routingDenial) return routingDenial
   if (parsed.data.engine === 'planetiler_overture') {
@@ -1893,7 +1912,7 @@ operationsRoute.post('/operations/custom-domains', async (c) => {
       verificationToken: `planisfy-domain-${randomBytes(16).toString('hex')}`,
     })
     .returning()
-  return c.json({ data: created }, 201)
+  return c.json({ data: serializeCustomDomain(created!) }, 201)
 })
 
 operationsRoute.post('/operations/custom-domains/:id/verify', async (c) => {
@@ -1924,7 +1943,7 @@ operationsRoute.post('/operations/custom-domains/:id/verify', async (c) => {
     })
     .where(eq(customDomains.id, id))
     .returning()
-  return c.json({ data: updated })
+  return c.json({ data: serializeCustomDomain(updated!) })
 })
 
 operationsRoute.delete('/operations/custom-domains/:id', async (c) => {
@@ -2248,12 +2267,18 @@ async function validateWorkerNode(kind: 'local' | 'remote' | 'cloud', endpoint?:
   }
   try {
     const validatedEndpoint = validateRemoteWorkerEndpoint(endpoint)
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 3000)
-    const response = await fetch(validatedEndpoint, {
-      redirect: 'manual',
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout))
+    const response = await withOutboundResponse(
+      validatedEndpoint,
+      outboundOptions({ timeoutMs: 3000 }),
+      async (result) => {
+        result.resume()
+        return {
+          ok: Boolean(result.statusCode && result.statusCode >= 200 && result.statusCode < 300),
+          status: result.statusCode ?? 502,
+          statusText: result.statusMessage ?? '',
+        }
+      }
+    )
     return {
       ok: response.ok,
       checks: [
@@ -2327,7 +2352,8 @@ export async function deliverNotification(
     message: string
     timestamp: string
     metadata?: Record<string, unknown>
-  }
+  },
+  send: NotificationHttpSender = sendOutboundNotification
 ) {
   if (channel.provider === 'email') {
     const body = buildNotificationPayload('email', event) as {
@@ -2387,18 +2413,85 @@ export async function deliverNotification(
     }
   }
 
-  const response = await fetch(target, {
-    method: 'POST',
-    redirect: 'manual',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const response = await send(target, JSON.stringify(body), providerHosts(channel.provider))
   return {
     delivered: response.ok,
     adapter: channel.provider,
     status: response.status,
     payload: body,
     message: response.ok ? 'Notification endpoint accepted test payload' : response.statusText,
+  }
+}
+
+export type NotificationHttpSender = (
+  target: string,
+  body: string,
+  allowedHosts?: readonly string[]
+) => Promise<{ ok: boolean; status: number; statusText: string }>
+
+async function sendOutboundNotification(
+  target: string,
+  body: string,
+  allowedHosts?: readonly string[]
+) {
+  return withOutboundResponse(
+    target,
+    outboundOptions({
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': String(Buffer.byteLength(body)),
+      },
+      body,
+      allowedHosts,
+      timeoutMs: 10_000,
+    }),
+    async (response) => {
+      response.resume()
+      return {
+        ok: Boolean(
+          response.statusCode && response.statusCode >= 200 && response.statusCode < 300
+        ),
+        status: response.statusCode ?? 502,
+        statusText: response.statusMessage ?? '',
+      }
+    }
+  )
+}
+
+function providerHosts(provider: string) {
+  if (provider === 'slack') return slackWebhookHosts
+  if (provider === 'discord') return discordWebhookHosts
+  return undefined
+}
+
+function outboundOptions(
+  options: Omit<OutboundRequestOptions, 'privateAllowlist'> = {}
+): OutboundRequestOptions {
+  return {
+    ...options,
+    privateAllowlist: env.OUTBOUND_PRIVATE_ALLOWLIST,
+    maxRedirects: 0,
+  }
+}
+
+async function resolvedSourceDenial(c: Context<AuthEnv>, sourceUrl: string) {
+  try {
+    await resolveOutboundTarget(sourceUrl, {
+      privateAllowlist: env.OUTBOUND_PRIVATE_ALLOWLIST,
+    })
+    return null
+  } catch (err) {
+    if (!(err instanceof OutboundRequestError)) throw err
+    return c.json(
+      {
+        error: {
+          code: 'SOURCE_URL_REJECTED',
+          message: err.message,
+        },
+      },
+      400
+    )
   }
 }
 
@@ -2425,32 +2518,23 @@ export function buildNotificationDeliveryProof(
 async function verifyDomainDns(host: string, token: string) {
   const checkedAt = new Date().toISOString()
   const candidates = [`_planisfy.${host}`, host]
-  const checks = []
+  const checks: Array<{ host: string; status: 'matched' | 'not_matched' }> = []
 
   for (const candidate of candidates) {
     try {
       const records = (await resolveTxt(candidate)).map((parts) => parts.join(''))
       const matched = records.some((record) => record.includes(token))
-      checks.push({
-        host: candidate,
-        status: matched ? 'matched' : 'missing',
-        records,
-      })
+      checks.push({ host: candidate, status: matched ? 'matched' : 'not_matched' })
       if (matched) {
         return {
           verified: true,
           checkedAt,
           method: 'TXT',
-          expected: token,
           checks,
         }
       }
-    } catch (err) {
-      checks.push({
-        host: candidate,
-        status: 'error',
-        error: errorMessage(err),
-      })
+    } catch {
+      checks.push({ host: candidate, status: 'not_matched' })
     }
   }
 
@@ -2458,8 +2542,59 @@ async function verifyDomainDns(host: string, token: string) {
     verified: false,
     checkedAt,
     method: 'TXT',
-    expected: token,
     checks,
+  }
+}
+
+export function normalizeCustomDomainHost(value: string) {
+  const input = value.trim().replace(/\.$/, '')
+  if (
+    input.includes('/') ||
+    input.includes(':') ||
+    input.includes('@') ||
+    input.includes('\\')
+  ) {
+    throw new Error('Host must be a domain name without protocol, port, credentials, or path')
+  }
+  const host = domainToASCII(input).toLowerCase()
+  const labels = host.split('.')
+  if (
+    !host ||
+    host.length > 253 ||
+    isIP(host) ||
+    labels.length < 2 ||
+    labels.some(
+      (label) =>
+        !label ||
+        label.length > 63 ||
+        !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(label)
+    )
+  ) {
+    throw new Error('Host must be a valid multi-label domain name')
+  }
+  if (
+    ['localhost', 'local', 'internal', 'home', 'lan', 'invalid', 'test'].some(
+      (suffix) => host === suffix || host.endsWith(`.${suffix}`)
+    )
+  ) {
+    throw new Error('Host must be a public domain name')
+  }
+  return host
+}
+
+function serializeCustomDomain(domain: typeof customDomains.$inferSelect) {
+  return {
+    id: domain.id,
+    accountId: domain.accountId,
+    resourceType: domain.resourceType,
+    resourceId: domain.resourceId,
+    host: domain.host,
+    path: domain.path,
+    status: domain.status,
+    verificationToken: domain.verificationToken,
+    tlsEnabled: domain.tlsEnabled,
+    createdAt: domain.createdAt,
+    updatedAt: domain.updatedAt,
   }
 }
 

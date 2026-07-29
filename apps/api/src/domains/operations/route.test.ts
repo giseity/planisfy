@@ -8,6 +8,7 @@ import {
   formatSseEvent,
   isValidScheduleTimezone,
   nextScheduleRunAt,
+  normalizeCustomDomainHost,
   operationsOverviewSignature,
   prepareScheduledOperationRun,
   prepareWorkflowTemplateApplication,
@@ -354,17 +355,15 @@ test('applying invalid template returns validation error', () => {
 
 test('Slack and Discord notification payloads post to target', async () => {
   const calls: Array<{ url: string; body: unknown }> = []
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = (async (url, init) => {
+  const send = async (url: string, body: string) => {
     calls.push({
-      url: String(url),
-      body: JSON.parse(String(init?.body)),
+      url,
+      body: JSON.parse(body),
     })
-    return new Response('', { status: 200 })
-  }) as typeof fetch
+    return { ok: true, status: 200, statusText: 'OK' }
+  }
 
-  try {
-    await deliverNotification(
+  await deliverNotification(
       {
         provider: 'slack',
         target: 'https://hooks.slack.com/services/T000/B000/XXX',
@@ -373,9 +372,10 @@ test('Slack and Discord notification payloads post to target', async () => {
         event: 'notification.test',
         message: 'Planisfy test notification',
         timestamp: '2026-06-15T00:00:00.000Z',
-      }
+      },
+      send
     )
-    await deliverNotification(
+  await deliverNotification(
       {
         provider: 'discord',
         target: 'https://discord.com/api/webhooks/123/abc',
@@ -384,11 +384,9 @@ test('Slack and Discord notification payloads post to target', async () => {
         event: 'notification.test',
         message: 'Planisfy test notification',
         timestamp: '2026-06-15T00:00:00.000Z',
-      }
+      },
+      send
     )
-  } finally {
-    globalThis.fetch = originalFetch
-  }
 
   assert.deepEqual(calls, [
     {
@@ -453,28 +451,32 @@ test('preview workflow templates reject unsafe target URLs', () => {
 
 test('deliverNotification does not fetch rejected targets', async () => {
   let called = false
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = (async () => {
+  const send = async () => {
     called = true
-    return new Response('', { status: 200 })
-  }) as typeof fetch
+    return { ok: true, status: 200, statusText: 'OK' }
+  }
 
-  try {
-    const result = await deliverNotification(
+  const result = await deliverNotification(
       { provider: 'webhook', target: 'http://169.254.169.254/latest' },
       {
         event: 'notification.test',
         message: 'Planisfy test notification',
         timestamp: '2026-06-15T00:00:00.000Z',
-      }
+      },
+      send
     )
 
-    assert.equal(called, false)
-    assert.equal(result.delivered, false)
-    assert.equal(result.status, 400)
-    assert.equal(result.code, 'NOTIFICATION_TARGET_REJECTED')
-  } finally {
-    globalThis.fetch = originalFetch
+  assert.equal(called, false)
+  assert.equal(result.delivered, false)
+  assert.equal(result.status, 400)
+  assert.equal(result.code, 'NOTIFICATION_TARGET_REJECTED')
+})
+
+test('custom domain hosts normalize public IDNA names and reject private-style names', () => {
+  assert.equal(normalizeCustomDomainHost('Maps.Example.COM.'), 'maps.example.com')
+  assert.equal(normalizeCustomDomainHost('münchen.example.com'), 'xn--mnchen-3ya.example.com')
+  for (const host of ['localhost', 'service.internal', '127.0.0.1', 'host:443', 'https://x.com']) {
+    assert.throws(() => normalizeCustomDomainHost(host))
   }
 })
 
