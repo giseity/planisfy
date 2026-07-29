@@ -10,6 +10,7 @@ import {
   oauthAccounts,
   organizations,
   sessions,
+  twoFactors,
   users,
   verifications,
 } from '@planisfy/database'
@@ -32,6 +33,7 @@ const authSchema = {
   organization: organizations,
   member: members,
   invitation: invitations,
+  twoFactor: twoFactors,
   apikey: apiKeys,
 }
 

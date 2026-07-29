@@ -1,5 +1,5 @@
 import { createAuthClient } from 'better-auth/react'
-import { organizationClient } from 'better-auth/client/plugins'
+import { organizationClient, twoFactorClient } from 'better-auth/client/plugins'
 import { clientEnv } from './env'
 
 // Better Auth's inferred client type currently leaks non-portable internals
@@ -35,14 +35,53 @@ export type AuthClient = {
   signOut: AuthMethod
   signIn: { email: AuthMethod; social: AuthMethod }
   signUp: { email: AuthMethod }
+  twoFactor: {
+    disable: AuthMethod
+    enable: AuthMethod
+    generateBackupCodes: AuthMethod
+    getTotpUri: AuthMethod
+    verifyBackupCode: AuthMethod
+    verifyTotp: AuthMethod
+  }
   unlinkAccount: AuthMethod
   useSession: AuthHook
 }
 
 export const authClient = createAuthClient({
   baseURL: clientEnv.NEXT_PUBLIC_AUTH_ORIGIN,
-  plugins: [organizationClient()],
+  plugins: [
+    organizationClient(),
+    twoFactorClient({
+      onTwoFactorRedirect: () => {
+        const url = new URL('/two-factor', clientEnv.NEXT_PUBLIC_CONSOLE_URL)
+        const callbackUrl = readTwoFactorCallback()
+        if (callbackUrl) {
+          url.searchParams.set('callbackUrl', callbackUrl)
+        }
+        window.location.assign(url)
+      },
+    }),
+  ],
 }) as unknown as AuthClient
+
+export const TWO_FACTOR_CALLBACK_STORAGE_KEY = 'planisfy:auth:two-factor-callback'
+
+export function rememberTwoFactorCallback(callbackUrl: string) {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(TWO_FACTOR_CALLBACK_STORAGE_KEY, callbackUrl)
+}
+
+export function consumeTwoFactorCallback() {
+  if (typeof window === 'undefined') return null
+  const callbackUrl = readTwoFactorCallback()
+  window.sessionStorage.removeItem(TWO_FACTOR_CALLBACK_STORAGE_KEY)
+  return callbackUrl
+}
+
+function readTwoFactorCallback() {
+  if (typeof window === 'undefined') return null
+  return window.sessionStorage.getItem(TWO_FACTOR_CALLBACK_STORAGE_KEY)
+}
 
 export type SocialProvider = 'github' | 'google'
 

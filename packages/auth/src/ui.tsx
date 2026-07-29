@@ -3,8 +3,10 @@
 import * as React from 'react'
 import {
   authClient,
+  consumeTwoFactorCallback,
   isEmailPasswordAuthEnabled,
   isSocialProviderEnabled,
+  rememberTwoFactorCallback,
   signIn,
   signUp,
   type SocialProvider,
@@ -132,6 +134,15 @@ function hasSessionToken(data: unknown) {
   if (!data || typeof data !== 'object' || !('token' in data)) return false
   const token = (data as { token?: unknown }).token
   return typeof token === 'string' && token.length > 0
+}
+
+function requiresTwoFactor(data: unknown) {
+  return Boolean(
+    data &&
+      typeof data === 'object' &&
+      'twoFactorRedirect' in data &&
+      (data as { twoFactorRedirect?: unknown }).twoFactorRedirect === true
+  )
 }
 
 function tokenFromUrl() {
@@ -314,6 +325,7 @@ function SocialButton({
   async function handleSocialSignIn() {
     setLoading(true)
     try {
+      rememberTwoFactorCallback(callbackURL)
       const { data, error } = await signIn.social({ provider, callbackURL })
       if (error) {
         toast.error(error.message || `${provider} sign-in is unavailable`)
@@ -399,12 +411,15 @@ export function SignInForm({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     setLoading(true)
+    rememberTwoFactorCallback(target)
     await signIn.email({
       email,
       password,
       callbackURL: target,
       fetchOptions: {
         onSuccess: (ctx: { data?: unknown }) => {
+          if (requiresTwoFactor(ctx.data)) return
+          consumeTwoFactorCallback()
           window.location.assign(authRedirectFromData(ctx.data) ?? target)
         },
         onError: (ctx: { error: { code?: string; message: string; statusText?: string } }) => {

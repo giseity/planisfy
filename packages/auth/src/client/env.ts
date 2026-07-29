@@ -6,6 +6,7 @@ declare const process: {
 
 const schema = z.object({
   NEXT_PUBLIC_AUTH_ORIGIN: z.string().url(),
+  NEXT_PUBLIC_CONSOLE_URL: z.string().url(),
   NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: z.string().optional(),
   NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED: z
     .enum(['true', 'false'])
@@ -17,6 +18,7 @@ export const clientEnv = createEnv(
   schema,
   {
     NEXT_PUBLIC_AUTH_ORIGIN: process.env.NEXT_PUBLIC_AUTH_ORIGIN,
+    NEXT_PUBLIC_CONSOLE_URL: process.env.NEXT_PUBLIC_CONSOLE_URL,
     NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: process.env.NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS,
     NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED: process.env.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED,
   },

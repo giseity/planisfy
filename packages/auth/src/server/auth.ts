@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth'
-import { createAccessControl, organization } from 'better-auth/plugins'
+import { createAccessControl, organization, twoFactor } from 'better-auth/plugins'
 import { oAuthProxy } from 'better-auth/plugins/oauth-proxy'
 import { apiKey } from '@better-auth/api-key'
 import { randomUUID } from 'node:crypto'
@@ -304,6 +304,10 @@ export const auth = betterAuth({
           await requireAccountFeature(member.organizationId, 'team')
         },
       },
+    }),
+    twoFactor({
+      issuer: 'Planisfy',
+      allowPasswordless: true,
     }),
     apiKey([
       {

@@ -72,6 +72,7 @@ export const users = pgTable(
       .references(() => accounts.id, { onDelete: "cascade" }),
     email: varchar("email", { length: 255 }).notNull(),
     emailVerified: boolean("email_verified").notNull().default(false),
+    twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
     role: systemRoleEnum("role").default("USER").notNull(),
     image: text("image"),
     name: varchar("name", { length: 128 }).notNull(),
@@ -240,3 +241,20 @@ export const verifications = pgTable("verifications", {
     .notNull()
     .defaultNow(),
 });
+
+export const twoFactors = pgTable(
+  "two_factors",
+  {
+    id: text("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    verified: boolean("verified").notNull().default(true),
+  },
+  (table) => [
+    uniqueIndex("two_factors_user_unique").on(table.userId),
+    index("two_factors_secret_idx").on(table.secret),
+  ],
+);
