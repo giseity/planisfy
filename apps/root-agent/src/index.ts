@@ -20,6 +20,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { pipeline } from 'node:stream/promises'
 import { Readable, Transform } from 'node:stream'
 import { loadWorkspaceEnv } from '@planisfy/env/node'
+import { parseBuilderImageAllowlist } from '@planisfy/geodata-contracts'
 import {
   normalizeOutboundUrl,
   OutboundRequestError,
@@ -63,6 +64,18 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(64 * 1024 * 1024),
+  ROOT_AGENT_ALLOWED_VALHALLA_IMAGES: z.string().default(''),
+  ROOT_AGENT_ALLOWED_PLANETILER_IMAGES: z.string().default(''),
+  ROOT_AGENT_BUILD_CPUS: z.coerce.number().positive().max(256).optional(),
+  ROOT_AGENT_BUILD_MEMORY: z
+    .string()
+    .regex(/^[1-9]\d*(?:[bkmg])?$/i, 'Use a Docker memory value such as 16g')
+    .optional(),
+  ROOT_AGENT_BUILD_PIDS_LIMIT: z.coerce.number().int().positive().max(1_048_576).optional(),
+  ROOT_AGENT_PLANETILER_NETWORK: z
+    .string()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/)
+    .optional(),
   ROOT_AGENT_COMPOSE_FILE: z.string().optional(),
   ROOT_AGENT_COMPOSE_ENV_FILE: z.string().optional(),
   ROOT_AGENT_COMPOSE_CWD: z.string().optional(),
@@ -87,6 +100,90 @@ const capabilities = config.ROOT_AGENT_CAPABILITIES.split(',')
 const activationCapable =
   capabilities.includes('self_host_activation') ||
   capabilities.includes('managed_runtime_activation')
+const buildAgentPolicy = validateBuildAgentConfiguration({
+  capabilities,
+  uid: process.getuid?.(),
+  gid: process.getgid?.(),
+  valhallaImages: config.ROOT_AGENT_ALLOWED_VALHALLA_IMAGES,
+  planetilerImages: config.ROOT_AGENT_ALLOWED_PLANETILER_IMAGES,
+  cpus: config.ROOT_AGENT_BUILD_CPUS,
+  memory: config.ROOT_AGENT_BUILD_MEMORY,
+  pidsLimit: config.ROOT_AGENT_BUILD_PIDS_LIMIT,
+  planetilerNetwork: config.ROOT_AGENT_PLANETILER_NETWORK,
+})
+
+type BuilderKind = 'valhalla' | 'planetiler'
+
+type BuilderSandbox = {
+  uid: number
+  gid: number
+  cpus: number
+  memory: string
+  pidsLimit: number
+}
+
+type BuildAgentPolicy = {
+  valhallaImages: Set<string>
+  planetilerImages: Set<string>
+  sandbox?: BuilderSandbox
+  planetilerNetwork?: string
+}
+
+export function validateBuildAgentConfiguration(input: {
+  capabilities: string[]
+  uid?: number
+  gid?: number
+  valhallaImages: string
+  planetilerImages: string
+  cpus?: number
+  memory?: string
+  pidsLimit?: number
+  planetilerNetwork?: string
+}): BuildAgentPolicy {
+  const valhallaCapable = input.capabilities.includes('valhalla_graph_build')
+  const planetilerCapable = input.capabilities.includes('basemap_build')
+  if (!valhallaCapable && !planetilerCapable) {
+    return { valhallaImages: new Set(), planetilerImages: new Set() }
+  }
+  if (input.uid === undefined || input.gid === undefined || input.uid === 0) {
+    throw new Error('Build-capable root agents must run as a dedicated non-root user')
+  }
+  if (input.cpus === undefined || input.memory === undefined || input.pidsLimit === undefined) {
+    throw new Error(
+      'Build-capable root agents require ROOT_AGENT_BUILD_CPUS, ROOT_AGENT_BUILD_MEMORY, and ROOT_AGENT_BUILD_PIDS_LIMIT'
+    )
+  }
+  if (planetilerCapable && !input.planetilerNetwork) {
+    throw new Error('Basemap build agents require ROOT_AGENT_PLANETILER_NETWORK')
+  }
+
+  return {
+    valhallaImages: new Set(
+      valhallaCapable
+        ? parseBuilderImageAllowlist(
+            input.valhallaImages,
+            'ROOT_AGENT_ALLOWED_VALHALLA_IMAGES'
+          )
+        : []
+    ),
+    planetilerImages: new Set(
+      planetilerCapable
+        ? parseBuilderImageAllowlist(
+            input.planetilerImages,
+            'ROOT_AGENT_ALLOWED_PLANETILER_IMAGES'
+          )
+        : []
+    ),
+    sandbox: {
+      uid: input.uid,
+      gid: input.gid,
+      cpus: input.cpus,
+      memory: input.memory,
+      pidsLimit: input.pidsLimit,
+    },
+    planetilerNetwork: input.planetilerNetwork,
+  }
+}
 
 if (
   activationCapable &&
@@ -377,6 +474,7 @@ async function buildRoutingGraph(token: string, build: RoutingGraphBuild) {
   const graphTarPath = join(buildDir, 'routing-graph.tar.gz')
 
   try {
+    assertAllowedBuilderImage('valhalla', build.valhallaImage)
     await updateBuild(token, build.id, 'preparing', 5, 'Preparing build workspace')
     await writeValhallaConfig(buildDir)
     await updateBuild(token, build.id, 'downloading_source', 10, 'Downloading OSM PBF source')
@@ -462,7 +560,7 @@ async function buildRoutingGraph(token: string, build: RoutingGraphBuild) {
     }
     const localArtifacts = await existingLocalArtifacts([graphTarPath])
     await updateBuild(token, build.id, 'failed', 100, 'Routing graph build failed', {
-      errorCode: 'ROOT_AGENT_BUILD_FAILED',
+      errorCode: builderErrorCode(err, 'ROOT_AGENT_BUILD_FAILED'),
       errorMessage: err instanceof Error ? err.message : String(err),
       ...(localArtifacts.length ? { output: { localArtifacts } } : {}),
     })
@@ -478,6 +576,7 @@ async function buildBasemap(token: string, build: BasemapBuild) {
   const outputPath = join(buildDir, `basemap.${extension}`)
 
   try {
+    assertAllowedBuilderImage('planetiler', build.planetilerImage)
     if (build.engine !== 'planetiler_osm' || build.sourceKind !== 'osm_pbf') {
       throw new Error(
         'Only planetiler_osm builds from OSM PBF sources are enabled in this root-agent version.'
@@ -504,14 +603,15 @@ async function buildBasemap(token: string, build: BasemapBuild) {
       '--download',
       ...planetilerExtraArgs(build.config),
     ]
-    await runLogged(token, build.id, 'docker', [
-      'run',
-      '--rm',
-      '-v',
-      `${buildDir}:/data`,
+    await dockerBuilderRun(
+      token,
+      build.id,
+      'planetiler',
       build.planetilerImage,
-      ...planetilerArgs,
-    ])
+      buildDir,
+      '/data',
+      planetilerArgs
+    )
 
     await updateBuild(token, build.id, 'packaging', 85, 'Validating basemap artifact')
     const checksumSha256 = await sha256File(outputPath)
@@ -546,7 +646,7 @@ async function buildBasemap(token: string, build: BasemapBuild) {
     }
     const localArtifacts = await existingLocalArtifacts([outputPath])
     await updateBuild(token, build.id, 'failed', 100, 'Basemap build failed', {
-      errorCode: 'ROOT_AGENT_BASEMAP_BUILD_FAILED',
+      errorCode: builderErrorCode(err, 'ROOT_AGENT_BASEMAP_BUILD_FAILED'),
       errorMessage: err instanceof Error ? err.message : String(err),
       ...(localArtifacts.length ? { output: { localArtifacts } } : {}),
     })
@@ -1076,14 +1176,7 @@ async function dockerRun(
   buildDir: string,
   args: string[]
 ) {
-  await runLogged(token, buildId, 'docker', [
-    'run',
-    '--rm',
-    '-v',
-    `${buildDir}:/work`,
-    image,
-    ...args,
-  ])
+  await dockerBuilderRun(token, buildId, 'valhalla', image, buildDir, '/work', args)
 }
 
 async function dockerShell(
@@ -1094,6 +1187,70 @@ async function dockerShell(
   commands: string[]
 ) {
   await dockerRun(token, buildId, image, buildDir, ['sh', '-lc', commands.join(' && ')])
+}
+
+async function dockerBuilderRun(
+  token: string,
+  buildId: string,
+  kind: BuilderKind,
+  image: string,
+  buildDir: string,
+  mountTarget: '/work' | '/data',
+  command: string[]
+) {
+  assertAllowedBuilderImage(kind, image)
+  const sandbox = buildAgentPolicy.sandbox
+  if (!sandbox) throw new Error('Builder sandbox is not configured')
+  await runLogged(
+    token,
+    buildId,
+    'docker',
+    buildBuilderDockerArgs({
+      image,
+      buildDir,
+      mountTarget,
+      network: kind === 'valhalla' ? 'none' : buildAgentPolicy.planetilerNetwork!,
+      sandbox,
+      command,
+    })
+  )
+}
+
+export function buildBuilderDockerArgs(input: {
+  image: string
+  buildDir: string
+  mountTarget: '/work' | '/data'
+  network: string
+  sandbox: BuilderSandbox
+  command: string[]
+}) {
+  return [
+    'run',
+    '--rm',
+    '--user',
+    `${input.sandbox.uid}:${input.sandbox.gid}`,
+    '--cap-drop=ALL',
+    '--security-opt=no-new-privileges',
+    '--read-only',
+    '--pids-limit',
+    String(input.sandbox.pidsLimit),
+    '--cpus',
+    String(input.sandbox.cpus),
+    '--memory',
+    input.sandbox.memory,
+    '--memory-swap',
+    input.sandbox.memory,
+    '--tmpfs',
+    '/tmp:rw,noexec,nosuid,nodev,size=1g',
+    '--network',
+    input.network,
+    '--mount',
+    `type=bind,src=${input.buildDir},dst=${input.mountTarget}`,
+    '--workdir',
+    input.mountTarget,
+    input.image,
+    ...input.command,
+  ]
 }
 
 async function runLogged(token: string, buildId: string, command: string, args: string[]) {
@@ -1574,16 +1731,30 @@ async function cleanupStaleChildren(root: string, cutoff: number) {
 }
 
 function planetilerExtraArgs(configValue: Record<string, unknown>) {
-  const args = Array.isArray(configValue.planetilerArgs)
-    ? configValue.planetilerArgs.filter((item): item is string => typeof item === 'string')
-    : []
   const minZoom = numberFromConfig(configValue, 'minZoom', NaN)
   const maxZoom = numberFromConfig(configValue, 'maxZoom', NaN)
   return [
     ...(Number.isFinite(minZoom) ? [`--minzoom=${minZoom}`] : []),
     ...(Number.isFinite(maxZoom) ? [`--maxzoom=${maxZoom}`] : []),
-    ...args,
   ]
+}
+
+class BuilderImagePolicyError extends Error {}
+
+function assertAllowedBuilderImage(kind: BuilderKind, image: string) {
+  const allowed =
+    kind === 'valhalla' ? buildAgentPolicy.valhallaImages : buildAgentPolicy.planetilerImages
+  if (!allowed.has(image)) {
+    throw new BuilderImagePolicyError(
+      `Persisted ${kind} builder image is not in this root agent's digest allowlist`
+    )
+  }
+}
+
+function builderErrorCode(error: unknown, fallback: string) {
+  return error instanceof BuilderImagePolicyError
+    ? 'ROOT_AGENT_UNAPPROVED_BUILDER_IMAGE'
+    : fallback
 }
 
 function numberFromConfig(configValue: Record<string, unknown>, key: string, fallback: number) {
@@ -1791,8 +1962,10 @@ function delay(ms: number) {
 }
 
 export const __rootAgentTest = {
+  assertAllowedBuilderImage,
   downloadExternalFile,
   linkFileAtomic,
+  planetilerExtraArgs,
   secureStateDirectory,
   validateBasemapRuntimeTarget,
   writeAgentState,

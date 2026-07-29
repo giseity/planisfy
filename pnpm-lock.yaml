@@ -548,6 +548,9 @@ importers:
       '@planisfy/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@planisfy/geodata-contracts':
+        specifier: workspace:*
+        version: link:../../packages/geodata-contracts
       '@planisfy/outbound':
         specifier: workspace:*
         version: link:../../packages/outbound

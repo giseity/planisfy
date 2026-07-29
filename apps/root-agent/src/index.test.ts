@@ -4,7 +4,129 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { __rootAgentTest } from './index'
+import {
+  __rootAgentTest,
+  buildBuilderDockerArgs,
+  validateBuildAgentConfiguration,
+} from './index'
+
+const VALHALLA_IMAGE = `ghcr.io/planisfy/valhalla@sha256:${'a'.repeat(64)}`
+const PLANETILER_IMAGE = `ghcr.io/planisfy/planetiler@sha256:${'b'.repeat(64)}`
+
+test('build agents require non-root execution and complete sandbox policy', () => {
+  const base = {
+    capabilities: ['valhalla_graph_build'],
+    uid: 1000,
+    gid: 1000,
+    valhallaImages: VALHALLA_IMAGE,
+    planetilerImages: '',
+    cpus: 4,
+    memory: '16g',
+    pidsLimit: 512,
+  }
+  const policy = validateBuildAgentConfiguration(base)
+  assert.deepEqual([...policy.valhallaImages], [VALHALLA_IMAGE])
+
+  assert.throws(() => validateBuildAgentConfiguration({ ...base, uid: 0 }), /non-root/)
+  assert.throws(
+    () => validateBuildAgentConfiguration({ ...base, memory: undefined }),
+    /ROOT_AGENT_BUILD_MEMORY/
+  )
+  assert.throws(
+    () =>
+      validateBuildAgentConfiguration({
+        ...base,
+        capabilities: ['basemap_build'],
+        valhallaImages: '',
+        planetilerImages: PLANETILER_IMAGE,
+      }),
+    /ROOT_AGENT_PLANETILER_NETWORK/
+  )
+})
+
+test('activation-only agents do not require builder privileges or policy', () => {
+  assert.deepEqual(
+    validateBuildAgentConfiguration({
+      capabilities: ['self_host_activation'],
+      uid: 0,
+      gid: 0,
+      valhallaImages: '',
+      planetilerImages: '',
+    }),
+    {
+      valhallaImages: new Set(),
+      planetilerImages: new Set(),
+    }
+  )
+})
+
+test('builder Docker arguments enforce the complete sandbox command shape', () => {
+  const args = buildBuilderDockerArgs({
+    image: VALHALLA_IMAGE,
+    buildDir: '/var/lib/planisfy/root-agent/work/job-1',
+    mountTarget: '/work',
+    network: 'none',
+    sandbox: { uid: 1000, gid: 1000, cpus: 4, memory: '16g', pidsLimit: 512 },
+    command: ['valhalla_build_tiles', '-c', '/work/valhalla.json'],
+  })
+
+  assert.deepEqual(args, [
+    'run',
+    '--rm',
+    '--user',
+    '1000:1000',
+    '--cap-drop=ALL',
+    '--security-opt=no-new-privileges',
+    '--read-only',
+    '--pids-limit',
+    '512',
+    '--cpus',
+    '4',
+    '--memory',
+    '16g',
+    '--memory-swap',
+    '16g',
+    '--tmpfs',
+    '/tmp:rw,noexec,nosuid,nodev,size=1g',
+    '--network',
+    'none',
+    '--mount',
+    'type=bind,src=/var/lib/planisfy/root-agent/work/job-1,dst=/work',
+    '--workdir',
+    '/work',
+    VALHALLA_IMAGE,
+    'valhalla_build_tiles',
+    '-c',
+    '/work/valhalla.json',
+  ])
+})
+
+test('Planetiler arguments ignore persisted raw command arguments', () => {
+  assert.deepEqual(
+    __rootAgentTest.planetilerExtraArgs({
+      minZoom: 2,
+      maxZoom: 12,
+      planetilerArgs: ['--download-wikidata', '--arbitrary-option'],
+    }),
+    ['--minzoom=2', '--maxzoom=12']
+  )
+})
+
+test('persisted legacy images cannot bypass the root-agent allowlist', () => {
+  assert.doesNotThrow(() => __rootAgentTest.assertAllowedBuilderImage('valhalla', VALHALLA_IMAGE))
+  assert.throws(
+    () => __rootAgentTest.assertAllowedBuilderImage('valhalla', 'ghcr.io/valhalla/valhalla:3.7.0'),
+    /not in this root agent's digest allowlist/
+  )
+  assert.throws(
+    () =>
+      __rootAgentTest.assertAllowedBuilderImage(
+        'planetiler',
+        `ghcr.io/planisfy/planetiler@sha256:${'c'.repeat(64)}`
+      ),
+    /not in this root agent's digest allowlist/
+  )
+})
 
 test('external downloads pin the validated host and resume valid ranges', async () => {
   const root = await mkdtemp(join(tmpdir(), 'planisfy-root-agent-download-'))

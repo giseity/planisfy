@@ -10,10 +10,11 @@
     "start": "node dist/index.js",
     "lint": "node ../../packages/eslint-config/node_modules/eslint/bin/eslint.js . --max-warnings 0",
     "check-types": "tsc --noEmit",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "test": "ROOT_AGENT_ALLOWED_VALHALLA_IMAGES=ghcr.io/planisfy/valhalla@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ROOT_AGENT_ALLOWED_PLANETILER_IMAGES=ghcr.io/planisfy/planetiler@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ROOT_AGENT_BUILD_CPUS=4 ROOT_AGENT_BUILD_MEMORY=16g ROOT_AGENT_BUILD_PIDS_LIMIT=512 ROOT_AGENT_PLANETILER_NETWORK=planisfy-builder-egress tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@planisfy/env": "workspace:*",
+    "@planisfy/geodata-contracts": "workspace:*",
     "@planisfy/outbound": "workspace:*",
     "zod": "^4.3.6"
   },

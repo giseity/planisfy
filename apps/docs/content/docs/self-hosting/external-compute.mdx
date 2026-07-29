@@ -67,6 +67,12 @@ ROOT_AGENT_UPLOAD_CONCURRENCY=4
 OUTBOUND_PRIVATE_ALLOWLIST=
 ROOT_AGENT_SOURCE_MAX_BYTES=274877906944
 ROOT_AGENT_DEM_TILE_MAX_BYTES=67108864
+ROOT_AGENT_ALLOWED_VALHALLA_IMAGES=ghcr.io/your-org/valhalla@sha256:replace-with-reviewed-digest
+ROOT_AGENT_ALLOWED_PLANETILER_IMAGES=ghcr.io/your-org/planetiler@sha256:replace-with-reviewed-digest
+ROOT_AGENT_BUILD_CPUS=8
+ROOT_AGENT_BUILD_MEMORY=32g
+ROOT_AGENT_BUILD_PIDS_LIMIT=512
+ROOT_AGENT_PLANETILER_NETWORK=planisfy-builder-egress
 ```
 
 Source and DEM downloads resolve and pin every connection and redirect. Public
@@ -74,6 +80,15 @@ destinations work by default. If this agent intentionally downloads from a
 private service, list its exact hostname, IP address, or CIDR in
 `OUTBOUND_PRIVATE_ALLOWLIST`; the API and agent must each be configured
 independently.
+
+Build-capable agents refuse to start as root or without finite CPU, memory, and
+PID limits. Run the service as a dedicated user and use digest-pinned image
+allowlists that match the API operator policy. Valhalla containers run without
+network access. Planetiler uses only `ROOT_AGENT_PLANETILER_NETWORK` because its
+supported build downloads auxiliary data; create that dedicated Docker network
+with the egress controls required by your deployment. Builder containers drop
+all capabilities, use a read-only root filesystem, and receive only their
+job-specific workspace as a writable host mount.
 
 Serving workers need activation paths and a runtime supervisor:
 
@@ -109,7 +124,8 @@ After successful registration, the agent writes its `pat_` node token to `ROOT_A
 
 ## Run with systemd
 
-Create a dedicated service user that can run Docker, then install a unit similar to this:
+Create a dedicated non-root service user that can run rootless Docker or access
+the trusted host Docker daemon, then install a unit similar to this:
 
 ```ini
 [Unit]
