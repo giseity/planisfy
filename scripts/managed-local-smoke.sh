@@ -275,7 +275,8 @@ echo "Running managed smoke against local ingress"
   INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
   ALLOW_INSECURE_MANAGED_STAGING=true \
   ALLOW_LOCAL_MANAGED_SMOKE=true \
-    node scripts/managed-staging-smoke.mjs
+  OUTBOUND_PRIVATE_ALLOWLIST="localhost,127.0.0.1" \
+    pnpm smoke:managed-staging
 )
 
 echo "Managed-local smoke passed"

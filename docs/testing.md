@@ -78,7 +78,9 @@ MANAGED_STAGING_TEST_EMAIL="..." MANAGED_STAGING_TEST_PASSWORD="..." pnpm smoke:
 ```
 
 `smoke:managed-staging` stays a fast public ingress, CORS, provider
-configuration, and storage write/read/delete check. The product-loop wrapper
+configuration, and storage write/read/delete check. Its ingress values must be
+clean public HTTPS origins; DNS answers are validated and pinned, redirects are
+revalidated, and response sizes and waits are bounded. The product-loop wrapper
 runs the full upload/process/publish/render browser flow against real managed
 public URLs and an existing managed test user; it does not seed data or reset
 the environment.

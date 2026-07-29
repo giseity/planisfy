@@ -23,6 +23,9 @@ importers:
       '@planisfy/eslint-config':
         specifier: workspace:*
         version: link:packages/eslint-config
+      '@planisfy/outbound':
+        specifier: workspace:^
+        version: link:packages/outbound
       '@planisfy/typescript-config':
         specifier: workspace:*
         version: link:packages/typescript-config
