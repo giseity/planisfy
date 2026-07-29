@@ -18,6 +18,13 @@ type HealthCheck = {
   bucket?: string
   path?: string
 }
+type RedisProbeClient = {
+  connect(): Promise<unknown>
+  ping(): Promise<unknown>
+  get(key: string): Promise<string | null>
+  quit(): Promise<unknown>
+  disconnect(): void
+}
 
 // ── GET /health — Basic readiness check ─────────────────────────────────────
 
@@ -61,38 +68,26 @@ healthRoute.get('/health/detailed', async (c) => {
 
   // Redis
   const redisStart = Date.now()
-  try {
-    const Redis = await import('ioredis').then((m) => m.default)
-    const redis = new Redis({
-      ...getRedisConnection(),
-      maxRetriesPerRequest: 1,
-      connectTimeout: 3000,
-      lazyConnect: true,
-    })
-    await redis.connect()
-    await redis.ping()
-    checks.redis = { status: 'ok', latency: Date.now() - redisStart }
-
-    const heartbeat = await redis.get(WORKER_GEODATA_HEARTBEAT_KEY)
+  const redisProbe = await probeRedisHealth(redisStart)
+  checks.redis = redisProbe.check
+  if (redisProbe.check.status === 'ok') {
+    const heartbeat = redisProbe.heartbeat
     if (heartbeat) {
-      const parsed = JSON.parse(heartbeat) as { timestamp?: string }
-      const timestamp = parsed.timestamp ? Date.parse(parsed.timestamp) : NaN
-      const ageMs = Number.isFinite(timestamp) ? Date.now() - timestamp : null
-      checks.workerGeodata = {
-        status: ageMs !== null && ageMs <= 60_000 ? 'ok' : 'degraded',
-        latency: ageMs ?? undefined,
+      try {
+        const parsed = JSON.parse(heartbeat) as { timestamp?: string }
+        const timestamp = parsed.timestamp ? Date.parse(parsed.timestamp) : NaN
+        const ageMs = Number.isFinite(timestamp) ? Date.now() - timestamp : null
+        checks.workerGeodata = {
+          status: ageMs !== null && ageMs <= 60_000 ? 'ok' : 'degraded',
+          latency: ageMs ?? undefined,
+        }
+      } catch {
+        checks.workerGeodata = { status: 'degraded', error: 'Invalid heartbeat payload' }
       }
     } else {
       checks.workerGeodata = { status: 'unavailable' }
     }
-
-    await redis.quit()
-  } catch (err) {
-    checks.redis = {
-      status: 'error',
-      latency: Date.now() - redisStart,
-      error: err instanceof Error ? err.message : String(err),
-    }
+  } else {
     checks.workerGeodata = { status: 'unknown', error: 'Redis unavailable' }
     healthy = false
   }
@@ -154,6 +149,68 @@ healthRoute.get('/health/detailed', async (c) => {
 
 function getRedisConnection() {
   return redisConnection
+}
+
+export async function probeRedisHealth(
+  start = Date.now(),
+  createClient: () => Promise<RedisProbeClient> = createRedisProbeClient
+): Promise<{ check: HealthCheck; heartbeat: string | null }> {
+  let redis: RedisProbeClient | undefined
+  try {
+    redis = await createClient()
+    await redis.connect()
+    await redis.ping()
+    const heartbeat = await redis.get(WORKER_GEODATA_HEARTBEAT_KEY)
+    return {
+      check: { status: 'ok', latency: Date.now() - start },
+      heartbeat,
+    }
+  } catch (err) {
+    return {
+      check: {
+        status: 'error',
+        latency: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+      },
+      heartbeat: null,
+    }
+  } finally {
+    if (redis) {
+      try {
+        await withCleanupTimeout(redis.quit(), 250)
+      } catch {
+        // Forced disconnect below is the cleanup guarantee.
+      } finally {
+        redis.disconnect()
+      }
+    }
+  }
+}
+
+async function createRedisProbeClient(): Promise<RedisProbeClient> {
+  const Redis = await import('ioredis').then((module) => module.default)
+  return new Redis({
+    ...getRedisConnection(),
+    maxRetriesPerRequest: 1,
+    connectTimeout: 3000,
+    lazyConnect: true,
+    enableOfflineQueue: false,
+    retryStrategy: () => null,
+  })
+}
+
+async function withCleanupTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Redis cleanup timed out')), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 async function checkTileWorkerHealth(): Promise<HealthCheck> {

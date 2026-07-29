@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { checkStorageHealth } from "./route";
+import { checkStorageHealth, probeRedisHealth } from "./route";
 
 test("storage health reports reachable local storage", async () => {
   const previousProvider = process.env.STORAGE_PROVIDER;
@@ -59,6 +59,36 @@ test("storage health reports degraded remote storage without network calls", asy
     restoreEnv("R2_ACCESS_KEY_ID", previousAccessKey);
     restoreEnv("R2_SECRET_ACCESS_KEY", previousSecret);
   }
+});
+
+test("Redis health probes disconnect after success", async () => {
+  const calls: string[] = [];
+  const result = await probeRedisHealth(0, async () => ({
+    async connect() { calls.push("connect"); },
+    async ping() { calls.push("ping"); },
+    async get() { calls.push("get"); return "heartbeat"; },
+    async quit() { calls.push("quit"); },
+    disconnect() { calls.push("disconnect"); },
+  }));
+
+  assert.equal(result.check.status, "ok");
+  assert.equal(result.heartbeat, "heartbeat");
+  assert.deepEqual(calls, ["connect", "ping", "get", "quit", "disconnect"]);
+});
+
+test("Redis health probes disconnect when commands and graceful cleanup fail", async () => {
+  const calls: string[] = [];
+  const result = await probeRedisHealth(0, async () => ({
+    async connect() { calls.push("connect"); },
+    async ping() { calls.push("ping"); throw new Error("ping failed"); },
+    async get() { calls.push("get"); return null; },
+    async quit() { calls.push("quit"); throw new Error("quit failed"); },
+    disconnect() { calls.push("disconnect"); },
+  }));
+
+  assert.equal(result.check.status, "error");
+  assert.match(result.check.error ?? "", /ping failed/);
+  assert.deepEqual(calls, ["connect", "ping", "quit", "disconnect"]);
 });
 
 function restoreEnv(name: string, value: string | undefined) {
