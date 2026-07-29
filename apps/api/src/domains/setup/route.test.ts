@@ -5,10 +5,11 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { Hono } from 'hono'
 import { setupRoute } from './route'
+import type { AuthEnv } from '../../middleware/auth'
 
 const app = new Hono()
 app.route('/', setupRoute)
-const consoleApp = new Hono()
+const consoleApp = new Hono<AuthEnv>()
 consoleApp.use('*', async (c, next) => {
   c.set('platformRole', 'ADMIN')
   await next()
