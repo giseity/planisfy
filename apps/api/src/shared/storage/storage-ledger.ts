@@ -1,6 +1,7 @@
 import { db, storageObjects } from "@planisfy/database";
 
-type DatabaseClient = typeof db;
+type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type DatabaseClient = typeof db | DatabaseTransaction;
 type JsonObject = Record<string, unknown>;
 
 export interface StorageObjectInput {

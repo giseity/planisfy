@@ -6,6 +6,8 @@ import {
   buildSpriteJson,
   extractSpriteImageIds,
   normalizeSpriteAssetUpload,
+  planSpriteSheet,
+  readPngDimensions,
   SpriteAssetValidationError,
   spriteStorageKeys,
   styleReferencesSpriteAssets,
@@ -88,6 +90,49 @@ test("sprite helpers validate PNG uploads and build real sheets", () => {
   assert.equal(decoded.height, 2);
   assert.deepEqual([...decoded.data.slice(0, 4)], [255, 0, 0, 255]);
   assert.deepEqual([...decoded.data.slice(8, 12)], [0, 255, 0, 255]);
+});
+
+test("PNG dimensions are rejected from IHDR before decoding", () => {
+  const source = new PNG({ width: 1, height: 1 });
+  const oversizedHeader = PNG.sync.write(source);
+  oversizedHeader.writeUInt32BE(513, 16);
+
+  assert.deepEqual(readPngDimensions(PNG.sync.write(source)), {
+    width: 1,
+    height: 1,
+  });
+  assert.throws(
+    () =>
+      validateSpritePngUpload({
+        buffer: oversizedHeader,
+        contentType: "image/png",
+      }),
+    (err) =>
+      err instanceof SpriteAssetValidationError &&
+      err.code === "INVALID_SPRITE_DIMENSIONS",
+  );
+});
+
+test("sprite layout wraps deterministically within bounded dimensions", () => {
+  const assets = Array.from({ length: 5 }, (_, index) => ({
+    id: `asset-${index}`,
+    name: `icon-${index}`,
+    png: new PNG({ width: 512, height: 512 }),
+  }));
+  const layout = planSpriteSheet(assets, 2);
+
+  assert.equal(layout.width, 4096);
+  assert.equal(layout.height, 2048);
+  assert.deepEqual(
+    layout.placements.map(({ x, y }) => [x, y]),
+    [
+      [0, 0],
+      [1024, 0],
+      [2048, 0],
+      [3072, 0],
+      [0, 1024],
+    ],
+  );
 });
 
 test("sprite helpers normalize safe SVG uploads into raster PNGs", async () => {

@@ -79,6 +79,8 @@ const avatarUserLimiter = createOperationalLimiter('avatar:user', 6, 60 * 60)
 const avatarIpLimiter = createOperationalLimiter('avatar:ip', 30, 60 * 60)
 const notificationChannelLimiter = createOperationalLimiter('notification:channel', 1, 60)
 const notificationAccountLimiter = createOperationalLimiter('notification:account', 10, 60 * 60)
+const spriteUploadLimiter = createOperationalLimiter('sprite:upload', 10, 60)
+const spritePublicationLimiter = createOperationalLimiter('sprite:publication', 6, 60)
 
 function createOperationalLimiter(prefix: string, points: number, duration: number) {
   return new RateLimiterRedis({
@@ -353,6 +355,12 @@ export const consumeNotificationTestRateLimit = (accountId: string, channelId: s
     [notificationChannelLimiter, channelId],
     [notificationAccountLimiter, accountId],
   ])
+
+export const consumeSpriteUploadRateLimit = (accountId: string) =>
+  consumeOperationalLimiters([[spriteUploadLimiter, accountId]])
+
+export const consumeSpritePublicationRateLimit = (accountId: string) =>
+  consumeOperationalLimiters([[spritePublicationLimiter, accountId]])
 
 async function consumeOperationalLimiters(
   entries: Array<[RateLimiterRedis, string]>

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
-import { eq, and, isNull, desc, inArray } from "drizzle-orm";
+import { eq, and, isNull, desc, inArray, sql } from "drizzle-orm";
 import {
   db,
   spriteAssets,
@@ -27,6 +27,14 @@ import { getAccountPlanLimits } from "../billing/billing";
 import { requireOrgMutationPermission, type AuthEnv } from "../../middleware/auth";
 import { recordStorageObject } from "../../shared/storage/storage-ledger";
 import {
+  consumeSpritePublicationRateLimit,
+  consumeSpriteUploadRateLimit,
+} from "../../middleware/rate-limit";
+import {
+  consumeMultipartRequest,
+  MultipartRequestError,
+} from "../../shared/http/multipart";
+import {
   buildSpriteSheet,
   extractSpriteImageIds,
   normalizeSpriteAssetUpload,
@@ -37,10 +45,18 @@ import {
   styleReferencesSpriteAssets,
   validateSpriteAssetName,
   validateSpritePngUpload,
+  SPRITE_ASSET_MAX_BYTES,
+  SPRITE_ATLAS_MAX_ASSETS,
+  SPRITE_ATLAS_MAX_JSON_BYTES,
+  SPRITE_NORMALIZED_MAX_BYTES,
   type PublishedSpriteMetadata,
 } from "./style-sprites";
 
 export const stylesRoute = new Hono<AuthEnv>();
+
+const SPRITE_MULTIPART_MAX_BYTES = 600 * 1024;
+const SPRITE_ACCOUNT_MAX_ASSETS = 256;
+const SPRITE_ACCOUNT_MAX_BYTES = 128 * 1024 * 1024;
 
 stylesRoute.use("/styles", requireOrgMutationPermission("resource.write"));
 stylesRoute.use("/styles/*", requireOrgMutationPermission("resource.write"));
@@ -121,8 +137,63 @@ stylesRoute.get("/sprite-assets", async (c) => {
 stylesRoute.post("/sprite-assets", async (c) => {
   const accountId = c.get("ownerId");
   const userId = c.get("userId");
-  const body = await c.req.parseBody();
-  const file = body.file;
+  const retryAfter = await consumeSpriteUploadRateLimit(accountId);
+  if (retryAfter !== null) {
+    c.header("Retry-After", String(retryAfter));
+    return c.json(
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many sprite uploads. Please try again later.",
+        },
+      },
+      429,
+    );
+  }
+
+  let uploadedFile:
+    | {
+        data: Buffer;
+        contentType: string;
+        fileName: string;
+      }
+    | undefined;
+  let body: Record<string, string>;
+  try {
+    body = await consumeMultipartRequest({
+      request: c.req.raw,
+      maxTotalBytes: SPRITE_MULTIPART_MAX_BYTES,
+      maxFileBytes: SPRITE_ASSET_MAX_BYTES,
+      maxFiles: 1,
+      maxFields: 4,
+      maxFieldBytes: 16 * 1024,
+      timeoutMs: 30_000,
+      onFile: async (file) => {
+        if (file.fieldName !== "file" || uploadedFile) {
+          throw new MultipartRequestError(
+            "INVALID_MULTIPART",
+            "Sprite upload must contain exactly one 'file' part.",
+          );
+        }
+        const chunks: Buffer[] = [];
+        for await (const chunk of file.stream) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+        uploadedFile = {
+          data: Buffer.concat(chunks),
+          contentType: file.contentType,
+          fileName: file.fileName,
+        };
+      },
+    });
+  } catch (err) {
+    if (!(err instanceof MultipartRequestError)) throw err;
+    return c.json(
+      { error: { code: err.code, message: err.message } },
+      err.code === "MULTIPART_LIMIT" ? 413 : 400,
+    );
+  }
+
   const name = String(body.name ?? "").trim();
   const folder = normalizeSpriteFolder(body.folder) ?? "";
   const description = normalizeOptionalString(body.description, 500);
@@ -140,7 +211,7 @@ stylesRoute.post("/sprite-assets", async (c) => {
       400,
     );
   }
-  if (!(file instanceof File)) {
+  if (!uploadedFile) {
     return c.json(
       {
         error: {
@@ -152,37 +223,13 @@ stylesRoute.post("/sprite-assets", async (c) => {
     );
   }
 
-  const [existing] = await db
-    .select({ id: spriteAssets.id })
-    .from(spriteAssets)
-    .where(
-      and(
-        eq(spriteAssets.accountId, accountId),
-        eq(spriteAssets.name, name),
-        isNull(spriteAssets.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (existing) {
-    return c.json(
-      {
-        error: {
-          code: "CONFLICT",
-          message: "A sprite asset with that name already exists.",
-        },
-      },
-      409,
-    );
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
   let normalized: Awaited<ReturnType<typeof normalizeSpriteAssetUpload>>;
   try {
     normalized = await normalizeSpriteAssetUpload({
-      buffer,
-      contentType: file.type || null,
-      fileName: file.name,
-      size: file.size,
+      buffer: uploadedFile.data,
+      contentType: uploadedFile.contentType || null,
+      fileName: uploadedFile.fileName,
+      size: uploadedFile.data.byteLength,
     });
   } catch (err) {
     if (err instanceof SpriteAssetValidationError) {
@@ -203,26 +250,100 @@ stylesRoute.post("/sprite-assets", async (c) => {
     assetId,
     fileName,
   );
-  const stored = await storage.upload(
-    storageKey,
-    normalized.sourceBuffer,
-    normalized.contentType,
-  );
   const rasterFileName = `${name}.png`;
   const rasterStorageKey =
     normalized.format === "png"
       ? storageKey
       : StoragePaths.accountSpriteAsset(accountId, assetId, rasterFileName);
-  const rasterStored =
-    normalized.format === "png"
-      ? stored
-      : await storage.upload(
-          rasterStorageKey,
-          normalized.rasterBuffer,
-          normalized.rasterContentType,
-        );
+  const stagedKeys = [storageKey];
+  if (rasterStorageKey !== storageKey) stagedKeys.push(rasterStorageKey);
+  let stored;
+  let rasterStored;
+  try {
+    stored = await storage.upload(
+      storageKey,
+      normalized.sourceBuffer,
+      normalized.contentType,
+    );
+    rasterStored =
+      normalized.format === "png"
+        ? stored
+        : await storage.upload(
+            rasterStorageKey,
+            normalized.rasterBuffer,
+            normalized.rasterContentType,
+          );
+  } catch (err) {
+    await Promise.all(stagedKeys.map((key) => storage.delete(key).catch(() => undefined)));
+    throw err;
+  }
 
-  const created = await db.transaction(async (tx) => {
+  let created;
+  try {
+    created = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`spriteQuota:${accountId}`}))`,
+      );
+      const activeAssets = await tx
+        .select({
+          id: spriteAssets.id,
+          storageObjectId: spriteAssets.storageObjectId,
+          rasterStorageObjectId: spriteAssets.rasterStorageObjectId,
+          name: spriteAssets.name,
+        })
+        .from(spriteAssets)
+        .where(
+          and(
+            eq(spriteAssets.accountId, accountId),
+            isNull(spriteAssets.deletedAt),
+          ),
+        );
+      if (activeAssets.some((asset) => asset.name === name)) {
+        throw new SpriteAssetValidationError(
+          "SPRITE_NAME_CONFLICT",
+          "A sprite asset with that name already exists.",
+        );
+      }
+      if (activeAssets.length >= SPRITE_ACCOUNT_MAX_ASSETS) {
+        throw new SpriteAssetValidationError(
+          "SPRITE_QUOTA",
+          `An account can store at most ${SPRITE_ACCOUNT_MAX_ASSETS} active sprite assets.`,
+        );
+      }
+      const activeObjectIds = [
+        ...new Set(
+          activeAssets.flatMap((asset) =>
+            [asset.storageObjectId, asset.rasterStorageObjectId].filter(
+              (id): id is string => Boolean(id),
+            ),
+          ),
+        ),
+      ];
+      const activeObjects =
+        activeObjectIds.length === 0
+          ? []
+          : await tx
+              .select({ size: storageObjects.size })
+              .from(storageObjects)
+              .where(
+                and(
+                  inArray(storageObjects.id, activeObjectIds),
+                  isNull(storageObjects.deletedAt),
+                ),
+              );
+      const activeBytes = activeObjects.reduce(
+        (total, object) => total + (object.size ?? 0),
+        0,
+      );
+      const stagedBytes =
+        stored.size + (rasterStorageKey === storageKey ? 0 : rasterStored.size);
+      if (activeBytes + stagedBytes > SPRITE_ACCOUNT_MAX_BYTES) {
+        throw new SpriteAssetValidationError(
+          "SPRITE_QUOTA",
+          `Active sprite assets cannot exceed ${SPRITE_ACCOUNT_MAX_BYTES} stored bytes per account.`,
+        );
+      }
+
     const [storageObject] = await tx
       .insert(storageObjects)
       .values({
@@ -286,7 +407,17 @@ stylesRoute.post("/sprite-assets", async (c) => {
       })
       .returning();
     return asset!;
-  });
+    });
+  } catch (err) {
+    await Promise.all(stagedKeys.map((key) => storage.delete(key).catch(() => undefined)));
+    if (err instanceof SpriteAssetValidationError) {
+      return c.json(
+        { error: { code: err.code, message: err.message } },
+        err.code === "SPRITE_NAME_CONFLICT" ? 409 : 403,
+      );
+    }
+    throw err;
+  }
 
   await logAudit({
     accountId,
@@ -656,6 +787,8 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
   const styleId = c.req.param("id");
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
+  const rateLimited = await spritePublicationRateLimitResponse(c, ownerId);
+  if (rateLimited) return rateLimited;
 
   const [style] = await db
     .select()
@@ -774,6 +907,8 @@ stylesRoute.post("/styles/:id/versions/:versionNum/publish", async (c) => {
   const versionNum = parseInt(c.req.param("versionNum"), 10);
   const ownerId = c.get("ownerId");
   const userId = c.get("userId");
+  const rateLimited = await spritePublicationRateLimitResponse(c, ownerId);
+  if (rateLimited) return rateLimited;
 
   if (isNaN(versionNum) || versionNum <= 0) {
     return c.json(
@@ -1112,6 +1247,41 @@ async function publishStyleSnapshot({
   userId: string;
   snapshot: typeof styleVersions.$inferSelect;
 }) {
+  const [existingImmutable] = await db
+    .select()
+    .from(stylePublications)
+    .where(
+      and(
+        eq(stylePublications.styleId, styleId),
+        eq(stylePublications.alias, `v${snapshot.version}`),
+      ),
+    )
+    .limit(1);
+  if (existingImmutable) {
+    const [latest] = await db
+      .insert(stylePublications)
+      .values({
+        styleId,
+        styleVersionId: existingImmutable.styleVersionId,
+        accountId: ownerId,
+        alias: "latest",
+        publishedBy: userId,
+        metadata: existingImmutable.metadata,
+      })
+      .onConflictDoUpdate({
+        target: [stylePublications.styleId, stylePublications.alias],
+        set: {
+          styleVersionId: existingImmutable.styleVersionId,
+          accountId: ownerId,
+          publishedBy: userId,
+          metadata: existingImmutable.metadata,
+        },
+      })
+      .returning();
+    if (!latest) throw new Error("Failed to republish immutable style snapshot");
+    return latest;
+  }
+
   const sprite = await createStyleSpriteAssets({
     ownerId,
     styleId,
@@ -1122,7 +1292,9 @@ async function publishStyleSnapshot({
     ...(sprite ? { sprite } : {}),
   };
 
-  const publication = await db.transaction(async (tx) => {
+  let publication;
+  try {
+    publication = await db.transaction(async (tx) => {
     const [latest] = await tx
       .insert(stylePublications)
       .values({
@@ -1156,8 +1328,12 @@ async function publishStyleSnapshot({
       })
       .onConflictDoNothing();
 
-    return latest;
-  });
+      return latest;
+    });
+  } catch (err) {
+    if (sprite) await cleanupPublishedSprite(sprite);
+    throw err;
+  }
 
   if (!publication) {
     throw new Error("Failed to publish style snapshot");
@@ -1179,6 +1355,12 @@ async function createStyleSpriteAssets({
 
   const imageIds = extractSpriteImageIds(snapshot.styleJson);
   if (imageIds.length === 0) return null;
+  if (imageIds.length > SPRITE_ATLAS_MAX_ASSETS) {
+    throw new SpriteAssetValidationError(
+      "SPRITE_ATLAS_LIMIT",
+      `A style can reference at most ${SPRITE_ATLAS_MAX_ASSETS} sprite assets.`,
+    );
+  }
 
   const rows = await db
     .select({
@@ -1215,32 +1397,60 @@ async function createStyleSpriteAssets({
   const keys = spriteStorageKeys(spriteId);
   const storage = getStorage();
   const info = storage.getInfo();
-  const assetImages = await Promise.all(
-    imageIds.map(async (name) => {
+  const assetImages = await mapWithConcurrency(
+    imageIds,
+    4,
+    async (name) => {
       const row = byName.get(name)!;
       const data = await storage.download(await resolveSpriteRasterStorageKey(row));
       const validated = validateSpritePngUpload({
         buffer: data,
         contentType: "image/png",
         size: data.byteLength,
+        maxBytes: SPRITE_NORMALIZED_MAX_BYTES,
       });
       return { id: row.id, name, png: validated.png };
-    }),
+    },
   );
   const sheet = buildSpriteSheet(assetImages, 1);
   const sheet2x = buildSpriteSheet(assetImages, 2);
   const json = Buffer.from(JSON.stringify(sheet.json));
   const json2x = Buffer.from(JSON.stringify(sheet2x.json));
+  if (
+    json.byteLength > SPRITE_ATLAS_MAX_JSON_BYTES ||
+    json2x.byteLength > SPRITE_ATLAS_MAX_JSON_BYTES
+  ) {
+    throw new SpriteAssetValidationError(
+      "SPRITE_ATLAS_LIMIT",
+      `Sprite manifests cannot exceed ${SPRITE_ATLAS_MAX_JSON_BYTES} bytes.`,
+    );
+  }
 
-  const uploads = await Promise.all([
-    storage.upload(keys.json, json, "application/json"),
-    storage.upload(keys.png, sheet.png, "image/png"),
-    storage.upload(keys.json2x, json2x, "application/json"),
-    storage.upload(keys.png2x, sheet2x.png, "image/png"),
-  ]);
+  const uploadInputs = [
+    [keys.json, json, "application/json"],
+    [keys.png, sheet.png, "image/png"],
+    [keys.json2x, json2x, "application/json"],
+    [keys.png2x, sheet2x.png, "image/png"],
+  ] as const;
+  let uploads;
+  try {
+    uploads = await Promise.all(
+      uploadInputs.map(([key, data, contentType]) =>
+        storage.upload(key, data, contentType),
+      ),
+    );
+  } catch (err) {
+    await Promise.all(
+      uploadInputs.map(([key]) => storage.delete(key).catch(() => undefined)),
+    );
+    throw err;
+  }
 
-  const objects = await Promise.all([
-    recordStorageObject({
+  let objects;
+  try {
+    objects = await db.transaction((tx) =>
+      Promise.all([
+        recordStorageObject({
       accountId: ownerId,
       provider: info.provider,
       bucket: info.bucket,
@@ -1253,8 +1463,8 @@ async function createStyleSpriteAssets({
       artifactKind: "sprite-json",
       version: String(snapshot.version),
       metadata: { spriteId, scale: 1, imageIds },
-    }),
-    recordStorageObject({
+        }, tx),
+        recordStorageObject({
       accountId: ownerId,
       provider: info.provider,
       bucket: info.bucket,
@@ -1267,8 +1477,8 @@ async function createStyleSpriteAssets({
       artifactKind: "sprite-png",
       version: String(snapshot.version),
       metadata: { spriteId, scale: 1, imageIds },
-    }),
-    recordStorageObject({
+        }, tx),
+        recordStorageObject({
       accountId: ownerId,
       provider: info.provider,
       bucket: info.bucket,
@@ -1281,8 +1491,8 @@ async function createStyleSpriteAssets({
       artifactKind: "sprite-json-2x",
       version: String(snapshot.version),
       metadata: { spriteId, scale: 2, imageIds },
-    }),
-    recordStorageObject({
+        }, tx),
+        recordStorageObject({
       accountId: ownerId,
       provider: info.provider,
       bucket: info.bucket,
@@ -1295,8 +1505,15 @@ async function createStyleSpriteAssets({
       artifactKind: "sprite-png-2x",
       version: String(snapshot.version),
       metadata: { spriteId, scale: 2, imageIds },
-    }),
-  ]);
+        }, tx),
+      ]),
+    );
+  } catch (err) {
+    await Promise.all(
+      uploadInputs.map(([key]) => storage.delete(key).catch(() => undefined)),
+    );
+    throw err;
+  }
 
   return {
     id: spriteId,
@@ -1309,6 +1526,55 @@ async function createStyleSpriteAssets({
     },
     storageKeys: keys,
   };
+}
+
+async function cleanupPublishedSprite(sprite: PublishedSpriteMetadata) {
+  const storage = getStorage();
+  await Promise.all(
+    Object.values(sprite.storageKeys).map((key) =>
+      storage.delete(key).catch(() => undefined),
+    ),
+  );
+  await db
+    .update(storageObjects)
+    .set({ deletedAt: new Date() })
+    .where(inArray(storageObjects.id, Object.values(sprite.storageObjects)));
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>,
+) {
+  const results = new Array<R>(values.length);
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (cursor < values.length) {
+        const index = cursor++;
+        results[index] = await mapper(values[index]!);
+      }
+    }),
+  );
+  return results;
+}
+
+async function spritePublicationRateLimitResponse(
+  c: Context<AuthEnv>,
+  ownerId: string,
+) {
+  const retryAfter = await consumeSpritePublicationRateLimit(ownerId);
+  if (retryAfter === null) return null;
+  c.header("Retry-After", String(retryAfter));
+  return c.json(
+    {
+      error: {
+        code: "RATE_LIMITED",
+        message: "Too many style publications. Please try again later.",
+      },
+    },
+    429,
+  );
 }
 
 function normalizeSpriteFolder(value: unknown) {

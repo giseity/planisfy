@@ -7,6 +7,12 @@ export type SpriteVariant = "json" | "png" | "json2x" | "png2x";
 
 export const SPRITE_ASSET_MAX_BYTES = 512 * 1024;
 export const SPRITE_ASSET_MAX_DIMENSION = 512;
+export const SPRITE_NORMALIZED_MAX_BYTES = 2 * 1024 * 1024;
+export const SPRITE_ATLAS_MAX_ASSETS = 128;
+export const SPRITE_ATLAS_MAX_DIMENSION = 4096;
+export const SPRITE_ATLAS_MAX_PIXELS = 4096 * 4096;
+export const SPRITE_ATLAS_MAX_PNG_BYTES = 16 * 1024 * 1024;
+export const SPRITE_ATLAS_MAX_JSON_BYTES = 1024 * 1024;
 export const SPRITE_ASSET_NAME_PATTERN = /^[A-Za-z0-9._-]{1,96}$/;
 export const SPRITE_ASSET_FOLDER_PATTERN = /^[A-Za-z0-9._/ -]{0,128}$/;
 
@@ -120,6 +126,7 @@ export async function normalizeSpriteAssetUpload(params: {
       buffer: rasterBuffer,
       contentType: "image/png",
       size: rasterBuffer.byteLength,
+      maxBytes: SPRITE_NORMALIZED_MAX_BYTES,
     });
     return {
       format: "svg",
@@ -141,6 +148,7 @@ export function validateSpritePngUpload(params: {
   buffer: Buffer;
   contentType?: string | null;
   size?: number | null;
+  maxBytes?: number;
 }): ValidatedSpritePng {
   if (params.contentType && params.contentType !== "image/png") {
     throw new SpriteAssetValidationError(
@@ -149,12 +157,16 @@ export function validateSpritePngUpload(params: {
     );
   }
   const size = params.size ?? params.buffer.byteLength;
-  if (size <= 0 || size > SPRITE_ASSET_MAX_BYTES) {
+  const maxBytes = params.maxBytes ?? SPRITE_ASSET_MAX_BYTES;
+  if (size <= 0 || size > maxBytes) {
     throw new SpriteAssetValidationError(
       "SPRITE_TOO_LARGE",
-      `Sprite assets must be between 1 byte and ${SPRITE_ASSET_MAX_BYTES} bytes.`,
+      `Sprite assets must be between 1 byte and ${maxBytes} bytes.`,
     );
   }
+
+  const dimensions = readPngDimensions(params.buffer);
+  assertSpriteDimensions(dimensions.width, dimensions.height);
 
   let png: PNG;
   try {
@@ -166,19 +178,43 @@ export function validateSpritePngUpload(params: {
     );
   }
 
+  assertSpriteDimensions(png.width, png.height);
+
+  return { png, width: png.width, height: png.height };
+}
+
+export function readPngDimensions(buffer: Buffer) {
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   if (
-    png.width < 1 ||
-    png.height < 1 ||
-    png.width > SPRITE_ASSET_MAX_DIMENSION ||
-    png.height > SPRITE_ASSET_MAX_DIMENSION
+    buffer.byteLength < 24 ||
+    !buffer.subarray(0, signature.byteLength).equals(signature) ||
+    buffer.readUInt32BE(8) !== 13 ||
+    buffer.toString("ascii", 12, 16) !== "IHDR"
+  ) {
+    throw new SpriteAssetValidationError(
+      "INVALID_SPRITE_PNG",
+      "Sprite asset must be a valid PNG image.",
+    );
+  }
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20),
+  };
+}
+
+function assertSpriteDimensions(width: number, height: number) {
+  if (
+    width < 1 ||
+    height < 1 ||
+    width > SPRITE_ASSET_MAX_DIMENSION ||
+    height > SPRITE_ASSET_MAX_DIMENSION ||
+    width * height > SPRITE_ASSET_MAX_DIMENSION * SPRITE_ASSET_MAX_DIMENSION
   ) {
     throw new SpriteAssetValidationError(
       "INVALID_SPRITE_DIMENSIONS",
       `Sprite dimensions must be between 1 and ${SPRITE_ASSET_MAX_DIMENSION} pixels.`,
     );
   }
-
-  return { png, width: png.width, height: png.height };
 }
 
 function normalizedSpriteContentType(
@@ -255,29 +291,97 @@ export function buildSpriteSheet(
     const empty = new PNG({ width: 1, height: 1 });
     return { json: {}, png: PNG.sync.write(empty) };
   }
-
-  const scale = pixelRatio;
-  const width = assets.reduce((sum, asset) => sum + asset.png.width * scale, 0);
-  const height = Math.max(...assets.map((asset) => asset.png.height * scale));
-  const sheet = new PNG({ width, height });
-  const json: Record<string, SpriteJsonEntry> = {};
-  let x = 0;
-
-  for (const asset of assets) {
-    const scaledWidth = asset.png.width * scale;
-    const scaledHeight = asset.png.height * scale;
-    blitScaled(asset.png, sheet, x, 0, scale);
-    json[asset.name] = {
-      x,
-      y: 0,
-      width: scaledWidth,
-      height: scaledHeight,
-      pixelRatio,
-    };
-    x += scaledWidth;
+  if (assets.length > SPRITE_ATLAS_MAX_ASSETS) {
+    throw new SpriteAssetValidationError(
+      "SPRITE_ATLAS_LIMIT",
+      `A style can reference at most ${SPRITE_ATLAS_MAX_ASSETS} sprite assets.`,
+    );
   }
 
-  return { json, png: PNG.sync.write(sheet) };
+  const layout = planSpriteSheet(assets, pixelRatio);
+  const sheet = new PNG({ width: layout.width, height: layout.height });
+  const json: Record<string, SpriteJsonEntry> = {};
+  for (const placement of layout.placements) {
+    const { asset, x, y, width, height } = placement;
+    blitScaled(asset.png, sheet, x, y, pixelRatio);
+    json[asset.name] = {
+      x,
+      y,
+      width,
+      height,
+      pixelRatio,
+    };
+  }
+
+  const png = PNG.sync.write(sheet);
+  if (png.byteLength > SPRITE_ATLAS_MAX_PNG_BYTES) {
+    throw new SpriteAssetValidationError(
+      "SPRITE_ATLAS_LIMIT",
+      `Encoded sprite sheets cannot exceed ${SPRITE_ATLAS_MAX_PNG_BYTES} bytes.`,
+    );
+  }
+  return { json, png };
+}
+
+export function planSpriteSheet(
+  assets: SpriteAssetImage[],
+  pixelRatio: 1 | 2,
+) {
+  const placements: Array<{
+    asset: SpriteAssetImage;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }> = [];
+  let x = 0;
+  let y = 0;
+  let rowHeight = 0;
+  let width = 0;
+
+  for (const asset of assets) {
+    const scaledWidth = asset.png.width * pixelRatio;
+    const scaledHeight = asset.png.height * pixelRatio;
+    if (
+      scaledWidth > SPRITE_ATLAS_MAX_DIMENSION ||
+      scaledHeight > SPRITE_ATLAS_MAX_DIMENSION
+    ) {
+      throw new SpriteAssetValidationError(
+        "SPRITE_ATLAS_LIMIT",
+        "A sprite asset is too large for the bounded atlas.",
+      );
+    }
+    if (x > 0 && x + scaledWidth > SPRITE_ATLAS_MAX_DIMENSION) {
+      y += rowHeight;
+      x = 0;
+      rowHeight = 0;
+    }
+    if (y + scaledHeight > SPRITE_ATLAS_MAX_DIMENSION) {
+      throw new SpriteAssetValidationError(
+        "SPRITE_ATLAS_LIMIT",
+        "Sprite atlas dimensions exceed the supported limit.",
+      );
+    }
+    placements.push({
+      asset,
+      x,
+      y,
+      width: scaledWidth,
+      height: scaledHeight,
+    });
+    x += scaledWidth;
+    width = Math.max(width, x);
+    rowHeight = Math.max(rowHeight, scaledHeight);
+  }
+
+  const height = y + rowHeight;
+  if (width * height > SPRITE_ATLAS_MAX_PIXELS) {
+    throw new SpriteAssetValidationError(
+      "SPRITE_ATLAS_LIMIT",
+      "Sprite atlas pixel count exceeds the supported limit.",
+    );
+  }
+  return { width, height, placements };
 }
 
 export function buildSpriteJson(imageIds: string[], pixelRatio: 1 | 2) {
