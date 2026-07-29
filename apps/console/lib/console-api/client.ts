@@ -112,7 +112,8 @@ class ApiClient {
     method: string,
     path: string,
     body?: unknown,
-    extraHeaders?: HeadersInit
+    extraHeaders?: HeadersInit,
+    signal?: AbortSignal
   ): Promise<T> {
     const url = `${CONSOLE_API_BASE}${path}`
     const res = await fetch(url, {
@@ -123,6 +124,7 @@ class ApiClient {
       },
       body: body ? JSON.stringify(body) : undefined,
       credentials: 'include',
+      signal,
     })
 
     const json = await res.json()
@@ -162,8 +164,8 @@ class ApiClient {
     return json as T
   }
 
-  get<T>(path: string) {
-    return this.request<T>('GET', path)
+  get<T>(path: string, options?: { signal?: AbortSignal }) {
+    return this.request<T>('GET', path, undefined, undefined, options?.signal)
   }
 
   post<T>(path: string, body?: unknown, headers?: HeadersInit) {
@@ -358,11 +360,7 @@ class ApiClient {
         run: ConsoleScheduledOperationRun
         replayed: boolean
       }>
-    >(
-      `/operations/schedules/${id}/run`,
-      undefined,
-      { 'Idempotency-Key': crypto.randomUUID() }
-    )
+    >(`/operations/schedules/${id}/run`, undefined, { 'Idempotency-Key': crypto.randomUUID() })
   }
 
   deleteScheduledOperation(id: string) {

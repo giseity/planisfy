@@ -167,4 +167,25 @@ describe('console product correctness regressions', () => {
       'https://console.planisfy.localhost/verify-email?source=marketing&callbackUrl=https%3A%2F%2Fconsole.planisfy.localhost%2Fstyles'
     )
   })
+
+  it('binds tileset product sections to their selected tabs', () => {
+    const source = readFileSync(
+      resolve(__dirname, '../app/(studio)/tilesets/[tilesetId]/client-page.tsx'),
+      'utf8'
+    )
+
+    expect(source).toContain('<TabsContent value="versions">')
+    expect(source).toContain('<TabsContent value="jobs">')
+    expect(source).toContain('<TabsContent value="metadata">')
+    expect(source).not.toContain('<TabsTrigger value="settings">')
+  })
+
+  it('cancels stale usage requests and resets pagination when the period changes', () => {
+    const source = readFileSync(resolve(__dirname, '../app/(studio)/usage/client-page.tsx'), 'utf8')
+
+    expect(source).toContain('const controller = new AbortController()')
+    expect(source).toContain('generation !== requestGeneration.current')
+    expect(source).toContain('controller.abort()')
+    expect(source).toContain('setLogPage(1)')
+  })
 })

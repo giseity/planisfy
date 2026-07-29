@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@planisfy/ui/components/card'
 import { Badge } from '@planisfy/ui/components/badge'
@@ -169,33 +169,48 @@ export default function UsagePage() {
   const [logPage, setLogPage] = useState(1)
   const [logTotal, setLogTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [summaryRes, timeseriesRes, byKeyRes, logsRes] = await Promise.all([
-        api.get<{ data: UsageSummary }>('/usage/summary'),
-        api.get<{ data: TimeseriesEntry[] }>(`/usage/timeseries?days=${period}`),
-        api.get<{ data: ByKeyEntry[] }>(`/usage/by-key?days=${period}`),
-        api.get<{ data: UsageLogEntry[]; pagination: { total: number } }>(
-          `/usage/logs?page=${logPage}&limit=20`
-        ),
-      ])
-      setSummary(summaryRes.data)
-      setTimeseries(timeseriesRes.data)
-      setByKey(byKeyRes.data)
-      setLogs(logsRes.data)
-      setLogTotal(logsRes.pagination.total)
-    } catch (err) {
-      console.error('Failed to fetch usage data:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [period, logPage])
+  const requestGeneration = useRef(0)
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    const controller = new AbortController()
+    const generation = ++requestGeneration.current
+
+    const fetchData = async () => {
+      setLoading(true)
+      try {
+        const [summaryRes, timeseriesRes, byKeyRes, logsRes] = await Promise.all([
+          api.get<{ data: UsageSummary }>('/usage/summary', { signal: controller.signal }),
+          api.get<{ data: TimeseriesEntry[] }>(`/usage/timeseries?days=${period}`, {
+            signal: controller.signal,
+          }),
+          api.get<{ data: ByKeyEntry[] }>(`/usage/by-key?days=${period}`, {
+            signal: controller.signal,
+          }),
+          api.get<{ data: UsageLogEntry[]; pagination: { total: number } }>(
+            `/usage/logs?page=${logPage}&limit=20`,
+            { signal: controller.signal }
+          ),
+        ])
+        if (generation !== requestGeneration.current) return
+        setSummary(summaryRes.data)
+        setTimeseries(timeseriesRes.data)
+        setByKey(byKeyRes.data)
+        setLogs(logsRes.data)
+        setLogTotal(logsRes.pagination.total)
+      } catch (err) {
+        if (controller.signal.aborted || generation !== requestGeneration.current) return
+        console.error('Failed to fetch usage data:', err)
+      } finally {
+        if (generation === requestGeneration.current) setLoading(false)
+      }
+    }
+
+    void fetchData()
+
+    return () => {
+      controller.abort()
+    }
+  }, [period, logPage])
 
   // Prepare pie data from by-key
   const pieData = byKey
@@ -218,7 +233,13 @@ export default function UsagePage() {
           <h1 className="text-2xl font-bold">Usage</h1>
           <Badge variant="secondary">{summary?.plan.name ?? 'Plan'}</Badge>
         </div>
-        <Select value={period} onValueChange={setPeriod}>
+        <Select
+          value={period}
+          onValueChange={(value) => {
+            setPeriod(value)
+            setLogPage(1)
+          }}
+        >
           <SelectTrigger className="w-[140px]">
             <SelectValue />
           </SelectTrigger>
