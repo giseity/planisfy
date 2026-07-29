@@ -1,8 +1,12 @@
 import { z } from "zod";
 
+const COMPOSE_SERVICE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+const IMAGE_REPOSITORY_PATTERN =
+  /^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?\/)?[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)+$/;
+
 export const upgradeImageSchema = z.object({
-  service: z.string().min(1),
-  image: z.string().min(1),
+  service: z.string().regex(COMPOSE_SERVICE_PATTERN),
+  image: z.string().regex(IMAGE_REPOSITORY_PATTERN),
   digest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
 });
 
@@ -15,7 +19,22 @@ export const requiredEnvSchema = z.object({
 export const upgradeReleaseManifestSchema = z.object({
   version: z.string().min(1),
   createdAt: z.string().datetime(),
-  images: z.array(upgradeImageSchema).min(1),
+  images: z
+    .array(upgradeImageSchema)
+    .min(1)
+    .superRefine((images, ctx) => {
+      const seen = new Set<string>();
+      images.forEach((image, index) => {
+        if (seen.has(image.service)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Duplicate Compose service: ${image.service}`,
+            path: [index, "service"],
+          });
+        }
+        seen.add(image.service);
+      });
+    }),
   minimumVersion: z.string().min(1).optional(),
   migrations: z
     .object({
@@ -71,4 +90,16 @@ export function hasPinnedImageDigests(manifest: UpgradeReleaseManifest) {
 
 export function canRollbackRelease(manifest: UpgradeReleaseManifest) {
   return manifest.rollbackSupported === true && manifest.backupRequired === true;
+}
+
+export function manifestServiceCoverage(
+  manifest: UpgradeReleaseManifest,
+  composeServices: Iterable<string>,
+) {
+  const manifestServices = new Set(manifest.images.map((image) => image.service));
+  const expectedServices = new Set(composeServices);
+  return {
+    missing: [...expectedServices].filter((service) => !manifestServices.has(service)).sort(),
+    unexpected: [...manifestServices].filter((service) => !expectedServices.has(service)).sort(),
+  };
 }

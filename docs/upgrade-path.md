@@ -12,7 +12,16 @@
 
 ## Supervisor Upgrade
 
-The optional supervisor accepts pinned release manifests validated by `@planisfy/upgrade-manifest`. It requires token auth, refuses floating `:latest` image targets, requires a successful backup before apply, and only rolls back when the manifest permits rollback.
+The optional supervisor accepts pinned release manifests validated by
+`@planisfy/upgrade-manifest`. It requires token auth and a successful backup
+before apply, and only rolls back when the manifest permits rollback.
+
+Each manifest must contain exactly one digest-pinned image for every Compose
+service enabled by the base file and `SUPERVISOR_COMPOSE_PROFILES`. Missing,
+unexpected, duplicate, or mutable entries fail before pull, migration, restore,
+or restart. The supervisor also rejects running project services outside the
+selected profiles. Both apply and rollback verify the merged Compose image list
+and use the generated pinned override for pull and `up`.
 
 ## Upgrade Smoke
 

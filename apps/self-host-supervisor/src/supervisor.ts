@@ -7,7 +7,7 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
   canRollbackRelease,
-  hasPinnedImageDigests,
+  manifestServiceCoverage,
   parseUpgradeReleaseManifest,
   type UpgradeReleaseManifest,
 } from "@planisfy/upgrade-manifest";
@@ -22,6 +22,7 @@ export type SupervisorConfig = {
   appVersion: string;
   composeFile: string;
   envFile: string;
+  composeProfiles?: string[];
   execute?: CommandExecutor;
 };
 
@@ -106,10 +107,7 @@ export function createSupervisorApp(config: SupervisorConfig) {
         "docker",
         [
           "compose",
-          "--env-file",
-          config.envFile,
-          "-f",
-          config.composeFile,
+          ...composeInvocationArgs(config),
           "config",
           "--quiet",
         ],
@@ -169,35 +167,17 @@ export function createSupervisorApp(config: SupervisorConfig) {
     }
 
     const manifest = manifestResult.manifest;
-    if (!hasPinnedImageDigests(manifest) || usesLatestTag(manifest)) {
-      return c.json(
-        {
-          error: {
-            code: "UNPINNED_RELEASE",
-            message: "Upgrade targets must use pinned image digests.",
-          },
-        },
-        400,
-      );
-    }
+    const coverageError = await validateComposeRelease(config, execute, manifest);
+    if (coverageError) return c.json({ error: coverageError }, 400);
 
     const operation = await createOperation(config, "upgrade.apply");
     operation.targetVersion = manifest.version;
     operation.backupDir = backup.backupDir;
 
     await runOperation(config, operation, async (record) => {
-      const services = await listComposeServices(config, execute);
-      const missingServices = manifest.images
-        .map((image) => image.service)
-        .filter((service) => !services.has(service));
-      if (missingServices.length > 0) {
-        throw new Error(
-          `Release manifest references unknown Compose services: ${missingServices.join(", ")}`,
-        );
-      }
-
       const overrideFile = await writeReleaseOverride(config, operation, manifest);
-      const composeArgs = composeFileArgs(config, overrideFile);
+      const composeArgs = composeInvocationArgs(config, overrideFile);
+      await verifyReleaseImages(config, execute, manifest, overrideFile);
       record.logs.push(`Validated pinned release ${manifest.version}.`);
       for (const image of manifest.images) {
         record.logs.push(`${image.service}: ${image.image}@${image.digest}`);
@@ -206,7 +186,7 @@ export function createSupervisorApp(config: SupervisorConfig) {
         record,
         execute,
         "docker",
-        ["compose", "--env-file", config.envFile, ...composeArgs, "pull"],
+        ["compose", ...composeArgs, "pull"],
         { cwd: config.rootDir },
       );
       await runCommand(
@@ -222,8 +202,6 @@ export function createSupervisorApp(config: SupervisorConfig) {
         "docker",
         [
           "compose",
-          "--env-file",
-          config.envFile,
           ...composeArgs,
           "up",
           "-d",
@@ -273,12 +251,24 @@ export function createSupervisorApp(config: SupervisorConfig) {
         400,
       );
     }
+    const coverageError = await validateComposeRelease(config, execute, manifest);
+    if (coverageError) return c.json({ error: coverageError }, 400);
 
     const operation = await createOperation(config, "upgrade.rollback");
     operation.targetVersion = manifest.version;
     operation.backupDir = parsed.data.backupDir;
 
     await runOperation(config, operation, async (record) => {
+      const overrideFile = await writeReleaseOverride(config, operation, manifest);
+      const composeArgs = composeInvocationArgs(config, overrideFile);
+      await verifyReleaseImages(config, execute, manifest, overrideFile);
+      await runCommand(
+        record,
+        execute,
+        "docker",
+        ["compose", ...composeArgs, "pull"],
+        { cwd: config.rootDir },
+      );
       await runCommand(
         record,
         execute,
@@ -292,10 +282,7 @@ export function createSupervisorApp(config: SupervisorConfig) {
         "docker",
         [
           "compose",
-          "--env-file",
-          config.envFile,
-          "-f",
-          config.composeFile,
+          ...composeArgs,
           "up",
           "-d",
         ],
@@ -343,6 +330,7 @@ export function supervisorConfigFromEnv(): SupervisorConfig {
       process.env.SUPERVISOR_COMPOSE_FILE ??
       join(rootDir, "infra/docker/docker-compose.yml"),
     envFile: process.env.SUPERVISOR_ENV_FILE ?? join(rootDir, ".env"),
+    composeProfiles: parseComposeProfiles(process.env.SUPERVISOR_COMPOSE_PROFILES),
   };
 }
 
@@ -360,10 +348,6 @@ async function loadManifest(path: string): Promise<ManifestLoadResult> {
     }
     return { ok: false, message: errorMessage(error) };
   }
-}
-
-function usesLatestTag(manifest: UpgradeReleaseManifest) {
-  return manifest.images.some((image) => image.image.endsWith(":latest"));
 }
 
 async function createOperation(
@@ -432,23 +416,101 @@ async function listComposeServices(
 ) {
   const result = await execute(
     "docker",
+    ["compose", ...composeInvocationArgs(config), "config", "--services"],
+    { cwd: config.rootDir },
+  );
+  return parseOutputLines(result.stdout);
+}
+
+async function listRunningComposeServices(
+  config: SupervisorConfig,
+  execute: CommandExecutor,
+) {
+  const result = await execute(
+    "docker",
     [
       "compose",
-      "--env-file",
-      config.envFile,
-      "-f",
-      config.composeFile,
-      "config",
+      ...composeInvocationArgs(config),
+      "ps",
       "--services",
+      "--status",
+      "running",
     ],
     { cwd: config.rootDir },
   );
-  return new Set(
-    result.stdout
-      .split(/\r?\n/)
-      .map((service) => service.trim())
-      .filter(Boolean),
+  return parseOutputLines(result.stdout);
+}
+
+async function validateComposeRelease(
+  config: SupervisorConfig,
+  execute: CommandExecutor,
+  manifest: UpgradeReleaseManifest,
+) {
+  try {
+    const services = await listComposeServices(config, execute);
+    const runningServices = await listRunningComposeServices(config, execute);
+    const coverage = manifestServiceCoverage(manifest, services);
+    const runningOutsideTarget = [...runningServices]
+      .filter((service) => !services.has(service))
+      .sort();
+    if (
+      services.size === 0 ||
+      coverage.missing.length > 0 ||
+      coverage.unexpected.length > 0 ||
+      runningOutsideTarget.length > 0
+    ) {
+      return {
+        code: "INCOMPLETE_RELEASE_MANIFEST",
+        message: "Release manifest must exactly cover the selected Compose stack.",
+        details: {
+          missingServices: coverage.missing,
+          unexpectedServices: coverage.unexpected,
+          runningOutsideTarget,
+        },
+      };
+    }
+    return null;
+  } catch (error) {
+    return {
+      code: "COMPOSE_VALIDATION_FAILED",
+      message: "Unable to enumerate the selected Compose stack.",
+      details: { cause: redactSensitive(errorMessage(error)) },
+    };
+  }
+}
+
+async function verifyReleaseImages(
+  config: SupervisorConfig,
+  execute: CommandExecutor,
+  manifest: UpgradeReleaseManifest,
+  overrideFile: string,
+) {
+  const result = await execute(
+    "docker",
+    [
+      "compose",
+      ...composeInvocationArgs(config, overrideFile),
+      "config",
+      "--images",
+    ],
+    { cwd: config.rootDir },
   );
+  const resolved = parseOutputLines(result.stdout);
+  const expected = new Set(
+    manifest.images.map((image) => `${image.image}@${image.digest}`),
+  );
+  const missing = [...expected].filter((image) => !resolved.has(image)).sort();
+  const unexpected = [...resolved].filter((image) => !expected.has(image)).sort();
+  const mutable = [...resolved].filter((image) => !/@sha256:[a-f0-9]{64}$/.test(image));
+  if (missing.length > 0 || unexpected.length > 0 || mutable.length > 0) {
+    throw new Error(
+      `Resolved Compose images do not match the reviewed release manifest: ${JSON.stringify({
+        missing,
+        unexpected,
+        mutable,
+      })}`,
+    );
+  }
 }
 
 async function writeReleaseOverride(
@@ -470,8 +532,39 @@ async function writeReleaseOverride(
   return path;
 }
 
-function composeFileArgs(config: SupervisorConfig, overrideFile: string) {
-  return ["-f", config.composeFile, "-f", overrideFile];
+function composeInvocationArgs(config: SupervisorConfig, overrideFile?: string) {
+  return [
+    "--env-file",
+    config.envFile,
+    ...(config.composeProfiles ?? []).flatMap((profile) => ["--profile", profile]),
+    "-f",
+    config.composeFile,
+    ...(overrideFile ? ["-f", overrideFile] : []),
+  ];
+}
+
+function parseComposeProfiles(value: string | undefined) {
+  if (!value?.trim()) return [];
+  const profiles = value
+    .split(",")
+    .map((profile) => profile.trim())
+    .filter(Boolean);
+  if (
+    new Set(profiles).size !== profiles.length ||
+    profiles.some((profile) => !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(profile))
+  ) {
+    throw new Error("SUPERVISOR_COMPOSE_PROFILES must contain unique Compose profile names");
+  }
+  return profiles;
+}
+
+function parseOutputLines(value: string) {
+  return new Set(
+    value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  );
 }
 
 function hasActiveOperation(config: SupervisorConfig) {

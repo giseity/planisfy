@@ -22,6 +22,11 @@ comma-separated operator allowlist of canonical
 `registry/repository@sha256:<digest>` references. The first image is selected
 for new jobs; Console and API callers cannot override it.
 
+When the self-host supervisor is enabled, set
+`SUPERVISOR_COMPOSE_PROFILES` to the comma-separated profiles it must upgrade,
+including `with-supervisor` and every profile with running services. Release
+manifests must exactly cover the resulting Compose service set.
+
 Outbound URLs resolve and pin DNS before the connection is opened. Private
 destinations are denied unless their exact hostname, IP address, or CIDR is
 listed in the comma-separated `OUTBOUND_PRIVATE_ALLOWLIST`. Configure the same

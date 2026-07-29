@@ -11,6 +11,15 @@ import {
 } from "./supervisor";
 
 const token = "test-supervisor-token";
+const apiDigest =
+  "sha256:1111111111111111111111111111111111111111111111111111111111111111";
+const apiImage = `ghcr.io/planisfy/api@${apiDigest}`;
+
+function successfulCommandResult(args: string[]) {
+  if (args.includes("--images")) return { stdout: `${apiImage}\n`, stderr: "" };
+  if (args.includes("--services")) return { stdout: "api\n", stderr: "" };
+  return { stdout: "ok", stderr: "" };
+}
 
 describe("self-host supervisor", () => {
   it("keeps health public and protects supervisor endpoints", async () => {
@@ -67,9 +76,9 @@ describe("self-host supervisor", () => {
     const { app, manifestPath } = await testApp({
       execute: async (command, args) => {
         commands.push(`${command} ${args.join(" ")}`);
-        if (args.includes("--services")) return { stdout: "api\n", stderr: "" };
-        return { stdout: "ok", stderr: "" };
+        return successfulCommandResult(args);
       },
+      composeProfiles: ["production"],
     });
     const backup = await authed(app, "/backup", { method: "POST" });
     const backupBody = (await backup.json()) as { data: { id: string } };
@@ -89,6 +98,7 @@ describe("self-host supervisor", () => {
     assert.equal(body.data.status, "SUCCEEDED");
     assert.equal(body.data.targetVersion, "1.2.3");
     assert.match(body.data.logs.join("\n"), /sha256:/);
+    assert.ok(commands.some((command) => command.includes("--profile production")));
     assert.ok(
       commands.some((command) =>
         command.includes("docker compose --env-file") &&
@@ -143,7 +153,144 @@ describe("self-host supervisor", () => {
 
     assert.equal(response.status, 400);
     const body = (await response.json()) as { error: { code: string } };
-    assert.equal(body.error.code, "UNPINNED_RELEASE");
+    assert.equal(body.error.code, "INVALID_MANIFEST");
+  });
+
+  it("rejects partial and unexpected release manifests before apply mutation", async () => {
+    const commands: string[] = [];
+    const { app, manifestPath } = await testApp({
+      execute: async (command, args) => {
+        commands.push(`${command} ${args.join(" ")}`);
+        if (args.includes("config") && args.includes("--services")) {
+          return { stdout: "api\nconsole\n", stderr: "" };
+        }
+        if (args.includes("ps") && args.includes("--services")) {
+          return { stdout: "api\n", stderr: "" };
+        }
+        return successfulCommandResult(args);
+      },
+    });
+    const backup = await authed(app, "/backup", { method: "POST" });
+    const backupBody = (await backup.json()) as { data: { id: string } };
+    const response = await authed(app, "/upgrade/apply", {
+      body: JSON.stringify({
+        manifestPath,
+        backupOperationId: backupBody.data.id,
+      }),
+      method: "POST",
+    });
+
+    assert.equal(response.status, 400);
+    const body = (await response.json()) as {
+      error: { code: string; details: { missingServices: string[] } };
+    };
+    assert.equal(body.error.code, "INCOMPLETE_RELEASE_MANIFEST");
+    assert.deepEqual(body.error.details.missingServices, ["console"]);
+    assert.equal(commands.some((command) => /\.release\.yml (?:pull|up)/.test(command)), false);
+    assert.equal(commands.some((command) => command.includes("db:migrate")), false);
+
+    const unexpectedManifest = releaseManifest({
+      images: [
+        releaseManifest().images[0],
+        {
+          service: "console",
+          image: "ghcr.io/planisfy/console",
+          digest:
+            "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        },
+      ],
+    });
+    const unexpected = await testApp({ manifest: unexpectedManifest });
+    const unexpectedBackup = await authed(unexpected.app, "/backup", { method: "POST" });
+    const unexpectedBackupBody = (await unexpectedBackup.json()) as {
+      data: { id: string };
+    };
+    const unexpectedResponse = await authed(unexpected.app, "/upgrade/apply", {
+      body: JSON.stringify({
+        manifestPath: unexpected.manifestPath,
+        backupOperationId: unexpectedBackupBody.data.id,
+      }),
+      method: "POST",
+    });
+    assert.equal(unexpectedResponse.status, 400);
+    const unexpectedBody = (await unexpectedResponse.json()) as {
+      error: { details: { unexpectedServices: string[] } };
+    };
+    assert.deepEqual(unexpectedBody.error.details.unexpectedServices, ["console"]);
+  });
+
+  it("rejects duplicate services and running services outside selected profiles", async () => {
+    const duplicate = releaseManifest({
+      images: [releaseManifest().images[0], releaseManifest().images[0]],
+    });
+    const duplicateApp = await testApp({ manifest: duplicate });
+    const duplicateBackup = await authed(duplicateApp.app, "/backup", { method: "POST" });
+    const duplicateBackupBody = (await duplicateBackup.json()) as { data: { id: string } };
+    const duplicateResponse = await authed(duplicateApp.app, "/upgrade/apply", {
+      body: JSON.stringify({
+        manifestPath: duplicateApp.manifestPath,
+        backupOperationId: duplicateBackupBody.data.id,
+      }),
+      method: "POST",
+    });
+    assert.equal(duplicateResponse.status, 400);
+    const duplicateBody = (await duplicateResponse.json()) as { error: { code: string } };
+    assert.equal(duplicateBody.error.code, "INVALID_MANIFEST");
+
+    const runningApp = await testApp({
+      execute: async (_command, args) => {
+        if (args.includes("config") && args.includes("--services")) {
+          return { stdout: "api\n", stderr: "" };
+        }
+        if (args.includes("ps") && args.includes("--services")) {
+          return { stdout: "api\nconsole\n", stderr: "" };
+        }
+        return successfulCommandResult(args);
+      },
+    });
+    const runningBackup = await authed(runningApp.app, "/backup", { method: "POST" });
+    const runningBackupBody = (await runningBackup.json()) as { data: { id: string } };
+    const runningResponse = await authed(runningApp.app, "/upgrade/apply", {
+      body: JSON.stringify({
+        manifestPath: runningApp.manifestPath,
+        backupOperationId: runningBackupBody.data.id,
+      }),
+      method: "POST",
+    });
+    assert.equal(runningResponse.status, 400);
+    const runningBody = (await runningResponse.json()) as {
+      error: { details: { runningOutsideTarget: string[] } };
+    };
+    assert.deepEqual(runningBody.error.details.runningOutsideTarget, ["console"]);
+  });
+
+  it("fails closed when merged Compose images differ from reviewed digests", async () => {
+    const commands: string[] = [];
+    const { app, manifestPath } = await testApp({
+      execute: async (command, args) => {
+        commands.push(`${command} ${args.join(" ")}`);
+        if (args.includes("--images")) {
+          return { stdout: "ghcr.io/planisfy/api:latest\n", stderr: "" };
+        }
+        return successfulCommandResult(args);
+      },
+    });
+    const backup = await authed(app, "/backup", { method: "POST" });
+    const backupBody = (await backup.json()) as { data: { id: string } };
+    const response = await authed(app, "/upgrade/apply", {
+      body: JSON.stringify({
+        manifestPath,
+        backupOperationId: backupBody.data.id,
+      }),
+      method: "POST",
+    });
+
+    assert.equal(response.status, 500);
+    const body = (await response.json()) as { data: { status: string } };
+    assert.equal(body.data.status, "FAILED");
+    assert.equal(commands.some((command) => command.endsWith(" pull")), false);
+    assert.equal(commands.some((command) => command.includes("db:migrate")), false);
+    assert.equal(commands.some((command) => command.endsWith(" up -d")), false);
   });
 
   it("guards rollback eligibility", async () => {
@@ -164,12 +311,31 @@ describe("self-host supervisor", () => {
     assert.equal(body.error.code, "ROLLBACK_UNSUPPORTED");
   });
 
+  it("rejects incomplete rollback manifests before restore", async () => {
+    const commands: string[] = [];
+    const { app, manifestPath } = await testApp({
+      execute: async (command, args) => {
+        commands.push(`${command} ${args.join(" ")}`);
+        if (args.includes("config") && args.includes("--services")) {
+          return { stdout: "api\nconsole\n", stderr: "" };
+        }
+        return successfulCommandResult(args);
+      },
+    });
+    const response = await authed(app, "/upgrade/rollback", {
+      body: JSON.stringify({ manifestPath, backupDir: "/backups/example" }),
+      method: "POST",
+    });
+    assert.equal(response.status, 400);
+    assert.equal(commands.some((command) => command.includes("self-host-restore.sh")), false);
+  });
+
   it("runs guarded rollback operations", async () => {
     const commands: string[] = [];
     const { app, manifestPath } = await testApp({
       execute: async (command, args) => {
         commands.push(`${command} ${args.join(" ")}`);
-        return { stdout: "ok", stderr: "" };
+        return successfulCommandResult(args);
       },
     });
 
@@ -191,12 +357,22 @@ describe("self-host supervisor", () => {
     assert.ok(
       commands.some((command) => command.includes("self-host-restore.sh")),
     );
-    assert.ok(commands.some((command) => command.includes("docker compose")));
+    const pull = commands.findIndex(
+      (command) => command.includes(".release.yml pull"),
+    );
+    const restore = commands.findIndex((command) =>
+      command.includes("self-host-restore.sh"),
+    );
+    const up = commands.findIndex(
+      (command) => command.includes(".release.yml up -d"),
+    );
+    assert.ok(pull >= 0 && pull < restore && restore < up);
     assert.ok(commands.some((command) => command.includes("/health/detailed")));
   });
 });
 
 async function testApp(options: {
+  composeProfiles?: string[];
   execute?: CommandExecutor;
   manifest?: Record<string, unknown>;
 } = {}) {
@@ -212,11 +388,10 @@ async function testApp(options: {
     appVersion: "1.2.2",
     composeFile: join(rootDir, "compose.yml"),
     envFile: join(rootDir, ".env"),
+    composeProfiles: options.composeProfiles,
     execute:
       options.execute ??
-      (async () => {
-        return { stdout: "ok", stderr: "" };
-      }),
+      (async (_command, args) => successfulCommandResult(args)),
     rootDir,
     stateDir,
     token,
@@ -245,7 +420,7 @@ function releaseManifest(overrides: Record<string, unknown> = {}) {
       {
         digest:
           overrides.digest ??
-          "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          apiDigest,
         image: overrides.image ?? "ghcr.io/planisfy/api",
         service: "api",
       },

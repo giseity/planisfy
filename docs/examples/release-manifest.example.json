@@ -1,6 +1,6 @@
 {
   "version": "1.2.0",
-  "createdAt": "<RFC3339 timestamp>",
+  "createdAt": "2026-07-29T00:00:00.000Z",
   "minimumVersion": "1.1.0",
   "images": [
     {
@@ -9,9 +9,74 @@
       "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
     {
+      "service": "worker-geodata",
+      "image": "ghcr.io/example/planisfy/worker-geodata",
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    {
       "service": "console",
       "image": "ghcr.io/example/planisfy/console",
       "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "service": "admin",
+      "image": "ghcr.io/example/planisfy/admin",
+      "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "service": "self-host-supervisor",
+      "image": "ghcr.io/example/planisfy/self-host-supervisor",
+      "digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    {
+      "service": "docs",
+      "image": "ghcr.io/example/planisfy/docs",
+      "digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+      "service": "marketing",
+      "image": "ghcr.io/example/planisfy/marketing",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "service": "postgres",
+      "image": "docker.io/library/postgres",
+      "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "service": "redis",
+      "image": "docker.io/library/redis",
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "service": "martin",
+      "image": "ghcr.io/maplibre/martin",
+      "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    {
+      "service": "valhalla",
+      "image": "ghcr.io/valhalla/valhalla",
+      "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    {
+      "service": "elevation",
+      "image": "ghcr.io/example/planisfy/elevation",
+      "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    {
+      "service": "static-renderer",
+      "image": "ghcr.io/example/planisfy/static-renderer",
+      "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+    },
+    {
+      "service": "pelias-elasticsearch",
+      "image": "docker.io/pelias/elasticsearch",
+      "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+    },
+    {
+      "service": "pelias",
+      "image": "docker.io/pelias/api",
+      "digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
     }
   ],
   "migrations": {
@@ -40,5 +105,7 @@
   ],
   "backupRequired": true,
   "rollbackSupported": true,
-  "notes": ["Example pinned-release manifest for self-host upgrade planning."]
+  "notes": [
+    "Example for the default stack plus the with-supervisor profile. Replace every repository and digest with reviewed release values, and add entries for any other enabled profile."
+  ]
 }
