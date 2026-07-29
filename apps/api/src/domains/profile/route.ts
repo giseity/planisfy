@@ -180,8 +180,9 @@ export const profileRoute = profileBaseRoute
       return getProfile(userId, tx)
     })
 
-    logAudit({
-      profileId: userId,
+    await logAudit({
+      accountId: userId,
+      actorUserId: userId,
       action: 'profile.avatar_updated',
       resourceType: 'profile',
       resourceId: userId,
@@ -213,8 +214,9 @@ export const profileRoute = profileBaseRoute
       return getProfile(userId, tx)
     })
 
-    logAudit({
-      profileId: userId,
+    await logAudit({
+      accountId: userId,
+      actorUserId: userId,
       action: 'profile.avatar_deleted',
       resourceType: 'profile',
       resourceId: userId,
@@ -262,8 +264,9 @@ export const profileRoute = profileBaseRoute
       await db.update(users).set({ name: displayName }).where(eq(users.id, userId))
     }
 
-    logAudit({
-      profileId: userId,
+    await logAudit({
+      accountId: userId,
+      actorUserId: userId,
       action: 'profile.updated',
       resourceType: 'profile',
       resourceId: userId,

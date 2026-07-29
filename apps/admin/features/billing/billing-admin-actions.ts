@@ -89,7 +89,8 @@ export async function assignManagedContractAction(formData: FormData) {
       .returning({ id: managedContracts.id })
 
     await tx.insert(auditEvents).values({
-      profileId: admin.userId,
+      accountId,
+      actorUserId: admin.userId,
       action: 'managed_contract.assigned',
       resourceType: 'managed_contract',
       resourceId: created?.id,
@@ -140,7 +141,8 @@ export async function grantUsageAllowanceAction(formData: FormData) {
 
     if (created) {
       await tx.insert(auditEvents).values({
-        profileId: admin.userId,
+        accountId,
+        actorUserId: admin.userId,
         action: 'usage_allowance.granted',
         resourceType: 'usage_allowance_grant',
         resourceId: created.id,

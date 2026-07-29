@@ -295,7 +295,7 @@ async function fetchAudit(accountId: string) {
       timestamp: auditEvents.timestamp,
     })
     .from(auditEvents)
-    .where(eq(auditEvents.profileId, accountId))
+    .where(eq(auditEvents.accountId, accountId))
     .orderBy(desc(auditEvents.timestamp))
     .limit(12)
 

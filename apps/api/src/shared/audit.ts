@@ -1,29 +1,30 @@
-import { db, auditEvents } from "@planisfy/database";
+import { db, auditEvents } from '@planisfy/database'
 
 interface AuditParams {
-  profileId: string;
-  action: string;
-  resourceType: string;
-  resourceId?: string;
-  metadata?: Record<string, unknown>;
-  ipAddress?: string;
+  accountId: string
+  actorUserId?: string
+  requestId?: string
+  outcome?: 'SUCCESS' | 'FAILURE'
+  action: string
+  resourceType: string
+  resourceId?: string
+  metadata?: Record<string, unknown>
+  ipAddress?: string
 }
 
 /**
- * Fire-and-forget audit event logging.
- * Errors are logged but never propagated to the caller.
+ * Persist an audit event. Callers must await this before reporting success.
  */
-export function logAudit(params: AuditParams): void {
-  db.insert(auditEvents)
-    .values({
-      profileId: params.profileId,
-      action: params.action,
-      resourceType: params.resourceType,
-      resourceId: params.resourceId ?? null,
-      metadata: params.metadata ?? null,
-      ipAddress: params.ipAddress ?? null,
-    })
-    .catch((err: unknown) => {
-      console.error("[audit] Failed to log event:", err);
-    });
+export async function logAudit(params: AuditParams): Promise<void> {
+  await db.insert(auditEvents).values({
+    accountId: params.accountId,
+    actorUserId: params.actorUserId ?? null,
+    requestId: params.requestId ?? null,
+    outcome: params.outcome ?? 'SUCCESS',
+    action: params.action,
+    resourceType: params.resourceType,
+    resourceId: params.resourceId ?? null,
+    metadata: params.metadata ?? null,
+    ipAddress: params.ipAddress ?? null,
+  })
 }

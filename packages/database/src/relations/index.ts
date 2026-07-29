@@ -613,7 +613,7 @@ export const usageRollupsRelations = relations(usageRollups, ({ one }) => ({
 
 export const auditEventsRelations = relations(auditEvents, ({ one }) => ({
   account: one(accounts, {
-    fields: [auditEvents.profileId],
+    fields: [auditEvents.accountId],
     references: [accounts.id],
   }),
 }))

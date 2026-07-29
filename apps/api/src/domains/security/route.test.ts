@@ -7,7 +7,10 @@ test("serializeSecurityActivity returns persisted audit activity", () => {
 
   const serialized = serializeSecurityActivity({
     id: "audit-1",
-    profileId: "account-1",
+    accountId: "account-1",
+    actorUserId: "actor-1",
+    requestId: "request-1",
+    outcome: "SUCCESS",
     action: "password.changed",
     resourceType: "security",
     resourceId: null,

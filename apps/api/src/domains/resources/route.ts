@@ -167,8 +167,9 @@ resourcesRoute.post(
       );
     }
 
-    logAudit({
-      profileId: userId,
+    await logAudit({
+      accountId,
+      actorUserId: userId,
       action: "tileset.created",
       resourceType: "tileset",
       resourceId: created.id,
@@ -212,8 +213,9 @@ resourcesRoute.delete("/tilesets/:id", async (c) => {
     .set({ deletedAt: now, updatedAt: now, status: "ARCHIVED" })
     .where(eq(tilesets.id, existing.id));
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId,
+    actorUserId: userId,
     action: "tileset.deleted",
     resourceType: "tileset",
     resourceId: existing.id,
@@ -425,8 +427,9 @@ resourcesRoute.post("/tilesets/:id/uploads", async (c) => {
     },
   });
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId,
+    actorUserId: userId,
     action: "tileset.uploaded",
     resourceType: "tileset",
     resourceId: tileset.id,
@@ -729,8 +732,9 @@ resourcesRoute.post("/tilesets/:id/versions/:version/publish", async (c) => {
       publishedBy: userId,
     },
   });
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId,
+    actorUserId: userId,
     action: "tileset.published",
     resourceType: "tileset",
     resourceId: id,
@@ -916,8 +920,9 @@ resourcesRoute.post("/tilesets/:id/rebuild", async (c) => {
     },
   });
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId,
+    actorUserId: userId,
     action: "tileset.rebuild_requested",
     resourceType: "tileset",
     resourceId: tileset.id,

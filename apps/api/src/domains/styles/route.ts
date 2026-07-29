@@ -280,8 +280,9 @@ stylesRoute.post("/sprite-assets", async (c) => {
     return asset!;
   });
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId,
+    actorUserId: userId,
     action: "sprite_asset.created",
     resourceType: "sprite_asset",
     resourceId: created.id,
@@ -398,8 +399,9 @@ stylesRoute.patch("/sprite-assets/:id", async (c) => {
     .where(and(eq(spriteAssets.id, existing.id), eq(spriteAssets.accountId, accountId)))
     .returning();
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId,
+    actorUserId: userId,
     action: "sprite_asset.renamed",
     resourceType: "sprite_asset",
     resourceId: existing.id,
@@ -432,8 +434,9 @@ stylesRoute.delete("/sprite-assets/:id", async (c) => {
     .set({ deletedAt: new Date() })
     .where(and(eq(spriteAssets.id, existing.id), eq(spriteAssets.accountId, accountId)));
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId,
+    actorUserId: userId,
     action: "sprite_asset.deleted",
     resourceType: "sprite_asset",
     resourceId: existing.id,
@@ -487,8 +490,9 @@ stylesRoute.post("/styles", async (c) => {
     styleJson,
   });
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: "style.created",
     resourceType: "style",
     resourceId: created.id,
@@ -679,8 +683,9 @@ stylesRoute.put("/styles/:id", async (c) => {
     );
   }
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: "style.updated",
     resourceType: "style",
     resourceId: styleId,
@@ -706,8 +711,9 @@ stylesRoute.delete("/styles/:id", async (c) => {
     );
   }
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: "style.deleted",
     resourceType: "style",
     resourceId: styleId,
@@ -822,8 +828,9 @@ stylesRoute.post("/styles/:id/publish", async (c) => {
       version: styles.version,
     });
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: "style.published",
     resourceType: "style",
     resourceId: styleId,
@@ -938,8 +945,9 @@ stylesRoute.post("/styles/:id/versions/:versionNum/publish", async (c) => {
       version: styles.version,
     });
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: "style.published_version",
     resourceType: "style",
     resourceId: styleId,
@@ -976,8 +984,9 @@ stylesRoute.post("/styles/:id/unpublish", async (c) => {
     );
   }
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: "style.unpublished",
     resourceType: "style",
     resourceId: styleId,
@@ -1004,8 +1013,9 @@ stylesRoute.post("/styles/:id/duplicate", async (c) => {
     );
   }
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: "style.created",
     resourceType: "style",
     resourceId: created.id,
@@ -1145,8 +1155,9 @@ stylesRoute.post("/styles/:id/versions/:versionNum/restore", async (c) => {
       updatedAt: styles.updatedAt,
     });
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: "style.restored",
     resourceType: "style",
     resourceId: styleId,

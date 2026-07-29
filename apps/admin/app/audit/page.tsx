@@ -55,7 +55,7 @@ export default async function AuditPage({
     db
       .select({
         id: auditEvents.id,
-        profileId: auditEvents.profileId,
+        accountId: auditEvents.accountId,
         action: auditEvents.action,
         resourceType: auditEvents.resourceType,
         resourceId: auditEvents.resourceId,
@@ -66,7 +66,7 @@ export default async function AuditPage({
         actorDisplayName: accounts.displayName,
       })
       .from(auditEvents)
-      .leftJoin(accounts, eq(auditEvents.profileId, accounts.id))
+      .leftJoin(accounts, eq(auditEvents.accountId, accounts.id))
       .where(whereClause)
       .orderBy(desc(auditEvents.timestamp))
       .limit(limit)
@@ -74,7 +74,7 @@ export default async function AuditPage({
     db
       .select({ count: count() })
       .from(auditEvents)
-      .leftJoin(accounts, eq(auditEvents.profileId, accounts.id))
+      .leftJoin(accounts, eq(auditEvents.accountId, accounts.id))
       .where(whereClause),
     db
       .selectDistinct({ action: auditEvents.action })
@@ -151,7 +151,7 @@ export default async function AuditPage({
               </TableCell>
               <TableCell>
                 {event.actorHandle ? (
-                  <Link href={`/users/${event.profileId}`} className="text-sm hover:underline">
+                  <Link href={`/users/${event.accountId}`} className="text-sm hover:underline">
                     @{event.actorHandle}
                   </Link>
                 ) : (

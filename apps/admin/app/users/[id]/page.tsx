@@ -89,7 +89,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
         ipAddress: auditEvents.ipAddress,
       })
       .from(auditEvents)
-      .where(eq(auditEvents.profileId, id))
+      .where(eq(auditEvents.accountId, id))
       .orderBy(desc(auditEvents.timestamp))
       .limit(50),
     db

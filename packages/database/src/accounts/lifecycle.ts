@@ -60,7 +60,8 @@ export async function setAccountLifecycle(params: {
     }
 
     await tx.insert(auditEvents).values({
-      profileId: account.id,
+      accountId: account.id,
+      actorUserId: params.actorId,
       action: 'account.lifecycle_changed',
       resourceType: 'account',
       resourceId: account.id,
@@ -153,7 +154,8 @@ export async function deactivateAccount(params: {
     ])
 
     await tx.insert(auditEvents).values({
-      profileId: account.id,
+      accountId: account.id,
+      actorUserId: params.actorId,
       action: 'account.deactivated',
       resourceType: 'account',
       resourceId: account.id,

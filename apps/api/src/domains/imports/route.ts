@@ -465,8 +465,9 @@ importsRoute.post("/source-imports/overture", async (c) => {
       provider: "OVERTURE",
     },
   });
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId,
+    actorUserId: userId,
     action: "source.import_requested",
     resourceType: "dataset",
     resourceId: dataset.id,
@@ -667,8 +668,9 @@ async function queueExistingDatasetTilesetBuild(params: {
       options: { minZoom, maxZoom },
     },
   });
-  logAudit({
-    profileId: params.userId,
+  await logAudit({
+    accountId: params.accountId,
+    actorUserId: params.userId,
     action: "tileset.dataset_build_requested",
     resourceType: "tileset",
     resourceId: tileset.id,

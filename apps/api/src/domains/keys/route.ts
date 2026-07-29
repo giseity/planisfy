@@ -203,8 +203,9 @@ keysRoute.post('/keys', async (c) => {
     )
   }
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: 'key.created',
     resourceType: 'api_key',
     resourceId: created.row.id,
@@ -322,8 +323,9 @@ keysRoute.put('/keys/:id', async (c) => {
     throw error
   }
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: 'key.updated',
     resourceType: 'api_key',
     resourceId: keyId,
@@ -354,8 +356,9 @@ keysRoute.delete('/keys/:id', async (c) => {
     throw error
   }
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: 'key.revoked',
     resourceType: 'api_key',
     resourceId: keyId,
@@ -427,8 +430,9 @@ keysRoute.post('/keys/:id/rotate', async (c) => {
     )
   }
 
-  logAudit({
-    profileId: userId,
+  await logAudit({
+    accountId: ownerId,
+    actorUserId: userId,
     action: 'key.rotated',
     resourceType: 'api_key',
     resourceId: keyId,

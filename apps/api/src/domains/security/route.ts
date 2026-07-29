@@ -27,6 +27,9 @@ export function serializeSecurityActivity(row: SecurityActivityRow) {
     resourceId: row.resourceId,
     metadata: row.metadata,
     ipAddress: row.ipAddress,
+    actorUserId: row.actorUserId,
+    requestId: row.requestId,
+    outcome: row.outcome,
     timestamp: row.timestamp.toISOString(),
   };
 }
@@ -39,7 +42,7 @@ securityRoute.get("/security/activity", async (c) => {
     .from(auditEvents)
     .where(
       and(
-        eq(auditEvents.profileId, ownerId),
+        eq(auditEvents.accountId, ownerId),
         or(
           inArray(auditEvents.resourceType, securityResourceTypes),
           like(auditEvents.action, "auth.%"),

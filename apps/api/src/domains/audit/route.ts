@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
-import { db, auditEvents, accounts } from "@planisfy/database";
+import { db, auditEvents, users } from "@planisfy/database";
 import { auditQuerySchema } from "@planisfy/api-contracts";
 import { queryValidator } from "../../shared/validation/validation";
 import type { AuthEnv } from "../../middleware/auth";
@@ -23,7 +23,7 @@ export const auditRoute = auditBaseRoute.get(
     c.req.valid("query");
   const offset = (page - 1) * limit;
 
-  const conditions = [eq(auditEvents.profileId, ownerId)];
+  const conditions = [eq(auditEvents.accountId, ownerId)];
   if (action) conditions.push(eq(auditEvents.action, action));
   if (resourceType) conditions.push(eq(auditEvents.resourceType, resourceType));
   if (from) conditions.push(gte(auditEvents.timestamp, new Date(from)));
@@ -40,11 +40,14 @@ export const auditRoute = auditBaseRoute.get(
         resourceId: auditEvents.resourceId,
         metadata: auditEvents.metadata,
         ipAddress: auditEvents.ipAddress,
+        requestId: auditEvents.requestId,
+        outcome: auditEvents.outcome,
         timestamp: auditEvents.timestamp,
-        actorName: accounts.displayName,
+        actorUserId: auditEvents.actorUserId,
+        actorName: users.name,
       })
       .from(auditEvents)
-      .leftJoin(accounts, eq(auditEvents.profileId, accounts.id))
+      .leftJoin(users, eq(auditEvents.actorUserId, users.id))
       .where(where)
       .orderBy(desc(auditEvents.timestamp))
       .limit(limit)
