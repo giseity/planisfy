@@ -281,7 +281,7 @@ const areaOfInterestInputSchema = z
     }
   })
 
-const routingGraphBuildSchema = z.object({
+export const routingGraphBuildSchema = z.object({
   name: z.string().min(1).max(128),
   sourceUrl: z
     .string()
@@ -300,7 +300,7 @@ const routingGraphBuildSchema = z.object({
   sourcePreset: z.string().min(1).max(128).optional(),
   workerNodeId: z.string().uuid(),
   activationWorkerNodeId: z.string().uuid().optional(),
-  valhallaImage: z.string().min(1).max(512).default('ghcr.io/valhalla/valhalla:3.7.0'),
+  valhallaImage: z.never().optional(),
   includeAdmins: z.boolean().default(true),
   includeTimezones: z.boolean().default(true),
   elevationMode: z.enum(['none', 'dem_companion']).default('none'),
@@ -312,7 +312,22 @@ const routingGraphActivateSchema = z.object({
   activationWorkerNodeId: z.string().uuid().optional(),
 })
 
-const basemapBuildSchema = z.object({
+const basemapBuildConfigSchema = z
+  .object({
+    minZoom: z.number().int().min(0).max(24).optional(),
+    maxZoom: z.number().int().min(0).max(24).optional(),
+    attribution: z.string().min(1).max(512).optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.minZoom === undefined ||
+      value.maxZoom === undefined ||
+      value.minZoom <= value.maxZoom,
+    { message: 'minZoom must be less than or equal to maxZoom' }
+  )
+
+export const basemapBuildSchema = z.object({
   name: z.string().min(1).max(128),
   sourceUrl: z
     .string()
@@ -333,11 +348,11 @@ const basemapBuildSchema = z.object({
   activationWorkerNodeId: z.string().uuid().optional(),
   engine: z.enum(['planetiler_osm', 'planetiler_overture']).default('planetiler_osm'),
   sourceKind: z.enum(['osm_pbf', 'overture_geoparquet']).default('osm_pbf'),
-  planetilerImage: z.string().min(1).max(512).default('ghcr.io/onthegomap/planetiler:latest'),
+  planetilerImage: z.never().optional(),
   profile: z.string().min(1).max(128).default('openmaptiles'),
   outputFormat: z.enum(['pmtiles', 'mbtiles']).default('pmtiles'),
   areaOfInterest: areaOfInterestInputSchema,
-  config: z.record(z.string(), z.unknown()).default({}),
+  config: basemapBuildConfigSchema.default({}),
 })
 
 const basemapActivateSchema = z.object({
@@ -1223,7 +1238,7 @@ operationsRoute.post('/operations/routing-graphs', async (c) => {
       sourcePreset: parsed.data.sourcePreset ?? null,
       workerNodeId: parsed.data.workerNodeId,
       activationWorkerNodeId: parsed.data.activationWorkerNodeId ?? null,
-      valhallaImage: parsed.data.valhallaImage,
+      valhallaImage: env.VALHALLA_BUILDER_IMAGES[0]!,
       includeAdmins: parsed.data.includeAdmins,
       includeTimezones: parsed.data.includeTimezones,
       elevationMode: parsed.data.elevationMode,
@@ -1373,7 +1388,7 @@ operationsRoute.post('/operations/basemap-builds', async (c) => {
       activationWorkerNodeId: parsed.data.activationWorkerNodeId ?? null,
       engine: parsed.data.engine,
       sourceKind: parsed.data.sourceKind,
-      planetilerImage: parsed.data.planetilerImage,
+      planetilerImage: env.PLANETILER_BUILDER_IMAGES[0]!,
       profile: parsed.data.profile,
       outputFormat: parsed.data.outputFormat,
       areaOfInterest: parsed.data.areaOfInterest ?? null,

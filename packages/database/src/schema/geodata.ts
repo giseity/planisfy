@@ -546,6 +546,10 @@ export const routingGraphBuilds = pgTable(
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
+    check(
+      'routing_graph_builds_valhalla_image_pinned_check',
+      sql`${table.valhallaImage} ~ '^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?/)?[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)+@sha256:[a-f0-9]{64}$'`
+    ),
     index('routing_graph_builds_account_idx').on(table.accountId),
     index('routing_graph_builds_status_idx').on(table.status),
     index('routing_graph_builds_worker_idx').on(table.workerNodeId),
@@ -907,9 +911,7 @@ export const basemapBuilds = pgTable(
     sourceKind: varchar('source_kind', { length: 64 }).notNull().default('osm_pbf'),
     sourceUrl: text('source_url').notNull(),
     sourcePreset: varchar('source_preset', { length: 128 }),
-    planetilerImage: text('planetiler_image')
-      .notNull()
-      .default('ghcr.io/onthegomap/planetiler:latest'),
+    planetilerImage: text('planetiler_image').notNull(),
     profile: varchar('profile', { length: 128 }).notNull().default('openmaptiles'),
     outputFormat: varchar('output_format', { length: 32 }).notNull().default('pmtiles'),
     areaOfInterest: jsonb('area_of_interest'),
@@ -929,6 +931,10 @@ export const basemapBuilds = pgTable(
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
+    check(
+      'basemap_builds_planetiler_image_pinned_check',
+      sql`${table.planetilerImage} ~ '^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?/)?[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)+@sha256:[a-f0-9]{64}$'`
+    ),
     index('basemap_builds_account_idx').on(table.accountId),
     index('basemap_builds_status_idx').on(table.status),
     index('basemap_builds_worker_idx').on(table.workerNodeId),

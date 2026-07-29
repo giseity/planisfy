@@ -78,6 +78,8 @@ services:
       - STATIC_RENDERER_INTERNAL_URL=${STATIC_RENDERER_INTERNAL_URL:-http://static-renderer:4300}
       - ELEVATION_INTERNAL_URL=${ELEVATION_INTERNAL_URL:-http://elevation:8080/api/v1}
       - VALHALLA_INTERNAL_URL=http://valhalla:8002
+      - VALHALLA_BUILDER_IMAGES=${VALHALLA_BUILDER_IMAGES:?Set digest-pinned Valhalla builder images}
+      - PLANETILER_BUILDER_IMAGES=${PLANETILER_BUILDER_IMAGES:?Set digest-pinned Planetiler builder images}
       - VALHALLA_READINESS_ROUTE=${VALHALLA_READINESS_ROUTE:-}
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-s3}
       - LOCAL_STORAGE_PATH=/data/storage

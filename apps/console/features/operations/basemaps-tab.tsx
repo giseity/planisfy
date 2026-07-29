@@ -80,7 +80,6 @@ export function BasemapsTab({
   const [sourceUrl, setSourceUrl] = useState(SOURCE_PRESETS[0]?.url ?? '')
   const [workerNodeId, setWorkerNodeId] = useState('')
   const [activationWorkerNodeId, setActivationWorkerNodeId] = useState('')
-  const [planetilerImage, setPlanetilerImage] = useState('ghcr.io/onthegomap/planetiler:latest')
   const [detail, setDetail] = useState<ConsoleBasemapBuildDetail | null>(null)
 
   const buildNodes = nodes.filter((node) => hasCapability(node, 'basemap_build'))
@@ -113,7 +112,6 @@ export function BasemapsTab({
           activationWorkerNodeId: activationWorkerNodeId || undefined,
           engine: 'planetiler_osm',
           sourceKind: 'osm_pbf',
-          planetilerImage,
           profile: 'openmaptiles',
           outputFormat: 'pmtiles',
           config: { minZoom: 0, maxZoom: sourcePreset === 'planet' ? 14 : 13 },
@@ -213,12 +211,6 @@ export function BasemapsTab({
                   ))}
                 </SelectContent>
               </Select>
-            </Field>
-            <Field label="Planetiler image">
-              <Input
-                value={planetilerImage}
-                onChange={(event) => setPlanetilerImage(event.target.value)}
-              />
             </Field>
             <Button disabled={!name || !sourceUrl || !workerNodeId} onClick={createBuild}>
               Queue Basemap Build

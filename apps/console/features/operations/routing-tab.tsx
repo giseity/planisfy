@@ -109,7 +109,6 @@ export function RoutingTab({
   )
   const [workerNodeId, setWorkerNodeId] = useState('')
   const [activationWorkerNodeId, setActivationWorkerNodeId] = useState('')
-  const [valhallaImage, setValhallaImage] = useState('ghcr.io/valhalla/valhalla:3.7.0')
   const [includeAdmins, setIncludeAdmins] = useState(true)
   const [includeTimezones, setIncludeTimezones] = useState(true)
   const [elevationMode, setElevationMode] = useState<'none' | 'dem_companion'>('none')
@@ -179,7 +178,6 @@ export function RoutingTab({
           sourcePreset: sourcePreset === 'custom' ? undefined : sourcePreset,
           workerNodeId,
           activationWorkerNodeId: activationWorkerNodeId || undefined,
-          valhallaImage,
           includeAdmins,
           includeTimezones,
           elevationMode,
@@ -336,12 +334,6 @@ export function RoutingTab({
                   ))}
                 </SelectContent>
               </Select>
-            </Field>
-            <Field label="Valhalla image">
-              <Input
-                value={valhallaImage}
-                onChange={(event) => setValhallaImage(event.target.value)}
-              />
             </Field>
             <label className="flex items-center gap-2 text-sm">
               <Checkbox

@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   deliverNotification,
   buildNotificationDeliveryProof,
+  basemapBuildSchema,
   canConsoleCreateScheduleKind,
   canUseConsoleOperatorOperation,
   formatSseEvent,
@@ -12,11 +13,51 @@ import {
   operationsOverviewSignature,
   prepareScheduledOperationRun,
   prepareWorkflowTemplateApplication,
+  routingGraphBuildSchema,
   validateServingWorker,
   validateScheduleInput,
   validateNotificationTarget,
   validatePreviewTargetUrl,
 } from './route'
+
+const TEST_WORKER_ID = '11111111-1111-4111-8111-111111111111'
+
+test('build creation schemas reject caller-controlled executable workloads', () => {
+  const routing = {
+    name: 'routing',
+    sourceUrl: 'https://download.example/map.osm.pbf',
+    workerNodeId: TEST_WORKER_ID,
+  }
+  assert.equal(routingGraphBuildSchema.safeParse(routing).success, true)
+  assert.equal(
+    routingGraphBuildSchema.safeParse({
+      ...routing,
+      valhallaImage: 'evil.example/workload:latest',
+    }).success,
+    false
+  )
+
+  const basemap = {
+    name: 'basemap',
+    sourceUrl: 'https://download.example/map.osm.pbf',
+    workerNodeId: TEST_WORKER_ID,
+  }
+  assert.equal(basemapBuildSchema.safeParse(basemap).success, true)
+  assert.equal(
+    basemapBuildSchema.safeParse({
+      ...basemap,
+      planetilerImage: 'evil.example/workload:latest',
+    }).success,
+    false
+  )
+  assert.equal(
+    basemapBuildSchema.safeParse({
+      ...basemap,
+      config: { planetilerArgs: ['--arbitrary-option'] },
+    }).success,
+    false
+  )
+})
 
 test('formatSseEvent emits EventSource-compatible frames', () => {
   assert.equal(

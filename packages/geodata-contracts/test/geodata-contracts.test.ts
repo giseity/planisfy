@@ -2,14 +2,41 @@ import { describe, expect, it } from 'vitest'
 import {
   buildDatasetTilesetProcessingInput,
   buildRetrySourceResource,
+  isPinnedBuilderImage,
   MANAGED_PELIAS_PROFILE,
   MANAGED_PELIAS_PROFILE_EXCLUDED_IMPORTERS,
   MANAGED_PELIAS_PROFILE_IMPORTERS,
   MANAGED_PELIAS_PROFILE_VERSION,
+  parseBuilderImageAllowlist,
   parseSourceProcessingJobInput,
 } from '../src'
 
 describe('geodata contracts', () => {
+  const digest = 'a'.repeat(64)
+
+  it('parses ordered digest-pinned builder image allowlists', () => {
+    expect(
+      parseBuilderImageAllowlist(
+        `ghcr.io/planisfy/valhalla@sha256:${digest},registry.example:5000/maps/valhalla@sha256:${'b'.repeat(64)}`
+      )
+    ).toEqual([
+      `ghcr.io/planisfy/valhalla@sha256:${digest}`,
+      `registry.example:5000/maps/valhalla@sha256:${'b'.repeat(64)}`,
+    ])
+  })
+
+  it('rejects mutable, malformed, empty, and duplicate builder image allowlists', () => {
+    expect(isPinnedBuilderImage('ghcr.io/planisfy/valhalla:latest')).toBe(false)
+    expect(isPinnedBuilderImage(`ghcr.io/planisfy/valhalla:3.7.0@sha256:${digest}`)).toBe(false)
+    expect(isPinnedBuilderImage(`ghcr.io/Planisfy/valhalla@sha256:${digest}`)).toBe(false)
+    expect(() => parseBuilderImageAllowlist('')).toThrow(/at least one/)
+    expect(() =>
+      parseBuilderImageAllowlist(
+        `ghcr.io/planisfy/valhalla@sha256:${digest},ghcr.io/planisfy/valhalla@sha256:${digest}`
+      )
+    ).toThrow(/duplicate/)
+  })
+
   it('defines the managed Pelias geocoder profile', () => {
     expect({
       name: MANAGED_PELIAS_PROFILE,

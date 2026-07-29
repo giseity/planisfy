@@ -1,5 +1,6 @@
 import { loadWorkspaceEnv } from '@planisfy/env/node'
 import { createEnv, portSchema, redisConnectionFromEnv, z } from '@planisfy/env'
+import { parseBuilderImageAllowlist } from '@planisfy/geodata-contracts'
 
 loadWorkspaceEnv()
 
@@ -41,6 +42,14 @@ const schema = z.object({
   GLYPHS_INTERNAL_URL: z.string().url(),
   STATIC_RENDERER_INTERNAL_URL: emptyableUrl,
   ELEVATION_INTERNAL_URL: z.string().url(),
+  VALHALLA_BUILDER_IMAGES: z
+    .string()
+    .min(1)
+    .transform((value, ctx) => parseBuilderImages(value, 'VALHALLA_BUILDER_IMAGES', ctx)),
+  PLANETILER_BUILDER_IMAGES: z
+    .string()
+    .min(1)
+    .transform((value, ctx) => parseBuilderImages(value, 'PLANETILER_BUILDER_IMAGES', ctx)),
 
   ZEPTOMAIL_SEND_MAIL_TOKEN: emptyableString,
   ZEPTOMAIL_FROM_AUTH: emptyableString,
@@ -88,6 +97,18 @@ assertManagedProductionEnv(env)
 assertOutboundPrivatePolicy(env)
 
 export const redisConnection = redisConnectionFromEnv(env)
+
+function parseBuilderImages(value: string, label: string, ctx: z.RefinementCtx) {
+  try {
+    return parseBuilderImageAllowlist(value, label)
+  } catch (error) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return z.NEVER
+  }
+}
 
 function assertOutboundPrivatePolicy(value: typeof env) {
   if (value.ALLOW_PRIVATE_SOURCE_URLS && !value.OUTBOUND_PRIVATE_ALLOWLIST) {

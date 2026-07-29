@@ -13,6 +13,34 @@ export const MANAGED_PELIAS_PROFILE_IMPORTERS = [
 ] as const
 export const MANAGED_PELIAS_PROFILE_EXCLUDED_IMPORTERS = ['interpolation', 'transit'] as const
 
+const PINNED_BUILDER_IMAGE_PATTERN =
+  /^(?:[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]+)?\/)?[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)+@sha256:[a-f0-9]{64}$/
+
+export function isPinnedBuilderImage(value: string) {
+  return PINNED_BUILDER_IMAGE_PATTERN.test(value)
+}
+
+export function parseBuilderImageAllowlist(value: string, label = 'builder image allowlist') {
+  const images = value
+    .split(',')
+    .map((image) => image.trim())
+    .filter(Boolean)
+
+  if (images.length === 0) {
+    throw new Error(`${label} must contain at least one digest-pinned image`)
+  }
+  const invalid = images.find((image) => !isPinnedBuilderImage(image))
+  if (invalid) {
+    throw new Error(
+      `${label} entries must use registry/repository@sha256:<64 lowercase hex>: ${invalid}`
+    )
+  }
+  if (new Set(images).size !== images.length) {
+    throw new Error(`${label} must not contain duplicate images`)
+  }
+  return images
+}
+
 export type TilesetBuildFormat = 'geojson' | 'csv' | 'shapefile' | 'pmtiles' | 'mbtiles'
 
 export type TilesetBuildOptions = {

@@ -225,6 +225,13 @@
       "when": 1785282789607,
       "tag": "0031_root_agent_protocol",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1785289956000,
+      "tag": "0032_builder_image_policy",
+      "breakpoints": true
     }
   ]
 }

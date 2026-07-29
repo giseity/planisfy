@@ -16,6 +16,12 @@ Start from `.env.example` and keep production secrets out of source control.
 | Geospatial services   | `MARTIN_INTERNAL_URL`, `VALHALLA_INTERNAL_URL`, `PELIAS_INTERNAL_URL`, `GLYPHS_INTERNAL_URL`, `ELEVATION_INTERNAL_URL`, `STATIC_RENDERER_INTERNAL_URL` |
 | Storage               | `STORAGE_PROVIDER`, local storage paths, S3 settings, R2 settings                                                                                      |
 
+Routing and basemap build creation also requires
+`VALHALLA_BUILDER_IMAGES` and `PLANETILER_BUILDER_IMAGES`. Each value is a
+comma-separated operator allowlist of canonical
+`registry/repository@sha256:<digest>` references. The first image is selected
+for new jobs; Console and API callers cannot override it.
+
 Outbound URLs resolve and pin DNS before the connection is opened. Private
 destinations are denied unless their exact hostname, IP address, or CIDR is
 listed in the comma-separated `OUTBOUND_PRIVATE_ALLOWLIST`. Configure the same

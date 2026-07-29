@@ -434,7 +434,6 @@ class ApiClient {
     sourcePreset?: string;
     workerNodeId: string;
     activationWorkerNodeId?: string;
-    valhallaImage?: string;
     includeAdmins?: boolean;
     includeTimezones?: boolean;
     elevationMode?: "none" | "dem_companion";
@@ -480,7 +479,6 @@ class ApiClient {
     activationWorkerNodeId?: string;
     engine?: "planetiler_osm" | "planetiler_overture";
     sourceKind?: "osm_pbf" | "overture_geoparquet";
-    planetilerImage?: string;
     profile?: string;
     outputFormat?: "pmtiles" | "mbtiles";
     areaOfInterest?: ConsoleAreaOfInterest;
