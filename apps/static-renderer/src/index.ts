@@ -9,6 +9,21 @@ loadWorkspaceEnv();
 const port = Number(process.env.PORT ?? "4300");
 const hostname = process.env.HOST ?? "0.0.0.0";
 const apiBaseUrl = process.env.PLANISFY_API_URL ?? "http://api:4000";
+const rendererLimits = {
+  maxRequests: positiveIntegerEnv("STATIC_RENDERER_MAX_REQUESTS", 128),
+  maxResourceBytes: positiveIntegerEnv(
+    "STATIC_RENDERER_MAX_RESOURCE_BYTES",
+    16 * 1024 * 1024,
+  ),
+  maxTotalBytes: positiveIntegerEnv(
+    "STATIC_RENDERER_MAX_TOTAL_BYTES",
+    64 * 1024 * 1024,
+  ),
+  requestTimeoutMs: positiveIntegerEnv(
+    "STATIC_RENDERER_REQUEST_TIMEOUT_MS",
+    10_000,
+  ),
+};
 
 const app = new Hono();
 
@@ -57,6 +72,7 @@ app.get("/render", async (c) => {
       ...parsed.data,
       apiBaseUrl,
       forwardedHeaders,
+      limits: rendererLimits,
     });
 
     return new Response(new Uint8Array(png), {
@@ -85,3 +101,11 @@ app.get("/render", async (c) => {
 serve({ fetch: app.fetch, hostname, port }, (info) => {
   console.log(`Planisfy static renderer listening on ${hostname}:${info.port}`);
 });
+
+function positiveIntegerEnv(name: string, fallback: number) {
+  const value = Number(process.env[name] ?? fallback);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return value;
+}

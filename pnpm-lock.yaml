@@ -665,6 +665,9 @@ importers:
       '@planisfy/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@planisfy/outbound':
+        specifier: workspace:*
+        version: link:../../packages/outbound
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1

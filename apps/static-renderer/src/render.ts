@@ -2,6 +2,14 @@ import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import type { Browser } from "playwright";
 import { chromium } from "playwright";
+import {
+  fetchRendererStyle,
+  headersForRouteRequest,
+  loadRendererResource,
+  RendererPolicyError,
+  RendererResourceBudget,
+  type RendererLimits,
+} from "./resource-loader";
 
 const require = createRequire(import.meta.url);
 
@@ -14,6 +22,7 @@ export type RenderRequest = {
   height: number;
   apiBaseUrl: string;
   forwardedHeaders: Record<string, string>;
+  limits: RendererLimits;
 };
 
 let browserPromise: Promise<Browser> | null = null;
@@ -22,7 +31,16 @@ let assetsPromise: Promise<{ js: string; css: string }> | null = null;
 export async function renderStaticMap(request: RenderRequest) {
   const browser = await getBrowser();
   const { js, css } = await getMapLibreAssets();
-  const styleJson = await fetchStyle(request);
+  const budget = new RendererResourceBudget(request.limits);
+  const styleUrl = new URL(
+    `/styles/v1/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.style)}`,
+    `${request.apiBaseUrl}/`,
+  );
+  const styleJson = await fetchRendererStyle({
+    url: styleUrl,
+    headers: request.forwardedHeaders,
+    budget,
+  });
   const normalizedStyle = normalizeStyleUrls(styleJson, request.apiBaseUrl);
   const apiOrigin = new URL(request.apiBaseUrl).origin;
   const page = await browser.newPage({
@@ -34,14 +52,56 @@ export async function renderStaticMap(request: RenderRequest) {
   });
 
   try {
-    await page.route("**/*", async (route) => {
-      const headers = headersForRouteRequest(
-        route.request().url(),
-        route.request().headers(),
-        request.forwardedHeaders,
-        apiOrigin,
+    let routeFailure: Error | null = null;
+    await page.routeWebSocket("**/*", async (socket) => {
+      routeFailure ??= new RendererPolicyError(
+        "Static render attempted a WebSocket connection",
       );
-      await route.continue({ headers });
+      await socket.close({
+        code: 1008,
+        reason: "Static renderer network policy",
+      });
+    });
+    await page.route("**/*", async (route) => {
+      const intercepted = route.request();
+      const interceptedUrl = intercepted.url();
+      const protocol = new URL(interceptedUrl).protocol;
+      if (protocol === "data:" || protocol === "blob:") {
+        await route.continue();
+        return;
+      }
+      if (
+        intercepted.method() !== "GET" &&
+        intercepted.method() !== "HEAD"
+      ) {
+        routeFailure ??= new RendererPolicyError(
+          "Static render attempted a non-read network request",
+        );
+        await route.abort("blockedbyclient");
+        return;
+      }
+
+      try {
+        const resource = await loadRendererResource({
+          requestUrl: interceptedUrl,
+          requestHeaders: headersForRouteRequest(
+            interceptedUrl,
+            intercepted.headers(),
+            request.forwardedHeaders,
+            apiOrigin,
+          ),
+          forwardedHeaders: request.forwardedHeaders,
+          apiBaseUrl: request.apiBaseUrl,
+          budget,
+        });
+        await route.fulfill(resource);
+      } catch (error) {
+        routeFailure ??=
+          error instanceof Error
+            ? error
+            : new RendererPolicyError("Static render request was blocked");
+        await route.abort("blockedbyclient");
+      }
     });
 
     await page.setContent(renderHtml({ js, css }), {
@@ -82,6 +142,7 @@ export async function renderStaticMap(request: RenderRequest) {
       },
     );
 
+    if (routeFailure) throw routeFailure;
     return await page.screenshot({ type: "png" });
   } finally {
     await page.close();
@@ -119,32 +180,6 @@ export function forwardedAuthHeaders(headers: Headers) {
     if (value) forwarded[name] = value;
   }
   return forwarded;
-}
-
-export function headersForRouteRequest(
-  requestUrl: string,
-  requestHeaders: Record<string, string>,
-  forwardedHeaders: Record<string, string>,
-  apiOrigin: string,
-) {
-  if (new URL(requestUrl).origin !== apiOrigin) return requestHeaders;
-  return {
-    ...requestHeaders,
-    ...forwardedHeaders,
-  };
-}
-
-async function fetchStyle(request: RenderRequest) {
-  const url = `${request.apiBaseUrl}/styles/v1/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.style)}`;
-  const response = await fetch(url, {
-    headers: request.forwardedHeaders,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Style fetch failed with ${response.status}`);
-  }
-
-  return response.json() as Promise<unknown>;
 }
 
 async function getBrowser() {
