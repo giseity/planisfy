@@ -100,7 +100,7 @@ export function PropertyPanel() {
         ))}
 
         {/* Filter */}
-        {"filter" in layer && (
+        {layer.type !== "background" && (
           <>
             <Separator />
             <FilterField

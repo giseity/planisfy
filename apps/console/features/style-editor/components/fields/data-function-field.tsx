@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Label } from '@planisfy/ui/components/label'
 import { Button } from '@planisfy/ui/components/button'
 import { Input } from '@planisfy/ui/components/input'
@@ -13,10 +14,15 @@ import {
 import { Plus, X, ChevronsUpDown } from 'lucide-react'
 import type { PropertySpec } from '@/features/style-editor/style-spec'
 import { ColorField } from './color-field'
+import {
+  commitDataFunctionStopKey,
+  newDataFunctionStopKey,
+  type DataFunctionType,
+} from '@/features/style-editor/style-spec/data-function'
 
 interface DataFunction {
   property: string
-  type?: 'identity' | 'categorical' | 'interval' | 'exponential'
+  type?: DataFunctionType
   base?: number
   default?: unknown
   stops?: [unknown, unknown][]
@@ -60,7 +66,7 @@ export function DataFunctionField({
 
   const addStop = () => {
     const lastValue = stops.length > 0 ? stops[stops.length - 1]![1] : getDefault(spec)
-    update({ stops: [...stops, ['value', lastValue]] })
+    update({ stops: [...stops, [newDataFunctionStopKey(value.type), lastValue]] })
   }
 
   const removeStop = (index: number) => {
@@ -132,11 +138,11 @@ export function DataFunctionField({
           <div className="text-[10px] text-muted-foreground font-medium mt-1">Stops</div>
           {stops.map((stop, i) => (
             <div key={i} className="flex items-center gap-1">
-              <Input
-                value={String(stop[0] ?? '')}
-                onChange={(e) => updateStop(i, 0, e.target.value)}
-                className="h-5 w-16 text-[10px] font-mono"
-                placeholder="key"
+              <StopKeyInput
+                key={`${i}:${String(stop[0])}:${value.type ?? 'categorical'}`}
+                value={stop[0]}
+                type={value.type}
+                onCommit={(key) => updateStop(i, 0, key)}
               />
               <ChevronsUpDown className="h-3 w-3 text-muted-foreground shrink-0" />
               <StopValueInput value={stop[1]} spec={spec} onChange={(v) => updateStop(i, 1, v)} />
@@ -156,6 +162,42 @@ export function DataFunctionField({
         </>
       )}
     </div>
+  )
+}
+
+function StopKeyInput({
+  value,
+  type,
+  onCommit,
+}: {
+  value: unknown
+  type: DataFunctionType | undefined
+  onCommit: (value: string | number) => void
+}) {
+  const [text, setText] = useState(String(value ?? ''))
+  const [invalid, setInvalid] = useState(false)
+
+  const commit = () => {
+    const result = commitDataFunctionStopKey(type, text)
+    setInvalid(!result.ok)
+    if (result.ok) onCommit(result.value)
+  }
+
+  return (
+    <Input
+      value={text}
+      onChange={(event) => {
+        setText(event.target.value)
+        setInvalid(false)
+      }}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') commit()
+      }}
+      aria-invalid={invalid}
+      className="h-5 w-16 text-[10px] font-mono"
+      placeholder={type === 'interval' || type === 'exponential' ? '0' : 'key'}
+    />
   )
 }
 
