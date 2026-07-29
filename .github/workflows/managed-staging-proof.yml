@@ -12,144 +12,62 @@ concurrency:
 env:
   NODE_VERSION: '24'
   PNPM_VERSION: '10.4.1'
-  NODE_ENV: production
-  PORT: '4000'
-  APP_VERSION: ${{ github.sha }}
-  DEPLOYMENT_MODE: managed
-  STORAGE_PROVIDER: r2
-  LOCAL_STORAGE_PATH: .storage
-  ALLOW_PRIVATE_SOURCE_URLS: 'false'
-  OVERTURE_ALLOW_EXPERIMENTAL_TYPES: 'false'
-  OVERTURE_RELEASE: ''
-  DEMO_PMTILES_PATH: ''
-  DODO_PAYMENTS_ENVIRONMENT: ${{ vars.DODO_PAYMENTS_ENVIRONMENT || 'test_mode' }}
-
-  MANAGED_STAGING_API_URL: ${{ vars.MANAGED_STAGING_API_URL }}
-  MANAGED_STAGING_CONSOLE_URL: ${{ vars.MANAGED_STAGING_CONSOLE_URL }}
-  NEXT_PUBLIC_API_URL: ${{ vars.MANAGED_STAGING_API_URL }}
-  NEXT_PUBLIC_CONSOLE_URL: ${{ vars.MANAGED_STAGING_CONSOLE_URL }}
-
-  DATABASE_URL: ${{ secrets.MANAGED_STAGING_DATABASE_URL }}
-  REDIS_URL: ${{ secrets.MANAGED_STAGING_REDIS_URL }}
-
-  BETTER_AUTH_SECRET: ${{ secrets.MANAGED_STAGING_BETTER_AUTH_SECRET }}
-  INTERNAL_API_SECRET: ${{ secrets.MANAGED_STAGING_INTERNAL_API_SECRET }}
-  SOURCE_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.MANAGED_STAGING_SOURCE_CREDENTIAL_ENCRYPTION_KEY }}
-
-  MARTIN_INTERNAL_URL: ${{ vars.MANAGED_STAGING_MARTIN_INTERNAL_URL }}
-  VALHALLA_INTERNAL_URL: ${{ vars.MANAGED_STAGING_VALHALLA_INTERNAL_URL }}
-  PELIAS_INTERNAL_URL: ${{ vars.MANAGED_STAGING_PELIAS_INTERNAL_URL }}
-  GLYPHS_INTERNAL_URL: ${{ vars.MANAGED_STAGING_GLYPHS_INTERNAL_URL }}
-  STATIC_RENDERER_INTERNAL_URL: ${{ vars.MANAGED_STAGING_STATIC_RENDERER_INTERNAL_URL }}
-  ELEVATION_INTERNAL_URL: ${{ vars.MANAGED_STAGING_ELEVATION_INTERNAL_URL }}
-
-  R2_BUCKET: ${{ secrets.MANAGED_STAGING_R2_BUCKET }}
-  R2_ENDPOINT: ${{ secrets.MANAGED_STAGING_R2_ENDPOINT }}
-  R2_ACCOUNT_ID: ${{ secrets.MANAGED_STAGING_R2_ACCOUNT_ID }}
-  R2_PUBLIC_URL: ${{ vars.MANAGED_STAGING_R2_PUBLIC_URL }}
-  R2_ACCESS_KEY_ID: ${{ secrets.MANAGED_STAGING_R2_ACCESS_KEY_ID }}
-  R2_SECRET_ACCESS_KEY: ${{ secrets.MANAGED_STAGING_R2_SECRET_ACCESS_KEY }}
-  S3_BUCKET: ${{ secrets.MANAGED_STAGING_R2_BUCKET }}
-  S3_REGION: auto
-  S3_ENDPOINT: ${{ secrets.MANAGED_STAGING_R2_ENDPOINT }}
-  S3_PUBLIC_URL: ${{ vars.MANAGED_STAGING_R2_PUBLIC_URL }}
-  AWS_ACCESS_KEY_ID: ${{ secrets.MANAGED_STAGING_R2_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.MANAGED_STAGING_R2_SECRET_ACCESS_KEY }}
-
-  DODO_PAYMENTS_API_KEY: ${{ secrets.MANAGED_STAGING_DODO_PAYMENTS_API_KEY }}
-  DODO_PAYMENTS_WEBHOOK_SECRET: ${{ secrets.MANAGED_STAGING_DODO_PAYMENTS_WEBHOOK_SECRET }}
-
-  ZEPTOMAIL_SEND_MAIL_TOKEN: ${{ secrets.MANAGED_STAGING_ZEPTOMAIL_SEND_MAIL_TOKEN }}
-  ZEPTOMAIL_FROM_AUTH: ${{ vars.MANAGED_STAGING_ZEPTOMAIL_FROM_AUTH }}
-  ZEPTOMAIL_FROM_NOTIFICATIONS: ${{ vars.MANAGED_STAGING_ZEPTOMAIL_FROM_NOTIFICATIONS }}
-  MANAGED_STAGING_E2E_EMAIL: ${{ secrets.MANAGED_STAGING_E2E_EMAIL }}
-  MANAGED_STAGING_E2E_PASSWORD: ${{ secrets.MANAGED_STAGING_E2E_PASSWORD }}
 
 jobs:
   prove-managed-staging:
     name: Prove Managed Staging
+    if: github.repository == 'giseity/planisfy'
     runs-on: ubuntu-latest
     environment: managed-staging
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check managed staging configuration
-        id: staging-config
-        shell: bash
-        run: |
-          missing=()
-          required=(
-            MANAGED_STAGING_API_URL
-            MANAGED_STAGING_CONSOLE_URL
-            DATABASE_URL
-            REDIS_URL
-            BETTER_AUTH_SECRET
-            INTERNAL_API_SECRET
-            MARTIN_INTERNAL_URL
-            VALHALLA_INTERNAL_URL
-            PELIAS_INTERNAL_URL
-            GLYPHS_INTERNAL_URL
-            ELEVATION_INTERNAL_URL
-            ZEPTOMAIL_SEND_MAIL_TOKEN
-            ZEPTOMAIL_FROM_AUTH
-            ZEPTOMAIL_FROM_NOTIFICATIONS
-            MANAGED_STAGING_E2E_EMAIL
-            MANAGED_STAGING_E2E_PASSWORD
-          )
-
-          for name in "${required[@]}"; do
-            if [ -z "${!name}" ]; then
-              missing+=("$name")
-            fi
-          done
-
-          if [ "${#missing[@]}" -gt 0 ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            printf 'Managed staging proof skipped. Missing configuration: %s\n' "${missing[*]}"
-            exit 0
-          fi
-
-          echo "configured=true" >> "$GITHUB_OUTPUT"
-
       - uses: pnpm/action-setup@v4
-        if: steps.staging-config.outputs.configured == 'true'
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v4
-        if: steps.staging-config.outputs.configured == 'true'
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-        if: steps.staging-config.outputs.configured == 'true'
+
+      - name: Validate managed environment contract
+        run: pnpm smoke:managed-env-contract
 
       - name: Install browser runtime
-        if: steps.staging-config.outputs.configured == 'true'
         run: pnpm --filter static-renderer exec playwright install --with-deps chromium
 
-      - name: Validate managed startup configuration
-        if: steps.staging-config.outputs.configured == 'true'
-        run: pnpm --filter api exec tsx -e "import('./src/env.ts').then(() => console.log('managed startup validation passed'))"
-
+      # Secret matrix:
+      # - checkout, setup, install, contract validation, browser install,
+      #   and artifact upload: no staging secrets
+      # - adapter smoke: internal API secret only
+      # - browser product loop: dedicated E2E account only
       - name: Run managed staging adapter smoke
-        if: steps.staging-config.outputs.configured == 'true'
+        env:
+          MANAGED_STAGING_API_URL: ${{ vars.MANAGED_STAGING_API_URL }}
+          MANAGED_STAGING_CONSOLE_URL: ${{ vars.MANAGED_STAGING_CONSOLE_URL }}
+          INTERNAL_API_SECRET: ${{ secrets.MANAGED_STAGING_INTERNAL_API_SECRET }}
         run: pnpm smoke:managed-staging
 
       - name: Run full browser product loop against managed staging
-        if: steps.staging-config.outputs.configured == 'true'
         env:
           PLANISFY_E2E_API_URL: ${{ vars.MANAGED_STAGING_API_URL }}
           PLANISFY_E2E_CONSOLE_URL: ${{ vars.MANAGED_STAGING_CONSOLE_URL }}
           PLANISFY_E2E_SKIP_SEED: 'true'
           PLANISFY_E2E_RESOURCE_SUFFIX: managed-${{ github.run_id }}
-          PLANISFY_SEED_EMAIL: ${{ env.MANAGED_STAGING_E2E_EMAIL }}
-          PLANISFY_SEED_PASSWORD: ${{ env.MANAGED_STAGING_E2E_PASSWORD }}
-        run: pnpm e2e:product-loop:full
+          PLANISFY_SEED_EMAIL: ${{ secrets.MANAGED_STAGING_E2E_EMAIL }}
+          PLANISFY_SEED_PASSWORD: ${{ secrets.MANAGED_STAGING_E2E_PASSWORD }}
+        run: |
+          test -n "$PLANISFY_E2E_API_URL"
+          test -n "$PLANISFY_E2E_CONSOLE_URL"
+          test -n "$PLANISFY_SEED_EMAIL"
+          test -n "$PLANISFY_SEED_PASSWORD"
+          pnpm e2e:product-loop:full
 
       - name: Upload managed staging screenshots
-        if: always() && steps.staging-config.outputs.configured == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: managed-staging-product-loop-screenshots

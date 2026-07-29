@@ -22,6 +22,7 @@
     "self-host:setup": "scripts/self-host-setup.sh",
     "self-host:support-bundle": "scripts/self-host-support-bundle.sh",
     "smoke:managed-local": "scripts/managed-local-smoke.sh",
+    "smoke:managed-env-contract": "pnpm exec tsx scripts/managed-env-contract-smoke.mjs",
     "smoke:managed-staging": "node scripts/managed-staging-smoke.mjs",
     "smoke:managed-staging-product-loop": "scripts/managed-staging-product-loop-smoke.sh",
     "smoke:self-host-backup-restore": "scripts/self-host-backup-restore-smoke.sh",
