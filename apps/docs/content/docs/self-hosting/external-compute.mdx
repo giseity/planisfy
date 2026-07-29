@@ -64,7 +64,16 @@ ROOT_AGENT_CAPABILITIES=valhalla_graph_build,basemap_build,dem_hydration
 ROOT_AGENT_POLL_INTERVAL_MS=5000
 ROOT_AGENT_UPLOAD_RETRIES=5
 ROOT_AGENT_UPLOAD_CONCURRENCY=4
+OUTBOUND_PRIVATE_ALLOWLIST=
+ROOT_AGENT_SOURCE_MAX_BYTES=274877906944
+ROOT_AGENT_DEM_TILE_MAX_BYTES=67108864
 ```
+
+Source and DEM downloads resolve and pin every connection and redirect. Public
+destinations work by default. If this agent intentionally downloads from a
+private service, list its exact hostname, IP address, or CIDR in
+`OUTBOUND_PRIVATE_ALLOWLIST`; the API and agent must each be configured
+independently.
 
 Serving workers need activation paths and a runtime supervisor:
 

@@ -1,9 +1,71 @@
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { __rootAgentTest } from './index'
+
+test('external downloads pin the validated host and resume valid ranges', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'planisfy-root-agent-download-'))
+  const target = join(root, 'source.bin')
+  const server = createServer((request, response) => {
+    assert.equal(request.headers.range, 'bytes=4-')
+    response.writeHead(206, {
+      'content-range': 'bytes 4-9/10',
+      'content-length': '6',
+    })
+    response.end('efghij')
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  assert.ok(address && typeof address === 'object')
+  try {
+    await writeFile(target, 'abcd')
+    await __rootAgentTest.downloadExternalFile(
+      `http://source.test:${address.port}/data`,
+      target,
+      {
+        maxBytes: 10,
+        resume: true,
+        privateAllowlist: 'source.test',
+        lookup: async () => [{ address: '127.0.0.1', family: 4 }],
+      }
+    )
+    assert.equal(await readFile(target, 'utf8'), 'abcdefghij')
+  } finally {
+    server.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('external downloads remove files that exceed the byte budget', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'planisfy-root-agent-download-limit-'))
+  const target = join(root, 'source.bin')
+  const server = createServer((_request, response) => response.end('oversized'))
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  assert.ok(address && typeof address === 'object')
+  try {
+    await assert.rejects(
+      __rootAgentTest.downloadExternalFile(
+        `http://source.test:${address.port}/data`,
+        target,
+        {
+          maxBytes: 3,
+          resume: false,
+          privateAllowlist: 'source.test',
+          lookup: async () => [{ address: '127.0.0.1', family: 4 }],
+        }
+      ),
+      /exceeds/
+    )
+    await assert.rejects(stat(target), { code: 'ENOENT' })
+  } finally {
+    server.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 test('linkFileAtomic creates a hardlink alias without copying', async () => {
   const root = await mkdtemp(join(tmpdir(), 'planisfy-root-agent-link-'))

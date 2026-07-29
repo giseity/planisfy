@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hgtTileName, resolveDemTileNames } from "./index";
+import { demTileUrl, hgtTileName, resolveDemTileNames } from "./index";
 
 test("hgtTileName formats lower-left degree names", () => {
   assert.equal(hgtTileName(9, 7), "N09E007");
@@ -31,5 +31,16 @@ test("resolveDemTileNames de-duplicates explicit tile overrides", () => {
       hgtTiles: ["n09e007.hgt.gz", "N09E007", "bad"],
     }),
     ["N09E007"],
+  );
+});
+
+test("demTileUrl preserves the base path and rejects query injection", () => {
+  assert.equal(
+    demTileUrl("https://example.com/skadi", "N09E007"),
+    "https://example.com/skadi/N09/N09E007.hgt.gz",
+  );
+  assert.throws(
+    () => demTileUrl("https://example.com/skadi?target=/internal", "N09E007"),
+    /query or fragment/,
   );
 });

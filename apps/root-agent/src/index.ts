@@ -18,8 +18,14 @@ import { basename, dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { pipeline } from 'node:stream/promises'
-import { Readable } from 'node:stream'
+import { Readable, Transform } from 'node:stream'
 import { loadWorkspaceEnv } from '@planisfy/env/node'
+import {
+  normalizeOutboundUrl,
+  OutboundRequestError,
+  withOutboundResponse,
+  type OutboundLookup,
+} from '@planisfy/outbound'
 import { z } from 'zod'
 
 loadWorkspaceEnv()
@@ -46,6 +52,17 @@ const envSchema = z.object({
     .string()
     .url()
     .default('https://s3.amazonaws.com/elevation-tiles-prod/skadi'),
+  OUTBOUND_PRIVATE_ALLOWLIST: z.string().default(''),
+  ROOT_AGENT_SOURCE_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(256 * 1024 * 1024 * 1024),
+  ROOT_AGENT_DEM_TILE_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(64 * 1024 * 1024),
   ROOT_AGENT_COMPOSE_FILE: z.string().optional(),
   ROOT_AGENT_COMPOSE_ENV_FILE: z.string().optional(),
   ROOT_AGENT_COMPOSE_CWD: z.string().optional(),
@@ -363,14 +380,10 @@ async function buildRoutingGraph(token: string, build: RoutingGraphBuild) {
     await updateBuild(token, build.id, 'preparing', 5, 'Preparing build workspace')
     await writeValhallaConfig(buildDir)
     await updateBuild(token, build.id, 'downloading_source', 10, 'Downloading OSM PBF source')
-    await runLogged(token, build.id, 'curl', [
-      '-LfsS',
-      '--continue-at',
-      '-',
-      '-o',
-      pbfPath,
-      build.sourceUrl,
-    ])
+    await downloadExternalFile(build.sourceUrl, pbfPath, {
+      maxBytes: config.ROOT_AGENT_SOURCE_MAX_BYTES,
+      resume: true,
+    })
 
     if (build.includeAdmins) {
       await updateBuild(token, build.id, 'building_admins', 25, 'Building Valhalla admin database')
@@ -472,14 +485,10 @@ async function buildBasemap(token: string, build: BasemapBuild) {
     }
     await updateBuild(token, build.id, 'preparing', 5, 'Preparing basemap build workspace')
     await updateBuild(token, build.id, 'downloading_source', 10, 'Downloading OSM PBF source')
-    await runLogged(token, build.id, 'curl', [
-      '-LfsS',
-      '--continue-at',
-      '-',
-      '-o',
-      pbfPath,
-      build.sourceUrl,
-    ])
+    await downloadExternalFile(build.sourceUrl, pbfPath, {
+      maxBytes: config.ROOT_AGENT_SOURCE_MAX_BYTES,
+      resume: true,
+    })
 
     await updateBuild(
       token,
@@ -569,7 +578,10 @@ async function buildDemCompanion(token: string, build: RoutingGraphBuild, buildD
     const hgtPath = join(demDir, `${tileName}.hgt`)
     const url = demTileUrl(demConfig.baseUrl ?? config.ROOT_AGENT_DEM_BASE_URL, tileName)
     try {
-      await runLogged(token, build.id, 'curl', ['-LfsS', '-o', gzPath, url])
+      await downloadExternalFile(url, gzPath, {
+        maxBytes: config.ROOT_AGENT_DEM_TILE_MAX_BYTES,
+        resume: false,
+      })
       await runLogged(token, build.id, 'sh', [
         '-lc',
         `gzip -cd ${shellQuote(gzPath)} > ${shellQuote(hgtPath)}`,
@@ -1617,6 +1629,106 @@ function parseDemConfig(value: unknown): DemConfig {
   }
 }
 
+export async function downloadExternalFile(
+  sourceUrl: string,
+  target: string,
+  options: {
+    maxBytes: number
+    resume: boolean
+    privateAllowlist?: string
+    lookup?: OutboundLookup
+  }
+) {
+  await mkdir(dirname(target), { recursive: true })
+  if (!options.resume) await rm(target, { force: true })
+  let existingSize = await fileSize(target)
+  if (existingSize > options.maxBytes) {
+    await rm(target, { force: true })
+    existingSize = 0
+  }
+
+  const headers: Record<string, string> = {}
+  if (options.resume && existingSize > 0) {
+    headers.Range = `bytes=${existingSize}-`
+  }
+
+  try {
+    await withOutboundResponse(
+      sourceUrl,
+      {
+        headers,
+        maxRedirects: 5,
+        timeoutMs: 10_000,
+        bodyIdleTimeoutMs: 60_000,
+        privateAllowlist: options.privateAllowlist ?? config.OUTBOUND_PRIVATE_ALLOWLIST,
+        lookup: options.lookup,
+      },
+      async (response) => {
+        const status = response.statusCode ?? 502
+        const append =
+          existingSize > 0 &&
+          status === 206 &&
+          contentRangeStartsAt(response.headers['content-range'], existingSize)
+        if (status < 200 || status >= 300) {
+          response.resume()
+          throw new Error(`External download failed with HTTP ${status}`)
+        }
+        if (status === 206 && existingSize > 0 && !append) {
+          response.resume()
+          await rm(target, { force: true })
+          throw new Error('External download returned an invalid Content-Range')
+        }
+
+        const baseSize = append ? existingSize : 0
+        const declaredLength = Number(response.headers['content-length'])
+        if (
+          Number.isFinite(declaredLength) &&
+          declaredLength >= 0 &&
+          baseSize + declaredLength > options.maxBytes
+        ) {
+          response.destroy()
+          throw new OutboundRequestError(
+            'RESPONSE_TOO_LARGE',
+            `External download exceeds ${options.maxBytes} bytes`
+          )
+        }
+
+        let total = baseSize
+        const limiter = new Transform({
+          transform(chunk: Buffer, _encoding, callback) {
+            total += chunk.byteLength
+            if (total > options.maxBytes) {
+              callback(
+                new OutboundRequestError(
+                  'RESPONSE_TOO_LARGE',
+                  `External download exceeds ${options.maxBytes} bytes`
+                )
+              )
+              return
+            }
+            callback(null, chunk)
+          },
+        })
+        await pipeline(
+          response,
+          limiter,
+          createWriteStream(target, { flags: append ? 'a' : 'w' })
+        )
+      }
+    )
+  } catch (err) {
+    if (
+      err instanceof OutboundRequestError &&
+      (err.code === 'RESPONSE_TOO_LARGE' ||
+        err.code === 'PRIVATE_ADDRESS' ||
+        err.code === 'INVALID_URL')
+    ) {
+      await rm(target, { force: true })
+    }
+    throw err
+  }
+}
+
 export function resolveDemTileNames(config: DemConfig) {
   const explicit = (config.hgtTiles ?? [])
     .map((tile) => tile.replace(/\.hgt(?:\.gz)?$/i, '').toUpperCase())
@@ -1642,8 +1754,18 @@ export function hgtTileName(lat: number, lon: number) {
   return `${ns}${String(Math.abs(lat)).padStart(2, '0')}${ew}${String(Math.abs(lon)).padStart(3, '0')}`
 }
 
-function demTileUrl(baseUrl: string, tileName: string) {
-  return `${baseUrl.replace(/\/$/, '')}/${tileName.slice(0, 3)}/${tileName}.hgt.gz`
+export function demTileUrl(baseUrl: string, tileName: string) {
+  const base = normalizeOutboundUrl(baseUrl)
+  if (base.search || base.hash) {
+    throw new Error('DEM base URL must not contain a query or fragment')
+  }
+  base.pathname = `${base.pathname.replace(/\/$/, '')}/${tileName.slice(0, 3)}/${tileName}.hgt.gz`
+  return base.href
+}
+
+function contentRangeStartsAt(value: string | string[] | undefined, expected: number) {
+  const header = Array.isArray(value) ? value[0] : value
+  return header?.match(/^bytes (\d+)-\d+\/(?:\d+|\*)$/)?.[1] === String(expected)
 }
 
 function shellQuote(value: string) {
@@ -1669,6 +1791,7 @@ function delay(ms: number) {
 }
 
 export const __rootAgentTest = {
+  downloadExternalFile,
   linkFileAtomic,
   secureStateDirectory,
   validateBasemapRuntimeTarget,

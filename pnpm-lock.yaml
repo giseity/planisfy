@@ -548,6 +548,9 @@ importers:
       '@planisfy/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@planisfy/outbound':
+        specifier: workspace:*
+        version: link:../../packages/outbound
       zod:
         specifier: ^4.3.6
         version: 4.3.6
