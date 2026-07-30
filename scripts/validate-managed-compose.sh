@@ -20,6 +20,23 @@ if ! rg -q 'PELIAS_INTERNAL_URL: http://pelias:4000' "$compose_file"; then
   exit 1
 fi
 
+for service in placeholder pip libpostal; do
+  if ! docker compose --env-file "$env_file" -f "$compose_file" config --services \
+    | rg -qx "$service"; then
+    echo "The managed planet geocoder profile requires the $service service." >&2
+    exit 1
+  fi
+
+  if ! node -e "
+    const config = require('$repo_root/infra/docker/configs/pelias-runtime.json');
+    const url = config.api?.services?.['$service']?.url;
+    if (typeof url !== 'string' || !url.startsWith('http://$service:')) process.exit(1);
+  "; then
+    echo "The managed Pelias runtime configuration must enable the $service service." >&2
+    exit 1
+  fi
+done
+
 if ! rg -q 'name: geobble-planisfy' "$compose_file"; then
   echo "The shared Geobble-Planisfy network contract is missing." >&2
   exit 1

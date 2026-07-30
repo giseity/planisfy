@@ -483,11 +483,80 @@ services:
     depends_on:
       pelias-elasticsearch:
         condition: service_healthy
+      placeholder:
+        condition: service_healthy
+      pip:
+        condition: service_healthy
+      libpostal:
+        condition: service_healthy
     healthcheck:
       test:
         [
           'CMD-SHELL',
           'node -e "require(''http'').get(''http://127.0.0.1:4000/v1'',r=>process.exit(r.statusCode<500?0:1)).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+    networks:
+      - planisfy-internal
+
+  placeholder:
+    image: ${PELIAS_PLACEHOLDER_IMAGE:?PELIAS_PLACEHOLDER_IMAGE must be set}
+    restart: unless-stopped
+    environment:
+      PELIAS_CONFIG: /config/pelias.json
+      PLACEHOLDER_DATA: /data/placeholder
+      PORT: 4100
+    volumes:
+      - ./infra/docker/configs/pelias-runtime.json:/config/pelias.json:ro
+      - pelias-runtime-data:/data:ro
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "status=$$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4100/); test \"$$status\" -ge 200 -a \"$$status\" -lt 500",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+    networks:
+      - planisfy-internal
+
+  pip:
+    image: ${PELIAS_PIP_SERVICE_IMAGE:?PELIAS_PIP_SERVICE_IMAGE must be set}
+    restart: unless-stopped
+    environment:
+      PELIAS_CONFIG: /config/pelias.json
+      PORT: 4200
+    volumes:
+      - ./infra/docker/configs/pelias-runtime.json:/config/pelias.json:ro
+      - pelias-runtime-data:/data:ro
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "status=$$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4200/); test \"$$status\" -ge 200 -a \"$$status\" -lt 500",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+    networks:
+      - planisfy-internal
+
+  libpostal:
+    image: ${PELIAS_LIBPOSTAL_IMAGE:?PELIAS_LIBPOSTAL_IMAGE must be set}
+    restart: unless-stopped
+    environment:
+      PORT: 4400
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "status=$$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:4400/); test \"$$status\" -ge 200 -a \"$$status\" -lt 500",
         ]
       interval: 15s
       timeout: 5s
@@ -581,6 +650,9 @@ volumes:
   pelias-elasticsearch-data:
     external: true
     name: ${PLANISFY_PELIAS_VOLUME_NAME:?PLANISFY_PELIAS_VOLUME_NAME must be set}
+  pelias-runtime-data:
+    external: true
+    name: ${PLANISFY_PELIAS_RUNTIME_DATA_VOLUME_NAME:?PLANISFY_PELIAS_RUNTIME_DATA_VOLUME_NAME must be set}
   pelias-snapshots:
     name: planisfy-pelias-snapshots
   root-agent-runtime-state:

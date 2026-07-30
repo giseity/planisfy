@@ -20,7 +20,18 @@
   },
   "api": {
     "indexName": "pelias_live",
-    "basePath": "/v1"
+    "basePath": "/v1",
+    "services": {
+      "placeholder": {
+        "url": "http://placeholder:4100"
+      },
+      "pip": {
+        "url": "http://pip:4200"
+      },
+      "libpostal": {
+        "url": "http://libpostal:4400"
+      }
+    }
   },
   "apis": {
     "autocomplete": {},
