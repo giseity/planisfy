@@ -10,6 +10,19 @@ cd "$repo_root"
 docker compose --env-file "$env_file" -f "$compose_file" config --format json \
   | node scripts/validate-managed-next-public.mjs
 
+docker compose --env-file "$env_file" -f "$compose_file" config --format json \
+  | node -e "
+    let input = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => (input += chunk));
+    process.stdin.on('end', () => {
+      const environment = JSON.parse(input).services?.api?.environment ?? {};
+      for (const key of ['VALHALLA_BUILDER_IMAGES', 'PLANETILER_BUILDER_IMAGES']) {
+        if (!environment[key]?.includes('@sha256:')) process.exit(1);
+      }
+    });
+  "
+
 if rg -q '^[[:space:]]+ports:' "$compose_file"; then
   echo "Managed services must not publish host ports; ingress belongs to Dokploy." >&2
   exit 1
