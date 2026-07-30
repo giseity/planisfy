@@ -19,7 +19,10 @@ env:
 jobs:
   prove-managed-staging:
     name: Prove Managed Staging
-    if: github.repository == 'giseity/planisfy'
+    if: >-
+      github.repository == 'giseity/planisfy' &&
+      vars.MANAGED_STAGING_API_URL != '' &&
+      vars.MANAGED_STAGING_CONSOLE_URL != ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: managed-staging
