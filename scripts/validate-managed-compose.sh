@@ -37,6 +37,14 @@ for service in placeholder pip libpostal; do
   fi
 done
 
+if ! node -e "
+  const config = require('$repo_root/infra/docker/configs/pelias-runtime.json');
+  if (config.imports?.whosonfirst?.datapath !== '/data/whosonfirst') process.exit(1);
+"; then
+  echo "The managed Pelias PIP service requires the Who's On First SQLite data path." >&2
+  exit 1
+fi
+
 if ! rg -q 'name: geobble-planisfy' "$compose_file"; then
   echo "The shared Geobble-Planisfy network contract is missing." >&2
   exit 1
