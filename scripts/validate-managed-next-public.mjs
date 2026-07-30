@@ -37,6 +37,13 @@ const requiredPublicVariables = {
   ],
 }
 
+const requiredRuntimeVariables = {
+  api: [
+    'NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED',
+    'NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS',
+  ],
+}
+
 const compose = JSON.parse(readFileSync(0, 'utf8'))
 const errors = []
 
@@ -80,6 +87,20 @@ for (const [serviceName, requiredVariables] of Object.entries(requiredPublicVari
       errors.push(
         `${serviceName}: Dockerfile does not promote ${variable} into the build environment`
       )
+    }
+  }
+}
+
+for (const [serviceName, requiredVariables] of Object.entries(requiredRuntimeVariables)) {
+  const runtimeEnvironment = compose.services?.[serviceName]?.environment
+  if (!runtimeEnvironment) {
+    errors.push(`${serviceName}: runtime environment is missing`)
+    continue
+  }
+
+  for (const variable of requiredVariables) {
+    if (!(variable in runtimeEnvironment)) {
+      errors.push(`${serviceName}: ${variable} is missing from runtime environment`)
     }
   }
 }

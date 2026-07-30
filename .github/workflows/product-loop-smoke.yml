@@ -10,6 +10,8 @@ on:
 env:
   NODE_VERSION: '24'
   PNPM_VERSION: '10.4.1'
+  GOOGLE_CLIENT_ID: 'test-client-id'
+  GOOGLE_CLIENT_SECRET: 'test-client-secret'
   VALHALLA_BUILDER_IMAGES: 'ghcr.io/planisfy/valhalla@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
   PLANETILER_BUILDER_IMAGES: 'ghcr.io/planisfy/planetiler@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 
@@ -43,11 +45,14 @@ jobs:
       - name: Prepare self-host stack
         run: pnpm self-host:setup
 
-      - name: Start product-loop services
-        run: docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d postgres redis martin minio minio-init api console worker-geodata worker-billing
+      - name: Start product-loop data services
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d postgres redis minio minio-init
 
       - name: Run migrations
         run: pnpm db:migrate
+
+      - name: Start product-loop application services
+        run: docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d martin api console worker-geodata worker-billing
 
       - name: Run full browser product-loop smoke
         run: pnpm e2e:product-loop:full
