@@ -90,6 +90,10 @@ export function isEmailPasswordAuthEnabled() {
   return getAuthEnv().NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED
 }
 
+export function isAuthEmailDeliveryRequired() {
+  return getDeploymentMode() === 'managed' && isEmailPasswordAuthEnabled()
+}
+
 export function getAuthCookieDomainOverride() {
   return getAuthEnv().AUTH_COOKIE_DOMAIN
 }

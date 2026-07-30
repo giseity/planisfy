@@ -14,6 +14,7 @@ import {
   getOAuthProxyURL,
   getSocialProviderCredentials,
   isAuthEmailDeliveryConfigured,
+  isAuthEmailDeliveryRequired,
   isEmailPasswordAuthEnabled,
   isProductionEnvironment,
 } from './env'
@@ -180,7 +181,7 @@ function getAuthCookieDomain(baseURL: string) {
   return undefined
 }
 
-if (emailPasswordEnabled && !isAuthEmailDeliveryConfigured()) {
+if (isAuthEmailDeliveryRequired() && !isAuthEmailDeliveryConfigured()) {
   throw new Error(
     'Email/password authentication requires ZEPTOMAIL_SEND_MAIL_TOKEN and ZEPTOMAIL_FROM_AUTH'
   )

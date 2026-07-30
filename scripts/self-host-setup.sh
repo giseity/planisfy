@@ -368,6 +368,7 @@ external_github_client_id="${GITHUB_CLIENT_ID-}"
 external_github_client_secret="${GITHUB_CLIENT_SECRET-}"
 external_google_client_id="${GOOGLE_CLIENT_ID-}"
 external_google_client_secret="${GOOGLE_CLIENT_SECRET-}"
+external_auth_email_password_enabled="${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED-}"
 load_env_file
 
 set_env_if_blank_or_default BETTER_AUTH_SECRET "$(generate_secret)" "local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE"
@@ -387,6 +388,10 @@ fi
 if [[ -n "$external_google_client_secret" ]]; then
   set_env_if_blank_or_default GOOGLE_CLIENT_SECRET "$external_google_client_secret" \
     "replace-me-google-client-secret"
+fi
+if [[ -n "$external_auth_email_password_enabled" ]]; then
+  set_env_if_blank_or_default NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED \
+    "$external_auth_email_password_enabled" "true" "false" ""
 fi
 if [[ -n "$external_valhalla_builder_images" ]]; then
   set_env_if_blank_or_default VALHALLA_BUILDER_IMAGES "$external_valhalla_builder_images" ""

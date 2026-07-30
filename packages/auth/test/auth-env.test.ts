@@ -4,6 +4,7 @@ import {
   getAuthTrustedOrigins,
   getEnabledSocialProviderNames,
   isAuthEmailDeliveryConfigured,
+  isAuthEmailDeliveryRequired,
   isEmailPasswordAuthEnabled,
 } from '../src/server/env'
 
@@ -19,6 +20,7 @@ const AUTH_ORIGIN_ENV_KEYS = [
   'ZEPTOMAIL_SEND_MAIL_TOKEN',
   'ZEPTOMAIL_FROM_AUTH',
   'NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS',
+  'DEPLOYMENT_MODE',
 ] as const
 
 const originalEnv = Object.fromEntries(AUTH_ORIGIN_ENV_KEYS.map((key) => [key, process.env[key]]))
@@ -94,6 +96,18 @@ describe('auth trusted origins', () => {
 
     process.env.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED = 'true'
     expect(isEmailPasswordAuthEnabled()).toBe(true)
+  })
+
+  it('requires email delivery only for managed email/password authentication', () => {
+    process.env.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED = 'true'
+    process.env.DEPLOYMENT_MODE = 'self_host'
+    expect(isAuthEmailDeliveryRequired()).toBe(false)
+
+    process.env.DEPLOYMENT_MODE = 'managed'
+    expect(isAuthEmailDeliveryRequired()).toBe(true)
+
+    process.env.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED = 'false'
+    expect(isAuthEmailDeliveryRequired()).toBe(false)
   })
 
   it('normalizes the public social-provider list', () => {

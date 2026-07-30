@@ -10,8 +10,7 @@ on:
 env:
   NODE_VERSION: '24'
   PNPM_VERSION: '10.4.1'
-  GOOGLE_CLIENT_ID: 'test-client-id'
-  GOOGLE_CLIENT_SECRET: 'test-client-secret'
+  NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED: 'true'
   VALHALLA_BUILDER_IMAGES: 'ghcr.io/planisfy/valhalla@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
   PLANETILER_BUILDER_IMAGES: 'ghcr.io/planisfy/planetiler@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 
