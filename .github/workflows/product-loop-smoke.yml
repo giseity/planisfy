@@ -47,6 +47,20 @@ jobs:
       - name: Start product-loop data services
         run: docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d postgres redis minio minio-init
 
+      - name: Wait for PostgreSQL
+        run: |
+          for attempt in {1..30}; do
+            if docker compose --env-file .env -f infra/docker/docker-compose.yml exec -T postgres \
+              psql -U planisfy -d planisfy -c 'select 1' >/dev/null; then
+              exit 0
+            fi
+            if [[ "$attempt" -eq 30 ]]; then
+              echo "PostgreSQL did not become ready" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
       - name: Run migrations
         run: pnpm db:migrate
 
