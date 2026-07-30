@@ -53,11 +53,11 @@ curl "https://api.example.com/directions/v1/driving/9.1829,48.7758;9.2000,48.780
   ],
   "units": "kilometers",
   "language": "en",
-  "alternates": 0
+  "alternatives": 0
 }
 ```
 
-The POST body accepts only `locations`, `units`, `language`, and `alternates`.
+The POST body accepts only `locations`, `units`, `language`, and `alternatives`.
 The URL profile determines Valhalla costing; unknown fields are rejected.
 
 ## Auth, caching, and errors

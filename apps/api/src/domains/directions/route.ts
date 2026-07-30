@@ -29,7 +29,7 @@ const directionsBodySchema = z
       .max(MAX_ROUTE_COORDINATES),
     units: z.enum(['kilometers', 'miles']).optional(),
     language: z.string().max(8).optional(),
-    alternates: z.number().int().min(0).max(3).optional(),
+    alternatives: z.number().int().min(0).max(3).optional(),
   })
   .strict()
 
@@ -259,6 +259,7 @@ directionsRoute.post('/directions/v1/:profile', async (c) => {
     )
   }
   const body = parsed.data
+  const { alternatives, ...routeBody } = body
 
   const costing = mapProfileToCosting(profile)
   if (!costing) {
@@ -266,7 +267,8 @@ directionsRoute.post('/directions/v1/:profile', async (c) => {
   }
 
   const result = await valhallaProxy('route', {
-    ...body,
+    ...routeBody,
+    ...(alternatives !== undefined ? { alternates: alternatives } : {}),
     costing,
     directions_options: { units: body.units ?? 'kilometers' },
   })

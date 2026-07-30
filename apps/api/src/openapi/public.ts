@@ -115,12 +115,13 @@ const routeBodySchema = z
           lat: z.number().min(-90).max(90),
         })
       )
-      .min(2),
-    costing: z.string().optional(),
+      .min(2)
+      .max(25),
     units: z.enum(['kilometers', 'miles']).optional(),
-    language: z.string().optional(),
+    language: z.string().max(8).optional(),
+    alternatives: z.number().int().min(0).max(3).optional(),
   })
-  .passthrough()
+  .strict()
 
 const staticMapParamsSchema = z.object({
   owner: z.string().openapi({ param: { name: 'owner', in: 'path' } }),

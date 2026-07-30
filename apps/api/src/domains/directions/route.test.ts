@@ -79,3 +79,52 @@ test('POST isochrone rejects more than four contours', async () => {
   assert.equal(response.status, 400)
   assert.equal((await response.json()).error.code, 'BAD_REQUEST')
 })
+
+test('POST directions exposes alternatives and translates it for Valhalla', async () => {
+  const originalFetch = globalThis.fetch
+  let valhallaBody: Record<string, unknown> | undefined
+  globalThis.fetch = (async (_input, init) => {
+    valhallaBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+    return new Response(JSON.stringify({ trip: {} }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as typeof fetch
+
+  try {
+    const response = await directionsRoute.request('/directions/v1/driving', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        locations: [
+          { lon: 0, lat: 0 },
+          { lon: 1, lat: 1 },
+        ],
+        alternatives: 2,
+      }),
+    })
+
+    assert.equal(response.status, 200)
+    assert.equal(valhallaBody?.alternates, 2)
+    assert.equal('alternatives' in (valhallaBody ?? {}), false)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('POST directions rejects the removed alternates field', async () => {
+  const response = await directionsRoute.request('/directions/v1/driving', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      locations: [
+        { lon: 0, lat: 0 },
+        { lon: 1, lat: 1 },
+      ],
+      alternates: 2,
+    }),
+  })
+
+  assert.equal(response.status, 400)
+  assert.equal((await response.json()).error.code, 'BAD_REQUEST')
+})
