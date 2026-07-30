@@ -201,7 +201,12 @@ set_env_if_blank_or_default() {
   ' "$ENV_FILE" > "$tmp"
   mv "$tmp" "$ENV_FILE"
   export "$name=$value"
-  echo "Set $name=${value#$ROOT_DIR/}"
+  case "$name" in
+    *_SECRET|*_CLIENT_SECRET|*_PASSWORD|*_TOKEN|*_ACCESS_KEY_ID|*_SECRET_ACCESS_KEY)
+      echo "Set $name=[redacted]"
+      ;;
+    *) echo "Set $name=${value#$ROOT_DIR/}" ;;
+  esac
 }
 
 generate_secret() {
@@ -356,10 +361,46 @@ if [[ ! -f "$ENV_FILE" ]]; then
   cp "$ENV_EXAMPLE" "$ENV_FILE"
   echo "Created .env from .env.example"
 fi
+
+# Preserve explicit operator/CI values before sourcing the generated file,
+# whose example values would otherwise overwrite the process environment.
+external_valhalla_builder_images="${VALHALLA_BUILDER_IMAGES-}"
+external_planetiler_builder_images="${PLANETILER_BUILDER_IMAGES-}"
+external_github_client_id="${GITHUB_CLIENT_ID-}"
+external_github_client_secret="${GITHUB_CLIENT_SECRET-}"
+external_google_client_id="${GOOGLE_CLIENT_ID-}"
+external_google_client_secret="${GOOGLE_CLIENT_SECRET-}"
+external_auth_email_password_enabled="${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED-}"
 load_env_file
 
 set_env_if_blank_or_default BETTER_AUTH_SECRET "$(generate_secret)" "local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE"
 set_env_if_blank_or_default INTERNAL_API_SECRET "$(generate_secret)" "local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p"
+if [[ -n "$external_github_client_id" ]]; then
+  set_env_if_blank_or_default GITHUB_CLIENT_ID "$external_github_client_id" \
+    "replace-me-github-client-id"
+fi
+if [[ -n "$external_github_client_secret" ]]; then
+  set_env_if_blank_or_default GITHUB_CLIENT_SECRET "$external_github_client_secret" \
+    "replace-me-github-client-secret"
+fi
+if [[ -n "$external_google_client_id" ]]; then
+  set_env_if_blank_or_default GOOGLE_CLIENT_ID "$external_google_client_id" \
+    "replace-me-google-client-id"
+fi
+if [[ -n "$external_google_client_secret" ]]; then
+  set_env_if_blank_or_default GOOGLE_CLIENT_SECRET "$external_google_client_secret" \
+    "replace-me-google-client-secret"
+fi
+if [[ -n "$external_auth_email_password_enabled" ]]; then
+  set_env_if_blank_or_default NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED \
+    "$external_auth_email_password_enabled" "true" "false" ""
+fi
+if [[ -n "$external_valhalla_builder_images" ]]; then
+  set_env_if_blank_or_default VALHALLA_BUILDER_IMAGES "$external_valhalla_builder_images" ""
+fi
+if [[ -n "$external_planetiler_builder_images" ]]; then
+  set_env_if_blank_or_default PLANETILER_BUILDER_IMAGES "$external_planetiler_builder_images" ""
+fi
 set_env_if_blank_or_default STORAGE_PROVIDER "s3" "local" ""
 set_env_if_blank_or_default S3_BUCKET "planisfy-artifacts" "planisfy-uploads" ""
 set_env_if_blank_or_default S3_REGION "auto" ""

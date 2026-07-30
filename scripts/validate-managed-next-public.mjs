@@ -6,7 +6,9 @@ const requiredPublicVariables = {
     'NEXT_PUBLIC_API_URL',
     'NEXT_PUBLIC_APP_URL',
     'NEXT_PUBLIC_AUTH_ORIGIN',
+    'NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED',
     'NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS',
+    'NEXT_PUBLIC_CONSOLE_URL',
     'NEXT_PUBLIC_CONSOLE_API_PATH',
     'NEXT_PUBLIC_DEPLOYMENT_MODE',
     'NEXT_PUBLIC_DOCS_URL',
@@ -15,6 +17,7 @@ const requiredPublicVariables = {
   marketing: [
     'NEXT_PUBLIC_API_URL',
     'NEXT_PUBLIC_AUTH_ORIGIN',
+    'NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED',
     'NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS',
     'NEXT_PUBLIC_CONSOLE_URL',
     'NEXT_PUBLIC_CONTACT_EMAIL',
@@ -31,8 +34,16 @@ const requiredPublicVariables = {
     'NEXT_PUBLIC_API_URL',
     'NEXT_PUBLIC_APP_URL',
     'NEXT_PUBLIC_AUTH_ORIGIN',
+    'NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED',
     'NEXT_PUBLIC_CONSOLE_URL',
     'NEXT_PUBLIC_MARKETING_URL',
+  ],
+}
+
+const requiredRuntimeVariables = {
+  api: [
+    'NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED',
+    'NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS',
   ],
 }
 
@@ -79,6 +90,20 @@ for (const [serviceName, requiredVariables] of Object.entries(requiredPublicVari
       errors.push(
         `${serviceName}: Dockerfile does not promote ${variable} into the build environment`
       )
+    }
+  }
+}
+
+for (const [serviceName, requiredVariables] of Object.entries(requiredRuntimeVariables)) {
+  const runtimeEnvironment = compose.services?.[serviceName]?.environment
+  if (!runtimeEnvironment) {
+    errors.push(`${serviceName}: runtime environment is missing`)
+    continue
+  }
+
+  for (const variable of requiredVariables) {
+    if (!(variable in runtimeEnvironment)) {
+      errors.push(`${serviceName}: ${variable} is missing from runtime environment`)
     }
   }
 }

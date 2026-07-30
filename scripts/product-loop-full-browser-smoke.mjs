@@ -320,6 +320,7 @@ async function createAndPublishStyle(page, tileset) {
     `/styles/${created.data.id}/publish`,
     {
       method: "POST",
+      body: { expectedVersion: created.data.version },
     },
   );
   if (!published.data.isPublic) {

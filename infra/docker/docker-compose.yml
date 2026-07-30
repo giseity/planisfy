@@ -58,6 +58,8 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
+      - NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
+      - NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED=${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED:-true}
       - NEXT_PUBLIC_ADMIN_URL=http://localhost:3003
       - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
       - NEXT_PUBLIC_DOCS_URL=http://localhost:3002
@@ -295,6 +297,9 @@ services:
     build:
       context: ../../
       dockerfile: apps/console/Dockerfile
+      args:
+        NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
+        NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED: ${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED:-true}
     image: planisfy/console:${PLANISFY_IMAGE_TAG:-dev}
     ports:
       - '3001:3000'
@@ -305,7 +310,9 @@ services:
       - NEXT_PUBLIC_APP_URL=http://localhost:3001
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
       - NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
+      - NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED=${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED:-true}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
       - API_INTERNAL_URL=http://api:4000
       - NEXT_PUBLIC_ADMIN_URL=http://localhost:3003
       - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
@@ -328,6 +335,8 @@ services:
     build:
       context: ../../
       dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED: ${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED:-true}
     image: planisfy/admin:${PLANISFY_IMAGE_TAG:-dev}
     ports:
       - '3003:3000'
@@ -337,6 +346,7 @@ services:
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - NEXT_PUBLIC_APP_URL=http://localhost:3003
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
+      - NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED=${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED:-true}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
       - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
@@ -433,6 +443,7 @@ services:
         NEXT_PUBLIC_API_URL: http://localhost:4000
         NEXT_PUBLIC_AUTH_ORIGIN: http://localhost:4000
         NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
+        NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED: ${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED:-true}
         NEXT_PUBLIC_CONSOLE_URL: http://localhost:3001
         NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
     image: planisfy/marketing:${PLANISFY_IMAGE_TAG:-dev}
@@ -446,6 +457,7 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
       - NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
+      - NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED=${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED:-true}
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
       - NEXT_PUBLIC_CONTACT_EMAIL=${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
     depends_on:
