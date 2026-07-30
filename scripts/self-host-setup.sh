@@ -202,7 +202,9 @@ set_env_if_blank_or_default() {
   mv "$tmp" "$ENV_FILE"
   export "$name=$value"
   case "$name" in
-    *SECRET*|*PASSWORD*|*TOKEN*|*ACCESS_KEY*) echo "Set $name=[redacted]" ;;
+    *_SECRET|*_CLIENT_SECRET|*_PASSWORD|*_TOKEN|*_ACCESS_KEY_ID|*_SECRET_ACCESS_KEY)
+      echo "Set $name=[redacted]"
+      ;;
     *) echo "Set $name=${value#$ROOT_DIR/}" ;;
   esac
 }

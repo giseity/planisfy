@@ -72,9 +72,7 @@ export async function setCanceledStatus(params: {
     const [updatedTileset] = await tx
       .update(tilesets)
       .set({
-        status: sql<
-          typeof tilesets.status
-        >`case when ${tilesets.currentVersionId} is null then 'DRAFT' else 'READY' end`,
+        status: canceledTilesetStatusExpression(),
         buildJobId: null,
         updatedAt: new Date(),
       })
@@ -88,6 +86,12 @@ export async function setCanceledStatus(params: {
         .where(eq(uploads.id, params.uploadId));
     }
   });
+}
+
+export function canceledTilesetStatusExpression() {
+  return sql<
+    typeof tilesets.status
+  >`case when ${tilesets.currentVersionId} is null then 'DRAFT'::tileset_status else 'READY'::tileset_status end`;
 }
 
 export async function updateProgress(

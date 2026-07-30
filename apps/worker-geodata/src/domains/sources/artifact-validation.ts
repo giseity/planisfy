@@ -393,7 +393,7 @@ finally:
     database.close()
 `
 
-class NodeFileSource implements Source {
+export class NodeFileSource implements Source {
   private readonly handlePromise;
 
   constructor(
@@ -413,14 +413,15 @@ class NodeFileSource implements Source {
       !Number.isSafeInteger(length) ||
       offset < 0 ||
       length < 0 ||
-      offset + length > this.size
+      offset > this.size
     ) {
       throw new Error("PMTiles reader requested bytes outside the file");
     }
-    const buffer = Buffer.alloc(length);
+    const readLength = Math.min(length, this.size - offset);
+    const buffer = Buffer.alloc(readLength);
     const handle = await this.handlePromise;
-    const { bytesRead } = await handle.read(buffer, 0, length, offset);
-    if (bytesRead !== length) throw new Error("PMTiles archive ended unexpectedly");
+    const { bytesRead } = await handle.read(buffer, 0, readLength, offset);
+    if (bytesRead !== readLength) throw new Error("PMTiles archive ended unexpectedly");
     return {
       data: buffer.buffer.slice(
         buffer.byteOffset,

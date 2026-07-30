@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import {
+  NodeFileSource,
   type ArtifactValidationLimits,
   validateGeneratedArtifact,
   validateShapefileArchive,
@@ -136,6 +137,26 @@ test("PMTiles validation rejects magic-header-only impostors", async () => {
       validateUploadFile(path, "pmtiles", undefined, limits),
       /Invalid PMTiles archive/,
     );
+  });
+});
+
+test("PMTiles file reads clamp the initial range at EOF", async () => {
+  await withTempDir(async (directory) => {
+    const path = join(directory, "small.pmtiles");
+    const contents = Buffer.from("small PMTiles fixture");
+    await writeFile(path, contents);
+    const source = new NodeFileSource(path, contents.length);
+
+    try {
+      const response = await source.getBytes(0, 16_384);
+      assert.deepEqual(Buffer.from(response.data), contents);
+      await assert.rejects(
+        source.getBytes(contents.length + 1, 1),
+        /requested bytes outside the file/,
+      );
+    } finally {
+      await source.close();
+    }
   });
 });
 
