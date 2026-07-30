@@ -356,10 +356,21 @@ if [[ ! -f "$ENV_FILE" ]]; then
   cp "$ENV_EXAMPLE" "$ENV_FILE"
   echo "Created .env from .env.example"
 fi
+
+# Preserve explicit operator/CI allowlists before sourcing the generated file,
+# whose blank examples would otherwise overwrite the process environment.
+external_valhalla_builder_images="${VALHALLA_BUILDER_IMAGES-}"
+external_planetiler_builder_images="${PLANETILER_BUILDER_IMAGES-}"
 load_env_file
 
 set_env_if_blank_or_default BETTER_AUTH_SECRET "$(generate_secret)" "local-dev-only-q1GU3s78xL8bYh6xWQ6xZTbu48rG49TE"
 set_env_if_blank_or_default INTERNAL_API_SECRET "$(generate_secret)" "local-dev-only-K4cSj9SNn7wHvpa86LkDe3br9v9j5C3p"
+if [[ -n "$external_valhalla_builder_images" ]]; then
+  set_env_if_blank_or_default VALHALLA_BUILDER_IMAGES "$external_valhalla_builder_images" ""
+fi
+if [[ -n "$external_planetiler_builder_images" ]]; then
+  set_env_if_blank_or_default PLANETILER_BUILDER_IMAGES "$external_planetiler_builder_images" ""
+fi
 set_env_if_blank_or_default STORAGE_PROVIDER "s3" "local" ""
 set_env_if_blank_or_default S3_BUCKET "planisfy-artifacts" "planisfy-uploads" ""
 set_env_if_blank_or_default S3_REGION "auto" ""

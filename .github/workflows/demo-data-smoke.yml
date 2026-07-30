@@ -15,6 +15,8 @@ on:
 env:
   NODE_VERSION: '24'
   PNPM_VERSION: '10.4.1'
+  VALHALLA_BUILDER_IMAGES: 'ghcr.io/planisfy/valhalla@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+  PLANETILER_BUILDER_IMAGES: 'ghcr.io/planisfy/planetiler@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 
 permissions:
   contents: read
