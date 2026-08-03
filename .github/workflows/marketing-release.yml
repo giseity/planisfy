@@ -1,0 +1,136 @@
+name: Marketing Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/marketing/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
+  workflow_dispatch:
+
+concurrency:
+  group: marketing-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+  PNPM_VERSION: '10.4.1'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/marketing
+  NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+  NEXT_PUBLIC_AUTH_ORIGIN: ${{ vars.NEXT_PUBLIC_AUTH_ORIGIN }}
+  NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${{ vars.NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS }}
+  NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED: ${{ vars.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED }}
+  NEXT_PUBLIC_CONSOLE_URL: ${{ vars.NEXT_PUBLIC_CONSOLE_URL }}
+  NEXT_PUBLIC_MARKETING_URL: ${{ vars.NEXT_PUBLIC_MARKETING_URL }}
+  NEXT_PUBLIC_DOCS_URL: ${{ vars.NEXT_PUBLIC_DOCS_URL }}
+  NEXT_PUBLIC_CONTACT_EMAIL: ${{ vars.NEXT_PUBLIC_CONTACT_EMAIL }}
+
+jobs:
+  verify:
+    name: Verify Marketing
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate production public configuration
+        shell: bash
+        run: |
+          required=(
+            NEXT_PUBLIC_API_URL
+            NEXT_PUBLIC_AUTH_ORIGIN
+            NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED
+            NEXT_PUBLIC_CONSOLE_URL
+            NEXT_PUBLIC_MARKETING_URL
+            NEXT_PUBLIC_DOCS_URL
+            NEXT_PUBLIC_CONTACT_EMAIL
+          )
+          for variable in "${required[@]}"; do
+            if [[ -z "${!variable:-}" ]]; then
+              echo "Missing production environment variable: $variable" >&2
+              exit 1
+            fi
+          done
+
+      - name: Lint, type check, and build Marketing
+        run: pnpm turbo run lint check-types build --filter=marketing
+
+  publish:
+    name: Publish Marketing Image
+    runs-on: ubuntu-latest
+    environment: production
+    needs: verify
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: apps/marketing/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_AUTH_ORIGIN=${{ env.NEXT_PUBLIC_AUTH_ORIGIN }}
+            NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=${{ env.NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS }}
+            NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED=${{ env.NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED }}
+            NEXT_PUBLIC_CONSOLE_URL=${{ env.NEXT_PUBLIC_CONSOLE_URL }}
+            NEXT_PUBLIC_MARKETING_URL=${{ env.NEXT_PUBLIC_MARKETING_URL }}
+            NEXT_PUBLIC_DOCS_URL=${{ env.NEXT_PUBLIC_DOCS_URL }}
+            NEXT_PUBLIC_CONTACT_EMAIL=${{ env.NEXT_PUBLIC_CONTACT_EMAIL }}
+          cache-from: type=gha,scope=marketing
+          cache-to: type=gha,mode=max,scope=marketing
+
+  deploy:
+    name: Deploy Marketing
+    runs-on: ubuntu-latest
+    environment: production
+    needs: publish
+    steps:
+      - name: Trigger Dokploy deployment
+        env:
+          DOKPLOY_DEPLOY_WEBHOOK_URL: ${{ secrets.DOKPLOY_MARKETING_DEPLOY_WEBHOOK_URL }}
+        run: |
+          if [[ -z "$DOKPLOY_DEPLOY_WEBHOOK_URL" ]]; then
+            echo 'Missing production secret: DOKPLOY_MARKETING_DEPLOY_WEBHOOK_URL' >&2
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            "$DOKPLOY_DEPLOY_WEBHOOK_URL"

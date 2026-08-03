@@ -10,6 +10,7 @@ const workflowNames = (await readdir(workflowsDirectory))
 
 const allowedSecrets = new Set([
   'GITHUB_TOKEN',
+  'DOKPLOY_MARKETING_DEPLOY_WEBHOOK_URL',
   'MANAGED_STAGING_E2E_EMAIL',
   'MANAGED_STAGING_E2E_PASSWORD',
   'MANAGED_STAGING_INTERNAL_API_SECRET',

@@ -12,7 +12,7 @@
 #   - console:    Customer Console (port 3001)
 #   - admin:      Super Admin (port 3003)
 #   - docs:       Documentation (port 3002)
-#   - marketing:  Landing page (port 3000)
+#   - marketing:  Optional landing page (port 3000; profile: with-marketing)
 #   - worker:     Geodata processing worker
 #   - supervisor: Local-only self-host upgrade supervisor (optional)
 #   - runtime-supervisor: Local-only serving runtime supervisor (optional)
@@ -436,6 +436,7 @@ services:
       - planisfy-network
 
   marketing:
+    profiles: ['with-marketing']
     build:
       context: ../../
       dockerfile: apps/marketing/Dockerfile
@@ -445,24 +446,22 @@ services:
         NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS: ${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
         NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED: ${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED:-true}
         NEXT_PUBLIC_CONSOLE_URL: http://localhost:3001
-        NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
+        NEXT_PUBLIC_DOCS_URL: http://localhost:3002
+        NEXT_PUBLIC_MARKETING_URL: http://localhost:3000
+        NEXT_PUBLIC_CONTACT_EMAIL: ${NEXT_PUBLIC_CONTACT_EMAIL:-support@planisfy.localhost}
     image: planisfy/marketing:${PLANISFY_IMAGE_TAG:-dev}
     ports:
       - '3000:3000'
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://planisfy:planisfy@postgres:5432/planisfy
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}
-      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       - NEXT_PUBLIC_API_URL=http://localhost:4000
       - NEXT_PUBLIC_AUTH_ORIGIN=http://localhost:4000
       - NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS=${NEXT_PUBLIC_AUTH_SOCIAL_PROVIDERS:-}
       - NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED=${NEXT_PUBLIC_AUTH_EMAIL_PASSWORD_ENABLED:-true}
       - NEXT_PUBLIC_CONSOLE_URL=http://localhost:3001
-      - NEXT_PUBLIC_CONTACT_EMAIL=${NEXT_PUBLIC_CONTACT_EMAIL:?NEXT_PUBLIC_CONTACT_EMAIL must be set}
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - NEXT_PUBLIC_DOCS_URL=http://localhost:3002
+      - NEXT_PUBLIC_MARKETING_URL=http://localhost:3000
+      - NEXT_PUBLIC_CONTACT_EMAIL=${NEXT_PUBLIC_CONTACT_EMAIL:-support@planisfy.localhost}
     restart: unless-stopped
     networks:
       - planisfy-network

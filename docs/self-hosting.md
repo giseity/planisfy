@@ -11,7 +11,7 @@ pnpm db:migrate
 
 ## Compose Services
 
-The stack defines API, Console, Admin, Docs, Marketing, worker-geodata, Postgres, Redis, Martin, Valhalla, local elevation, static renderer, Pelias API, Pelias Elasticsearch, optional Pelias fixture import jobs, MinIO through the recommended `with-minio` profile, optional Traefik, optional tile-worker, and optional self-host supervisor.
+The default stack defines API, Console, Admin, Docs, worker-geodata, Postgres, Redis, Martin, Valhalla, local elevation, static renderer, Pelias API, Pelias Elasticsearch, and optional Pelias fixture import jobs. The public Marketing site is separate from the product runtime and is available through the optional `with-marketing` profile. MinIO uses the recommended `with-minio` profile; Traefik, tile-worker, and the self-host supervisor are also optional.
 
 ## VPS Platforms
 
@@ -68,10 +68,13 @@ Optional profiles:
 
 ```bash
 docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-minio up -d
+docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-marketing up -d marketing
 TILE_DELIVERY_MODE=worker docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-tile-worker up -d api tile-worker
 docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-supervisor up -d self-host-supervisor admin
 docker compose --env-file .env -f infra/docker/docker-compose.yml --profile with-proxy up -d traefik
 ```
+
+The `with-marketing` profile is useful for local previews or branded self-host deployments. It is not required for the Planisfy product services and has no database or internal API credentials.
 
 The `with-minio` profile starts local S3-compatible storage and a one-shot
 bucket initializer. `.env.example` defaults to `STORAGE_PROVIDER=s3`,

@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'apps/marketing/**'
   pull_request:
     branches: [main]
 
@@ -139,8 +141,6 @@ jobs:
             dockerfile: apps/admin/Dockerfile
           - app: docs
             dockerfile: apps/docs/Dockerfile
-          - app: marketing
-            dockerfile: apps/marketing/Dockerfile
           - app: worker-geodata
             dockerfile: apps/worker-geodata/Dockerfile
           - app: worker-billing
